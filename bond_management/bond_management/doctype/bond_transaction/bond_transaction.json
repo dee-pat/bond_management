@@ -1,0 +1,270 @@
+{
+ "actions": [],
+ "allow_bulk_edit": 1,
+ "allow_rename": 1,
+ "autoname": "field:transaction_reference",
+ "creation": "2026-06-26 20:42:37.033444",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "transaction_type",
+  "column_break_3ogy",
+  "attachment",
+  "section_break_stvz",
+  "isin",
+  "bond_name",
+  "column_break_vi9v",
+  "portfolio_name",
+  "account_number",
+  "section_break_jjet",
+  "currency",
+  "price",
+  "trade_date",
+  "settlement_date",
+  "accrued_interest_calculated",
+  "accrued_interest_paid",
+  "maturity_date",
+  "coupon_frequency",
+  "column_break_jo9c",
+  "quantity_face_value",
+  "principal",
+  "settlement_amount",
+  "commission",
+  "commission_amount",
+  "transaction_reference",
+  "coupon_rate",
+  "face_value_per_unit",
+  "issue_date",
+  "day_count_convention"
+ ],
+ "fields": [
+  {
+   "fieldname": "trade_date",
+   "fieldtype": "Date",
+   "in_list_view": 1,
+   "label": "Trade Date",
+   "reqd": 1
+  },
+  {
+   "fetch_from": "isin.bond_name",
+   "fieldname": "bond_name",
+   "fieldtype": "Data",
+   "label": "Bond Name",
+   "read_only": 1
+  },
+  {
+   "allow_in_quick_entry": 1,
+   "fieldname": "quantity_face_value",
+   "fieldtype": "Int",
+   "in_list_view": 1,
+   "label": "Quantity/ Face Value",
+   "reqd": 1
+  },
+  {
+   "allow_in_quick_entry": 1,
+   "fieldname": "price",
+   "fieldtype": "Currency",
+   "in_list_view": 1,
+   "label": "Price",
+   "options": "currency",
+   "precision": "6",
+   "reqd": 1
+  },
+  {
+   "fieldname": "accrued_interest_paid",
+   "fieldtype": "Currency",
+   "label": "Accrued Interest Paid",
+   "options": "currency",
+   "reqd": 1
+  },
+  {
+   "default": "0.45",
+   "fieldname": "commission",
+   "fieldtype": "Percent",
+   "label": "Commission %",
+   "reqd": 1
+  },
+  {
+   "fieldname": "settlement_date",
+   "fieldtype": "Date",
+   "label": "Settlement Date",
+   "reqd": 1
+  },
+  {
+   "allow_in_quick_entry": 1,
+   "fieldname": "transaction_reference",
+   "fieldtype": "Data",
+   "label": "Transaction Reference",
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "fieldname": "attachment",
+   "fieldtype": "Attach",
+   "label": "Attachment"
+  },
+  {
+   "fieldname": "column_break_jo9c",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "section_break_jjet",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fetch_from": "isin.face_value_per_unit",
+   "fetch_if_empty": 1,
+   "fieldname": "face_value_per_unit",
+   "fieldtype": "Currency",
+   "label": "Face Value Per Unit",
+   "options": "currency",
+   "read_only": 1
+  },
+  {
+   "fetch_from": "isin.currency",
+   "fieldname": "currency",
+   "fieldtype": "Data",
+   "label": "Currency",
+   "read_only": 1
+  },
+  {
+   "fieldname": "commission_amount",
+   "fieldtype": "Currency",
+   "label": "Commission Amount",
+   "options": "currency",
+   "read_only": 1
+  },
+  {
+   "fieldname": "principal",
+   "fieldtype": "Currency",
+   "label": "Principal",
+   "options": "currency",
+   "read_only": 1
+  },
+  {
+   "allow_in_quick_entry": 1,
+   "fieldname": "isin",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "ISIN",
+   "options": "Bond Master",
+   "reqd": 1
+  },
+  {
+   "fieldname": "settlement_amount",
+   "fieldtype": "Currency",
+   "label": "Settlement Amount",
+   "options": "currency",
+   "read_only": 1
+  },
+  {
+   "allow_in_quick_entry": 1,
+   "fieldname": "portfolio_name",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Portfolio Name",
+   "options": "Bond Portfolio",
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_vi9v",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fetch_from": "portfolio_name.account_no",
+   "fieldname": "account_number",
+   "fieldtype": "Data",
+   "label": "Account Number",
+   "read_only": 1
+  },
+  {
+   "fieldname": "accrued_interest_calculated",
+   "fieldtype": "Currency",
+   "label": "Accrued Interest Calculated",
+   "options": "currency",
+   "read_only": 1
+  },
+  {
+   "fetch_from": "isin.coupon_frequency",
+   "fieldname": "coupon_frequency",
+   "fieldtype": "Data",
+   "label": "Coupon frequency",
+   "read_only": 1
+  },
+  {
+   "fetch_from": "isin.maturity_date",
+   "fieldname": "maturity_date",
+   "fieldtype": "Data",
+   "label": "Maturity Date",
+   "read_only": 1
+  },
+  {
+   "fetch_from": "isin.issue_date",
+   "fieldname": "issue_date",
+   "fieldtype": "Data",
+   "label": "Issue Date",
+   "read_only": 1
+  },
+  {
+   "allow_in_quick_entry": 1,
+   "fieldname": "transaction_type",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Transaction Type",
+   "options": "Purchase\nSale",
+   "reqd": 1
+  },
+  {
+   "fieldname": "section_break_stvz",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fetch_from": "isin.day_count_convention",
+   "fieldname": "day_count_convention",
+   "fieldtype": "Data",
+   "label": "Day Count Convention",
+   "read_only": 1
+  },
+  {
+   "fetch_from": "isin.coupon_rate",
+   "fieldname": "coupon_rate",
+   "fieldtype": "Percent",
+   "label": "Coupon Rate %",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_3ogy",
+   "fieldtype": "Column Break"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-06-30 16:09:26.169432",
+ "modified_by": "Administrator",
+ "module": "Bond Management",
+ "name": "Bond Transaction",
+ "naming_rule": "By fieldname",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "settlement_date"
+}

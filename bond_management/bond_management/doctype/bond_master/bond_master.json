@@ -1,0 +1,166 @@
+{
+ "actions": [],
+ "allow_bulk_edit": 1,
+ "allow_rename": 1,
+ "autoname": "field:isin",
+ "creation": "2026-06-26 19:34:49.474062",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "bond_name",
+  "isin",
+  "section_break_whu3",
+  "issue_date",
+  "face_value_per_unit",
+  "coupon_frequency",
+  "bond_type",
+  "column_break_kkjm",
+  "maturity_date",
+  "currency",
+  "coupon_rate",
+  "day_count_convention",
+  "section_break_qwjg",
+  "principal_schedule",
+  "coupon_schedule_tab",
+  "coupon_schedule"
+ ],
+ "fields": [
+  {
+   "fieldname": "bond_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Bond Name",
+   "reqd": 1
+  },
+  {
+   "fieldname": "isin",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "ISIN",
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "default": "USD",
+   "fieldname": "currency",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Currency",
+   "options": "Currency",
+   "reqd": 1
+  },
+  {
+   "default": "100",
+   "fieldname": "face_value_per_unit",
+   "fieldtype": "Currency",
+   "label": "Face Value Per Unit",
+   "options": "currency",
+   "reqd": 1
+  },
+  {
+   "fieldname": "coupon_rate",
+   "fieldtype": "Percent",
+   "label": "Coupon Rate %",
+   "reqd": 1
+  },
+  {
+   "default": "2",
+   "fieldname": "coupon_frequency",
+   "fieldtype": "Select",
+   "label": "Coupon Frequency",
+   "options": "1\n2\n4",
+   "reqd": 1
+  },
+  {
+   "fieldname": "issue_date",
+   "fieldtype": "Date",
+   "in_list_view": 1,
+   "label": "Issue Date",
+   "reqd": 1
+  },
+  {
+   "fieldname": "maturity_date",
+   "fieldtype": "Date",
+   "label": "Maturity Date",
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "default": "30E/360",
+   "fieldname": "day_count_convention",
+   "fieldtype": "Select",
+   "label": "Day Count Convention",
+   "options": "30E/360\nActual/Actual(ICMA)\nActual/364(Kenya)",
+   "reqd": 1
+  },
+  {
+   "default": "Kenya Eurobond",
+   "fieldname": "bond_type",
+   "fieldtype": "Select",
+   "label": "Bond Type",
+   "options": "Kenya Infrastructure Bond\nKenya Treasury Bond\nKenya Eurobond\nBritish Gilts",
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_kkjm",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "section_break_whu3",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "coupon_schedule",
+   "fieldtype": "Table",
+   "label": "Coupon Schedule",
+   "options": "Bond Coupon Schedule"
+  },
+  {
+   "fieldname": "section_break_qwjg",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "principal_schedule",
+   "fieldtype": "Table",
+   "label": "Principal Schedule",
+   "options": "Bond Principal Schedule"
+  },
+  {
+   "fieldname": "coupon_schedule_tab",
+   "fieldtype": "Tab Break",
+   "label": "Coupon Schedule"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-06-30 09:37:23.701026",
+ "modified_by": "Administrator",
+ "module": "Bond Management",
+ "name": "Bond Master",
+ "naming_rule": "By fieldname",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1,
+   "submit": 0,
+   "cancel": 0,
+   "amend": 0
+  }
+ ],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "bond_name"
+}
