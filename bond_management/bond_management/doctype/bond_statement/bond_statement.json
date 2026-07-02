@@ -2,25 +2,47 @@
  "actions": [],
  "allow_bulk_edit": 1,
  "allow_rename": 1,
+ "autoname": "BS-.####",
  "creation": "2026-07-01 15:56:18.093315",
  "doctype": "DocType",
  "engine": "InnoDB",
  "field_order": [
-  "section_break_dggq"
+  "section_break_dggq",
+  "portfolio_name",
+  "statement_date",
+  "bond_market_prices"
  ],
  "fields": [
   {
    "fieldname": "section_break_dggq",
    "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "bond_market_prices",
+   "fieldtype": "Table",
+   "label": "Bond Market Prices",
+   "options": "Bond Market Prices"
+  },
+  {
+   "fieldname": "portfolio_name",
+   "fieldtype": "Link",
+   "label": "Portfolio Name",
+   "options": "Bond Portfolio"
+  },
+  {
+   "fieldname": "statement_date",
+   "fieldtype": "Date",
+   "label": "Statement Date"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-07-01 15:56:18.093315",
+ "modified": "2026-07-02 16:29:37.091051",
  "modified_by": "Administrator",
  "module": "Bond Management",
  "name": "Bond Statement",
+ "naming_rule": "Expression",
  "owner": "Administrator",
  "permissions": [
   {
@@ -40,5 +62,6 @@
  "rows_threshold_for_grid_search": 20,
  "sort_field": "creation",
  "sort_order": "DESC",
- "states": []
+ "states": [],
+ "title_field": "statement_date"
 }
