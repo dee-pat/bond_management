@@ -1,8 +1,6 @@
 # Copyright (c) 2026, Deepak Patel and contributors
 # For license information, please see license.txt
 
-from turtle import position
-
 import frappe
 from frappe.model.document import Document
 from frappe.utils import getdate
@@ -21,7 +19,11 @@ class BondTransaction(Document):
 		if getdate(self.settlement_date) < getdate(self.issue_date):
 			frappe.throw("Settlement Date must be after Issue Date")
 
-		position = self.get_position(self.isin, self.name)
+		position = self.get_position(
+    		isin=self.isin,
+    		portfolio_name=self.portfolio_name,
+    		exclude_name=self.name
+		)
 
 		print("Current Position: ", position)
 
@@ -45,22 +47,20 @@ class BondTransaction(Document):
 		self.accrued_interest_calculated = (self.quantity_face_value or 0) * accrued_fraction
 
 
-
-	def get_position(self, isin, exclude_name=None):
-		filters = {
-        "isin": isin,
-        #"docstatus": 1
-    	}
-
-		txs = frappe.get_all(
+	def get_position(self, isin, portfolio_name, exclude_name=None): 
+		query = frappe.qb.get_query(
 			"Bond Transaction",
-			filters=filters,
-			fields=["name", "transaction_type", "quantity_face_value"]
+			filters = {
+				"isin": isin,
+				"portfolio_name": portfolio_name,
+			 	#"docstatus": 1
+			},
+			fields= ["name", "transaction_type", "quantity_face_value",]
 		)
 
-		position = 0
-
+		txs = query.run(as_dict=True)
 		print("Transactions: ", txs)
+		position = 0
 
 		for tx in txs:
 			# exclude current doc if editing

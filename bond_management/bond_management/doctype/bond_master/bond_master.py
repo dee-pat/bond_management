@@ -80,3 +80,4 @@ class BondMaster(Document):
 				frappe.throw(
 					f"Repayment date {repayment_date} must match a coupon date"
 				)
+

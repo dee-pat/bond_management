@@ -2,41 +2,49 @@
  "actions": [],
  "allow_bulk_edit": 1,
  "allow_rename": 1,
- "creation": "2026-07-02 21:35:03.934536",
+ "creation": "2026-07-02 17:20:12.293453",
  "doctype": "DocType",
  "editable_grid": 1,
  "engine": "InnoDB",
  "field_order": [
-  "section_break_rofi",
+  "section_break_jhtu",
   "isin",
-  "market_price",
-  "currency"
+  "currency",
+  "quantity",
+  "market_price"
  ],
  "fields": [
   {
-   "fieldname": "section_break_rofi",
+   "fieldname": "section_break_jhtu",
    "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "market_price",
+   "fieldtype": "Currency",
+   "in_list_view": 1,
+   "label": "Market Price",
+   "options": "currency"
+  },
+  {
+   "fieldname": "currency",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Currency",
+   "read_only": 1
+  },
+  {
+   "fieldname": "quantity",
+   "fieldtype": "Int",
+   "in_list_view": 1,
+   "label": "Quantity",
+   "read_only": 1
   },
   {
    "fieldname": "isin",
    "fieldtype": "Link",
    "in_list_view": 1,
    "label": "ISIN",
-   "options": "Bond Master"
-  },
-  {
-   "fieldname": "market_price",
-   "fieldtype": "Float",
-   "in_list_view": 1,
-   "label": "Market Price",
-   "read_only": 1
-  },
-  {
-   "fetch_from": "isin.currency",
-   "fieldname": "currency",
-   "fieldtype": "Data",
-   "in_list_view": 1,
-   "label": "Currency",
+   "options": "Bond Master",
    "read_only": 1
   }
  ],
@@ -44,10 +52,10 @@
  "index_web_pages_for_search": 1,
  "istable": 1,
  "links": [],
- "modified": "2026-07-03 16:03:06.102992",
+ "modified": "2026-07-02 19:12:42.958326",
  "modified_by": "Administrator",
  "module": "Bond Management",
- "name": "Bond Market Prices",
+ "name": "Bond Statement Details",
  "owner": "Administrator",
  "permissions": [],
  "row_format": "Dynamic",

@@ -1,16 +1,7 @@
 from dateutil.relativedelta import relativedelta
 import frappe
 from frappe.utils import getdate, add_days
-import calendar
-
-
-def is_end_of_month(dt):
-    return dt.day == calendar.monthrange(dt.year, dt.month)[1]
-
-
-def end_of_month(dt):
-    last_day = calendar.monthrange(dt.year, dt.month)[1]
-    return dt.replace(day=last_day)
+from frappe.utils.data import get_last_day
 
 
 def generate_coupon_schedule(issue_date, maturity_date, coupon_frequency):
@@ -44,14 +35,14 @@ def generate_coupon_schedule(issue_date, maturity_date, coupon_frequency):
     # Step 1: generate coupon dates backwards from maturity
     dates = []
     current = maturity_date
-    eom = is_end_of_month(maturity_date)
+    eom = maturity_date.day == get_last_day(maturity_date)
 
     while current > issue_date:
         dates.append(current)
         current = current - step
 
         if eom:
-            current = end_of_month(current)
+            current = get_last_day(current)
 
     # Optional: include first stub if needed
     # Ensure first period starts at issue_date

@@ -19,18 +19,20 @@ class BondStatement(Document):
 
         positions = fetch_holdings(self.portfolio_name, self.statement_date)
 
-        self.set("bond_market_prices", [])  # clear table
+        self.set("bond_statement_details", [])  # clear table
 
         for p in positions:
             if not p.get("quantity"):
                 continue
 
-            #bond = frappe.get_doc("bond_market_prices", p.isin)
+            statement_date = self.statement_date
+            market_price = get_market_price(p.get("isin"), statement_date, self.portfolio_name)
 
-            self.append("bond_market_prices", {	
+            self.append("bond_statement_details", {	
                 "isin": p.get("isin"),
                 "quantity": p.get("quantity"),
-                "currency": p.get("currency")
+                "currency": p.get("currency"),
+                "market_price": market_price
             })
 
 
@@ -90,8 +92,29 @@ def get_position(isin, statement_date, portfolio_name):
         if r.maturity_date and getdate(r.maturity_date) <= getdate(statement_date):
             return 0  # Bond has matured, no further transactions affect position
         if r.transaction_type == "Purchase":
-            position += r.quantity_face_value   
+            position = position + r.quantity_face_value   
         elif r.transaction_type == "Sale":
-             position -= r.quantity_face_value
+             position = position - r.quantity_face_value
 
     return position
+
+
+def get_market_price(isin, statement_date, portfolio_name):
+    query = frappe.qb.get_query(
+        "Bond Market Date",
+        filters={
+            "date": ["<=", statement_date],
+            "bond_market_prices.isin": isin,
+            #"docstatus": 1
+        },
+        fields=["date", "bond_market_prices.market_price"],
+        order_by="date desc",
+        limit = 1
+    )
+    
+    price_docs = query.run(as_dict=True)
+    if price_docs:
+        price_doc = price_docs[0] # we want to access the first (and only) document in the list
+        return price_doc.get("market_price")
+    else:
+        return None

@@ -10,18 +10,15 @@
   "section_break_dggq",
   "portfolio_name",
   "statement_date",
-  "bond_market_prices"
+  "column_break_omxg",
+  "attachment",
+  "section_break_4jh1",
+  "bond_statement_details"
  ],
  "fields": [
   {
    "fieldname": "section_break_dggq",
    "fieldtype": "Section Break"
-  },
-  {
-   "fieldname": "bond_market_prices",
-   "fieldtype": "Table",
-   "label": "Bond Market Prices",
-   "options": "Bond Market Prices"
   },
   {
    "fieldname": "portfolio_name",
@@ -33,12 +30,31 @@
    "fieldname": "statement_date",
    "fieldtype": "Date",
    "label": "Statement Date"
+  },
+  {
+   "fieldname": "column_break_omxg",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "attachment",
+   "fieldtype": "Attach",
+   "label": "Attachment"
+  },
+  {
+   "fieldname": "section_break_4jh1",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "bond_statement_details",
+   "fieldtype": "Table",
+   "label": "Bond Statement Details",
+   "options": "Bond Statement Details"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-07-02 16:29:37.091051",
+ "modified": "2026-07-02 21:30:48.509031",
  "modified_by": "Administrator",
  "module": "Bond Management",
  "name": "Bond Statement",
