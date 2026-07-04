@@ -66,11 +66,12 @@ def create_future_cash_flows(isin, date, market_price):
         settlement_date=settlement_date,
         quantity_face_value=1
     )
-
+    # correct the accrued interest based on the principal factor
+    accrued_interest = accrued_interest * calculate_principal_factor2(isin, date)
+    
     # Add accrued interest as a cash flow on the settlement date
     future_cash_flows.append({"type": "market_price", "date": settlement_date, "amount": -market_price})
     future_cash_flows.append({"type": "accrued_interest", "date": settlement_date, "amount": -accrued_interest})
-    
     
     # Get the coupon schedule and principal schedule from the bond document
     coupon_schedule = bond_doc.get("coupon_schedule")
@@ -94,9 +95,9 @@ def create_future_cash_flows(isin, date, market_price):
             principal_payment = bond_doc.face_value_per_unit * (principal_period.get("repayment_percent") or 0.0) / 100.0
             future_cash_flows.append({"type": "principal", "date": repayment_date, "amount": principal_payment})
 
-    #print("Accrued Interest", accrued_interest)
-    #print("Market Price", market_price)
-    #print("Future Cash Flows for ISIN {}: {}".format(isin, future_cash_flows))
+    print("Accrued Interest", accrued_interest)
+    print("Market Price", market_price)
+    print("Future Cash Flows for ISIN {}: {}".format(isin, future_cash_flows))
 
     return future_cash_flows
     

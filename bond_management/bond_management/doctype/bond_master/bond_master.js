@@ -5,6 +5,7 @@
 frappe.ui.form.on('Bond Master', {
     refresh: function(frm) {
         update_maturity_date(frm);
+        hide_grid_buttons(frm);
     }
 });
 
@@ -57,4 +58,19 @@ function update_maturity_date(frm) {
     });
 
     frm.set_value('maturity_date', max_date || null);
+}
+function hide_grid_buttons(frm) {
+    let grid = frm.get_field("coupon_schedule").grid;
+
+        // hide Buttons
+        grid.wrapper.find('.grid-add-row').hide();
+        grid.wrapper.find('.grid-remove-rows').hide();
+        grid.wrapper.find('.grid-edit-rows').hide();
+        grid.wrapper.find('.grid-duplicate-rows').hide();
+
+        // also prevent row insert/delete programmatically via UI
+        grid.cannot_add_rows = true;
+        grid.cannot_delete_rows = true;
+        grid.cannot_edit_rows = true;
+        grid.cannot_duplicate_rows = true;
 }

@@ -9,10 +9,10 @@
  "field_order": [
   "section_break_jhtu",
   "isin",
-  "currency",
   "quantity",
+  "principal_factor",
   "market_price",
-  "principal_factor"
+  "currency"
  ],
  "fields": [
   {
@@ -60,7 +60,7 @@
  "index_web_pages_for_search": 1,
  "istable": 1,
  "links": [],
- "modified": "2026-07-04 18:46:59.892157",
+ "modified": "2026-07-04 22:55:33.623567",
  "modified_by": "Administrator",
  "module": "Bond Management",
  "name": "Bond Statement Details",
