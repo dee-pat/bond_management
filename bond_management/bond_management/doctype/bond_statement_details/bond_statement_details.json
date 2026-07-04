@@ -11,7 +11,8 @@
   "isin",
   "currency",
   "quantity",
-  "market_price"
+  "market_price",
+  "principal_factor"
  ],
  "fields": [
   {
@@ -46,13 +47,20 @@
    "label": "ISIN",
    "options": "Bond Master",
    "read_only": 1
+  },
+  {
+   "fieldname": "principal_factor",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Principal Factor",
+   "read_only": 1
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "istable": 1,
  "links": [],
- "modified": "2026-07-02 19:12:42.958326",
+ "modified": "2026-07-04 18:46:59.892157",
  "modified_by": "Administrator",
  "module": "Bond Management",
  "name": "Bond Statement Details",

@@ -9,8 +9,10 @@
  "field_order": [
   "section_break_rofi",
   "isin",
+  "principal_factor",
   "market_price",
-  "currency"
+  "currency",
+  "future_xirr"
  ],
  "fields": [
   {
@@ -28,8 +30,7 @@
    "fieldname": "market_price",
    "fieldtype": "Float",
    "in_list_view": 1,
-   "label": "Market Price",
-   "read_only": 1
+   "label": "Market Price"
   },
   {
    "fetch_from": "isin.currency",
@@ -38,13 +39,27 @@
    "in_list_view": 1,
    "label": "Currency",
    "read_only": 1
+  },
+  {
+   "fieldname": "future_xirr",
+   "fieldtype": "Percent",
+   "in_list_view": 1,
+   "label": "Future XIRR",
+   "read_only": 1
+  },
+  {
+   "fieldname": "principal_factor",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Principal Factor",
+   "read_only": 1
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "istable": 1,
  "links": [],
- "modified": "2026-07-03 16:03:06.102992",
+ "modified": "2026-07-04 18:47:24.810485",
  "modified_by": "Administrator",
  "module": "Bond Management",
  "name": "Bond Market Prices",
