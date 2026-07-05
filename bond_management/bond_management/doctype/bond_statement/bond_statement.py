@@ -4,7 +4,7 @@
 import frappe
 from frappe.model.document import Document
 from frappe.utils import getdate
-from bond_management.bond_management.utils.xirr import calculate_principal_factor2
+from bond_management.bond_management.utils.xirr import calculate_principal_factor
 
 
 class BondStatement(Document):
@@ -27,7 +27,7 @@ class BondStatement(Document):
 
             statement_date = self.statement_date
             market_price = get_market_price(p.get("isin"), statement_date, self.portfolio_name)
-            principal_factor = calculate_principal_factor2(p.get("isin"), statement_date)
+            principal_factor = calculate_principal_factor(p.get("isin"), statement_date)
             
             self.append("bond_statement_details", {	
                 "isin": p.get("isin"),

@@ -1,4 +1,4 @@
-
+import frappe
 from frappe.utils import getdate
 
 
@@ -72,7 +72,22 @@ def calculate_accrued_fraction(
     return coupon_rate / 100 * face_value_per_unit * fraction
 
 
-import frappe
+@frappe.whitelist()
+def calculate_principal_factor(isin, date):
+
+    bond_doc = frappe.get_doc("Bond Master", isin)
+    principal_schedule = bond_doc.get("principal_schedule")
+
+    settlement_date = getdate(date)
+    principal_factor = 1.0
+
+    for period in principal_schedule:
+        if settlement_date > period.get("repayment_date"):
+            principal_factor = principal_factor - (period.get("repayment_percent") or 0.0) / 100.0
+
+    return principal_factor
+
+
 
 @frappe.whitelist()
 def get_accrued_interest(isin=None, settlement_date=None, quantity_face_value=None):
@@ -84,6 +99,8 @@ def get_accrued_interest(isin=None, settlement_date=None, quantity_face_value=No
     quantity_face_value = float(quantity_face_value)
 
     bond_doc = frappe.get_doc("Bond Master", isin)
+
+    principal_factor = calculate_principal_factor(isin, settlement_date)
 
     # convert only once
     schedule = [row.as_dict() for row in bond_doc.coupon_schedule]
@@ -97,4 +114,4 @@ def get_accrued_interest(isin=None, settlement_date=None, quantity_face_value=No
         bond_doc.coupon_rate 
     )
 
-    return fraction * quantity_face_value
+    return fraction * quantity_face_value * principal_factor

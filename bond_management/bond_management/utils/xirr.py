@@ -1,6 +1,6 @@
 import frappe
 from frappe.utils import getdate
-from bond_management.bond_management.utils.accrual import get_accrued_interest
+from bond_management.bond_management.utils.accrual import get_accrued_interest, calculate_principal_factor
 from pyxirr import xirr
 from collections import defaultdict
 
@@ -66,12 +66,12 @@ def create_future_cash_flows(isin, date, market_price):
         settlement_date=settlement_date,
         quantity_face_value=1
     )
-    # correct the accrued interest based on the principal factor
-    accrued_interest = accrued_interest * calculate_principal_factor2(isin, date)
     
     # Add accrued interest as a cash flow on the settlement date
-    future_cash_flows.append({"type": "market_price", "date": settlement_date, "amount": -market_price})
-    future_cash_flows.append({"type": "accrued_interest", "date": settlement_date, "amount": -accrued_interest})
+    future_cash_flows.append({"bond": isin, "type": "market_price", 
+        "date": settlement_date, "amount": -market_price})
+    future_cash_flows.append({"bond": isin, "type": "accrued_interest", 
+        "date": settlement_date, "amount": -accrued_interest})
     
     # Get the coupon schedule and principal schedule from the bond document
     coupon_schedule = bond_doc.get("coupon_schedule")
@@ -81,53 +81,16 @@ def create_future_cash_flows(isin, date, market_price):
     for coupon_period in coupon_schedule:
         coupon_date = getdate(coupon_period.get("coupon_date"))
         if coupon_date > settlement_date:
-            principal_factor = calculate_princlple_factor(principal_schedule, coupon_date)
+            principal_factor = calculate_principal_factor(isin, coupon_date)
             interest_factor = (bond_doc.coupon_rate / 100) / int(bond_doc.coupon_frequency) 
             coupon_payment = interest_factor * bond_doc.face_value_per_unit * principal_factor
-            future_cash_flows.append({"type": "coupon", "date": coupon_date, "amount": coupon_payment})
-    
-
+            future_cash_flows.append({"bond": isin, "type": "coupon", "date": coupon_date, "amount": coupon_payment})
     
     # Iterate through the principal schedule to add future principal repayments
     for principal_period in principal_schedule:
         repayment_date = getdate(principal_period.get("repayment_date"))
         if repayment_date > settlement_date:
             principal_payment = bond_doc.face_value_per_unit * (principal_period.get("repayment_percent") or 0.0) / 100.0
-            future_cash_flows.append({"type": "principal", "date": repayment_date, "amount": principal_payment})
-
-    print("Accrued Interest", accrued_interest)
-    print("Market Price", market_price)
-    print("Future Cash Flows for ISIN {}: {}".format(isin, future_cash_flows))
+            future_cash_flows.append({"bond": isin, "type": "principal", "date": repayment_date, "amount": principal_payment})
 
     return future_cash_flows
-    
-
-def calculate_princlple_factor(principal_schedule, date):
-    """
-    Calculate the principal factor for a bond based on its principal schedule and settlement date.
-
-    :param principal_schedule: The principal schedule of the bond.
-    :param date: The date for which to calculate the principal factor.
-    :return: The principal factor as a float.
-    """
-
-    settlement_date = getdate(date)
-    principal_factor = 1.0
-
-    for period in principal_schedule:
-        if settlement_date > period.get("repayment_date"):
-            principal_factor = principal_factor - (period.get("repayment_percent") or 0.0) / 100.0
-
-    return principal_factor
-
-def calculate_principal_factor2(isin, date):
-
-    bond_doc = frappe.get_doc("Bond Master", isin)
-    principal_schedule = bond_doc.get("principal_schedule")
-    principal_factor = calculate_princlple_factor(principal_schedule, date)
-
-    return principal_factor
-
-
-
-

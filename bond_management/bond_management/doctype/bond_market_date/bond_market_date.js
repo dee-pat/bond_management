@@ -27,5 +27,61 @@ frappe.ui.form.on("Bond Market Prices", {
                 frm.refresh_field("bond_market_prices");
             });
         }, 500);
+    },
+    copy_cashflows(frm, cdt, cdn) {
+        const row = locals[cdt][cdn];
+
+        frm.call({
+            method: "get_cashflows",
+            doc: frm.doc,
+            args: {
+                isin: row.isin,
+                market_price: row.market_price
+            }
+        }).then(r => {
+            const data = r.message || [];
+
+            if (!data.length) {
+                frappe.msgprint("No cashflows found.");
+                return;
+            }
+
+            // sort by date
+            data.sort((a, b) => new Date(a.date) - new Date(b.date));
+
+            let tsv = "isin\ttransaction_type\tdate\tamount\n";
+
+            data.forEach(d => {
+                tsv += `${d.isin}\t${d.type}\t${d.date}\t${d.amount}\n`;
+            });
+
+            fallbackCopy(tsv);
+
+            frappe.show_alert({
+                message: `Copied for ${row.isin}`,
+                indicator: "green"
+            });
+        });
     }
 });
+
+
+function copyToClipboard(text) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).catch(() => fallbackCopy(text));
+    } else {
+        fallbackCopy(text);
+    }
+}
+
+function fallbackCopy(text) {
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.style.position = "fixed";
+    ta.style.opacity = 0;
+
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand("copy");
+    document.body.removeChild(ta);
+}

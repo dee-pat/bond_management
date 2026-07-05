@@ -6,14 +6,15 @@ from frappe.model.document import Document
 from pyxirr import xirr
 from collections import defaultdict
 from frappe.utils import getdate
-from bond_management.bond_management.utils.xirr import calculate_future_xirr, calculate_principal_factor2
+from bond_management.bond_management.utils.xirr import calculate_future_xirr, create_future_cash_flows
+from bond_management.bond_management.utils.accrual import calculate_principal_factor
+
 
 class BondMarketDate(Document):
 
     def validate(self):
         self.update_future_xirr()
         self.update_principal_factor()
-
 
 
     @frappe.whitelist()
@@ -35,12 +36,49 @@ class BondMarketDate(Document):
             if not row.isin:
                 continue
 
-            principal_factor = calculate_principal_factor2(row.isin, self.date)
+            principal_factor = calculate_principal_factor(row.isin, self.date)
 
             try:
                 row.principal_factor = principal_factor if principal_factor is not None else None
             except Exception:
                 row.principal_factor = None
+
+    @frappe.whitelist()
+    def get_cashflows(self, isin, market_price):
+        rows = []
+        flows = create_future_cash_flows(isin, self.date, market_price)
+
+        for f in flows:
+            rows.append({
+                "isin": isin,
+                "type": f["type"],
+                "date": str(f["date"]),
+                "amount": f["amount"],
+            })
+
+        return rows
+
+
+    @frappe.whitelist()
+    def get_all_cashflows(self):
+        valuation_date = getdate(self.date)
+
+        all_rows = []
+        
+        for row in self.bond_market_prices:
+            isin = row.isin
+            market_price = row.market_price
+            flows = create_future_cash_flows(isin, valuation_date, market_price)
+
+            for f in flows:
+                all_rows.append({
+                    "isin": isin,
+                    "type": f.get("type"),
+                    "date": getdate(f.get("date")).isoformat(),
+                    "amount": float(f.get("amount") or 0.0),
+                })
+
+        return all_rows    
 
             
 	
