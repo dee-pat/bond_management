@@ -4,14 +4,17 @@
 import frappe
 from frappe.model.document import Document
 from frappe.utils import getdate
-from bond_management.bond_management.utils.xirr import calculate_principal_factor
+from bond_management.bond_management.utils.xirr import (
+    calculate_principal_factor,
+    create_past_cash_flows,
+    get_position,
+)
 
 
 class BondStatement(Document):
     def validate(self):
         pass
         self.populate_holdings()
-
 
     def populate_holdings(self):
         if not self.portfolio_name or not self.statement_date:
@@ -26,19 +29,21 @@ class BondStatement(Document):
                 continue
 
             statement_date = self.statement_date
-            market_price = get_market_price(p.get("isin"), statement_date, self.portfolio_name)
+            market_price = get_market_price(
+                p.get("isin"), statement_date, self.portfolio_name
+            )
             principal_factor = calculate_principal_factor(p.get("isin"), statement_date)
-            
-            self.append("bond_statement_details", {	
-                "isin": p.get("isin"),
-                "quantity": p.get("quantity"),
-                "currency": p.get("currency"),
-                "market_price": market_price,
-                "principal_factor": principal_factor
-            })
 
-
-
+            self.append(
+                "bond_statement_details",
+                {
+                    "isin": p.get("isin"),
+                    "quantity": p.get("quantity"),
+                    "currency": p.get("currency"),
+                    "market_price": market_price,
+                    "principal_factor": principal_factor,
+                },
+            )
 
 
 @frappe.whitelist()
@@ -59,46 +64,20 @@ def fetch_holdings(portfolio_name, date):
 
         bond_doc = frappe.get_doc("Bond Master", isin)
 
-        results.append({
-            "isin": bond_doc.name,
-            "quantity": qty,
-            "currency": bond_doc.currency
-        })
+        results.append(
+            {"isin": bond_doc.name, "quantity": qty, "currency": bond_doc.currency}
+        )
     print("Results:", results)
     return results
+
 
 def get_portfolio_bonds(portfolio_name):
     return frappe.get_all(
         "Bond Transaction",
         filters={"portfolio_name": portfolio_name},
         pluck="isin",
-        distinct=True
+        distinct=True,
     )
-
-
-def get_position(isin, statement_date, portfolio_name):
-    rows = frappe.get_all(
-        "Bond Transaction",
-        filters={
-            "isin": isin,
-            "portfolio_name": portfolio_name,
-            "settlement_date": ["<=", statement_date],
-            #"docstatus": 1
-        },
-        fields=["transaction_type", "quantity_face_value", "maturity_date"],
-    )
-
-    position = 0
-
-    for r in rows:
-        if r.maturity_date and getdate(r.maturity_date) <= getdate(statement_date):
-            return 0  # Bond has matured, no further transactions affect position
-        if r.transaction_type == "Purchase":
-            position = position + r.quantity_face_value   
-        elif r.transaction_type == "Sale":
-             position = position - r.quantity_face_value
-
-    return position
 
 
 def get_market_price(isin, statement_date, portfolio_name):
@@ -107,16 +86,18 @@ def get_market_price(isin, statement_date, portfolio_name):
         filters={
             "date": ["<=", statement_date],
             "bond_market_prices.isin": isin,
-            #"docstatus": 1
+            # "docstatus": 1
         },
         fields=["date", "bond_market_prices.market_price"],
         order_by="date desc",
-        limit = 1
+        limit=1,
     )
-    
+
     price_docs = query.run(as_dict=True)
     if price_docs:
-        price_doc = price_docs[0] # we want to access the first (and only) document in the list
+        price_doc = price_docs[
+            0
+        ]  # we want to access the first (and only) document in the list
         return price_doc.get("market_price")
     else:
         return None
