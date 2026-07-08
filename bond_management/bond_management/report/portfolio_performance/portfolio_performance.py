@@ -6,9 +6,11 @@ from frappe.utils import getdate
 from pyxirr import xirr
 
 from bond_management.bond_management.utils.performance import (
-    get_positions,
     get_transactions,
+    get_market_price
 )
+from bond_management.bond_management.utils.xirr import get_position
+from bond_management.bond_management.utils.accrual import get_accrued_interest
 
 # ---------- ENTRY POINT ----------
 
@@ -33,8 +35,9 @@ def execute(filters: dict | None = None):
         frappe.throw("Not permitted")
 
     columns = get_columns()
-
-    data, portfolio_xirr = get_data(portfolio, valuation_date)
+    data = get_data(portfolio, valuation_date)
+    return columns, data
+    #data, portfolio_xirr = get_data(portfolio, valuation_date)
     """
     # Add summary row
     if data:
@@ -56,70 +59,19 @@ def get_columns() -> list[dict]:
     return [
         {"label": "ISIN", "fieldname": "isin", "width": 150},
         {"label": "Currency", "currency": "currency", "width": 50},
-        {
-            "label": "Face Value/Unit",
-            "face_value_per_unit": "face_value_per_unit",
-            "width": 50,
-        },
-        {
-            "label": "Princlipal Factor",
-            "principal_factor": "principal_factor",
-            "width": 50,
-        },
-        {
-            "label": "Factored Nonimal Value",
-            "nominal_value": "nominal_value",
-            "width": 150,
-        },
-        {
-            "label": "Market Price",
-            "fieldname": "market_price",
-            "fieldtype": "Float",
-            "width": 100,
-        },
-        {
-            "label": "Accrued Interest",
-            "fieldname": "accrued_interest",
-            "fieldtype": "Float",
-            "width": 100,
-        },
-        {
-            "label": "Purchases Value",
-            "fieldname": "purchases_value",
-            "fieldtype": "Currency",
-            "width": 120,
-        },
-        {
-            "label": "Sales Value",
-            "fieldname": "sales_value",
-            "fieldtype": "Currency",
-            "width": 120,
-        },
-        {
-            "label": "Coupons Value",
-            "fieldname": "copons_value",
-            "fieldtype": "Currency",
-            "width": 120,
-        },
-        {
-            "label": "Repayment Value",
-            "fieldname": "repayment_value",
-            "fieldtype": "Currency",
-            "width": 120,
-        },
-        {
-            "label": "Market Value",
-            "fieldname": "market_value",
-            "fieldtype": "Currency",
-            "width": 160,
-        },
-        {
-            "label": "Gain/Loss Value",
-            "fieldname": "gain_value",
-            "fieldtype": "Currency",
-            "width": 160,
-        },
-        {"label": "XIRR", "fieldname": "xirr", "fieldtype": "Percent", "width": 100},
+        {"label": "Face Value/Unit", "face_value_per_unit": "face_value_per_unit", "width": 50},
+        {"label": "Princlipal Factor", "principal_factor": "principal_factor", "width": 50},
+        {"label": "Number of Units", "quantity": "quantity", "width": 50},       
+        {"label": "Nominal Value", "nominal_value": "nominal_value", "width": 150},
+        {"label": "Market Price", "fieldname": "market_price", "fieldtype": "Float", "width": 100},
+        {"label": "Accrued Interest", "fieldname": "accrued_interest", "fieldtype": "Float", "width": 100},
+        {"label": "Purchases Value", "fieldname": "purchases_value", "fieldtype": "Currency", "width": 120},
+        {"label": "Sales Value", "fieldname": "sales_value", "fieldtype": "Currency", "width": 120},
+        {"label": "Coupons Value", "fieldname": "copons_value", "fieldtype": "Currency", "width": 120},
+        {"label": "Repayment Value", "fieldname": "repayment_value", "fieldtype": "Currency", "width": 120},
+        {"label": "Market Value", "fieldname": "market_value", "fieldtype": "Currency", "width": 160},
+        {"label": "Gain Value", "fieldname": "gain_value", "fieldtype": "Currency", "width": 160},
+        {"label": "XIRR", "fieldname": "xirr", "width": 150},
     ]
 
 
@@ -129,65 +81,54 @@ def get_columns() -> list[dict]:
 def get_data(portfolio, valuation_date):
     rows = []
 
-    positions = get_positions(portfolio, valuation_date)
+    transactions = get_transactions(portfolio=portfolio, date=valuation_date)
 
-    if len(positions) > 100:
-        frappe.throw("Too many bonds. Please filter portfolio.")
+    for t in transactions:
 
-    for p in positions:
-        isin = p["isin"]
-        nominal = p["nominal"]
+        # ---------- TRANSACTION DATA ----------
+        isin = t["isin"]
+        purchases_value = t["purchases_value"]
+        sales_value = t["sales_value"]
+        quantity = t["quantity"]
+
+        # ---------- MASTER DATA ----------
+        currency = "USD"
+        face_value_per_unit = 100.0
+
 
         # ---------- MARKET DATA ----------
-        price = get_market_prices(isin, valuation_date)
+        market_price = get_market_price(isin=isin, valuation_date=valuation_date)
+        accrued_interest = get_accrued_interest(isin=isin, settlement_date=valuation_date, quantity_face_value=1)
+        market_value = quantity * (market_price + accrued_interest)
 
-        clean = price.get("market_price") or 0.0
-        accrued = price.get("accrued_interest") or 0.0
-        dirty = clean + accrued
+        # ---------- CASHFLOW DATA ----------
+        principal_factor = 1.0
+        nominal_value = quantity * face_value_per_unit * principal_factor
 
-        mv_clean = nominal * clean
-        accrued_val = nominal * accrued
-        total_val = nominal * dirty
-
-        # ---------- FLOWS (CACHED) ----------
-        if isin not in flows_cache:
-            past = build_past_cashflows(isin, portfolio)
-            future = build_future_cashflows(isin, valuation_date)
-
-            # normalize once
-            flows_cache[isin] = consolidate_flows(past + future)
-
-        bond_cf = flows_cache[isin]
-
-        if len(bond_cf) > 200:
-            bond_xirr = None
-            frappe.message_log("Too Many Lines on Cashflow: max 200")
-
-        # ---------- BOND XIRR ----------
-        bond_xirr = safe_xirr(bond_cf)
-
-        # ---------- PORTFOLIO AGGREGATION ----------
-        for d, amt in bond_cf.items():
-            portfolio_cf[d] = portfolio_cf.get(d, 0.0) + amt
+        copons_value = 0.0
+        repayment_value = 0.0
 
         rows.append(
             {
                 "isin": isin,
-                "bond_name": p.get("bond_name"),
-                "nominal": nominal,
-                "clean_price": clean,
-                "accrued_interest": accrued,
-                "dirty_price": dirty,
-                "market_value_clean": mv_clean,
-                "accrued_value": accrued_val,
-                "total_value": total_val,
-                "xirr": bond_xirr,
+                "currency": currency,
+                "face_value_per_unit": face_value_per_unit,
+                "principal_factor": principal_factor,
+                "quantity": quantity,
+                "nominal_value": nominal_value,
+                "market_price": market_price,
+                "accrued_interest": accrued_interest,
+                "purchases_value": purchases_value,
+                "sales_value": sales_value,
+                "copons_value": copons_value,
+                "repayment_value": repayment_value,
+                "market_value": market_value,
+                "gain_value": (market_value + repayment_value + copons_value + sales_value - purchases_value),
+                "xirr": xirr,
             }
         )
 
-    portfolio_xirr = safe_xirr(portfolio_cf)
-
-    return rows, portfolio_xirr
+    return rows
 
 
 # ---------- TOTAL ROW ----------
@@ -209,61 +150,3 @@ def make_total_row(data, portfolio_xirr):
     }
 """
 
-# ---------- HELPERS ----------
-
-"""
-def safe_xirr(cf_dict):
-    try:
-        if len(cf_dict) < 2:
-            return None
-
-        return xirr(cf_dict)
-    except Exception:
-        return None
-
-
-def consolidate_flows(flows):
-    out = {}
-
-    for d, amt in flows:
-        if not d or amt is None:
-            continue
-
-        out[d] = out.get(d, 0.0) + float(amt)
-
-    return out
-"""
-
-# ---------- PLACEHOLDERS (you already have these) ----------
-"""
-
-def get_positions(portfolio):
-    method = frappe.get_attr(
-        "bond_management.bond_management.doctype.bond_transaction.bond_transaction.get_position"
-    )
-    return method(portfolio=portfolio)
-
-
-# currently does not exist one below is only for testing
-def get_market_price(isin, valuation_date):
-    method = frappe.get_attr(
-        "bond_management.bond_management.doctype.bond_market_prices.bond_market_prices.market_price"
-    )
-    return method(isin=isin, valuation_date=valuation_date)
-
-
-# currently does not exist one below is only for testing
-def build_past_cashflows(isin, portfolio):
-    method = frappe.get_attr(
-        "bond_management.bond_management.doctype.bond_statement.bond_statement.build_future_cashflows"
-    )
-    return method(isin=isin, portfolio=portfolio)
-
-
-def build_future_cashflows(isin, valuation_date):
-    method = frappe.get_attr(
-        "bond_management.bond_management.doctype.bond_statement.bond_statement.build_future_cashflows"
-    )
-    return method(isin=isin, valuation_date=valuation_date)
-
-"""

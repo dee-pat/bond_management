@@ -3,35 +3,48 @@ from frappe.utils import getdate
 from pyxirr import xirr
 from frappe.query_builder import DocType
 from datetime import timedelta
+from pypika import functions as fn, Case
+
 
 def get_transactions(portfolio, date):
-    transactions = frappe.qb.get_query(
-        "Bond Transactions",
-        fields=[
-            "isin",
-            "SUM(CASE WHEN transaction_type = 'purchase' THEN settlement_amount ELSE 0 END) AS purchase_settlement",
-            "SUM(CASE WHEN transaction_type = 'sales' THEN settlement_amount ELSE 0 END) AS sales_settlement",
-        ],
-        filters={"bond_portfolio": portfolio, "settlement_date": ["<=", date]},
-        group_by="isin",
-    ).run(as_dict=True)
+    BTransac = DocType("Bond Transaction")
 
-    return transactions
+    # CASE expressions
+    purchase_case = (
+        Case()
+        .when(BTransac.transaction_type == "purchase", BTransac.settlement_amount)
+        .else_(0)
+    )
 
+    sale_case = (
+        Case()
+        .when(BTransac.transaction_type == "sale", BTransac.settlement_amount)
+        .else_(0)
+    )
 
-def get_positions(portfolio, date):
-    positions = frappe.qb.get_query(
-        "Bond Transactions",
-        fields=[
-            "isin",
-            "SUM(CASE WHEN transaction_type = 'purchase' THEN -quantity_face_value ELSE quantity_face_value END) AS position",
-        ],
-        filters={"bond_portfolio": portfolio, "settlement_date": ["<=", date]},
-        group_by="isin",
-    ).run(as_dict=True)
+    quantity_case = (
+        Case()
+        .when(BTransac.transaction_type == "purchase", BTransac.quantity_face_value)
+        .when(BTransac.transaction_type == "sale", -BTransac.quantity_face_value)
+        .else_(0)
+    )
 
-    return positions
+    query = (
+        frappe.qb.from_(BTransac)
+        .select(
+            BTransac.isin,
+            fn.Sum(purchase_case).as_("purchases_value"),
+            fn.Sum(sale_case).as_("sales_value"),
+            fn.Sum(quantity_case).as_("quantity"),
+        )
+        .where(
+            (BTransac.portfolio_name == portfolio)
+            & (BTransac.settlement_date <= date)
+        )
+        .groupby(BTransac.isin)
+    )
 
+    return query.run(as_dict=True)
 
 
 
@@ -58,16 +71,4 @@ def get_market_price(isin, valuation_date):
         return result[0].market_price or 0.0
 
     return 0.0
-
-
-
-
-
-def get_bond_transactions(isin, portfolio):
-    bond_doc = frappe.get_doc(
-        "Bond Master"
-                              
-
-
-
 
