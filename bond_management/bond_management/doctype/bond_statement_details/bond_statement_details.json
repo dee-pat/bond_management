@@ -21,10 +21,10 @@
   },
   {
    "fieldname": "market_price",
-   "fieldtype": "Currency",
+   "fieldtype": "Float",
    "in_list_view": 1,
    "label": "Market Price",
-   "options": "currency"
+   "read_only": 1
   },
   {
    "fieldname": "currency",
@@ -60,7 +60,7 @@
  "index_web_pages_for_search": 1,
  "istable": 1,
  "links": [],
- "modified": "2026-07-04 22:55:33.623567",
+ "modified": "2026-07-07 19:57:58.500173",
  "modified_by": "Administrator",
  "module": "Bond Management",
  "name": "Bond Statement Details",
