@@ -10,7 +10,7 @@ from bond_management.bond_management.utils.performance import (
     get_market_price
 )
 from bond_management.bond_management.utils.accrual import get_accrued_interest, calculate_principal_factor
-from bond_management.bond_management.utils.xirr import create_past_cash_flows
+from bond_management.bond_management.utils.xirr import create_past_cash_flows, get_position
 
 # ---------- ENTRY POINT ----------
 
@@ -87,9 +87,8 @@ def get_data(portfolio, valuation_date):
 
         # ---------- TRANSACTION DATA ----------
         isin = t["isin"]
-        purchases_value = t["purchases_value"]
-        sales_value = t["sales_value"]
-        quantity = t["quantity"]
+
+        quantity = get_position(isin=isin, statement_date=valuation_date, portfolio_name=portfolio)
 
         # ---------- MASTER DATA ----------
         bond = frappe.qb.get_query("Bond Master", fields=["currency", "face_value_per_unit"]).run(as_dict=True)[0]
@@ -116,7 +115,8 @@ def get_data(portfolio, valuation_date):
         # access:
         coupons_value = totals["coupon"]
         repayment_value = totals["principal"]
-
+        purchases_value = -totals["purchase"]
+        sales_value = totals["sale"]
 
         xirr = 0.0
 
