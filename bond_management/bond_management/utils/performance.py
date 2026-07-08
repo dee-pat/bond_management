@@ -33,6 +33,7 @@ def get_transactions(portfolio, date):
         frappe.qb.from_(BTransac)
         .select(
             BTransac.isin,
+            BTransac.currency,
             fn.Sum(purchase_case).as_("purchases_value"),
             fn.Sum(sale_case).as_("sales_value"),
             fn.Sum(quantity_case).as_("quantity"),

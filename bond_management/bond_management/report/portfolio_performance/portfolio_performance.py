@@ -4,13 +4,13 @@
 import frappe
 from frappe.utils import getdate
 from pyxirr import xirr
-
+from collections import defaultdict
 from bond_management.bond_management.utils.performance import (
     get_transactions,
     get_market_price
 )
-from bond_management.bond_management.utils.xirr import get_position
-from bond_management.bond_management.utils.accrual import get_accrued_interest
+from bond_management.bond_management.utils.accrual import get_accrued_interest, calculate_principal_factor
+from bond_management.bond_management.utils.xirr import create_past_cash_flows
 
 # ---------- ENTRY POINT ----------
 
@@ -36,16 +36,16 @@ def execute(filters: dict | None = None):
 
     columns = get_columns()
     data = get_data(portfolio, valuation_date)
-    return columns, data
+
     #data, portfolio_xirr = get_data(portfolio, valuation_date)
-    """
+
     # Add summary row
     if data:
-        total_row = make_total_row(data, portfolio_xirr)
-        data.append({})
+        total_row = make_total_row(data)
+        #data.append({})
         data.append(total_row)
     return columns, data
-    """
+
 
 
 # ---------- COLUMNS ----------
@@ -57,20 +57,20 @@ def get_columns() -> list[dict]:
     One field definition per column, just like a DocType field definition.
     """
     return [
-        {"label": "ISIN", "fieldname": "isin", "width": 150},
-        {"label": "Currency", "currency": "currency", "width": 50},
-        {"label": "Face Value/Unit", "face_value_per_unit": "face_value_per_unit", "width": 50},
-        {"label": "Princlipal Factor", "principal_factor": "principal_factor", "width": 50},
-        {"label": "Number of Units", "quantity": "quantity", "width": 50},       
-        {"label": "Nominal Value", "nominal_value": "nominal_value", "width": 150},
+        {"label": "ISIN", "fieldname": "isin", "width": 140},
+        {"label": "Currency", "fieldname": "currency", "width": 90},
+        {"label": "Face Value/Unit", "fieldname": "face_value_per_unit", "width": 150},
+        {"label": "Princlipal Factor", "fieldname": "principal_factor", "fieldtype": "Float", "width": 150},
+        {"label": "Number of Units", "fieldname": "quantity", "width": 150},       
+        {"label": "Nominal Value", "fieldname": "nominal_value", "fieldtype": "Currency", "options": "currency", "width": 150},
         {"label": "Market Price", "fieldname": "market_price", "fieldtype": "Float", "width": 100},
         {"label": "Accrued Interest", "fieldname": "accrued_interest", "fieldtype": "Float", "width": 100},
-        {"label": "Purchases Value", "fieldname": "purchases_value", "fieldtype": "Currency", "width": 120},
-        {"label": "Sales Value", "fieldname": "sales_value", "fieldtype": "Currency", "width": 120},
-        {"label": "Coupons Value", "fieldname": "copons_value", "fieldtype": "Currency", "width": 120},
-        {"label": "Repayment Value", "fieldname": "repayment_value", "fieldtype": "Currency", "width": 120},
-        {"label": "Market Value", "fieldname": "market_value", "fieldtype": "Currency", "width": 160},
-        {"label": "Gain Value", "fieldname": "gain_value", "fieldtype": "Currency", "width": 160},
+        {"label": "Purchases Value", "fieldname": "purchases_value", "fieldtype": "Currency", "options": "currency", "width": 120},
+        {"label": "Sales Value", "fieldname": "sales_value", "fieldtype": "Currency", "options": "currency",  "width": 120},
+        {"label": "Coupons Value", "fieldname": "coupons_value", "fieldtype": "Currency", "options": "currency",  "width": 120},
+        {"label": "Repayment Value", "fieldname": "repayment_value", "fieldtype": "Currency", "options": "currency",  "width": 120},
+        {"label": "Market Value", "fieldname": "market_value", "fieldtype": "Currency", "options": "currency",  "width": 160},
+        {"label": "Gain Value", "fieldname": "gain_value", "fieldtype": "Currency", "options": "currency",  "width": 160},
         {"label": "XIRR", "fieldname": "xirr", "width": 150},
     ]
 
@@ -92,8 +92,9 @@ def get_data(portfolio, valuation_date):
         quantity = t["quantity"]
 
         # ---------- MASTER DATA ----------
-        currency = "USD"
-        face_value_per_unit = 100.0
+        bond = frappe.qb.get_query("Bond Master", fields=["currency", "face_value_per_unit"]).run(as_dict=True)[0]
+        currency = bond.get("currency")
+        face_value_per_unit = bond.get("face_value_per_unit")
 
 
         # ---------- MARKET DATA ----------
@@ -102,11 +103,22 @@ def get_data(portfolio, valuation_date):
         market_value = quantity * (market_price + accrued_interest)
 
         # ---------- CASHFLOW DATA ----------
-        principal_factor = 1.0
+        principal_factor = calculate_principal_factor(isin=isin, date=valuation_date)
         nominal_value = quantity * face_value_per_unit * principal_factor
 
-        copons_value = 0.0
-        repayment_value = 0.0
+        cashflows = create_past_cash_flows(isin=isin, date=valuation_date, market_price=market_price, portfolio=portfolio)
+        print("Cashflows: ", cashflows)
+        totals = defaultdict(float)
+
+        for line in cashflows:
+            totals[line.get("type")] = totals[line.get("type")] + line.get("amount") or 0
+
+        # access:
+        coupons_value = totals["coupon"]
+        repayment_value = totals["principal"]
+
+
+        xirr = 0.0
 
         rows.append(
             {
@@ -120,10 +132,10 @@ def get_data(portfolio, valuation_date):
                 "accrued_interest": accrued_interest,
                 "purchases_value": purchases_value,
                 "sales_value": sales_value,
-                "copons_value": copons_value,
+                "coupons_value": coupons_value,
                 "repayment_value": repayment_value,
                 "market_value": market_value,
-                "gain_value": (market_value + repayment_value + copons_value + sales_value - purchases_value),
+                "gain_value": (market_value + repayment_value + coupons_value + sales_value - purchases_value),
                 "xirr": xirr,
             }
         )
@@ -132,21 +144,29 @@ def get_data(portfolio, valuation_date):
 
 
 # ---------- TOTAL ROW ----------
-"""
 
-def make_total_row(data, portfolio_xirr):
-    total_nominal = sum(d["nominal"] for d in data)
-    total_clean_value = sum(d["market_value_clean"] for d in data)
-    total_accrued = sum(d["accrued_value"] for d in data)
-    total_value = sum(d["total_value"] for d in data)
+
+def make_total_row(data):
+    nominal_value = sum(d["nominal_value"] for d in data)
+    purchases_value = sum(d["purchases_value"] for d in data)   
+    sales_value = sum(d["sales_value"] for d in data)
+    coupons_value = sum(d["coupons_value"] for d in data)
+    repayment_value = sum(d["repayment_value"] for d in data)
+    market_value = sum(d["market_value"] for d in data)
+    gain_value = sum(d["gain_value"] for d in data)
+    xirr = 0.0
 
     return {
         "isin": "TOTAL",
-        "nominal": total_nominal,
-        "market_value_clean": total_clean_value,
-        "accrued_value": total_accrued,
-        "total_value": total_value,
-        "xirr": portfolio_xirr,
+        "currency": "USD",  # hardcoded for now!
+        "nominal_value": nominal_value,
+        "purchases_value": purchases_value,
+        "sales_value": sales_value,
+        "coupons_value": coupons_value,
+        "repayment_value": repayment_value,
+        "market_value": market_value,
+        "gain_value": gain_value,        
+        "xirr": xirr,
     }
-"""
+
 

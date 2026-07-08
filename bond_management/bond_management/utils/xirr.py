@@ -146,7 +146,7 @@ def create_future_cash_flows(isin, date, market_price):
                 }
             )
 
-    return future_cash_flows
+    return sorted(future_cash_flows, key=lambda x: x['date'])
 
 
 def create_past_cash_flows(isin, date, market_price, portfolio):
@@ -265,7 +265,7 @@ def create_past_cash_flows(isin, date, market_price, portfolio):
             )
     print("Past Cashflows for:", isin, past_cash_flows)
 
-    return past_cash_flows
+    return sorted(past_cash_flows, key=lambda x: x['date'])
 
 
 def get_position(isin, statement_date, portfolio_name):
