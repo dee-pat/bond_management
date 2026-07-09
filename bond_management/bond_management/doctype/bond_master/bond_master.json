@@ -1,6 +1,7 @@
 {
  "actions": [],
  "allow_bulk_edit": 1,
+ "allow_import": 1,
  "allow_rename": 1,
  "autoname": "field:isin",
  "creation": "2026-06-26 19:34:49.474062",
@@ -11,6 +12,7 @@
   "isin",
   "section_break_whu3",
   "issue_date",
+  "first_coupon_date",
   "face_value_per_unit",
   "coupon_frequency",
   "bond_type",
@@ -129,12 +131,18 @@
    "fieldname": "coupon_schedule_tab",
    "fieldtype": "Tab Break",
    "label": "Coupon Schedule"
+  },
+  {
+   "fieldname": "first_coupon_date",
+   "fieldtype": "Date",
+   "label": "First Coupon Date",
+   "reqd": 1
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-07-03 15:03:55.231169",
+ "modified": "2026-07-09 14:28:29.066942",
  "modified_by": "Administrator",
  "module": "Bond Management",
  "name": "Bond Master",

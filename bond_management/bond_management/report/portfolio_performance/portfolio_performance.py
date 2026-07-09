@@ -11,7 +11,7 @@ from bond_management.bond_management.utils.performance import (
     get_distinct_isins,
 )
 from bond_management.bond_management.utils.accrual import unit_accrued_interest, calculate_principal_factor
-from bond_management.bond_management.utils.xirr import create_past_cash_flows, get_position
+from bond_management.bond_management.utils.xirr import create_past_cash_flows, get_position, calculate_past_xirr, consolidate_cashflows
 
 # ---------- ENTRY POINT ----------
 
@@ -36,13 +36,11 @@ def execute(filters: dict | None = None):
         frappe.throw("Not permitted")
 
     columns = get_columns()
-    data = get_data(portfolio, valuation_date)
-
-    #data, portfolio_xirr = get_data(portfolio, valuation_date)
+    data, combined_cashflow = get_data(portfolio, valuation_date)
 
     # Add summary row
     if data:
-        total_row = make_total_row(data)
+        total_row = make_total_row(data, combined_cashflow)
         #data.append({})
         data.append(total_row)
     return columns, data
@@ -72,7 +70,7 @@ def get_columns() -> list[dict]:
         {"label": "Amotisation Value", "fieldname": "amortisation_value", "fieldtype": "Currency", "options": "currency",  "width": 120},
         {"label": "Market Value", "fieldname": "market_value", "fieldtype": "Currency", "options": "currency",  "width": 160},
         {"label": "Gain Value", "fieldname": "gain_value", "fieldtype": "Currency", "options": "currency",  "width": 160},
-        {"label": "XIRR", "fieldname": "xirr", "width": 150},
+        {"label": "XIRR", "fieldname": "xirr", "fieldtype": "Percent", "width": 150},
     ]
 
 
@@ -84,6 +82,7 @@ def get_data(portfolio, valuation_date):
 
     isins = get_distinct_isins(portfolio=portfolio, date=valuation_date)
 
+    combined_cashflow = []
     for bond in isins:
 
         # ---------- TRANSACTION DATA ----------
@@ -107,8 +106,8 @@ def get_data(portfolio, valuation_date):
         nominal_value = quantity * face_value_per_unit * principal_factor
 
         cashflows = create_past_cash_flows(isin=isin, date=valuation_date, market_price=market_price, portfolio=portfolio)
-        for cf in cashflows:
-            print(cf)
+        combined_cashflow.extend(cashflows)
+
         totals = defaultdict(float)
 
         for line in cashflows:
@@ -120,7 +119,12 @@ def get_data(portfolio, valuation_date):
         purchases_value = -totals["purchase"]
         sales_value = totals["sale"]
 
-        xirr = 0.0
+        xirr_abs = calculate_past_xirr(isin=isin, date=valuation_date, market_price=market_price, portfolio=portfolio)
+        if xirr_abs:
+            xirr = xirr_abs * 100
+
+        else:
+            xirr = None
 
         rows.append(
             {
@@ -142,13 +146,13 @@ def get_data(portfolio, valuation_date):
             }
         )
 
-    return rows
+    return rows, combined_cashflow
 
 
 # ---------- TOTAL ROW ----------
 
 
-def make_total_row(data):
+def make_total_row(data, combined_cashflow):
     nominal_value = sum(d["nominal_value"] for d in data)
     purchases_value = sum(d["purchases_value"] for d in data)   
     sales_value = sum(d["sales_value"] for d in data)
@@ -156,7 +160,13 @@ def make_total_row(data):
     amortisation_value = sum(d["amortisation_value"] for d in data)
     market_value = sum(d["market_value"] for d in data)
     gain_value = sum(d["gain_value"] for d in data)
-    xirr = 0.0
+    
+    #print(combined_cashflow)
+    cash_flows = consolidate_cashflows(cash_flows=combined_cashflow)
+
+    xirr_value = xirr(cash_flows, guess=0.1)*100
+
+    #xirr_value = 0.0
 
     return {
         "isin": "TOTAL",
@@ -168,7 +178,7 @@ def make_total_row(data):
         "amortisation_value": amortisation_value,
         "market_value": market_value,
         "gain_value": gain_value,        
-        "xirr": xirr,
+        "xirr": xirr_value,
     }
 
 

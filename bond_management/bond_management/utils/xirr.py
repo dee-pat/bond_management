@@ -324,3 +324,33 @@ def get_position(isin, statement_date, portfolio_name):
             position = position - r.quantity_face_value
 
     return position
+
+
+def calculate_past_xirr(isin, date, market_price, portfolio):
+    # Create past cash flows
+    past_cash_flows = create_past_cash_flows(isin, date, market_price, portfolio)
+
+    # Consolidate cash flows
+    consolidated_cash_flows = consolidate_cashflows(past_cash_flows)
+
+    # ---------- SMART GUESS ----------
+    #guess = get_last_xirr_guess(isin, date) # chnage this for future 
+
+    #if guess is None:
+    #    guess = 0.1
+
+    # Optional: clamp guess to reasonable range
+    #guess = max(min(guess, 1.0), -0.5)
+
+    guess = 0.1
+
+    # ---------- XIRR ----------
+    try:
+        xirr_value = xirr(consolidated_cash_flows, guess=guess)
+    except Exception:
+        try:
+            xirr_value = xirr(consolidated_cash_flows, guess=0.1)
+        except Exception:
+            xirr_value = None
+
+    return xirr_value
