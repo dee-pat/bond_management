@@ -90,13 +90,12 @@ def calculate_principal_factor(isin, date):
 
 
 @frappe.whitelist()
-def get_accrued_interest(isin=None, settlement_date=None, quantity_face_value=None):
+def unit_accrued_interest(isin=None, settlement_date=None):
 
-    if not isin or not settlement_date or not quantity_face_value:
+    if not isin or not settlement_date:
         return 0
 
     settlement_date = getdate(settlement_date)
-    quantity_face_value = float(quantity_face_value)
 
     bond_doc = frappe.get_doc("Bond Master", isin)
 
@@ -114,4 +113,15 @@ def get_accrued_interest(isin=None, settlement_date=None, quantity_face_value=No
         bond_doc.coupon_rate 
     )
 
-    return fraction * quantity_face_value * principal_factor
+    return fraction * principal_factor
+
+@frappe.whitelist()
+def get_accrued_interest(isin=None, settlement_date=None, quantity_face_value=None):
+    if not isin or not settlement_date or not quantity_face_value:
+        return 0
+    settlement_date = getdate(settlement_date)
+
+    return unit_accrued_interest(isin=isin, settlement_date=settlement_date) * quantity_face_value
+
+
+    

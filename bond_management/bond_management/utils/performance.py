@@ -6,6 +6,7 @@ from datetime import timedelta
 from pypika import functions as fn, Case
 
 
+
 def get_transactions(portfolio, date):
     BTransac = DocType("Bond Transaction")
 
@@ -46,6 +47,30 @@ def get_transactions(portfolio, date):
     )
 
     return query.run(as_dict=True)
+
+
+
+def get_distinct_isins(portfolio=None, date=None):
+    BTransac = DocType("Bond Transaction")
+
+    query = (
+        frappe.qb.from_(BTransac)
+        .select(BTransac.isin)
+        .distinct()
+    )
+
+    # optional filters
+    if portfolio:
+        query = query.where(BTransac.portfolio_name == portfolio)
+
+    if date:
+        query = query.where(BTransac.settlement_date <= date)
+
+    bonds = query.run(as_dict=True)
+    return sorted(bonds, key=lambda x: x['isin'])
+
+    # return as simple list
+    # return [row["isin"] for row in result]
 
 
 

@@ -1,7 +1,7 @@
 import frappe
-from frappe.utils import getdate
+from frappe.utils import getdate, add_days
 from bond_management.bond_management.utils.accrual import (
-    get_accrued_interest,
+    unit_accrued_interest,
     calculate_principal_factor,
 )
 from pyxirr import xirr
@@ -82,8 +82,8 @@ def create_future_cash_flows(isin, date, market_price):
 
     # Calculate accrued interest up to the settlement date
     settlement_date = getdate(date)
-    accrued_interest = get_accrued_interest(
-        isin=isin, settlement_date=settlement_date, quantity_face_value=1
+    accrued_interest = unit_accrued_interest(
+        isin=isin, settlement_date=settlement_date,
     )
 
     # Add accrued interest as a cash flow on the settlement date
@@ -107,6 +107,7 @@ def create_future_cash_flows(isin, date, market_price):
     # Get the coupon schedule and principal schedule from the bond document
     coupon_schedule = bond_doc.get("coupon_schedule")
     principal_schedule = bond_doc.get("principal_schedule")
+    maturity_date = bond_doc.get("maturity_date")
 
     # Iterate through the coupon schedule to add future coupon payments
     for coupon_period in coupon_schedule:
@@ -137,15 +138,25 @@ def create_future_cash_flows(isin, date, market_price):
                 * (principal_period.get("repayment_percent") or 0.0)
                 / 100.0
             )
-            future_cash_flows.append(
-                {
-                    "bond": isin,
-                    "type": "principal",
-                    "date": repayment_date,
-                    "amount": principal_payment,
-                }
+            if repayment_date == maturity_date:
+                future_cash_flows.append(
+                    {
+                        "bond": isin,
+                        "type": "sale",
+                        "date": repayment_date,
+                        "amount": principal_payment,
+                    }
+                )
+            else:
+                future_cash_flows.append(
+                    {
+                        "bond": isin,
+                        "type": "amortisation",
+                        "date": repayment_date,
+                        "amount": principal_payment,
+                    }
             )
-
+    future_cash_flows = [d for d in future_cash_flows if d.get('amount') != 0.0]
     return sorted(future_cash_flows, key=lambda x: x['date'])
 
 
@@ -157,10 +168,10 @@ def create_past_cash_flows(isin, date, market_price, portfolio):
     past_cash_flows = []
 
     # Calculate accrued interest up to the settlement date
-    date = getdate(date)
+    settlement_date = getdate(date)
     position = get_position(isin, statement_date=date, portfolio_name=portfolio)
-    accrued_interest = get_accrued_interest(
-        isin=isin, settlement_date=date, quantity_face_value=position
+    accrued_interest = unit_accrued_interest(
+        isin=isin, settlement_date=settlement_date,
     )
 
     # Add accrued interest as a cash flow on the settlement date
@@ -168,7 +179,7 @@ def create_past_cash_flows(isin, date, market_price, portfolio):
         {
             "bond": isin,
             "type": "market_price",
-            "date": date,
+            "date": settlement_date,
             "amount": market_price * position,
         }
     )
@@ -176,14 +187,15 @@ def create_past_cash_flows(isin, date, market_price, portfolio):
         {
             "bond": isin,
             "type": "accrued_interest",
-            "date": date,
-            "amount": accrued_interest,
+            "date": settlement_date,
+            "amount": accrued_interest * position,
         }
     )
 
     # Get the coupon schedule and principal schedule from the bond document
     coupon_schedule = bond_doc.get("coupon_schedule")
     principal_schedule = bond_doc.get("principal_schedule")
+    maturity_date = bond_doc.get("maturity_date")
 
     # Iterate through the coupon schedule to add past coupon payments
     for coupon_period in coupon_schedule:
@@ -191,24 +203,37 @@ def create_past_cash_flows(isin, date, market_price, portfolio):
         position = get_position(
             isin, statement_date=coupon_date, portfolio_name=portfolio
         )
-        if coupon_date <= date and position > 0:
+        if coupon_date <= settlement_date:
             principal_factor = calculate_principal_factor(isin, coupon_date)
             interest_factor = (bond_doc.coupon_rate / 100) / int(
                 bond_doc.coupon_frequency
             )
-            coupon_payment = (
+            coupon_rate = (
                 interest_factor
                 * bond_doc.face_value_per_unit
                 * principal_factor
-                * position
             )
-            past_cash_flows.append(
-                {
-                    "bond": isin,
-                    "type": "coupon",
-                    "date": coupon_date,
-                    "amount": coupon_payment,
-                }
+            if coupon_date == maturity_date:
+                position = get_position(
+                        isin, statement_date=add_days(coupon_date, days=-1), portfolio_name=portfolio
+                    )
+                print("\n New Coupon Date:", add_days(coupon_date, days=-1),"\n")
+                past_cash_flows.append(
+                    {
+                        "bond": isin,
+                        "type": "coupon",
+                        "date": coupon_date,
+                        "amount": coupon_rate * position,
+                    }
+                )
+            elif position > 0:
+                past_cash_flows.append(
+                    {
+                        "bond": isin,
+                        "type": "coupon",
+                        "date": coupon_date,
+                        "amount": coupon_rate * position,
+                    }
             )
 
     # Iterate through the principal schedule to add past principal repayments
@@ -217,20 +242,29 @@ def create_past_cash_flows(isin, date, market_price, portfolio):
         position = get_position(
             isin, statement_date=repayment_date, portfolio_name=portfolio
         )
-        if repayment_date <= date and position > 0:
-            principal_payment = (
+        if repayment_date <= settlement_date:
+            principal_amount = (
                 bond_doc.face_value_per_unit
                 * (principal_period.get("repayment_percent") or 0.0)
-                / 100.0
-                * position
+                / 100.0 * position
             )
-            past_cash_flows.append(
-                {
-                    "bond": isin,
-                    "type": "principal",
-                    "date": repayment_date,
-                    "amount": principal_payment,
-                }
+            if repayment_date == maturity_date:
+                past_cash_flows.append(
+                    {
+                        "bond": isin,
+                        "type": "sale",
+                        "date": repayment_date,
+                        "amount": principal_amount,
+                    }
+                )
+            else:
+                past_cash_flows.append(
+                    {
+                        "bond": isin,
+                        "type": "amortisation",
+                        "date": repayment_date,
+                        "amount": principal_amount,
+                    }
             )
 
     rows = frappe.get_all(
@@ -263,8 +297,7 @@ def create_past_cash_flows(isin, date, market_price, portfolio):
                     "amount": r.settlement_amount,
                 }
             )
-    print("Past Cashflows for:", isin, past_cash_flows)
-
+    past_cash_flows = [d for d in past_cash_flows if d.get('amount') != 0.0]
     return sorted(past_cash_flows, key=lambda x: x['date'])
 
 

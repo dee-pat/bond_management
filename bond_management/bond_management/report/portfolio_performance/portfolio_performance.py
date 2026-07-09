@@ -7,9 +7,10 @@ from pyxirr import xirr
 from collections import defaultdict
 from bond_management.bond_management.utils.performance import (
     get_transactions,
-    get_market_price
+    get_market_price,
+    get_distinct_isins,
 )
-from bond_management.bond_management.utils.accrual import get_accrued_interest, calculate_principal_factor
+from bond_management.bond_management.utils.accrual import unit_accrued_interest, calculate_principal_factor
 from bond_management.bond_management.utils.xirr import create_past_cash_flows, get_position
 
 # ---------- ENTRY POINT ----------
@@ -57,7 +58,7 @@ def get_columns() -> list[dict]:
     One field definition per column, just like a DocType field definition.
     """
     return [
-        {"label": "ISIN", "fieldname": "isin", "width": 140},
+        {"label": "ISIN", "fieldname": "isin", "fieldtype": "Link", "options": "Bond Master", "width": 140},
         {"label": "Currency", "fieldname": "currency", "width": 90},
         {"label": "Face Value/Unit", "fieldname": "face_value_per_unit", "width": 150},
         {"label": "Princlipal Factor", "fieldname": "principal_factor", "fieldtype": "Float", "width": 150},
@@ -68,7 +69,7 @@ def get_columns() -> list[dict]:
         {"label": "Purchases Value", "fieldname": "purchases_value", "fieldtype": "Currency", "options": "currency", "width": 120},
         {"label": "Sales Value", "fieldname": "sales_value", "fieldtype": "Currency", "options": "currency",  "width": 120},
         {"label": "Coupons Value", "fieldname": "coupons_value", "fieldtype": "Currency", "options": "currency",  "width": 120},
-        {"label": "Repayment Value", "fieldname": "repayment_value", "fieldtype": "Currency", "options": "currency",  "width": 120},
+        {"label": "Amotisation Value", "fieldname": "amortisation_value", "fieldtype": "Currency", "options": "currency",  "width": 120},
         {"label": "Market Value", "fieldname": "market_value", "fieldtype": "Currency", "options": "currency",  "width": 160},
         {"label": "Gain Value", "fieldname": "gain_value", "fieldtype": "Currency", "options": "currency",  "width": 160},
         {"label": "XIRR", "fieldname": "xirr", "width": 150},
@@ -81,12 +82,12 @@ def get_columns() -> list[dict]:
 def get_data(portfolio, valuation_date):
     rows = []
 
-    transactions = get_transactions(portfolio=portfolio, date=valuation_date)
+    isins = get_distinct_isins(portfolio=portfolio, date=valuation_date)
 
-    for t in transactions:
+    for bond in isins:
 
         # ---------- TRANSACTION DATA ----------
-        isin = t["isin"]
+        isin = bond["isin"]
 
         quantity = get_position(isin=isin, statement_date=valuation_date, portfolio_name=portfolio)
 
@@ -98,7 +99,7 @@ def get_data(portfolio, valuation_date):
 
         # ---------- MARKET DATA ----------
         market_price = get_market_price(isin=isin, valuation_date=valuation_date)
-        accrued_interest = get_accrued_interest(isin=isin, settlement_date=valuation_date, quantity_face_value=1)
+        accrued_interest = unit_accrued_interest(isin=isin, settlement_date=valuation_date)
         market_value = quantity * (market_price + accrued_interest)
 
         # ---------- CASHFLOW DATA ----------
@@ -106,7 +107,8 @@ def get_data(portfolio, valuation_date):
         nominal_value = quantity * face_value_per_unit * principal_factor
 
         cashflows = create_past_cash_flows(isin=isin, date=valuation_date, market_price=market_price, portfolio=portfolio)
-        print("Cashflows: ", cashflows)
+        for cf in cashflows:
+            print(cf)
         totals = defaultdict(float)
 
         for line in cashflows:
@@ -114,7 +116,7 @@ def get_data(portfolio, valuation_date):
 
         # access:
         coupons_value = totals["coupon"]
-        repayment_value = totals["principal"]
+        amortisation_value = totals["amortisation"]
         purchases_value = -totals["purchase"]
         sales_value = totals["sale"]
 
@@ -133,9 +135,9 @@ def get_data(portfolio, valuation_date):
                 "purchases_value": purchases_value,
                 "sales_value": sales_value,
                 "coupons_value": coupons_value,
-                "repayment_value": repayment_value,
+                "amortisation_value": amortisation_value,
                 "market_value": market_value,
-                "gain_value": (market_value + repayment_value + coupons_value + sales_value - purchases_value),
+                "gain_value": (market_value + amortisation_value + coupons_value + sales_value - purchases_value),
                 "xirr": xirr,
             }
         )
@@ -151,7 +153,7 @@ def make_total_row(data):
     purchases_value = sum(d["purchases_value"] for d in data)   
     sales_value = sum(d["sales_value"] for d in data)
     coupons_value = sum(d["coupons_value"] for d in data)
-    repayment_value = sum(d["repayment_value"] for d in data)
+    amortisation_value = sum(d["amortisation_value"] for d in data)
     market_value = sum(d["market_value"] for d in data)
     gain_value = sum(d["gain_value"] for d in data)
     xirr = 0.0
@@ -163,7 +165,7 @@ def make_total_row(data):
         "purchases_value": purchases_value,
         "sales_value": sales_value,
         "coupons_value": coupons_value,
-        "repayment_value": repayment_value,
+        "amortisation_value": amortisation_value,
         "market_value": market_value,
         "gain_value": gain_value,        
         "xirr": xirr,
