@@ -4,9 +4,8 @@
 import frappe
 from frappe.model.document import Document
 from frappe.utils import getdate
-from bond_management.bond_management.utils.coupon_schedule import (
-    generate_coupon_schedule,
-)
+from bond_management.bond_management.utils.coupon_schedule import get_coupon_schedule
+
 from bond_management.bond_management.utils.accrual import calculate_accrued_fraction
 from bond_management.bond_management.utils.xirr import create_past_cash_flows
 
@@ -40,9 +39,8 @@ class BondTransaction(Document):
             if self.quantity_face_value > position:
                 frappe.throw("Cannot sell more than current position")
 
-        coupon_schedule = generate_coupon_schedule(
-            self.issue_date, self.maturity_date, self.coupon_frequency
-        )
+        coupon_schedule = get_coupon_schedule(self.isin)
+
         accrued_fraction = calculate_accrued_fraction(
             coupon_schedule,
             self.settlement_date,

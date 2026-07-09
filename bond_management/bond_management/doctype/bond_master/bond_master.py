@@ -52,7 +52,10 @@ class BondMaster(Document):
 		schedule = generate_coupon_schedule(
 			self.issue_date,
 			self.maturity_date,
-			self.coupon_frequency
+			self.coupon_frequency,
+			self.coupon_rate,
+			self.first_coupon_date,
+    		self.day_count_convention,
 		)
 
 		self.set("coupon_schedule", [])

@@ -203,16 +203,16 @@ def create_past_cash_flows(isin, date, market_price, portfolio):
         position = get_position(
             isin, statement_date=coupon_date, portfolio_name=portfolio
         )
+        coupon_factor = coupon_period.get("coupon_factor") / 100
+        print ("\ncoupon_factor : ",coupon_factor, " for ",isin)
         if coupon_date <= settlement_date:
             principal_factor = calculate_principal_factor(isin, coupon_date)
-            interest_factor = (bond_doc.coupon_rate / 100) / int(
-                bond_doc.coupon_frequency
-            )
             coupon_rate = (
-                interest_factor
+                coupon_factor
                 * bond_doc.face_value_per_unit
                 * principal_factor
             )
+
             if coupon_date == maturity_date:
                 position = get_position(
                         isin, statement_date=add_days(coupon_date, days=-1), portfolio_name=portfolio
@@ -334,23 +334,14 @@ def calculate_past_xirr(isin, date, market_price, portfolio):
     consolidated_cash_flows = consolidate_cashflows(past_cash_flows)
 
     # ---------- SMART GUESS ----------
-    #guess = get_last_xirr_guess(isin, date) # chnage this for future 
-
-    #if guess is None:
-    #    guess = 0.1
-
-    # Optional: clamp guess to reasonable range
-    #guess = max(min(guess, 1.0), -0.5)
-
-    guess = 0.1
+    
+    guess = 0.1 # work on this later
 
     # ---------- XIRR ----------
+
     try:
-        xirr_value = xirr(consolidated_cash_flows, guess=guess)
+        xirr_value = xirr(consolidated_cash_flows, guess=0.1)
     except Exception:
-        try:
-            xirr_value = xirr(consolidated_cash_flows, guess=0.1)
-        except Exception:
-            xirr_value = None
+        xirr_value = None
 
     return xirr_value

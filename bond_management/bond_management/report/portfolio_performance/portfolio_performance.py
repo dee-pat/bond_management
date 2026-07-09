@@ -11,7 +11,7 @@ from bond_management.bond_management.utils.performance import (
     get_distinct_isins,
 )
 from bond_management.bond_management.utils.accrual import unit_accrued_interest, calculate_principal_factor
-from bond_management.bond_management.utils.xirr import create_past_cash_flows, get_position, calculate_past_xirr, consolidate_cashflows
+from bond_management.bond_management.utils.xirr import create_past_cash_flows, get_position, consolidate_cashflows, calculate_past_xirr
 
 # ---------- ENTRY POINT ----------
 
