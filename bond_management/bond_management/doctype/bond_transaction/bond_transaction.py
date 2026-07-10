@@ -6,7 +6,7 @@ from frappe.model.document import Document
 from frappe.utils import getdate
 from bond_management.bond_management.utils.coupon_schedule import get_coupon_schedule
 
-from bond_management.bond_management.utils.accrual import calculate_accrued_fraction
+from bond_management.bond_management.utils.accrual import get_accrued_interest
 from bond_management.bond_management.utils.xirr import create_past_cash_flows
 
 
@@ -41,17 +41,11 @@ class BondTransaction(Document):
 
         coupon_schedule = get_coupon_schedule(self.isin)
 
-        accrued_fraction = calculate_accrued_fraction(
-            coupon_schedule,
-            self.settlement_date,
-            self.day_count_convention,
-            self.face_value_per_unit,
-            self.coupon_frequency,
-            self.coupon_rate,
+        self.accrued_interest_calculated = get_accrued_interest(
+            isin=self.isin,
+            settlement_date=self.settlement_date,
+            quantity_face_value=self.quantity_face_value,
         )
-        self.accrued_interest_calculated = (
-            self.quantity_face_value or 0
-        ) * accrued_fraction
 
     def get_position(self, isin, portfolio_name, exclude_name=None):
         query = frappe.qb.get_query(

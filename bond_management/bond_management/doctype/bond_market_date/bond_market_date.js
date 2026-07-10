@@ -107,7 +107,7 @@ function render_yield_curve(frm) {
 
     let valuation_date = frm.doc.date;
 
-    // 🔹 Build dataset
+    // Build dataset
     let data = rows.map(row => {
 
         let date = row.weighted_avg_repayment_date || row.maturity_date;
@@ -127,27 +127,27 @@ function render_yield_curve(frm) {
         return;
     }
 
-    // 🔹 Sort by maturity (IMPORTANT)
+    // Sort by maturity (IMPORTANT)
     data.sort((a, b) => a.years - b.years);
 
-    // 🔹 X axis = years (REAL spacing)
+    // X axis = years (REAL spacing)
     const labels = data.map(d => {
         return `${d.date}\n${d.isin}`;
     });
 
-    // 🔹 Y axis = %
+    // Y axis = %
     const values = data.map(d => d.yield * 100);
 
-    // 🔹 Build tooltip labels (dates + isin)
+    // Build tooltip labels (dates + isin)
     const tooltip_labels = data.map(d => {
         return `${d.date} | ${d.isin}`;
     });
 
-    // 🔹 Create container
+    // Create container
     let container = $('<div>').css({ height: '340px' });
     wrapper.append(container);
 
-    // 🔹 Render chart
+    // Render chart
     let chart = new frappe.Chart(container[0], {
         title: "Yield Curve",
         data: {
@@ -166,8 +166,9 @@ function render_yield_curve(frm) {
             spline: 1
         }
     });
+ 
 
-    // 🔥 Inject custom tooltip (this is the trick)
+    // Inject custom tooltip
     chart.parent.querySelectorAll('.chart-point').forEach((point, i) => {
         point.setAttribute('title', tooltip_labels[i]);
     });

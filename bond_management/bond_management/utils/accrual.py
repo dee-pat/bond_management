@@ -73,7 +73,6 @@ def calculate_accrued_fraction(
         end_date=settlement,
         coupon_frequency=coupon_frequency,
     )
-
     return coupon_rate / 100 * face_value_per_unit * fraction
 
 
@@ -128,7 +127,6 @@ def get_accrued_interest(isin=None, settlement_date=None, quantity_face_value=No
         return 0
     settlement_date = getdate(settlement_date)
 
-    return (
-        unit_accrued_interest(isin=isin, settlement_date=settlement_date)
-        * quantity_face_value
+    return unit_accrued_interest(isin=isin, settlement_date=settlement_date) * float(
+        quantity_face_value
     )

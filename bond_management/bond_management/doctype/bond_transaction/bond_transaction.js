@@ -27,6 +27,7 @@ function calculate_all(frm) {
         args: {
             isin: frm.doc.isin,
             settlement_date: frm.doc.settlement_date,
+            quantity_face_value: frm.doc.quantity_face_value 
         },
         callback: function(r) {
             if (r.message !== undefined) {
