@@ -9,7 +9,8 @@
  "field_order": [
   "section_break_prts",
   "date",
-  "bond_market_prices"
+  "bond_market_prices",
+  "yield_curve_chart"
  ],
  "fields": [
   {
@@ -26,12 +27,17 @@
    "fieldtype": "Table",
    "label": "Bond Market Prices",
    "options": "Bond Market Prices"
+  },
+  {
+   "fieldname": "yield_curve_chart",
+   "fieldtype": "HTML",
+   "label": "Yield Curve "
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-07-05 10:55:47.814297",
+ "modified": "2026-07-10 09:08:50.448904",
  "modified_by": "Administrator",
  "module": "Bond Management",
  "name": "Bond Market Date",

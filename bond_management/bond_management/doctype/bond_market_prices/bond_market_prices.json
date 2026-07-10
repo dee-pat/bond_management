@@ -13,7 +13,8 @@
   "market_price",
   "currency",
   "future_xirr",
-  "copy_cashflows"
+  "copy_cashflows",
+  "maturity_date"
  ],
  "fields": [
   {
@@ -60,13 +61,19 @@
    "fieldtype": "Button",
    "in_list_view": 1,
    "label": "Copy Cashflows"
+  },
+  {
+   "fieldname": "maturity_date",
+   "fieldtype": "Date",
+   "label": "Maturity Date",
+   "read_only": 1
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "istable": 1,
  "links": [],
- "modified": "2026-07-05 11:51:54.458883",
+ "modified": "2026-07-10 09:30:58.957673",
  "modified_by": "Administrator",
  "module": "Bond Management",
  "name": "Bond Market Prices",

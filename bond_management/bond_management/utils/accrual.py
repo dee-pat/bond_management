@@ -1,5 +1,6 @@
 import frappe
 from frappe.utils import getdate
+from bond_management.bond_management.utils.coupon_schedule import year_fraction
 
 
 def get_coupon_period(coupon_schedule, settlement_date):
@@ -10,7 +11,7 @@ def get_coupon_period(coupon_schedule, settlement_date):
     period = None
     for row in coupon_schedule:
         start = getdate(row.get("period_start"))
-        end   = getdate(row.get("period_end"))
+        end = getdate(row.get("period_end"))
         if start and end:
             if start <= settlement_date <= end:
                 period = row
@@ -23,11 +24,7 @@ def days_30E_360(start, end):
     d1 = min(start.day, 30)
     d2 = min(end.day, 30)
 
-    return (
-        (end.year - start.year) * 360 +
-        (end.month - start.month) * 30 +
-        (d2 - d1)
-    )
+    return (end.year - start.year) * 360 + (end.month - start.month) * 30 + (d2 - d1)
 
 
 def calculate_accrued_fraction(
@@ -36,7 +33,7 @@ def calculate_accrued_fraction(
     day_count_convention,
     face_value_per_unit,
     coupon_frequency,
-    coupon_rate
+    coupon_rate,
 ):
     period = get_coupon_period(coupon_schedule, settlement_date)
 
@@ -44,9 +41,10 @@ def calculate_accrued_fraction(
         return 0
 
     start = getdate(period.get("period_start"))
-    end   = getdate(period.get("period_end"))
+    end = getdate(period.get("period_end"))
     settlement = getdate(settlement_date)
 
+    """
     # Day count
     if day_count_convention == "30E/360":
         accrued_days = days_30E_360(start, settlement)
@@ -68,6 +66,13 @@ def calculate_accrued_fraction(
         return 0
 
     fraction = accrued_days / total_days
+    """
+    fraction = year_fraction(
+        day_count_convention=day_count_convention,
+        start_date=start,
+        end_date=settlement,
+        coupon_frequency=coupon_frequency,
+    )
 
     return coupon_rate / 100 * face_value_per_unit * fraction
 
@@ -83,10 +88,11 @@ def calculate_principal_factor(isin, date):
 
     for period in principal_schedule:
         if settlement_date > period.get("repayment_date"):
-            principal_factor = principal_factor - (period.get("repayment_percent") or 0.0) / 100.0
+            principal_factor = (
+                principal_factor - (period.get("repayment_percent") or 0.0) / 100.0
+            )
 
     return principal_factor
-
 
 
 @frappe.whitelist()
@@ -110,10 +116,11 @@ def unit_accrued_interest(isin=None, settlement_date=None):
         bond_doc.day_count_convention,
         bond_doc.face_value_per_unit,
         bond_doc.coupon_frequency,
-        bond_doc.coupon_rate 
+        bond_doc.coupon_rate,
     )
 
     return fraction * principal_factor
+
 
 @frappe.whitelist()
 def get_accrued_interest(isin=None, settlement_date=None, quantity_face_value=None):
@@ -121,7 +128,7 @@ def get_accrued_interest(isin=None, settlement_date=None, quantity_face_value=No
         return 0
     settlement_date = getdate(settlement_date)
 
-    return unit_accrued_interest(isin=isin, settlement_date=settlement_date) * quantity_face_value
-
-
-    
+    return (
+        unit_accrued_interest(isin=isin, settlement_date=settlement_date)
+        * quantity_face_value
+    )
