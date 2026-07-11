@@ -278,34 +278,33 @@ def create_past_cash_flows(isin, date, market_price, portfolio):
                     }
                 )
 
-    rows = frappe.get_all(
+    rows = frappe.qb.get_query(
         "Bond Transaction",
         filters={
             "isin": isin,
             "portfolio_name": portfolio,
             "settlement_date": ["<=", date],
-            # "docstatus": 1
         },
         fields=["transaction_type", "settlement_amount", "settlement_date"],
-    )
+    ).run(as_dict=True)
 
-    for r in rows:
-        if r.transaction_type == "Purchase":
+    for row in rows:
+        if row["transaction_type"] == "Purchase":
             past_cash_flows.append(
                 {
                     "bond": isin,
                     "type": "purchase",
-                    "date": r.settlement_date,
-                    "amount": -r.settlement_amount,
+                    "date": row["settlement_date"],
+                    "amount": -row["settlement_amount"],
                 }
             )
-        elif r.transaction_type == "Sale":
+        elif row["transaction_type"] == "Sale":
             past_cash_flows.append(
                 {
                     "bond": isin,
                     "type": "sale",
-                    "date": r.settlement_date,
-                    "amount": r.settlement_amount,
+                    "date": row["settlement_date"],
+                    "amount": row["settlement_amount"],
                 }
             )
     past_cash_flows = [d for d in past_cash_flows if d.get("amount") != 0.0]
@@ -313,26 +312,27 @@ def create_past_cash_flows(isin, date, market_price, portfolio):
 
 
 def get_position(isin, statement_date, portfolio_name):
-    rows = frappe.get_all(
+    rows = frappe.qb.get_query(
         "Bond Transaction",
         filters={
             "isin": isin,
             "portfolio_name": portfolio_name,
             "settlement_date": ["<=", statement_date],
-            # "docstatus": 1
         },
         fields=["transaction_type", "quantity_face_value", "maturity_date"],
-    )
+    ).run(as_dict=True)
 
     position = 0
 
-    for r in rows:
-        if r.maturity_date and getdate(r.maturity_date) <= getdate(statement_date):
+    for row in rows:
+        if row["maturity_date"] and getdate(row["maturity_date"]) <= getdate(
+            statement_date
+        ):
             return 0  # Bond has matured, no further transactions affect position
-        if r.transaction_type == "Purchase":
-            position = position + r.quantity_face_value
-        elif r.transaction_type == "Sale":
-            position = position - r.quantity_face_value
+        if row["transaction_type"] == "Purchase":
+            position += row["quantity_face_value"]
+        elif row["transaction_type"] == "Sale":
+            position -= row["quantity_face_value"]
 
     return position
 

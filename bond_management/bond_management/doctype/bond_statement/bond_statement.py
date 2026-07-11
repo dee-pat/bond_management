@@ -70,9 +70,9 @@ def fetch_holdings(portfolio_name, date):
 
 
 def get_portfolio_bonds(portfolio_name):
-    return frappe.get_all(
+    return frappe.qb.get_query(
         "Bond Transaction",
         filters={"portfolio_name": portfolio_name},
-        pluck="isin",
         distinct=True,
-    )
+        fields=["isin"],
+    ).run(pluck=True)

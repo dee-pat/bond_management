@@ -30,3 +30,8 @@ Never:
 - suggest monkey patching core Frappe
 - downgrade dependencies
 - mix v15 (or older versions) and v16 APIs
+
+Frappe Python API
+- avoid frappe.db.get_list and frappe.db.get_all 
+- use frappe.qb.get_query instead 
+
