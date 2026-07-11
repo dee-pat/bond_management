@@ -9,33 +9,32 @@ from bond_management.bond_management.utils.accrual import (
     unit_accrued_interest,
 )
 
+DEFAULT_XIRR_GUESS = 0.1
+
 
 def calculate_future_xirr(isin, date, market_price):
-    # Create future cash flows
     future_cash_flows = create_future_cash_flows(isin, date, market_price)
-
-    # Consolidate cash flows
     consolidated_cash_flows = consolidate_cashflows(future_cash_flows)
-
-    # ---------- SMART GUESS ----------
     guess = get_last_xirr_guess(isin, date)
-
     if guess is None:
-        guess = 0.1
-
-    # Optional: clamp guess to reasonable range
+        guess = DEFAULT_XIRR_GUESS
     guess = max(min(guess, 1.0), -0.5)
-
     return calculate_xirr(consolidated_cash_flows, guess)
 
 
-def calculate_xirr(cash_flows, guess=0.1):
+def calculate_xirr(cash_flows, guess=DEFAULT_XIRR_GUESS):
     """Return an XIRR value, or ``None`` when cash flows have no valid solution."""
     if len(cash_flows) < 2:
         return None
 
     try:
         return xirr(cash_flows, guess=guess)
+    except (ArithmeticError, ValueError):
+        if guess == DEFAULT_XIRR_GUESS:
+            return None
+
+    try:
+        return xirr(cash_flows, guess=DEFAULT_XIRR_GUESS)
     except (ArithmeticError, ValueError):
         return None
 
