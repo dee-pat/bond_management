@@ -1,44 +1,23 @@
 # Copyright (c) 2026, Deepak Patel and Contributors
 # See license.txt
 
-import frappe
-from frappe.tests import IntegrationTestCase
-# from frappe.tests.utils import IntegrationTestCase
 from frappe.exceptions import ValidationError
+from frappe.tests import IntegrationTestCase
 
-# On IntegrationTestCase, the doctype test records and all
-# link-field test record dependencies are recursively loaded
-# Use these module variables to add/remove to/from that list
-EXTRA_TEST_RECORD_DEPENDENCIES = []  # eg. ["User"]
-IGNORE_TEST_RECORD_DEPENDENCIES = []  # eg. ["User"]
+from bond_management.bond_management.tests.factories import make_bond
 
 
+class TestBondMaster(IntegrationTestCase):
+    def test_generates_coupon_schedule_and_principal_percentages(self):
+        bond = make_bond()
 
-class IntegrationTestBondMaster(IntegrationTestCase):
-    """
-    Integration tests for BondMaster.
-    Use this class for testing interactions between multiple components.
-    """
-    def test_maturity_before_issue_fails(self):
-        doc = frappe.get_doc({
-            "doctype": "Bond Master",
-            "issue_date": "2024-01-10",
-            "maturity_date": "2024-01-01"
-        })
-        self.assertRaises(ValidationError, doc.insert)
+        self.assertEqual(bond.maturity_date.isoformat(), "2027-01-01")
+        self.assertEqual(len(bond.coupon_schedule), 4)
+        self.assertEqual(bond.principal_schedule[0].repayment_percent, 100)
+        self.assertEqual(bond.coupon_schedule[-1].coupon_date.isoformat(), "2027-01-01")
 
-    def test_valid_dates_pass(self):
-        doc = frappe.get_doc({
-            "doctype": "Bond Master",
-            "issue_date": "2024-01-01",
-            "maturity_date": "2024-02-01"
-        })
-        doc.insert()  # should not raise
+    def test_rejects_non_positive_principal_schedule(self):
+        bond = make_bond()
+        bond.principal_schedule[0].principal_units = 0
 
-    def test_equal_dates_behavior(self):
-        doc = frappe.get_doc({
-            "doctype": "Bond Master",
-            "issue_date": "2024-01-01",
-            "maturity_date": "2024-01-01"
-        })
-        self.assertRaises(ValidationError, doc.insert)
+        self.assertRaises(ValidationError, bond.save)

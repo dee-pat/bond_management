@@ -1,22 +1,28 @@
 # Copyright (c) 2026, Deepak Patel and Contributors
 # See license.txt
 
-# import frappe
 from frappe.tests import IntegrationTestCase
 
-
-# On IntegrationTestCase, the doctype test records and all
-# link-field test record dependencies are recursively loaded
-# Use these module variables to add/remove to/from that list
-EXTRA_TEST_RECORD_DEPENDENCIES = []  # eg. ["User"]
-IGNORE_TEST_RECORD_DEPENDENCIES = []  # eg. ["User"]
+from bond_management.bond_management.tests.factories import make_bond, make_market_date
 
 
+class TestBondMarketDate(IntegrationTestCase):
+    def test_updates_market_price_derived_fields_and_cashflows(self):
+        bond = make_bond()
+        market_date = make_market_date(bond)
+        price_row = market_date.bond_market_prices[0]
 
-class IntegrationTestBondMarketDate(IntegrationTestCase):
-	"""
-	Integration tests for BondMarketDate.
-	Use this class for testing interactions between multiple components.
-	"""
+        self.assertEqual(price_row.maturity_date, bond.maturity_date)
+        self.assertEqual(price_row.principal_factor, 1)
+        self.assertIsNotNone(price_row.future_xirr)
 
-	pass
+        cashflows = market_date.get_cashflows(bond.name, 100)
+        self.assertGreater(len(cashflows), 2)
+        self.assertEqual(cashflows[0]["type"], "market_price")
+
+    def test_ignores_incomplete_market_price_rows(self):
+        market_date = make_market_date(make_bond())
+        market_date.append("bond_market_prices", {"market_price": 100})
+
+        market_date.save()
+        self.assertIsNone(market_date.bond_market_prices[-1].maturity_date)

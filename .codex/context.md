@@ -33,5 +33,5 @@ Never:
 
 Frappe Python API
 - avoid frappe.db.get_list and frappe.db.get_all 
-- use frappe.qb.get_query instead 
+- use frappe.qb.get_query instead of the 2 above
 
