@@ -4,10 +4,8 @@
 import frappe
 from frappe.model.document import Document
 from frappe.utils import getdate
-from bond_management.bond_management.utils.coupon_schedule import get_coupon_schedule
 
 from bond_management.bond_management.utils.accrual import get_accrued_interest
-from bond_management.bond_management.utils.xirr import create_past_cash_flows
 
 
 class BondTransaction(Document):
@@ -18,8 +16,8 @@ class BondTransaction(Document):
         self.commission_amount = (
             (self.principal or 0) * float(self.commission or 0) / 100
         )
-        self.settlement_amount = (self.price or 0) * (self.quantity_face_value or 0) + (
-            self.accrued_interest_paid or 0
+        self.settlement_amount = (
+            self.principal * (self.price or 0) / 100 + (self.accrued_interest_paid or 0)
         )
 
         if getdate(self.settlement_date) > getdate(self.maturity_date):
@@ -33,13 +31,8 @@ class BondTransaction(Document):
             exclude_name=self.name,
         )
 
-        print("Current Position: ", position)
-
-        if self.transaction_type == "Sale":
-            if self.quantity_face_value > position:
-                frappe.throw("Cannot sell more than current position")
-
-        coupon_schedule = get_coupon_schedule(self.isin)
+        if self.transaction_type == "Sale" and self.quantity_face_value > position:
+            frappe.throw("Cannot sell more than current position")
 
         self.accrued_interest_calculated = get_accrued_interest(
             isin=self.isin,
@@ -63,7 +56,6 @@ class BondTransaction(Document):
         )
 
         txs = query.run(as_dict=True)
-        print("Transactions: ", txs)
         position = 0
 
         for tx in txs:
@@ -72,8 +64,8 @@ class BondTransaction(Document):
                 continue
 
             if tx.transaction_type == "Sale":
-                position = position - tx.quantity_face_value
+                position -= tx.quantity_face_value
             else:
-                position = position + tx.quantity_face_value
+                position += tx.quantity_face_value
 
         return position

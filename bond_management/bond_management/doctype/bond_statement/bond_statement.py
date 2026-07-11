@@ -4,6 +4,8 @@
 import frappe
 from frappe.model.document import Document
 from frappe.utils import getdate
+
+from bond_management.bond_management.utils.performance import get_market_price
 from bond_management.bond_management.utils.xirr import (
     calculate_principal_factor,
     create_past_cash_flows,
@@ -13,7 +15,6 @@ from bond_management.bond_management.utils.xirr import (
 
 class BondStatement(Document):
     def validate(self):
-        pass
         self.populate_holdings()
 
     def populate_holdings(self):
@@ -29,9 +30,7 @@ class BondStatement(Document):
                 continue
 
             statement_date = self.statement_date
-            market_price = get_market_price(
-                p.get("isin"), statement_date, self.portfolio_name
-            )
+            market_price = get_market_price(p.get("isin"), statement_date)
             principal_factor = calculate_principal_factor(p.get("isin"), statement_date)
 
             self.append(
@@ -48,8 +47,6 @@ class BondStatement(Document):
 
 @frappe.whitelist()
 def fetch_holdings(portfolio_name, date):
-    from frappe.utils import getdate
-
     date = getdate(date)
 
     results = []
@@ -69,7 +66,6 @@ def fetch_holdings(portfolio_name, date):
         results.append(
             {"isin": bond_doc.name, "quantity": qty, "currency": bond_doc.currency}
         )
-    print("Results:", results)
     return results
 
 
@@ -80,26 +76,3 @@ def get_portfolio_bonds(portfolio_name):
         pluck="isin",
         distinct=True,
     )
-
-
-def get_market_price(isin, statement_date, portfolio_name):
-    query = frappe.qb.get_query(
-        "Bond Market Date",
-        filters={
-            "date": ["<=", statement_date],
-            "bond_market_prices.isin": isin,
-            # "docstatus": 1
-        },
-        fields=["date", "bond_market_prices.market_price"],
-        order_by="date desc",
-        limit=1,
-    )
-
-    price_docs = query.run(as_dict=True)
-    if price_docs:
-        price_doc = price_docs[
-            0
-        ]  # we want to access the first (and only) document in the list
-        return price_doc.get("market_price")
-    else:
-        return None

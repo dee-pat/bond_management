@@ -1,27 +1,21 @@
 import frappe
-from frappe.utils import getdate
-from pyxirr import xirr
 from frappe.query_builder import DocType
-from datetime import timedelta
 
 
-def get_distinct_isins(portfolio=None, date=None):
-    BTransac = DocType("Bond Transaction")
+def get_distinct_isins(portfolio=None, valuation_date=None):
+    bond_transaction = DocType("Bond Transaction")
 
-    query = frappe.qb.from_(BTransac).select(BTransac.isin).distinct()
+    query = frappe.qb.from_(bond_transaction).select(bond_transaction.isin).distinct()
 
     # optional filters
     if portfolio:
-        query = query.where(BTransac.portfolio_name == portfolio)
+        query = query.where(bond_transaction.portfolio_name == portfolio)
 
-    if date:
-        query = query.where(BTransac.settlement_date <= date)
+    if valuation_date:
+        query = query.where(bond_transaction.settlement_date <= valuation_date)
 
     bonds = query.run(as_dict=True)
     return sorted(bonds, key=lambda x: x["isin"])
-
-    # return as simple list
-    # return [row["isin"] for row in result]
 
 
 def get_market_price(isin, valuation_date):

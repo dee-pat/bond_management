@@ -1,8 +1,8 @@
 from dateutil.relativedelta import relativedelta
+
 import frappe
-from frappe.utils import getdate, add_days
+from frappe.utils import add_days, add_months, getdate
 from frappe.utils.data import get_last_day
-import calendar
 
 
 def generate_coupon_schedule(
@@ -34,7 +34,7 @@ def generate_coupon_schedule(
     # Step 1: generate schedule backwards
     dates = []
     current = maturity_date
-    eom = maturity_date.day == get_last_day(maturity_date)
+    eom = maturity_date == get_last_day(maturity_date)
 
     while current > issue_date:
         dates.append(current)
@@ -95,7 +95,12 @@ def get_coupon_schedule(isin):
     query = frappe.qb.get_query(
         "Bond Coupon Schedule",
         fields=["coupon_date", "period_start", "period_end", "coupon_factor"],
-        filters={"name": isin},
+        filters={
+            "parent": isin,
+            "parenttype": "Bond Master",
+            "parentfield": "coupon_schedule",
+        },
+        order_by="coupon_date asc",
     )
     return query.run(as_dict=True)
 
@@ -107,22 +112,18 @@ def year_fraction(day_count_convention, start_date, end_date, coupon_frequency):
     if end <= start:
         return 0
 
-    # ACT/365
     if day_count_convention == "ACT/365":
         return (end - start).days / 365
 
-    # ACT/364
-    elif day_count_convention == "ACT/364":
+    if day_count_convention in {"ACT/364", "Actual/364(Kenya)"}:
         return (end - start).days / 364
 
-    # ACT/ACT (ISDA-style approximation)
-    elif day_count_convention == "ACT/ACT":
-        quasi_start = add_days(end_date, months=int(-12 / coupon_frequency))
-        denominator = (start_date - quasi_start).days * coupon_frequency
+    if day_count_convention in {"ACT/ACT", "Actual/Actual(ICMA)"}:
+        quasi_start = add_months(end, -int(12 / coupon_frequency))
+        denominator = (end - quasi_start).days * coupon_frequency
         return (end - start).days / denominator
 
-    # 30E/360
-    elif day_count_convention == "30E/360":
+    if day_count_convention == "30E/360":
         d1 = min(start.day, 30)
         d2 = min(end.day, 30)
 
@@ -130,5 +131,4 @@ def year_fraction(day_count_convention, start_date, end_date, coupon_frequency):
             (end.year - start.year) * 360 + (end.month - start.month) * 30 + (d2 - d1)
         ) / 360
 
-    else:
-        raise ValueError(f"Unsupported day count convention: {day_count_convention}")
+    raise ValueError(f"Unsupported day count convention: {day_count_convention}")

@@ -1,5 +1,6 @@
 import frappe
 from frappe.utils import getdate
+
 from bond_management.bond_management.utils.coupon_schedule import year_fraction
 
 
@@ -20,13 +21,6 @@ def get_coupon_period(coupon_schedule, settlement_date):
     return period
 
 
-def days_30E_360(start, end):
-    d1 = min(start.day, 30)
-    d2 = min(end.day, 30)
-
-    return (end.year - start.year) * 360 + (end.month - start.month) * 30 + (d2 - d1)
-
-
 def calculate_accrued_fraction(
     coupon_schedule,
     settlement_date,
@@ -41,32 +35,7 @@ def calculate_accrued_fraction(
         return 0
 
     start = getdate(period.get("period_start"))
-    end = getdate(period.get("period_end"))
     settlement = getdate(settlement_date)
-
-    """
-    # Day count
-    if day_count_convention == "30E/360":
-        accrued_days = days_30E_360(start, settlement)
-        total_days = 360
-        # total_days = days_30E_360(start, end) * coupon_frequency
-    elif day_count_convention == "ACT/ACT":
-        accrued_days = (settlement - start).days
-        total_days = (end - start).days  * int(coupon_frequency)
-    elif day_count_convention == "ACT/364":
-        accrued_days = (settlement - start).days
-        total_days = 364
-    elif day_count_convention == "ACT/365":
-        accrued_days = (settlement - start).days
-        total_days = 365
-    else:
-        raise ValueError(f"Unsupported day count convention: {day_count_convention}")
-
-    if total_days == 0:
-        return 0
-
-    fraction = accrued_days / total_days
-    """
     fraction = year_fraction(
         day_count_convention=day_count_convention,
         start_date=start,
@@ -86,7 +55,8 @@ def calculate_principal_factor(isin, date):
     principal_factor = 1.0
 
     for period in principal_schedule:
-        if settlement_date > period.get("repayment_date"):
+        repayment_date = getdate(period.get("repayment_date"))
+        if repayment_date and settlement_date > repayment_date:
             principal_factor = (
                 principal_factor - (period.get("repayment_percent") or 0.0) / 100.0
             )

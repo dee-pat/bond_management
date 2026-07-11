@@ -1,11 +1,13 @@
-import frappe
-from frappe.utils import getdate, add_days
-from bond_management.bond_management.utils.accrual import (
-    unit_accrued_interest,
-    calculate_principal_factor,
-)
-from pyxirr import xirr
 from collections import defaultdict
+
+import frappe
+from frappe.utils import add_days, getdate
+from pyxirr import xirr
+
+from bond_management.bond_management.utils.accrual import (
+    calculate_principal_factor,
+    unit_accrued_interest,
+)
 
 
 def calculate_future_xirr(isin, date, market_price):
@@ -24,16 +26,18 @@ def calculate_future_xirr(isin, date, market_price):
     # Optional: clamp guess to reasonable range
     guess = max(min(guess, 1.0), -0.5)
 
-    # ---------- XIRR ----------
-    try:
-        xirr_value = xirr(consolidated_cash_flows, guess=guess)
-    except Exception:
-        try:
-            xirr_value = xirr(consolidated_cash_flows, guess=0.1)
-        except Exception:
-            xirr_value = None
+    return calculate_xirr(consolidated_cash_flows, guess)
 
-    return xirr_value
+
+def calculate_xirr(cash_flows, guess=0.1):
+    """Return an XIRR value, or ``None`` when cash flows have no valid solution."""
+    if len(cash_flows) < 2:
+        return None
+
+    try:
+        return xirr(cash_flows, guess=guess)
+    except (ArithmeticError, ValueError):
+        return None
 
 
 def get_last_xirr_guess(isin, date):
@@ -61,14 +65,14 @@ def get_last_xirr_guess(isin, date):
 def consolidate_cashflows(cash_flows):
     consolidated_cash_flows = defaultdict(float)
 
-    for f in cash_flows:
-        if not f.get("date") or f.get("amount") is None:
+    for cash_flow in cash_flows:
+        if not cash_flow.get("date") or cash_flow.get("amount") is None:
             continue
 
-        date = getdate(f["date"])
-        amount = float(f["amount"] or 0.0)
+        cash_flow_date = getdate(cash_flow["date"])
+        amount = float(cash_flow["amount"] or 0.0)
 
-        consolidated_cash_flows[date] += amount
+        consolidated_cash_flows[cash_flow_date] += amount
 
     return dict(consolidated_cash_flows)
 
@@ -113,9 +117,10 @@ def create_future_cash_flows(isin, date, market_price):
     # Iterate through the coupon schedule to add future coupon payments
     for coupon_period in coupon_schedule:
         coupon_date = getdate(coupon_period.get("coupon_date"))
-        if coupon_date > settlement_date:
+        coupon_factor = coupon_period.get("coupon_factor")
+        if coupon_date and coupon_factor is not None and coupon_date > settlement_date:
             principal_factor = calculate_principal_factor(isin, coupon_date)
-            coupon_factor = coupon_period.get("coupon_factor") / 100
+            coupon_factor /= 100
             coupon_payment = (
                 coupon_factor * bond_doc.face_value_per_unit * principal_factor
             )
@@ -131,7 +136,7 @@ def create_future_cash_flows(isin, date, market_price):
     # Iterate through the principal schedule to add future principal repayments
     for principal_period in principal_schedule:
         repayment_date = getdate(principal_period.get("repayment_date"))
-        if repayment_date > settlement_date:
+        if repayment_date and repayment_date > settlement_date:
             principal_payment = (
                 bond_doc.face_value_per_unit
                 * (principal_period.get("repayment_percent") or 0.0)
@@ -200,10 +205,15 @@ def create_past_cash_flows(isin, date, market_price, portfolio):
     # Iterate through the coupon schedule to add past coupon payments
     for coupon_period in coupon_schedule:
         coupon_date = getdate(coupon_period.get("coupon_date"))
+        if not coupon_date:
+            continue
         position = get_position(
             isin, statement_date=coupon_date, portfolio_name=portfolio
         )
-        coupon_factor = coupon_period.get("coupon_factor") / 100
+        coupon_factor = coupon_period.get("coupon_factor")
+        if coupon_factor is None:
+            continue
+        coupon_factor /= 100
         if coupon_date <= settlement_date:
             principal_factor = calculate_principal_factor(isin, coupon_date)
             coupon_rate = (
@@ -237,6 +247,8 @@ def create_past_cash_flows(isin, date, market_price, portfolio):
     # Iterate through the principal schedule to add past principal repayments
     for principal_period in principal_schedule:
         repayment_date = getdate(principal_period.get("repayment_date"))
+        if not repayment_date:
+            continue
         position = get_position(
             isin, statement_date=repayment_date, portfolio_name=portfolio
         )
@@ -332,15 +344,4 @@ def calculate_past_xirr(isin, date, market_price, portfolio):
     # Consolidate cash flows
     consolidated_cash_flows = consolidate_cashflows(past_cash_flows)
 
-    # ---------- SMART GUESS ----------
-
-    guess = 0.1  # work on this later
-
-    # ---------- XIRR ----------
-
-    try:
-        xirr_value = xirr(consolidated_cash_flows, guess=0.1)
-    except Exception:
-        xirr_value = None
-
-    return xirr_value
+    return calculate_xirr(consolidated_cash_flows)

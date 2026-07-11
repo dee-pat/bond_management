@@ -3,8 +3,6 @@
 
 import frappe
 from frappe.model.document import Document
-from pyxirr import xirr
-from collections import defaultdict
 from frappe.utils import getdate
 from bond_management.bond_management.utils.xirr import (
     calculate_future_xirr,
@@ -26,12 +24,8 @@ class BondMarketDate(Document):
             if not row.isin or not row.market_price:
                 continue
 
-            xirr = calculate_future_xirr(row.isin, self.date, row.market_price)
-
-            try:
-                row.future_xirr = xirr * 100 if xirr is not None else None
-            except Exception:
-                row.future_xirr = None
+            future_xirr = calculate_future_xirr(row.isin, self.date, row.market_price)
+            row.future_xirr = future_xirr * 100 if future_xirr is not None else None
 
     @frappe.whitelist()
     def update_principal_factor(self):
@@ -39,14 +33,7 @@ class BondMarketDate(Document):
             if not row.isin:
                 continue
 
-            principal_factor = calculate_principal_factor(row.isin, self.date)
-
-            try:
-                row.principal_factor = (
-                    principal_factor if principal_factor is not None else None
-                )
-            except Exception:
-                row.principal_factor = None
+            row.principal_factor = calculate_principal_factor(row.isin, self.date)
 
     @frappe.whitelist()
     def get_cashflows(self, isin, market_price):
@@ -74,6 +61,8 @@ class BondMarketDate(Document):
         for row in self.bond_market_prices:
             isin = row.isin
             market_price = row.market_price
+            if not isin or market_price is None:
+                continue
             flows = create_future_cash_flows(isin, valuation_date, market_price)
 
             for f in flows:
@@ -91,10 +80,7 @@ class BondMarketDate(Document):
     def update_maturity_date(self):
         for row in self.bond_market_prices:
             isin = row.isin
+            if not isin:
+                continue
             bond_doc = frappe.get_doc("Bond Master", isin)
-            maturity_date = bond_doc.get("maturity_date")
-
-            try:
-                row.maturity_date = maturity_date
-            except Exception:
-                row.maturity_date = None
+            row.maturity_date = bond_doc.get("maturity_date")

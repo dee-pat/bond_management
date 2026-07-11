@@ -3,7 +3,6 @@
 
 import frappe
 from frappe.utils import getdate
-from pyxirr import xirr
 from collections import defaultdict
 from bond_management.bond_management.utils.performance import (
     get_market_price,
@@ -17,6 +16,7 @@ from bond_management.bond_management.utils.xirr import (
     create_past_cash_flows,
     create_future_cash_flows,
     get_position,
+    calculate_xirr,
     consolidate_cashflows,
     calculate_past_xirr,
     calculate_future_xirr,
@@ -35,10 +35,14 @@ def execute(filters: dict | None = None):
     filters = filters or {}
 
     portfolio = filters.get("portfolio")
-    valuation_date = getdate(filters.get("valuation_date"))
+    valuation_date = filters.get("valuation_date")
 
     if not portfolio:
         frappe.throw("Portfolio is required")
+    if not valuation_date:
+        frappe.throw("Valuation Date is required")
+
+    valuation_date = getdate(valuation_date)
 
     # Permission check
     if not frappe.has_permission("Bond Portfolio", "read", doc=portfolio):
@@ -149,14 +153,12 @@ def get_columns() -> list[dict]:
 def get_data(portfolio, valuation_date):
     rows = []
 
-    isins = get_distinct_isins(portfolio=portfolio, date=valuation_date)
+    isins = get_distinct_isins(portfolio=portfolio, valuation_date=valuation_date)
 
     combined_cashflow = []
     combined_future_cashflow = []
 
     for bond in isins:
-
-        # ---------- TRANSACTION DATA ----------
         isin = bond["isin"]
 
         quantity = get_position(
@@ -164,9 +166,11 @@ def get_data(portfolio, valuation_date):
         )
 
         # ---------- MASTER DATA ----------
-        bond = frappe.qb.get_query(
-            "Bond Master", fields=["currency", "face_value_per_unit"]
-        ).run(as_dict=True)[0]
+        bond = frappe.db.get_value(
+            "Bond Master", isin, ["currency", "face_value_per_unit"], as_dict=True
+        )
+        if not bond:
+            continue
         currency = bond.get("currency")
         face_value_per_unit = bond.get("face_value_per_unit")
 
@@ -192,9 +196,7 @@ def get_data(portfolio, valuation_date):
         totals = defaultdict(float)
 
         for line in cashflows:
-            totals[line.get("type")] = (
-                totals[line.get("type")] + line.get("amount") or 0
-            )
+            totals[line.get("type")] += line.get("amount") or 0
 
         # access:
         coupons_value = totals["coupon"]
@@ -217,8 +219,6 @@ def get_data(portfolio, valuation_date):
         )
         for row in future_cashflows:
             row["amount"] = row["amount"] * quantity
-
-        print("Future Cashflows", future_cashflows)
 
         combined_future_cashflow.extend(future_cashflows)
 
@@ -271,20 +271,20 @@ def make_total_row(data, combined_cashflow, combined_future_cashflow):
     market_value = sum(d["market_value"] for d in data)
     gain_value = sum(d["gain_value"] for d in data)
 
-    # print(combined_cashflow)
     cash_flows = consolidate_cashflows(cash_flows=combined_cashflow)
-
-    xirr_value = xirr(cash_flows, guess=0.1) * 100
+    xirr_value = calculate_xirr(cash_flows)
 
     combined_future_cashflow = consolidate_cashflows(
         cash_flows=combined_future_cashflow
     )
 
-    future_xirr = xirr(combined_future_cashflow, guess=0.1) * 100
+    future_xirr = calculate_xirr(combined_future_cashflow)
+
+    currencies = {row["currency"] for row in data if row.get("currency")}
 
     return {
         "isin": "TOTAL",
-        "currency": "USD",  # hardcoded for now!
+        "currency": currencies.pop() if len(currencies) == 1 else None,
         "nominal_value": nominal_value,
         "purchases_value": purchases_value,
         "sales_value": sales_value,
@@ -292,6 +292,6 @@ def make_total_row(data, combined_cashflow, combined_future_cashflow):
         "amortisation_value": amortisation_value,
         "market_value": market_value,
         "gain_value": gain_value,
-        "xirr": xirr_value,
-        "future_xirr": future_xirr,
+        "xirr": xirr_value * 100 if xirr_value is not None else 0.0,
+        "future_xirr": future_xirr * 100 if future_xirr is not None else 0.0,
     }
