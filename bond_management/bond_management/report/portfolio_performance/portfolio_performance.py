@@ -6,7 +6,6 @@ from frappe.utils import getdate
 from pyxirr import xirr
 from collections import defaultdict
 from bond_management.bond_management.utils.performance import (
-    get_transactions,
     get_market_price,
     get_distinct_isins,
 )
@@ -16,9 +15,11 @@ from bond_management.bond_management.utils.accrual import (
 )
 from bond_management.bond_management.utils.xirr import (
     create_past_cash_flows,
+    create_future_cash_flows,
     get_position,
     consolidate_cashflows,
     calculate_past_xirr,
+    calculate_future_xirr,
 )
 
 # ---------- ENTRY POINT ----------
@@ -44,11 +45,13 @@ def execute(filters: dict | None = None):
         frappe.throw("Not permitted")
 
     columns = get_columns()
-    data, combined_cashflow = get_data(portfolio, valuation_date)
+    data, combined_cashflow, combined_future_cashflow = get_data(
+        portfolio, valuation_date
+    )
 
     # Add summary row
     if data:
-        total_row = make_total_row(data, combined_cashflow)
+        total_row = make_total_row(data, combined_cashflow, combined_future_cashflow)
         # data.append({})
         data.append(total_row)
     return columns, data
@@ -131,6 +134,12 @@ def get_columns() -> list[dict]:
             "width": 130,
         },
         {"label": "XIRR", "fieldname": "xirr", "fieldtype": "Percent", "width": 80},
+        {
+            "label": "Future XIRR",
+            "fieldname": "future_xirr",
+            "fieldtype": "Percent",
+            "width": 80,
+        },
     ]
 
 
@@ -143,6 +152,8 @@ def get_data(portfolio, valuation_date):
     isins = get_distinct_isins(portfolio=portfolio, date=valuation_date)
 
     combined_cashflow = []
+    combined_future_cashflow = []
+
     for bond in isins:
 
         # ---------- TRANSACTION DATA ----------
@@ -191,17 +202,32 @@ def get_data(portfolio, valuation_date):
         purchases_value = -totals["purchase"]
         sales_value = totals["sale"]
 
-        xirr_abs = calculate_past_xirr(
+        xirr = calculate_past_xirr(
             isin=isin,
             date=valuation_date,
             market_price=market_price,
             portfolio=portfolio,
         )
-        if xirr_abs:
-            xirr = xirr_abs * 100
+        xirr = xirr * 100.0 if xirr else 0.0  # percent and handle None
 
-        else:
-            xirr = None
+        future_cashflows = create_future_cash_flows(
+            isin=isin,
+            date=valuation_date,
+            market_price=market_price,
+        )
+        for row in future_cashflows:
+            row["amount"] = row["amount"] * quantity
+
+        print("Future Cashflows", future_cashflows)
+
+        combined_future_cashflow.extend(future_cashflows)
+
+        future_xirr = calculate_future_xirr(
+            isin=isin, date=valuation_date, market_price=market_price
+        )
+        future_xirr = (
+            future_xirr * 100.0 if future_xirr else 0.0
+        )  # percent and handle None
 
         rows.append(
             {
@@ -226,16 +252,17 @@ def get_data(portfolio, valuation_date):
                     - purchases_value
                 ),
                 "xirr": xirr,
+                "future_xirr": future_xirr,
             }
         )
 
-    return rows, combined_cashflow
+    return rows, combined_cashflow, combined_future_cashflow
 
 
 # ---------- TOTAL ROW ----------
 
 
-def make_total_row(data, combined_cashflow):
+def make_total_row(data, combined_cashflow, combined_future_cashflow):
     nominal_value = sum(d["nominal_value"] for d in data)
     purchases_value = sum(d["purchases_value"] for d in data)
     sales_value = sum(d["sales_value"] for d in data)
@@ -249,7 +276,11 @@ def make_total_row(data, combined_cashflow):
 
     xirr_value = xirr(cash_flows, guess=0.1) * 100
 
-    # xirr_value = 0.0
+    combined_future_cashflow = consolidate_cashflows(
+        cash_flows=combined_future_cashflow
+    )
+
+    future_xirr = xirr(combined_future_cashflow, guess=0.1) * 100
 
     return {
         "isin": "TOTAL",
@@ -262,4 +293,5 @@ def make_total_row(data, combined_cashflow):
         "market_value": market_value,
         "gain_value": gain_value,
         "xirr": xirr_value,
+        "future_xirr": future_xirr,
     }
