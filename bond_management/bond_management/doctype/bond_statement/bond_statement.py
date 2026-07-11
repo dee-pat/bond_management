@@ -57,7 +57,9 @@ def fetch_holdings(portfolio_name, date):
     bonds = get_portfolio_bonds(portfolio_name)
 
     for isin in bonds:
-        qty = get_position(isin, date, portfolio_name)
+        qty = get_position(
+            isin=isin, statement_date=date, portfolio_name=portfolio_name
+        )
 
         if not qty:
             continue

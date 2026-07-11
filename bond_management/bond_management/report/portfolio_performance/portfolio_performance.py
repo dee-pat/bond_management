@@ -40,7 +40,7 @@ def execute(filters: dict | None = None):
         frappe.throw("Portfolio is required")
 
     # Permission check
-    if not frappe.has_permission("Portfolio", "read", doc=portfolio):
+    if not frappe.has_permission("Bond Portfolio", "read", doc=portfolio):
         frappe.throw("Not permitted")
 
     columns = get_columns()
