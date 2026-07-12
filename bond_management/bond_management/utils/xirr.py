@@ -8,6 +8,7 @@ from bond_management.bond_management.utils.accrual import (
     calculate_principal_factor,
     unit_accrued_interest,
 )
+from bond_management.bond_management.utils.portfolio import get_position
 
 DEFAULT_XIRR_GUESS = 0.1
 
@@ -308,32 +309,6 @@ def create_past_cash_flows(isin, date, market_price, portfolio):
             )
     past_cash_flows = [d for d in past_cash_flows if d.get("amount") != 0.0]
     return sorted(past_cash_flows, key=lambda x: x["date"])
-
-
-def get_position(isin, statement_date, portfolio_name):
-    rows = frappe.qb.get_query(
-        "Bond Transaction",
-        filters={
-            "isin": isin,
-            "portfolio_name": portfolio_name,
-            "settlement_date": ["<=", statement_date],
-        },
-        fields=["transaction_type", "quantity_face_value", "maturity_date"],
-    ).run(as_dict=True)
-
-    position = 0
-
-    for row in rows:
-        if row["maturity_date"] and getdate(row["maturity_date"]) <= getdate(
-            statement_date
-        ):
-            return 0  # Bond has matured, no further transactions affect position
-        if row["transaction_type"] == "Purchase":
-            position += row["quantity_face_value"]
-        elif row["transaction_type"] == "Sale":
-            position -= row["quantity_face_value"]
-
-    return position
 
 
 def calculate_past_xirr(isin, date, market_price, portfolio):

@@ -21,3 +21,14 @@ class TestBondMaster(IntegrationTestCase):
         bond.principal_schedule[0].principal_units = 0
 
         self.assertRaises(ValidationError, bond.save)
+
+    def test_maturity_date_boundary_rules(self):
+        bond = make_bond()
+        bond.maturity_date = "2025-01-02"
+        bond.validate_dates()
+
+        bond.maturity_date = "2025-01-01"
+        self.assertRaises(ValidationError, bond.validate_dates)
+
+        bond.maturity_date = "2024-12-31"
+        self.assertRaises(ValidationError, bond.validate_dates)

@@ -52,7 +52,6 @@ class BondMarketDate(Document):
 
         return rows
 
-    @frappe.whitelist()
     def get_all_cashflows(self):
         valuation_date = getdate(self.date)
 

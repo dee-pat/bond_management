@@ -47,3 +47,16 @@ class TestBondTransaction(IntegrationTestCase):
         )
 
         self.assertRaises(ValidationError, sale.insert)
+
+    def test_allows_settlement_on_issue_and_maturity_dates(self):
+        bond = make_bond()
+
+        issue_date_transaction = make_transaction(
+            bond, make_portfolio(), settlement_date=bond.issue_date
+        )
+        maturity_date_transaction = make_transaction(
+            bond, make_portfolio(), settlement_date=bond.maturity_date
+        )
+
+        self.assertEqual(issue_date_transaction.settlement_date, bond.issue_date)
+        self.assertEqual(maturity_date_transaction.settlement_date, bond.maturity_date)

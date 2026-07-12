@@ -1,16 +1,11 @@
 # Copyright (c) 2026, Deepak Patel and contributors
 # For license information, please see license.txt
 
-import frappe
 from frappe.model.document import Document
-from frappe.utils import getdate
 
+from bond_management.bond_management.utils.accrual import calculate_principal_factor
 from bond_management.bond_management.utils.performance import get_market_price
-from bond_management.bond_management.utils.xirr import (
-    calculate_principal_factor,
-    create_past_cash_flows,
-    get_position,
-)
+from bond_management.bond_management.utils.portfolio import fetch_holdings
 
 
 class BondStatement(Document):
@@ -43,36 +38,3 @@ class BondStatement(Document):
                     "principal_factor": principal_factor,
                 },
             )
-
-
-@frappe.whitelist()
-def fetch_holdings(portfolio_name, date):
-    date = getdate(date)
-
-    results = []
-
-    bonds = get_portfolio_bonds(portfolio_name)
-
-    for isin in bonds:
-        qty = get_position(
-            isin=isin, statement_date=date, portfolio_name=portfolio_name
-        )
-
-        if not qty:
-            continue
-
-        bond_doc = frappe.get_doc("Bond Master", isin)
-
-        results.append(
-            {"isin": bond_doc.name, "quantity": qty, "currency": bond_doc.currency}
-        )
-    return results
-
-
-def get_portfolio_bonds(portfolio_name):
-    return frappe.qb.get_query(
-        "Bond Transaction",
-        filters={"portfolio_name": portfolio_name},
-        distinct=True,
-        fields=["isin"],
-    ).run(pluck=True)

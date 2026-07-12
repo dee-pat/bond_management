@@ -45,7 +45,6 @@ def calculate_accrued_fraction(
     return coupon_rate / 100 * face_value_per_unit * fraction
 
 
-@frappe.whitelist()
 def calculate_principal_factor(isin, date):
 
     bond_doc = frappe.get_doc("Bond Master", isin)
@@ -64,7 +63,6 @@ def calculate_principal_factor(isin, date):
     return principal_factor
 
 
-@frappe.whitelist()
 def unit_accrued_interest(isin=None, settlement_date=None):
 
     if not isin or not settlement_date:
