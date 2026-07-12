@@ -31,6 +31,10 @@ Never:
 - downgrade dependencies
 - mix v15 (or older versions) and v16 APIs
 
+Check
+- monkey patching core Frappe; should be removed
+
+
 Frappe Python API
 - avoid frappe.db.get_list and frappe.db.get_all 
 - use frappe.qb.get_query instead of the 2 above
@@ -43,4 +47,6 @@ Test Code:
 Javascript (JS):
 - Do not suggest JS calculations. call the python whitelisted function instead
 - regularly check if a whitelisted function does not need to be whitelisted (not used by JS etc). remove the whitelist
-- Doctypes files should not call other Doctype fuctions. if these fuctions are required by other Doctypes, move them to a file in utils. Therfore doctype functions are only needed by the Dctype itself
+
+Function Imports
+- Doctypes files should not call other Doctype fuctions. if these fuctions are required by other Doctypes, move them to a file in utils. Therfore doctype functions inside the Doctype file are the ones needed by only the Doctype itself 

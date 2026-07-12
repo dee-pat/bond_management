@@ -18,7 +18,7 @@ def generate_coupon_schedule(
     maturity_date = getdate(maturity_date)
     first_coupon_date = getdate(first_coupon_date) if first_coupon_date else None
 
-    if not issue_date or not maturity_date or not coupon_frequency:
+    if not issue_date or not maturity_date or coupon_frequency is None:
         return []
 
     if issue_date >= maturity_date:

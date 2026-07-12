@@ -23,6 +23,9 @@ class BondMarketDate(Document):
         for row in self.bond_market_prices:
             if not row.isin or row.market_price is None:
                 continue
+            if row.market_price <= 0:
+                row.future_xirr = None
+                continue
 
             future_xirr = calculate_future_xirr(row.isin, self.date, row.market_price)
             row.future_xirr = future_xirr * 100 if future_xirr is not None else None

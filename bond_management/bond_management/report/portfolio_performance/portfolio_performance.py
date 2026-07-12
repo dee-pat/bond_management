@@ -61,6 +61,50 @@ def execute(filters: dict | None = None):
     return columns, data
 
 
+@frappe.whitelist(methods=["POST"])
+def get_xirr_cashflows(portfolio, valuation_date, isin, xirr_type):
+    """Return the raw cash flows behind a report XIRR value for spreadsheet review."""
+    if xirr_type not in {"past", "future"}:
+        frappe.throw("Invalid XIRR type")
+    if not frappe.has_permission("Bond Portfolio", "read", doc=portfolio):
+        frappe.throw("Not permitted")
+
+    valuation_date = getdate(valuation_date)
+    if isin == "TOTAL":
+        _, past_cashflows, future_cashflows = get_data(portfolio, valuation_date)
+        cashflows = past_cashflows if xirr_type == "past" else future_cashflows
+    else:
+        market_price = get_market_price(isin, valuation_date)
+        if xirr_type == "past":
+            cashflows = create_past_cash_flows(
+                isin=isin,
+                date=valuation_date,
+                market_price=market_price,
+                portfolio=portfolio,
+            )
+        else:
+            quantity = get_position(isin, valuation_date, portfolio)
+            cashflows = create_future_cash_flows(isin, valuation_date, market_price)
+            cashflows = [
+                {**cashflow, "amount": cashflow["amount"] * quantity}
+                for cashflow in cashflows
+            ]
+
+    return [
+        {
+            "isin": cashflow["bond"],
+            "transaction_type": cashflow["type"],
+            "date": getdate(cashflow["date"]).isoformat(),
+            "amount": float(cashflow["amount"]),
+        }
+        for cashflow in sorted(
+            cashflows,
+            key=lambda cashflow: (getdate(cashflow["date"]), float(cashflow["amount"])),
+        )
+        if float(cashflow["amount"]) != 0
+    ]
+
+
 # ---------- COLUMNS ----------
 
 
