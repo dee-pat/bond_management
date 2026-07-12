@@ -21,7 +21,7 @@ class BondMarketDate(Document):
     @frappe.whitelist()
     def update_future_xirr(self):
         for row in self.bond_market_prices:
-            if not row.isin or not row.market_price:
+            if not row.isin or row.market_price is None:
                 continue
 
             future_xirr = calculate_future_xirr(row.isin, self.date, row.market_price)

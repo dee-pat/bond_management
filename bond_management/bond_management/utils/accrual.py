@@ -41,6 +41,7 @@ def calculate_accrued_fraction(
         start_date=start,
         end_date=settlement,
         coupon_frequency=coupon_frequency,
+        reference_end_date=period.get("coupon_date"),
     )
     return coupon_rate / 100 * face_value_per_unit * fraction
 
@@ -89,7 +90,6 @@ def unit_accrued_interest(isin=None, settlement_date=None):
     return fraction * principal_factor
 
 
-@frappe.whitelist()
 def get_accrued_interest(isin=None, settlement_date=None, quantity_face_value=None):
     if not isin or not settlement_date or not quantity_face_value:
         return 0

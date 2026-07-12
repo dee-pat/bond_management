@@ -26,8 +26,11 @@ def generate_coupon_schedule(
 
     try:
         coupon_frequency = int(coupon_frequency)
-    except ValueError:
+    except (TypeError, ValueError):
         frappe.throw("Coupon Frequency must be a number")
+
+    if coupon_frequency <= 0 or 12 % coupon_frequency:
+        frappe.throw("Coupon Frequency must be a positive divisor of 12")
 
     step = relativedelta(months=int(12 / coupon_frequency))
 
@@ -71,11 +74,7 @@ def generate_coupon_schedule(
             coupon_frequency=coupon_frequency,
         )
 
-        # coupon factor (only if rate provided)
-        if coupon_rate:
-            coupon_factor = coupon_rate * fraction
-        else:
-            coupon_factor = None
+        coupon_factor = (coupon_rate or 0) * fraction
 
         coupon_schedule.append(
             {
@@ -101,13 +100,22 @@ def get_coupon_schedule(isin):
             "parentfield": "coupon_schedule",
         },
         order_by="coupon_date asc",
+        ignore_permissions=False,
     )
     return query.run(as_dict=True)
 
 
-def year_fraction(day_count_convention, start_date, end_date, coupon_frequency):
+def year_fraction(
+    day_count_convention,
+    start_date,
+    end_date,
+    coupon_frequency,
+    reference_end_date=None,
+):
     start = getdate(start_date)
     end = getdate(end_date)
+    reference_end = getdate(reference_end_date) if reference_end_date else end
+    coupon_frequency = int(coupon_frequency)
 
     if end <= start:
         return 0
@@ -119,8 +127,10 @@ def year_fraction(day_count_convention, start_date, end_date, coupon_frequency):
         return (end - start).days / 364
 
     if day_count_convention in {"ACT/ACT", "Actual/Actual(ICMA)"}:
-        quasi_start = add_months(end, -int(12 / coupon_frequency))
-        denominator = (end - quasi_start).days * coupon_frequency
+        quasi_start = add_months(reference_end, -(12 // coupon_frequency))
+        if reference_end == get_last_day(reference_end):
+            quasi_start = get_last_day(quasi_start)
+        denominator = (reference_end - quasi_start).days * coupon_frequency
         return (end - start).days / denominator
 
     if day_count_convention == "30E/360":

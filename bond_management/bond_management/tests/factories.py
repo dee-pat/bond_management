@@ -5,27 +5,27 @@ def unique_name(prefix):
     return f"{prefix}-{frappe.generate_hash(length=8)}"
 
 
-def make_bond():
+def make_bond(**overrides):
     isin = unique_name("TEST-BOND")
-    return frappe.get_doc(
-        {
-            "doctype": "Bond Master",
-            "bond_name": isin,
-            "isin": isin,
-            "currency": "USD",
-            "face_value_per_unit": 100,
-            "coupon_rate": 7,
-            "coupon_frequency": "2",
-            "issue_date": "2025-01-01",
-            "maturity_date": "2027-01-01",
-            "first_coupon_date": "2025-07-01",
-            "day_count_convention": "30E/360",
-            "bond_type": "Kenya Treasury Bond",
-            "principal_schedule": [
-                {"repayment_date": "2027-01-01", "principal_units": 100}
-            ],
-        }
-    ).insert()
+    values = {
+        "doctype": "Bond Master",
+        "bond_name": isin,
+        "isin": isin,
+        "currency": "USD",
+        "face_value_per_unit": 100,
+        "coupon_rate": 7,
+        "coupon_frequency": "2",
+        "issue_date": "2025-01-01",
+        "maturity_date": "2027-01-01",
+        "first_coupon_date": "2025-07-01",
+        "day_count_convention": "30E/360",
+        "bond_type": "Kenya Treasury Bond",
+        "principal_schedule": [
+            {"repayment_date": "2027-01-01", "principal_units": 100}
+        ],
+    }
+    values.update(overrides)
+    return frappe.get_doc(values).insert()
 
 
 def make_portfolio():

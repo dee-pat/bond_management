@@ -11,6 +11,7 @@ def get_position(isin, statement_date, portfolio_name, exclude_name=None):
             "settlement_date": ["<=", statement_date],
         },
         fields=["name", "transaction_type", "quantity_face_value", "maturity_date"],
+        ignore_permissions=False,
     ).run(as_dict=True)
 
     position = 0
@@ -33,6 +34,7 @@ def get_portfolio_bonds(portfolio_name):
         filters={"portfolio_name": portfolio_name},
         distinct=True,
         fields=["isin"],
+        ignore_permissions=False,
     ).run(pluck=True)
 
 

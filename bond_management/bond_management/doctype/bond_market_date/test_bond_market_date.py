@@ -26,3 +26,9 @@ class TestBondMarketDate(IntegrationTestCase):
 
         market_date.save()
         self.assertIsNone(market_date.bond_market_prices[-1].maturity_date)
+
+    def test_recalculates_a_zero_market_price(self):
+        market_date = make_market_date(make_bond(), market_price=0)
+        price_row = market_date.bond_market_prices[0]
+
+        self.assertIsNone(price_row.future_xirr)

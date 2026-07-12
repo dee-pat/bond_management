@@ -2,7 +2,7 @@ from collections import defaultdict
 
 import frappe
 from frappe.utils import add_days, getdate
-from pyxirr import xirr
+from pyxirr import InvalidPaymentsError, xirr
 
 from bond_management.bond_management.utils.accrual import (
     calculate_principal_factor,
@@ -30,13 +30,13 @@ def calculate_xirr(cash_flows, guess=DEFAULT_XIRR_GUESS):
 
     try:
         return xirr(cash_flows, guess=guess)
-    except (ArithmeticError, ValueError):
+    except (ArithmeticError, InvalidPaymentsError, ValueError):
         if guess == DEFAULT_XIRR_GUESS:
             return None
 
     try:
         return xirr(cash_flows, guess=DEFAULT_XIRR_GUESS)
-    except (ArithmeticError, ValueError):
+    except (ArithmeticError, InvalidPaymentsError, ValueError):
         return None
 
 
@@ -97,7 +97,7 @@ def create_future_cash_flows(isin, date, market_price):
             "bond": isin,
             "type": "market_price",
             "date": settlement_date,
-            "amount": -market_price,
+            "amount": -(bond_doc.face_value_per_unit * market_price / 100),
         }
     )
     future_cash_flows.append(
@@ -185,7 +185,7 @@ def create_past_cash_flows(isin, date, market_price, portfolio):
             "bond": isin,
             "type": "market_price",
             "date": settlement_date,
-            "amount": market_price * position,
+            "amount": bond_doc.face_value_per_unit * market_price / 100 * position,
         }
     )
     past_cash_flows.append(
@@ -286,6 +286,7 @@ def create_past_cash_flows(isin, date, market_price, portfolio):
             "settlement_date": ["<=", date],
         },
         fields=["transaction_type", "settlement_amount", "settlement_date"],
+        ignore_permissions=False,
     ).run(as_dict=True)
 
     for row in rows:

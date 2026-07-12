@@ -1,5 +1,6 @@
 from datetime import date
 
+import frappe
 from frappe.tests import IntegrationTestCase
 
 from bond_management.bond_management.utils.coupon_schedule import (
@@ -21,3 +22,26 @@ class TestCouponSchedule(IntegrationTestCase):
         self.assertEqual(year_fraction("30E/360", "2025-01-01", "2025-07-01", 2), 0.5)
         self.assertEqual(year_fraction("Actual/364(Kenya)", "2025-01-01", "2025-01-02", 2), 1 / 364)
         self.assertEqual(year_fraction("30E/360", "2025-01-01", "2025-01-01", 2), 0)
+
+    def test_actual_actual_icma_handles_string_frequency_and_eom_periods(self):
+        self.assertEqual(
+            year_fraction("Actual/Actual(ICMA)", "2024-08-31", "2025-02-28", "2"),
+            0.5,
+        )
+
+    def test_rejects_invalid_coupon_frequency_and_keeps_zero_coupon_factor(self):
+        self.assertRaises(
+            frappe.ValidationError,
+            generate_coupon_schedule,
+            "2025-01-01",
+            "2026-01-01",
+            0,
+            10,
+            "2025-07-01",
+            "30E/360",
+        )
+        schedule = generate_coupon_schedule(
+            "2025-01-01", "2026-01-01", 2, 0, "2025-07-01", "30E/360"
+        )
+
+        self.assertEqual(schedule[0]["coupon_factor"], 0)

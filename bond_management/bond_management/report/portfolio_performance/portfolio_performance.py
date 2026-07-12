@@ -15,12 +15,12 @@ from bond_management.bond_management.utils.accrual import (
 from bond_management.bond_management.utils.xirr import (
     create_past_cash_flows,
     create_future_cash_flows,
-    get_position,
     calculate_xirr,
     consolidate_cashflows,
     calculate_past_xirr,
     calculate_future_xirr,
 )
+from bond_management.bond_management.utils.portfolio import get_position
 
 # ---------- ENTRY POINT ----------
 
@@ -54,9 +54,9 @@ def execute(filters: dict | None = None):
     )
 
     # Add summary row
-    if data:
+    currencies = {row["currency"] for row in data if row.get("currency")}
+    if data and len(currencies) <= 1:
         total_row = make_total_row(data, combined_cashflow, combined_future_cashflow)
-        # data.append({})
         data.append(total_row)
     return columns, data
 
@@ -179,7 +179,9 @@ def get_data(portfolio, valuation_date):
         accrued_interest = unit_accrued_interest(
             isin=isin, settlement_date=valuation_date
         )
-        market_value = quantity * (market_price + accrued_interest)
+        market_value = quantity * (
+            face_value_per_unit * market_price / 100 + accrued_interest
+        )
 
         # ---------- CASHFLOW DATA ----------
         principal_factor = calculate_principal_factor(isin=isin, date=valuation_date)
