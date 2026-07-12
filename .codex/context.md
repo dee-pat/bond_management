@@ -1,5 +1,8 @@
 This project uses Frappe Framework v16.
 
+Documentation
+- https://docs.frappe.io/framework/user/en/introduction
+
 Environment:
 - Python 3.14
 - Node 24
@@ -38,11 +41,13 @@ Check
 Frappe Python API
 - avoid frappe.db.get_list and frappe.db.get_all 
 - use frappe.qb.get_query instead of the 2 above
+- use ignore_permissions=False for user-facing frappe.qb.get_query reads unless a documented service boundary requires otherwise
 
 Test Code:
 - suggest/update test codes for all functions, including utilities, reports, and DocType controllers
 - for >, >=, <, <=; write one test for each of >, <, and =
 - define the expected equality outcome from the specific business rule being tested
+- add Cypress browser tests in cypress/integration for report and other client-side interactions; promise-returning JS flows are required for testability
 
 Javascript (JS):
 - Do not suggest JS calculations. call the python whitelisted function instead

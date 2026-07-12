@@ -210,11 +210,16 @@ def get_data(portfolio, valuation_date):
         )
 
         # ---------- MASTER DATA ----------
-        bond = frappe.db.get_value(
-            "Bond Master", isin, ["currency", "face_value_per_unit"], as_dict=True
-        )
-        if not bond:
+        bonds = frappe.qb.get_query(
+            "Bond Master",
+            fields=["currency", "face_value_per_unit"],
+            filters={"name": isin},
+            limit=1,
+            ignore_permissions=False,
+        ).run(as_dict=True)
+        if not bonds:
             continue
+        bond = bonds[0]
         currency = bond.get("currency")
         face_value_per_unit = bond.get("face_value_per_unit")
 

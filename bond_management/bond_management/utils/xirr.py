@@ -41,25 +41,19 @@ def calculate_xirr(cash_flows, guess=DEFAULT_XIRR_GUESS):
 
 
 def get_last_xirr_guess(isin, date):
+    results = frappe.qb.get_query(
+        "Bond Market Date",
+        fields=["bond_market_prices.future_xirr"],
+        filters={"date": ["<=", date], "bond_market_prices.isin": isin},
+        order_by="date desc",
+        ignore_permissions=False,
+    ).run(as_dict=True)
 
-    BMP = frappe.qb.DocType("Bond Market Prices")
-    BMD = frappe.qb.DocType("Bond Market Date")
+    for result in results:
+        if result.get("future_xirr") is not None:
+            return result["future_xirr"] / 100
 
-    query = (
-        frappe.qb.from_(BMP)
-        .join(BMD)
-        .on(BMP.parent == BMD.name)
-        .select(BMP.future_xirr)
-        .where((BMP.isin == isin) & (BMP.future_xirr.isnotnull()) & (BMD.date <= date))
-        .orderby(BMD.date, order=frappe.qb.desc)
-        .limit(1)
-    )
-
-    result = query.run(as_dict=True)
-
-    guess = result[0].future_xirr / 100 if result else None
-
-    return guess
+    return None
 
 
 def consolidate_cashflows(cash_flows):

@@ -28,31 +28,41 @@ frappe.query_reports["Portfolio Performance"] = {
     onload(report) {
         const selector = ".portfolio-cashflow-copy";
         report.page.wrapper.off("click.portfolio-cashflow", selector);
-        report.page.wrapper.on("click.portfolio-cashflow", selector, async (event) => {
+        report.page.wrapper.on("click.portfolio-cashflow", selector, (event) => {
             event.preventDefault();
             event.stopPropagation();
             const button = $(event.currentTarget);
-            const filters = report.get_values();
-            const response = await frappe.call({
-                method: "bond_management.bond_management.report.portfolio_performance.portfolio_performance.get_xirr_cashflows",
-                type: "POST",
-                args: {
-                    portfolio: filters.portfolio,
-                    valuation_date: filters.valuation_date,
-                    isin: button.attr("data-isin"),
-                    xirr_type: button.attr("data-xirr-type")
-                }
-            });
-            const cashflows = response.message || [];
-            if (!cashflows.length) {
-                frappe.show_alert({message: "No cash flows found", indicator: "orange"});
-                return;
-            }
-
-            const tsv = ["isin\ttransaction_type\tdate\tamount", ...cashflows.map((flow) => (
-                `${flow.isin}\t${flow.transaction_type}\t${flow.date}\t${flow.amount}`
-            ))].join("\n");
-            frappe.utils.copy_to_clipboard(tsv, `Copied ${cashflows.length} cash flows`);
+            copy_xirr_cashflows(
+                report,
+                button.attr("data-isin"),
+                button.attr("data-xirr-type")
+            ).catch(frappe.msgprint);
         });
     }
 };
+
+function copy_xirr_cashflows(report, isin, xirr_type) {
+    const filters = report.get_values();
+    return frappe.call({
+        method: "bond_management.bond_management.report.portfolio_performance.portfolio_performance.get_xirr_cashflows",
+        type: "POST",
+        args: {
+            portfolio: filters.portfolio,
+            valuation_date: filters.valuation_date,
+            isin,
+            xirr_type
+        }
+    }).then((response) => {
+        const cashflows = response.message || [];
+        if (!cashflows.length) {
+            frappe.show_alert({message: "No cash flows found", indicator: "orange"});
+            return cashflows;
+        }
+
+        const tsv = ["isin\ttransaction_type\tdate\tamount", ...cashflows.map((flow) => (
+            `${flow.isin}\t${flow.transaction_type}\t${flow.date}\t${flow.amount}`
+        ))].join("\n");
+        frappe.utils.copy_to_clipboard(tsv, `Copied ${cashflows.length} cash flows`);
+        return cashflows;
+    });
+}
