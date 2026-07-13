@@ -200,7 +200,7 @@ jobs:
       - name: Run Cypress
         working-directory: /home/runner/frappe-bench
         run: |
-          bench --site test_site run-ui-tests bond_management --headless --browser "$(which chrome)" --spec cypress/integration/portfolio_performance.js
+          bench --site test_site run-ui-tests bond_management --headless --browser "$(which chrome)"
         env:
           CI: 'Yes'
 

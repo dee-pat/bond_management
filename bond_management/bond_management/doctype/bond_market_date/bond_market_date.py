@@ -5,7 +5,10 @@ import frappe
 from frappe.model.document import Document
 from frappe.utils import flt
 
-from bond_management.bond_management.utils.accrual import calculate_principal_factor
+from bond_management.bond_management.utils.accrual import (
+    calculate_principal_factor,
+    calculate_weighted_average_repayment,
+)
 from bond_management.bond_management.utils.xirr import (
     calculate_future_xirr,
     create_future_cash_flows,
@@ -122,6 +125,8 @@ def _calculate_market_data(date, isin, market_price):
         "currency": None,
         "future_xirr": None,
         "principal_factor": None,
+        "weighted_avg_repayment_date": None,
+        "weighted_avg_repayment_years": None,
         "maturity_date": None,
     }
     if not isin:
@@ -135,6 +140,11 @@ def _calculate_market_data(date, isin, market_price):
         return values
 
     values["principal_factor"] = calculate_principal_factor(isin, date)
+    weighted_date, weighted_years = calculate_weighted_average_repayment(
+        bond_doc.get("principal_schedule"), date
+    )
+    values["weighted_avg_repayment_date"] = weighted_date
+    values["weighted_avg_repayment_years"] = weighted_years
     if market_price is None:
         return values
 

@@ -4,6 +4,7 @@ from bond_management.bond_management.tests.factories import make_bond
 from bond_management.bond_management.utils.accrual import (
     calculate_accrued_fraction,
     calculate_principal_factor,
+    calculate_weighted_average_repayment,
     get_coupon_period,
 )
 
@@ -42,3 +43,33 @@ class TestAccrual(IntegrationTestCase):
         self.assertEqual(calculate_principal_factor(bond.name, "2025-06-30"), 1)
         self.assertEqual(calculate_principal_factor(bond.name, "2025-07-01"), 1)
         self.assertEqual(calculate_principal_factor(bond.name, "2025-07-02"), 0.5)
+
+    def test_weighted_repayment_uses_remaining_principal_with_strict_future_boundary(self):
+        schedule = [
+            {"repayment_date": "2025-07-01", "principal_units": 25},
+            {"repayment_date": "2025-07-05", "principal_units": 75},
+        ]
+
+        before_date, before_years = calculate_weighted_average_repayment(schedule, "2025-06-30")
+        on_date, on_years = calculate_weighted_average_repayment(schedule, "2025-07-01")
+        after_date, after_years = calculate_weighted_average_repayment(schedule, "2025-07-02")
+
+        self.assertEqual(before_date.isoformat(), "2025-07-04")
+        self.assertAlmostEqual(before_years, 4 / 365)
+        self.assertEqual(on_date.isoformat(), "2025-07-05")
+        self.assertAlmostEqual(on_years, 4 / 365)
+        self.assertEqual(after_date.isoformat(), "2025-07-05")
+        self.assertAlmostEqual(after_years, 3 / 365)
+        self.assertEqual(calculate_weighted_average_repayment(schedule, "2025-07-05"), (None, None))
+        self.assertEqual(calculate_weighted_average_repayment(schedule, "2025-07-06"), (None, None))
+
+    def test_weighted_repayment_rounds_display_date_half_up_without_rounding_years(self):
+        schedule = [
+            {"repayment_date": "2025-07-01", "principal_units": 50},
+            {"repayment_date": "2025-07-02", "principal_units": 50},
+        ]
+
+        weighted_date, weighted_years = calculate_weighted_average_repayment(schedule, "2025-06-30")
+
+        self.assertEqual(weighted_date.isoformat(), "2025-07-02")
+        self.assertAlmostEqual(weighted_years, 1.5 / 365)

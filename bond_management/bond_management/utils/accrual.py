@@ -1,7 +1,12 @@
+from datetime import timedelta
+from decimal import ROUND_HALF_UP, Decimal
+
 import frappe
 from frappe.utils import getdate
 
 from bond_management.bond_management.utils.coupon_schedule import year_fraction
+
+DAYS_PER_YEAR = Decimal(365)
 
 
 def get_coupon_period(coupon_schedule, settlement_date):
@@ -59,6 +64,48 @@ def calculate_principal_factor(isin, date):
             principal_factor = principal_factor - (period.get("repayment_percent") or 0.0) / 100.0
 
     return principal_factor
+
+
+def calculate_weighted_average_repayment(principal_schedule, valuation_date):
+    """Return the remaining-principal weighted repayment date and exact years.
+
+    Repayments on or before the valuation date are no longer future principal
+    cash flows and are excluded. The displayed date is rounded to the nearest
+    whole day using half-up rounding, while the returned year value preserves
+    the unrounded weighted day count for yield-curve positioning.
+    """
+    if not valuation_date:
+        return None, None
+
+    valuation_date = getdate(valuation_date)
+    remaining_repayments = []
+
+    for period in principal_schedule or []:
+        raw_repayment_date = period.get("repayment_date")
+        if not raw_repayment_date:
+            continue
+
+        repayment_date = getdate(raw_repayment_date)
+        principal_units = Decimal(str(period.get("principal_units") or 0))
+        if repayment_date <= valuation_date or principal_units <= 0:
+            continue
+
+        remaining_repayments.append((repayment_date, principal_units))
+
+    total_principal = sum((principal for _, principal in remaining_repayments), Decimal(0))
+    if not total_principal:
+        return None, None
+
+    weighted_days = (
+        sum(
+            (Decimal((repayment_date - valuation_date).days) * principal)
+            for repayment_date, principal in remaining_repayments
+        )
+        / total_principal
+    )
+    rounded_days = int(weighted_days.quantize(Decimal(1), rounding=ROUND_HALF_UP))
+
+    return valuation_date + timedelta(days=rounded_days), float(weighted_days / DAYS_PER_YEAR)
 
 
 def unit_accrued_interest(isin=None, settlement_date=None):

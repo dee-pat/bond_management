@@ -10,6 +10,7 @@ from bond_management.bond_management.doctype.bond_market_date.bond_market_date i
 )
 from bond_management.bond_management.tests.factories import make_bond, make_market_date
 from bond_management.bond_management.utils.performance import get_market_price
+from bond_management.patches.backfill_weighted_avg_repayment import execute as backfill_weighted_repayment
 
 
 class TestBondMarketDate(IntegrationTestCase):
@@ -20,6 +21,8 @@ class TestBondMarketDate(IntegrationTestCase):
 
         self.assertEqual(price_row.maturity_date, bond.maturity_date)
         self.assertEqual(price_row.principal_factor, 1)
+        self.assertEqual(price_row.weighted_avg_repayment_date, bond.maturity_date)
+        self.assertAlmostEqual(price_row.weighted_avg_repayment_years, 368 / 365)
         self.assertIsNotNone(price_row.future_xirr)
 
         cashflows = get_cashflows(market_date.date, bond.name, 100)
@@ -46,12 +49,53 @@ class TestBondMarketDate(IntegrationTestCase):
                 "currency": None,
                 "future_xirr": None,
                 "principal_factor": None,
+                "weighted_avg_repayment_date": None,
+                "weighted_avg_repayment_years": None,
                 "maturity_date": None,
             },
         )
         self.assertIsNotNone(result[1]["maturity_date"])
         self.assertIsNone(result[1]["principal_factor"])
         self.assertIsNone(result[1]["future_xirr"])
+
+    def test_persists_remaining_principal_weighted_repayment_values(self):
+        bond = make_bond(
+            principal_schedule=[
+                {"repayment_date": "2026-01-01", "principal_units": 20},
+                {"repayment_date": "2027-01-01", "principal_units": 80},
+            ]
+        )
+
+        price_row = make_market_date(bond, date="2025-02-03").bond_market_prices[0]
+
+        self.assertEqual(price_row.weighted_avg_repayment_date.isoformat(), "2026-10-20")
+        self.assertAlmostEqual(price_row.weighted_avg_repayment_years, 624 / 365)
+
+    def test_backfill_patch_updates_existing_market_price_rows(self):
+        bond = make_bond(
+            principal_schedule=[
+                {"repayment_date": "2026-01-01", "principal_units": 20},
+                {"repayment_date": "2027-01-01", "principal_units": 80},
+            ]
+        )
+        market_date = make_market_date(bond, date="2025-02-04")
+        price_row = market_date.bond_market_prices[0]
+        frappe.db.set_value(
+            "Bond Market Prices",
+            price_row.name,
+            {
+                "weighted_avg_repayment_date": None,
+                "weighted_avg_repayment_years": 0,
+            },
+            update_modified=False,
+        )
+
+        backfill_weighted_repayment()
+        market_date.reload()
+        price_row = market_date.bond_market_prices[0]
+
+        self.assertEqual(price_row.weighted_avg_repayment_date.isoformat(), "2026-10-20")
+        self.assertAlmostEqual(price_row.weighted_avg_repayment_years, 623 / 365)
 
     def test_market_price_must_be_greater_than_zero(self):
         bond = make_bond()

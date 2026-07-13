@@ -7,9 +7,15 @@ const market_recalculation_method =
 const market_cashflow_method =
 	"bond_management.bond_management.doctype.bond_market_date.bond_market_date.get_cashflows";
 const market_recalculation_state = new WeakMap();
+const cashflow_copy_bindings = new WeakMap();
 
 frappe.ui.form.on("Bond Market Date", {
+	setup(frm) {
+		set_future_xirr_formatter(frm);
+	},
 	refresh(frm) {
+		set_future_xirr_formatter(frm);
+		bind_cashflow_copy(frm);
 		render_yield_curve(frm);
 	},
 	date: schedule_market_recalculation,
@@ -20,10 +26,82 @@ frappe.ui.form.on("Bond Market Prices", {
 	isin: schedule_market_recalculation,
 	bond_market_prices_add: schedule_market_recalculation,
 	bond_market_prices_remove: schedule_market_recalculation,
-	copy_cashflows(frm, cdt, cdn) {
-		return copy_cashflows(frm, locals[cdt][cdn]);
-	},
 });
+
+function set_future_xirr_formatter(frm) {
+	const formatter = (value, df, options, row) => {
+		const formatted_value = frappe.form.formatters.Percent(
+			value,
+			df,
+			{ ...(options || {}), inline: true },
+			row
+		);
+		if (value === null || value === undefined || !row || !row.name || !row.isin) {
+			return formatted_value;
+		}
+
+		const copy_label = __("Copy cash flows for {0}", [row.isin]);
+		return `<button type="button" class="btn btn-link btn-xs bond-market-cashflow-copy" data-row-name="${frappe.utils.escape_html(
+			row.name
+		)}" data-isin="${frappe.utils.escape_html(
+			row.isin
+		)}" aria-label="${frappe.utils.escape_html(copy_label)}" title="${frappe.utils.escape_html(
+			__("Copy cash flows for Excel")
+		)}">${formatted_value}</button>`;
+	};
+
+	const standard_field = frappe.meta.docfield_map["Bond Market Prices"]?.future_xirr;
+	if (standard_field) {
+		standard_field.formatter = formatter;
+	}
+
+	const document_field = frappe.meta.get_docfield(
+		"Bond Market Prices",
+		"future_xirr",
+		frm.docname
+	);
+	if (document_field) {
+		document_field.formatter = formatter;
+	}
+}
+
+function bind_cashflow_copy(frm) {
+	const grid = frm.fields_dict.bond_market_prices?.grid;
+	if (!grid) {
+		return;
+	}
+
+	const selector = ".bond-market-cashflow-copy";
+	const wrapper = grid.wrapper.get(0);
+	const previous_binding = cashflow_copy_bindings.get(frm);
+	if (previous_binding?.wrapper === wrapper) {
+		return;
+	}
+	if (previous_binding) {
+		previous_binding.wrapper.removeEventListener("click", previous_binding.handler, true);
+	}
+
+	const handler = (event) => {
+		const button = event.target.closest?.(selector);
+		if (!button || !wrapper.contains(button)) {
+			return;
+		}
+
+		// Frappe's grid cell click handler runs in the bubble phase and would open
+		// the editable row before a delegated jQuery handler could stop it.
+		event.preventDefault();
+		event.stopPropagation();
+
+		const row_name = button.dataset.rowName;
+		const row = (frm.doc.bond_market_prices || []).find(
+			(market_price) => market_price.name === row_name
+		);
+		copy_cashflows(frm, row).catch(frappe.msgprint);
+	};
+
+	wrapper.addEventListener("click", handler, true);
+	cashflow_copy_bindings.set(frm, { wrapper, handler });
+}
 
 function get_market_state(frm) {
 	if (!market_recalculation_state.has(frm)) {
@@ -102,7 +180,14 @@ function apply_market_calculation(frm, calculated_rows) {
 	const calculations_by_name = new Map(
 		calculated_rows.filter((row) => row.name).map((row) => [row.name, row])
 	);
-	const derived_fields = ["currency", "future_xirr", "principal_factor", "maturity_date"];
+	const derived_fields = [
+		"currency",
+		"future_xirr",
+		"principal_factor",
+		"weighted_avg_repayment_date",
+		"weighted_avg_repayment_years",
+		"maturity_date",
+	];
 	const updates = (frm.doc.bond_market_prices || []).flatMap((row) => {
 		const calculated = calculations_by_name.get(row.name) || {};
 		return derived_fields.map((fieldname) =>
@@ -157,44 +242,12 @@ function copy_cashflows(frm, row) {
 				),
 			].join("\n");
 
-			return copy_to_clipboard(tsv).then(() => {
-				frappe.show_alert({
-					message: __("Copied cash flows for {0}", [isin]),
-					indicator: "green",
-				});
-				return cashflows;
-			});
+			frappe.utils.copy_to_clipboard(
+				tsv,
+				__("Copied {0} cash flows for {1}", [cashflows.length, isin])
+			);
+			return cashflows;
 		});
-}
-
-function copy_to_clipboard(text) {
-	if (navigator.clipboard && window.isSecureContext) {
-		return navigator.clipboard.writeText(text).catch(() => fallback_copy(text));
-	}
-
-	return fallback_copy(text);
-}
-
-function fallback_copy(text) {
-	return new Promise((resolve, reject) => {
-		const textarea = document.createElement("textarea");
-		textarea.value = text;
-		textarea.style.position = "fixed";
-		textarea.style.opacity = "0";
-		document.body.appendChild(textarea);
-		textarea.select();
-
-		try {
-			if (!document.execCommand("copy")) {
-				throw new Error("The browser did not copy the cash flows.");
-			}
-			resolve();
-		} catch (error) {
-			reject(error);
-		} finally {
-			textarea.remove();
-		}
-	});
 }
 
 function render_yield_curve(frm) {
@@ -233,10 +286,11 @@ function render_yield_curve(frm) {
 
 	const container = document.createElement("div");
 	container.className = "bond-yield-curve";
+	container.style.position = "relative";
 	const svg = append_svg(container, "svg", {
 		viewBox: `0 0 ${width} ${height}`,
 		role: "img",
-		"aria-label": __("Yield curve with numeric year spacing"),
+		"aria-label": __("Yield curve by weighted average principal repayment"),
 		style: "display:block;width:100%;height:auto;max-height:340px",
 	});
 	append_svg(svg, "title", {}, __("Yield Curve"));
@@ -273,18 +327,67 @@ function render_yield_curve(frm) {
 		"stroke-linecap": "round",
 	});
 
+	const tooltip = document.createElement("div");
+	tooltip.className = "bond-yield-tooltip";
+	tooltip.setAttribute("role", "tooltip");
+	tooltip.hidden = true;
+	Object.assign(tooltip.style, {
+		position: "absolute",
+		zIndex: "1",
+		maxWidth: "min(420px, calc(100% - 16px))",
+		padding: "6px 9px",
+		borderRadius: "var(--border-radius-md)",
+		background: "var(--gray-900)",
+		color: "var(--gray-50)",
+		fontSize: "12px",
+		lineHeight: "1.4",
+		textAlign: "center",
+		pointerEvents: "none",
+		transform: "translate(-50%, calc(-100% - 10px))",
+	});
+	container.appendChild(tooltip);
+
 	data.forEach((point) => {
+		const tooltip_text = format_yield_tooltip(point);
 		const circle = append_svg(svg, "circle", {
 			cx: x_position(point.years),
 			cy: y_position(point.yield_percent),
-			r: 5,
+			r: 7,
 			fill: "#3366ff",
 			stroke: "#ffffff",
 			"stroke-width": 1.5,
 			tabindex: 0,
-			"aria-label": format_yield_tooltip(point),
+			class: "bond-yield-point",
+			"data-isin": point.isin,
+			"data-repayment-date": point.repayment_date,
+			"aria-label": tooltip_text,
 		});
-		append_svg(circle, "title", {}, format_yield_tooltip(point));
+		append_svg(circle, "title", {}, tooltip_text);
+
+		const show_tooltip = () => {
+			const svg_bounds = svg.getBoundingClientRect();
+			const container_bounds = container.getBoundingClientRect();
+			const scale_x = svg_bounds.width / width;
+			const scale_y = svg_bounds.height / height;
+			tooltip.textContent = tooltip_text;
+			tooltip.style.left = `${
+				svg_bounds.left -
+				container_bounds.left +
+				Number(circle.getAttribute("cx")) * scale_x
+			}px`;
+			tooltip.style.top = `${
+				svg_bounds.top - container_bounds.top + Number(circle.getAttribute("cy")) * scale_y
+			}px`;
+			tooltip.hidden = false;
+		};
+		const hide_tooltip = () => {
+			tooltip.hidden = true;
+		};
+
+		circle.addEventListener("mouseenter", show_tooltip);
+		circle.addEventListener("mouseleave", hide_tooltip);
+		circle.addEventListener("focus", show_tooltip);
+		circle.addEventListener("blur", hide_tooltip);
 	});
 
 	wrapper.append(container);
@@ -297,10 +400,12 @@ function get_yield_curve_data(frm) {
 
 	return (frm.doc.bond_market_prices || [])
 		.map((row) => {
-			const repayment_date = row.maturity_date;
-			const years = repayment_date
-				? frappe.datetime.get_day_diff(repayment_date, frm.doc.date) / 365
-				: NaN;
+			const repayment_date = row.weighted_avg_repayment_date;
+			const years =
+				row.weighted_avg_repayment_years === null ||
+				row.weighted_avg_repayment_years === undefined
+					? NaN
+					: Number(row.weighted_avg_repayment_years);
 			return {
 				isin: row.isin,
 				repayment_date,
@@ -314,6 +419,7 @@ function get_yield_curve_data(frm) {
 		.filter(
 			(point) =>
 				point.isin &&
+				point.repayment_date &&
 				point.years > 0 &&
 				Number.isFinite(point.years) &&
 				Number.isFinite(point.yield_percent)
@@ -397,7 +503,7 @@ function draw_yield_axes(svg, dimensions, x_position, y_position) {
 			"font-size": 12,
 			fill: "currentColor",
 		},
-		__("Years to repayment")
+		__("Years to weighted average principal repayment")
 	);
 	append_svg(
 		svg,
@@ -429,7 +535,7 @@ function format_years(years) {
 }
 
 function format_yield_tooltip(point) {
-	return __("{0} | {1} | {2} years | Yield {3}%", [
+	return __("ISIN: {0} | Weighted repayment: {1} | {2} years | Yield {3}%", [
 		point.isin,
 		point.repayment_date,
 		point.years.toFixed(2),

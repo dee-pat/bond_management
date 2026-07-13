@@ -13,7 +13,8 @@
   "market_price",
   "currency",
   "future_xirr",
-  "copy_cashflows",
+  "weighted_avg_repayment_date",
+  "weighted_avg_repayment_years",
   "maturity_date"
  ],
  "fields": [
@@ -60,10 +61,20 @@
    "read_only": 1
   },
   {
-   "fieldname": "copy_cashflows",
-   "fieldtype": "Button",
+   "description": "Nearest-day date representing the weighted timing of remaining principal repayments as of the market date.",
+   "fieldname": "weighted_avg_repayment_date",
+   "fieldtype": "Date",
    "in_list_view": 1,
-   "label": "Copy Cashflows"
+   "label": "Weighted Average Principal Repayment Date",
+   "read_only": 1
+  },
+  {
+   "fieldname": "weighted_avg_repayment_years",
+   "fieldtype": "Float",
+   "hidden": 1,
+   "label": "Weighted Average Principal Repayment Years",
+   "precision": "9",
+   "read_only": 1
   },
   {
    "fieldname": "maturity_date",
