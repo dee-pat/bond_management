@@ -20,9 +20,12 @@ class TestXirr(IntegrationTestCase):
 
     def test_market_price_uses_price_per_hundred(self):
         bond = make_bond(face_value_per_unit=1000)
-        cashflows = create_future_cash_flows(bond.name, "2025-12-31", 105)
 
-        self.assertEqual(cashflows[0]["amount"], -1050)
+        for market_price in (105, "105"):
+            with self.subTest(market_price=market_price):
+                cashflows = create_future_cash_flows(bond.name, "2025-12-31", market_price)
+
+                self.assertEqual(cashflows[0]["amount"], -1050)
 
     def test_maturity_day_purchase_receives_redemption_without_double_counting_commission(self):
         bond = make_bond(coupon_rate=0)
@@ -44,3 +47,13 @@ class TestXirr(IntegrationTestCase):
         self.assertEqual(transaction.settlement_amount, 1000)
         self.assertEqual(amounts_by_type["purchase"], -1000)
         self.assertEqual(amounts_by_type["sale"], 1000)
+
+    def test_past_cashflows_accept_numeric_string_market_prices(self):
+        bond = make_bond(coupon_rate=0)
+        portfolio = make_portfolio()
+        make_transaction(bond, portfolio)
+
+        cashflows = create_past_cash_flows(bond.name, "2025-12-31", "105", portfolio.name)
+        market_price = next(row for row in cashflows if row["type"] == "market_price")
+
+        self.assertEqual(market_price["amount"], 1050)

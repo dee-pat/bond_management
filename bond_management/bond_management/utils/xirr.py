@@ -1,7 +1,7 @@
 from collections import defaultdict
 
 import frappe
-from frappe.utils import getdate
+from frappe.utils import flt, getdate
 from pyxirr import InvalidPaymentsError, xirr
 
 from bond_management.bond_management.utils.accrual import (
@@ -77,6 +77,7 @@ def consolidate_cashflows(cash_flows):
 def create_future_cash_flows(isin, date, market_price):
     # Fetch the bond document
     bond_doc = frappe.get_doc("Bond Master", isin)
+    market_price = flt(market_price)
 
     # Initialize future cash flows list
     future_cash_flows = []
@@ -164,6 +165,7 @@ def create_future_cash_flows(isin, date, market_price):
 def create_past_cash_flows(isin, date, market_price, portfolio):
     # Fetch the bond document
     bond_doc = frappe.get_doc("Bond Master", isin)
+    market_price = flt(market_price)
 
     # Initialize past cash flows list
     past_cash_flows = []

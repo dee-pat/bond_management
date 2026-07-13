@@ -105,7 +105,8 @@ def get_cashflows(date, isin, market_price):
         frappe.throw("Date is required")
     if not isin:
         frappe.throw("ISIN is required")
-    if market_price is None or flt(market_price) <= 0:
+    market_price = flt(market_price)
+    if market_price <= 0:
         frappe.throw("Market Price must be greater than zero")
 
     frappe.has_permission("Bond Master", "read", doc=isin, throw=True)

@@ -25,9 +25,18 @@ class TestBondMarketDate(IntegrationTestCase):
         self.assertAlmostEqual(price_row.weighted_avg_repayment_years, 368 / 365)
         self.assertIsNotNone(price_row.future_xirr)
 
-        cashflows = get_cashflows(market_date.date, bond.name, 100)
+        cashflows = get_cashflows(market_date.date, bond.name, "100")
         self.assertGreater(len(cashflows), 2)
         self.assertEqual(cashflows[0]["type"], "market_price")
+        self.assertEqual(cashflows[0]["amount"], -100)
+
+    def test_cashflow_endpoint_rejects_invalid_market_prices(self):
+        bond = make_bond()
+
+        for market_price in (None, "", "not-a-number", "0", "-1"):
+            with self.subTest(market_price=market_price):
+                with self.assertRaisesRegex(frappe.ValidationError, "must be greater than zero"):
+                    get_cashflows("2025-12-29", bond.name, market_price)
 
     def test_value_endpoint_clears_stale_derived_fields_for_incomplete_rows(self):
         result = get_recalculated_market_data(
