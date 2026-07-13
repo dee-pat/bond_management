@@ -41,7 +41,9 @@ def execute(filters: dict | None = None):
     )
 
     columns = get_columns()
-    data, combined_cashflow, combined_future_cashflow = get_data(portfolio, valuation_date)
+    data, combined_cashflow, combined_future_cashflow = get_data(
+        portfolio, valuation_date
+    )
 
     # Add summary row
     currencies = {row["currency"] for row in data if row.get("currency")}
@@ -66,16 +68,23 @@ def get_xirr_cashflows(portfolio, valuation_date, isin, xirr_type):
         cashflows = past_cashflows if xirr_type == "past" else future_cashflows
     else:
         portfolio_isins = {
-            row["isin"] for row in get_distinct_isins(portfolio=portfolio, valuation_date=valuation_date)
+            row["isin"]
+            for row in get_distinct_isins(
+                portfolio=portfolio, valuation_date=valuation_date
+            )
         }
         if isin not in portfolio_isins:
-            frappe.throw(f"ISIN {frappe.bold(isin)} is not in this portfolio on or before the valuation date")
+            frappe.throw(
+                f"ISIN {frappe.bold(isin)} is not in this portfolio on or before the valuation date"
+            )
         if not frappe.has_permission("Bond Master", "read", doc=isin):
             frappe.throw("Not permitted", frappe.PermissionError)
 
         quantity = get_position(isin, valuation_date, portfolio)
         market_price = get_market_price(isin, valuation_date)
-        terminal_market_price = get_terminal_market_price(isin, valuation_date, quantity, market_price)
+        terminal_market_price = get_terminal_market_price(
+            isin, valuation_date, quantity, market_price
+        )
         if xirr_type == "past":
             cashflows = create_past_cash_flows(
                 isin=isin,
@@ -86,8 +95,13 @@ def get_xirr_cashflows(portfolio, valuation_date, isin, xirr_type):
         elif not quantity:
             cashflows = []
         else:
-            cashflows = create_future_cash_flows(isin, valuation_date, terminal_market_price)
-            cashflows = [{**cashflow, "amount": cashflow["amount"] * quantity} for cashflow in cashflows]
+            cashflows = create_future_cash_flows(
+                isin, valuation_date, terminal_market_price
+            )
+            cashflows = [
+                {**cashflow, "amount": cashflow["amount"] * quantity}
+                for cashflow in cashflows
+            ]
 
     return [
         {
@@ -120,7 +134,9 @@ def validate_report_inputs(portfolio, valuation_date):
 def get_terminal_market_price(isin, valuation_date, quantity, market_price):
     """Require a valid quote only when a position still has market exposure."""
     if quantity and market_price is None:
-        frappe.throw(f"No market price found for {frappe.bold(isin)} on or before {valuation_date}")
+        frappe.throw(
+            f"No market price found for {frappe.bold(isin)} on or before {valuation_date}"
+        )
     if quantity and flt(market_price) <= 0:
         frappe.throw(f"Market price for {frappe.bold(isin)} must be greater than zero")
 
@@ -152,15 +168,15 @@ def get_columns() -> list[dict]:
             "fieldname": "isin",
             "fieldtype": "Link",
             "options": "Bond Master",
-            "width": 130,
+            "width": 140,
         },
-        {"label": "Currency", "fieldname": "currency", "width": 50},
+        {"label": "CCY", "fieldname": "currency", "width": 60},
         # {"label": "Face Value/Unit", "fieldname": "face_value_per_unit", "width": 150},
         {
-            "label": "Principal Factor",
+            "label": "Prin. Factor",
             "fieldname": "principal_factor",
             "fieldtype": "Float",
-            "width": 60,
+            "width": 110,
         },
         # {"label": "Number of Units", "fieldname": "quantity", "width": 150},
         {
@@ -168,7 +184,7 @@ def get_columns() -> list[dict]:
             "fieldname": "nominal_value",
             "fieldtype": "Currency",
             "options": "currency",
-            "width": 130,
+            "width": 135,
         },
         # {"label": "Market Price", "fieldname": "market_price", "fieldtype": "Float", "width": 80,},
         # {"label": "Accrued Interest", "fieldname": "accrued_interest", "fieldtype": "Float", "width": 60,},
@@ -177,49 +193,36 @@ def get_columns() -> list[dict]:
             "fieldname": "purchases_value",
             "fieldtype": "Currency",
             "options": "currency",
-            "width": 130,
+            "width": 135,
         },
         {
-            "label": "Sales Value",
-            "fieldname": "sales_value",
+            "label": "Proceeds Value",
+            "fieldname": "proceeds_value",
             "fieldtype": "Currency",
             "options": "currency",
-            "width": 130,
-        },
-        {
-            "label": "Coupons Value",
-            "fieldname": "coupons_value",
-            "fieldtype": "Currency",
-            "options": "currency",
-            "width": 130,
-        },
-        {
-            "label": "Amortisation Value",
-            "fieldname": "amortisation_value",
-            "fieldtype": "Currency",
-            "options": "currency",
-            "width": 130,
+            "width": 135,
+            "description": "Sales, coupon payments and principal amortisation received.",
         },
         {
             "label": "Market Value",
             "fieldname": "market_value",
             "fieldtype": "Currency",
             "options": "currency",
-            "width": 130,
+            "width": 135,
         },
         {
             "label": "Gain Value",
             "fieldname": "gain_value",
             "fieldtype": "Currency",
             "options": "currency",
-            "width": 130,
+            "width": 135,
         },
         {"label": "XIRR", "fieldname": "xirr", "fieldtype": "Percent", "width": 80},
         {
             "label": "Future XIRR",
             "fieldname": "future_xirr",
             "fieldtype": "Percent",
-            "width": 80,
+            "width": 105,
         },
     ]
 
@@ -238,7 +241,9 @@ def get_data(portfolio, valuation_date):
     for bond in isins:
         isin = bond["isin"]
 
-        quantity = get_position(isin=isin, statement_date=valuation_date, portfolio_name=portfolio)
+        quantity = get_position(
+            isin=isin, statement_date=valuation_date, portfolio_name=portfolio
+        )
 
         # ---------- MASTER DATA ----------
         bonds = frappe.qb.get_query(
@@ -256,9 +261,15 @@ def get_data(portfolio, valuation_date):
 
         # ---------- MARKET DATA ----------
         market_price = get_market_price(isin=isin, valuation_date=valuation_date)
-        terminal_market_price = get_terminal_market_price(isin, valuation_date, quantity, market_price)
-        accrued_interest = unit_accrued_interest(isin=isin, settlement_date=valuation_date)
-        market_value = quantity * (face_value_per_unit * terminal_market_price / 100 + accrued_interest)
+        terminal_market_price = get_terminal_market_price(
+            isin, valuation_date, quantity, market_price
+        )
+        accrued_interest = unit_accrued_interest(
+            isin=isin, settlement_date=valuation_date
+        )
+        market_value = quantity * (
+            face_value_per_unit * terminal_market_price / 100 + accrued_interest
+        )
 
         # ---------- CASHFLOW DATA ----------
         principal_factor = calculate_principal_factor(isin=isin, date=valuation_date)
@@ -278,10 +289,8 @@ def get_data(portfolio, valuation_date):
             totals[line.get("type")] += line.get("amount") or 0
 
         # access:
-        coupons_value = totals["coupon"]
-        amortisation_value = totals["amortisation"]
         purchases_value = -totals["purchase"]
-        sales_value = totals["sale"]
+        proceeds_value = totals["sale"] + totals["coupon"] + totals["amortisation"]
 
         xirr = calculate_xirr(consolidate_cashflows(cashflows))
         xirr = xirr * 100.0 if xirr is not None else 0.0
@@ -292,8 +301,13 @@ def get_data(portfolio, valuation_date):
                 date=valuation_date,
                 market_price=terminal_market_price,
             )
-            future_xirr = calculate_future_xirr_from_cashflows(isin, valuation_date, unit_future_cashflows)
-            future_cashflows = [{**row, "amount": row["amount"] * quantity} for row in unit_future_cashflows]
+            future_xirr = calculate_future_xirr_from_cashflows(
+                isin, valuation_date, unit_future_cashflows
+            )
+            future_cashflows = [
+                {**row, "amount": row["amount"] * quantity}
+                for row in unit_future_cashflows
+            ]
         else:
             future_xirr = None
             future_cashflows = []
@@ -313,13 +327,9 @@ def get_data(portfolio, valuation_date):
                 # "market_price": market_price,
                 # "accrued_interest": accrued_interest,
                 "purchases_value": purchases_value,
-                "sales_value": sales_value,
-                "coupons_value": coupons_value,
-                "amortisation_value": amortisation_value,
+                "proceeds_value": proceeds_value,
                 "market_value": market_value,
-                "gain_value": (
-                    market_value + amortisation_value + coupons_value + sales_value - purchases_value
-                ),
+                "gain_value": market_value + proceeds_value - purchases_value,
                 "xirr": xirr,
                 "future_xirr": future_xirr,
             }
@@ -334,16 +344,16 @@ def get_data(portfolio, valuation_date):
 def make_total_row(data, combined_cashflow, combined_future_cashflow):
     nominal_value = sum(d["nominal_value"] for d in data)
     purchases_value = sum(d["purchases_value"] for d in data)
-    sales_value = sum(d["sales_value"] for d in data)
-    coupons_value = sum(d["coupons_value"] for d in data)
-    amortisation_value = sum(d["amortisation_value"] for d in data)
+    proceeds_value = sum(d["proceeds_value"] for d in data)
     market_value = sum(d["market_value"] for d in data)
     gain_value = sum(d["gain_value"] for d in data)
 
     cash_flows = consolidate_cashflows(cash_flows=combined_cashflow)
     xirr_value = calculate_xirr(cash_flows)
 
-    combined_future_cashflow = consolidate_cashflows(cash_flows=combined_future_cashflow)
+    combined_future_cashflow = consolidate_cashflows(
+        cash_flows=combined_future_cashflow
+    )
 
     future_xirr = calculate_xirr(combined_future_cashflow)
 
@@ -354,9 +364,7 @@ def make_total_row(data, combined_cashflow, combined_future_cashflow):
         "currency": currencies.pop() if len(currencies) == 1 else None,
         "nominal_value": nominal_value,
         "purchases_value": purchases_value,
-        "sales_value": sales_value,
-        "coupons_value": coupons_value,
-        "amortisation_value": amortisation_value,
+        "proceeds_value": proceeds_value,
         "market_value": market_value,
         "gain_value": gain_value,
         "xirr": xirr_value * 100 if xirr_value is not None else 0.0,
