@@ -35,9 +35,9 @@ class TestPortfolioPerformance(IntegrationTestCase):
         self.assertEqual(
             widths,
             {
-                "isin": 160,
+                "isin": 140,
                 "currency": 60,
-                "principal_factor": 90,
+                "principal_factor": 110,
                 "nominal_value": 135,
                 "purchases_value": 135,
                 "proceeds_value": 135,
