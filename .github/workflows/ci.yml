@@ -3,6 +3,7 @@ name: CI
 on:
   push:
     branches:
+      - main
       - version-16
   pull_request:
 
@@ -83,7 +84,7 @@ jobs:
       - name: Setup
         run: |
           pip install frappe-bench
-          bench init --skip-redis-config-generation --skip-assets --python "$(which python)" ~/frappe-bench
+          bench init --frappe-branch version-16 --skip-redis-config-generation --skip-assets --python "$(which python)" ~/frappe-bench
 
       - name: Install
         working-directory: /home/runner/frappe-bench
@@ -103,3 +104,113 @@ jobs:
           bench --site test_site run-tests --app bond_management
         env:
           TYPE: server
+
+  ui-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    name: UI (Chrome)
+
+    services:
+      redis-cache:
+        image: redis:alpine
+        ports:
+          - 13000:6379
+      redis-queue:
+        image: redis:alpine
+        ports:
+          - 11000:6379
+      mariadb:
+        image: mariadb:11.8
+        env:
+          MYSQL_ROOT_PASSWORD: root
+        ports:
+          - 3306:3306
+        options: --health-cmd="mariadb-admin ping" --health-interval=5s --health-timeout=2s --health-retries=3
+
+    steps:
+      - name: Clone
+        uses: actions/checkout@v6
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.14'
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          check-latest: true
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-ui-pip-${{ hashFiles('**/*requirements.txt', '**/pyproject.toml', '**/setup.py', '**/setup.cfg') }}
+          restore-keys: |
+            ${{ runner.os }}-ui-pip-
+            ${{ runner.os }}-pip-
+
+      - name: Cache Cypress binary
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/Cypress
+          key: ${{ runner.os }}-cypress-v16
+
+      - name: Install MariaDB Client
+        run: |
+          sudo apt update
+          sudo apt-get install mariadb-client
+
+      - name: Setup Bench
+        run: |
+          pip install frappe-bench
+          bench init --frappe-branch version-16 --skip-redis-config-generation --skip-assets --python "$(which python)" ~/frappe-bench
+
+      - name: Install App and Build Assets
+        working-directory: /home/runner/frappe-bench
+        run: |
+          bench get-app bond_management "$GITHUB_WORKSPACE"
+          bench setup requirements --dev
+          bench set-config -g admin_password admin
+          bench new-site --db-root-password root --admin-password admin test_site
+          bench --site test_site set-config allow_tests true
+          bench --site test_site set-config host_name "http://test_site:8000"
+          bench --site test_site install-app bond_management
+          bench build
+        env:
+          CI: 'Yes'
+
+      - name: Seed UI Test Site
+        working-directory: /home/runner/frappe-bench
+        run: |
+          bench --site test_site execute frappe.utils.install.complete_setup_wizard
+          bench --site test_site execute frappe.tests.ui_test_helpers.create_test_user
+
+      - name: Setup Chrome
+        uses: browser-actions/setup-chrome@latest
+
+      - name: Start Web Server
+        working-directory: /home/runner/frappe-bench
+        run: |
+          echo "127.0.0.1 test_site" | sudo tee -a /etc/hosts
+          nohup bench serve --port 8000 > "$RUNNER_TEMP/bench-web.log" 2>&1 &
+          curl --noproxy '*' --fail --silent --show-error --retry 30 --retry-connrefused --retry-delay 2 http://test_site:8000/api/method/ping
+
+      - name: Run Cypress
+        working-directory: /home/runner/frappe-bench
+        run: |
+          bench --site test_site run-ui-tests bond_management --headless --browser "$(which chrome)" --spec cypress/integration/portfolio_performance.js
+        env:
+          CI: 'Yes'
+
+      - name: Upload UI failure artifacts
+        if: failure()
+        uses: actions/upload-artifact@v6
+        with:
+          name: ui-test-failure-artifacts
+          if-no-files-found: ignore
+          path: |
+            /home/runner/frappe-bench/cypressVideos
+            /home/runner/frappe-bench/apps/bond_management/cypress/screenshots
+            ${{ runner.temp }}/bench-web.log

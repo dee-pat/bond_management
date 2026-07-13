@@ -1,38 +1,97 @@
 context("Portfolio Performance", () => {
-	before(() => {
+	beforeEach(() => {
 		cy.login();
 	});
 
-	it("copies XIRR cash flows from the report", () => {
-		cy.visit("/desk/query-report/Portfolio%20Performance");
-		cy.window().should("have.property", "copy_xirr_cashflows").then((window) => {
-			const call = cy.stub(window.frappe, "call").resolves({
-				message: [
-					{
-						isin: "TEST-BOND",
-						transaction_type: "purchase",
-						date: "2025-12-31",
-						amount: -1000,
-					},
-				],
-			});
-			const copy = cy.stub(window.frappe.utils, "copy_to_clipboard");
-			const report = {
-				get_values: () => ({
-					portfolio: "TEST-PORTFOLIO",
-					valuation_date: "2025-12-31",
-				}),
-			};
+	it("copies cash flows by clicking the rendered XIRR button", () => {
+		cy.intercept("GET", "**/api/method/frappe.client.validate_link_and_fetch*", {
+			statusCode: 200,
+			body: { message: { name: "TEST-PORTFOLIO" } },
+		});
+		cy.intercept("GET", "**/api/method/frappe.desk.query_report.run*", {
+			statusCode: 200,
+			body: {
+				message: {
+					columns: [
+						{
+							label: "ISIN",
+							fieldname: "isin",
+							fieldtype: "Data",
+							width: 160,
+						},
+						{
+							label: "XIRR",
+							fieldname: "xirr",
+							fieldtype: "Percent",
+							width: 100,
+						},
+						{
+							label: "Future XIRR",
+							fieldname: "future_xirr",
+							fieldtype: "Percent",
+							width: 120,
+						},
+					],
+					result: [
+						{
+							isin: "TEST-BOND",
+							xirr: 12.5,
+							future_xirr: 8.75,
+						},
+					],
+					execution_time: 0.01,
+				},
+			},
+		}).as("report");
+		cy.intercept(
+			"POST",
+			"**/api/method/bond_management.bond_management.report.portfolio_performance.portfolio_performance.get_xirr_cashflows",
+			{
+				statusCode: 200,
+				body: {
+					message: [
+						{
+							isin: "TEST-BOND",
+							transaction_type: "purchase",
+							date: "2025-12-31",
+							amount: -1000,
+						},
+					],
+				},
+			}
+		).as("cashflows");
 
-			return cy.wrap(window.copy_xirr_cashflows(report, "TEST-BOND", "past")).then(() => {
-				expect(call).to.have.been.calledWithMatch({
-					type: "POST",
-					args: { isin: "TEST-BOND", xirr_type: "past" },
-				});
-				expect(copy).to.have.been.calledWithMatch(
-					"isin\ttransaction_type\tdate\tamount\nTEST-BOND\tpurchase\t2025-12-31\t-1000"
-				);
+		cy.visit(
+			"/desk/query-report/Portfolio%20Performance?portfolio=TEST-PORTFOLIO&valuation_date=2025-12-31"
+		);
+		cy.wait("@report");
+		cy.window().then((window) => {
+			cy.stub(window.frappe.utils, "copy_to_clipboard").as("copyToClipboard");
+		});
+
+		cy.get('.portfolio-cashflow-copy[data-xirr-type="past"]').should("be.visible").click();
+
+		cy.wait("@cashflows").then(({ request }) => {
+			const body = parse_request_body(request.body);
+			expect(body).to.include({
+				portfolio: "TEST-PORTFOLIO",
+				valuation_date: "2025-12-31",
+				isin: "TEST-BOND",
+				xirr_type: "past",
 			});
 		});
+		cy.get("@copyToClipboard").should(
+			"have.been.calledWith",
+			"isin\ttransaction_type\tdate\tamount\nTEST-BOND\tpurchase\t2025-12-31\t-1000",
+			"Copied 1 cash flows"
+		);
 	});
 });
+
+function parse_request_body(body) {
+	if (typeof body !== "string") {
+		return body;
+	}
+
+	return Object.fromEntries(new URLSearchParams(body));
+}

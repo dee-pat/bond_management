@@ -24,12 +24,12 @@ def get_market_price(isin, valuation_date):
         "Bond Market Date",
         fields=["bond_market_prices.market_price"],
         filters={"date": ["<=", valuation_date], "bond_market_prices.isin": isin},
-        order_by="date desc",
+        order_by="date desc, name desc",
         limit=1,
         ignore_permissions=False,
     ).run(as_dict=True)
 
     if result:
-        return result[0].market_price or 0.0
+        return result[0].market_price
 
-    return 0.0
+    return None

@@ -3,86 +3,141 @@
 
 import frappe
 from frappe.model.document import Document
-from frappe.utils import getdate
+from frappe.utils import flt
+
+from bond_management.bond_management.utils.accrual import calculate_principal_factor
 from bond_management.bond_management.utils.xirr import (
     calculate_future_xirr,
     create_future_cash_flows,
 )
-from bond_management.bond_management.utils.accrual import calculate_principal_factor
 
 
 class BondMarketDate(Document):
-
     def validate(self):
-        self.update_future_xirr()
-        self.update_principal_factor()
-        self.update_maturity_date()
+        self._validate_market_price_rows(require_complete=True)
+        self._recalculate_market_data()
 
-    @frappe.whitelist()
-    def update_future_xirr(self):
+    def _recalculate_market_data(self):
         for row in self.bond_market_prices:
-            if not row.isin or row.market_price is None:
-                continue
-            if row.market_price <= 0:
-                row.future_xirr = None
-                continue
+            values = _calculate_market_data(self.date, row.isin, row.market_price)
+            for fieldname, value in values.items():
+                row.set(fieldname, value)
 
-            future_xirr = calculate_future_xirr(row.isin, self.date, row.market_price)
-            row.future_xirr = future_xirr * 100 if future_xirr is not None else None
+    def _validate_market_price_rows(self, require_complete):
+        seen_isins = set()
 
-    @frappe.whitelist()
-    def update_principal_factor(self):
         for row in self.bond_market_prices:
             if not row.isin:
+                if require_complete:
+                    frappe.throw(f"ISIN is required in row {row.idx}")
                 continue
 
-            row.principal_factor = calculate_principal_factor(row.isin, self.date)
+            if row.isin in seen_isins:
+                frappe.throw(f"ISIN {frappe.bold(row.isin)} appears more than once in Bond Market Prices")
+            seen_isins.add(row.isin)
 
-    @frappe.whitelist()
-    def get_cashflows(self, isin, market_price):
-        rows = []
-        flows = create_future_cash_flows(isin, self.date, market_price)
-
-        for f in flows:
-            rows.append(
-                {
-                    "isin": isin,
-                    "type": f["type"],
-                    "date": str(f["date"]),
-                    "amount": f["amount"],
-                }
-            )
-
-        return rows
-
-    def get_all_cashflows(self):
-        valuation_date = getdate(self.date)
-
-        all_rows = []
-
-        for row in self.bond_market_prices:
-            isin = row.isin
-            market_price = row.market_price
-            if not isin or market_price is None:
+            if row.market_price is None:
+                if require_complete:
+                    frappe.throw(f"Market Price is required in row {row.idx}")
                 continue
-            flows = create_future_cash_flows(isin, valuation_date, market_price)
 
-            for f in flows:
-                all_rows.append(
-                    {
-                        "isin": isin,
-                        "type": f.get("type"),
-                        "date": getdate(f.get("date")).isoformat(),
-                        "amount": float(f.get("amount") or 0.0),
-                    }
-                )
+            if flt(row.market_price) <= 0:
+                row.future_xirr = None
+                frappe.throw(f"Market Price must be greater than zero in row {row.idx}")
 
-        return all_rows
 
-    def update_maturity_date(self):
-        for row in self.bond_market_prices:
-            isin = row.isin
-            if not isin:
-                continue
-            bond_doc = frappe.get_doc("Bond Master", isin)
-            row.maturity_date = bond_doc.get("maturity_date")
+@frappe.whitelist(methods=["POST"])
+def get_recalculated_market_data(date, rows):
+    """Return derived row values without accepting or returning a form document."""
+    if not (
+        frappe.has_permission("Bond Market Date", "write")
+        or frappe.has_permission("Bond Market Date", "create")
+    ):
+        frappe.throw("Not permitted", frappe.PermissionError)
+
+    rows = frappe.parse_json(rows)
+    if not isinstance(rows, list):
+        frappe.throw("Rows must be a list")
+
+    seen_names = set()
+    seen_isins = set()
+    result = []
+
+    for index, row in enumerate(rows, start=1):
+        if not isinstance(row, dict):
+            frappe.throw(f"Row {index} must be an object")
+
+        row_name = row.get("name")
+        isin = row.get("isin")
+        market_price = row.get("market_price")
+
+        if not row_name or row_name in seen_names:
+            frappe.throw(f"Row {index} must have a unique name")
+        seen_names.add(row_name)
+
+        if isin:
+            if isin in seen_isins:
+                frappe.throw(f"ISIN {frappe.bold(isin)} appears more than once in Bond Market Prices")
+            seen_isins.add(isin)
+            if not frappe.has_permission("Bond Master", "read", doc=isin):
+                frappe.throw("Not permitted", frappe.PermissionError)
+
+        if market_price is not None and flt(market_price) <= 0:
+            frappe.throw(f"Market Price must be greater than zero in row {index}")
+
+        result.append(
+            {
+                "name": row_name,
+                **_calculate_market_data(date, isin, market_price),
+            }
+        )
+
+    return result
+
+
+@frappe.whitelist(methods=["POST"])
+def get_cashflows(date, isin, market_price):
+    """Return value-only cash flows without syncing a form Document response."""
+    if not date:
+        frappe.throw("Date is required")
+    if not isin:
+        frappe.throw("ISIN is required")
+    if market_price is None or flt(market_price) <= 0:
+        frappe.throw("Market Price must be greater than zero")
+
+    frappe.has_permission("Bond Master", "read", doc=isin, throw=True)
+    return [
+        {
+            "isin": isin,
+            "type": flow["type"],
+            "date": str(flow["date"]),
+            "amount": flow["amount"],
+        }
+        for flow in create_future_cash_flows(isin, date, market_price)
+    ]
+
+
+def _calculate_market_data(date, isin, market_price):
+    values = {
+        "currency": None,
+        "future_xirr": None,
+        "principal_factor": None,
+        "maturity_date": None,
+    }
+    if not isin:
+        return values
+
+    bond_doc = frappe.get_doc("Bond Master", isin)
+    values["currency"] = bond_doc.get("currency")
+    values["maturity_date"] = bond_doc.get("maturity_date")
+
+    if not date:
+        return values
+
+    values["principal_factor"] = calculate_principal_factor(isin, date)
+    if market_price is None:
+        return values
+
+    future_xirr = calculate_future_xirr(isin, date, market_price)
+    values["future_xirr"] = future_xirr * 100 if future_xirr is not None else None
+    return values

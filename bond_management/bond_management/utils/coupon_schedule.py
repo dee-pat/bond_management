@@ -1,6 +1,5 @@
-from dateutil.relativedelta import relativedelta
-
 import frappe
+from dateutil.relativedelta import relativedelta
 from frappe.utils import add_days, add_months, getdate
 from frappe.utils.data import get_last_day
 
@@ -13,7 +12,6 @@ def generate_coupon_schedule(
     first_coupon_date,
     day_count_convention,
 ):
-
     issue_date = getdate(issue_date)
     maturity_date = getdate(maturity_date)
     first_coupon_date = getdate(first_coupon_date) if first_coupon_date else None
@@ -100,6 +98,7 @@ def get_coupon_schedule(isin):
             "parentfield": "coupon_schedule",
         },
         order_by="coupon_date asc",
+        parent_doctype="Bond Master",
         ignore_permissions=False,
     )
     return query.run(as_dict=True)
@@ -127,18 +126,38 @@ def year_fraction(
         return (end - start).days / 364
 
     if day_count_convention in {"ACT/ACT", "Actual/Actual(ICMA)"}:
-        quasi_start = add_months(reference_end, -(12 // coupon_frequency))
-        if reference_end == get_last_day(reference_end):
-            quasi_start = get_last_day(quasi_start)
-        denominator = (reference_end - quasi_start).days * coupon_frequency
-        return (end - start).days / denominator
+        if coupon_frequency <= 0 or 12 % coupon_frequency:
+            raise ValueError("Coupon frequency must be a positive divisor of 12")
+        if reference_end < end:
+            raise ValueError("Reference end date cannot be before end date")
+
+        # ICMA long stubs must be split across their notional coupon periods.
+        # Using one denominator for the whole stub is wrong when the periods have
+        # different lengths (most visibly around leap years and month ends).
+        months_per_period = 12 // coupon_frequency
+        preserve_eom = reference_end == get_last_day(reference_end)
+        quasi_end = reference_end
+        fraction = 0.0
+
+        while quasi_end > start:
+            quasi_start = add_months(quasi_end, -months_per_period)
+            if preserve_eom:
+                quasi_start = get_last_day(quasi_start)
+
+            overlap_start = max(start, quasi_start)
+            overlap_end = min(end, quasi_end)
+            if overlap_end > overlap_start:
+                denominator = (quasi_end - quasi_start).days * coupon_frequency
+                fraction += (overlap_end - overlap_start).days / denominator
+
+            quasi_end = quasi_start
+
+        return fraction
 
     if day_count_convention == "30E/360":
         d1 = min(start.day, 30)
         d2 = min(end.day, 30)
 
-        return (
-            (end.year - start.year) * 360 + (end.month - start.month) * 30 + (d2 - d1)
-        ) / 360
+        return ((end.year - start.year) * 360 + (end.month - start.month) * 30 + (d2 - d1)) / 360
 
     raise ValueError(f"Unsupported day count convention: {day_count_convention}")

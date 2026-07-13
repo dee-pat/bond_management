@@ -13,12 +13,13 @@ class BondStatement(Document):
         self.populate_holdings()
 
     def populate_holdings(self):
+        # Clear generated rows first so cleared inputs cannot retain old holdings.
+        self.set("bond_statement_details", [])
+
         if not self.portfolio_name or not self.statement_date:
             return
 
         positions = fetch_holdings(self.portfolio_name, self.statement_date)
-
-        self.set("bond_statement_details", [])  # clear table
 
         for p in positions:
             if not p.get("quantity"):

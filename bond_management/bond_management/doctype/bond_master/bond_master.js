@@ -1,76 +1,118 @@
 // Copyright (c) 2026, Deepak Patel and contributors
 // For license information, please see license.txt
 
+const schedule_recalculation_state = new WeakMap();
+const schedule_recalculation_method =
+	"bond_management.bond_management.doctype.bond_master.bond_master.get_recalculated_schedules";
 
-frappe.ui.form.on('Bond Master', {
-    refresh: function(frm) {
-        update_maturity_date(frm);
-        hide_grid_buttons(frm);
-    }
+frappe.ui.form.on("Bond Master", {
+	issue_date: recalculate_schedules,
+	first_coupon_date: recalculate_schedules,
+	coupon_frequency: recalculate_schedules,
+	coupon_rate: recalculate_schedules,
+	day_count_convention: recalculate_schedules,
 });
 
-frappe.ui.form.on('Bond Principal Schedule', {
-    principal_units: function(frm, cdt, cdn) {
-        update_percentages(frm);
-    }
+frappe.ui.form.on("Bond Principal Schedule", {
+	principal_units: recalculate_schedules,
+	repayment_date: recalculate_schedules,
+	principal_schedule_add: recalculate_schedules,
+	principal_schedule_remove: recalculate_schedules,
 });
 
-function update_percentages(frm) {
-    let total = 0;
+function get_schedule_state(frm) {
+	if (!schedule_recalculation_state.has(frm)) {
+		schedule_recalculation_state.set(frm, {
+			request_id: 0,
+		});
+	}
 
-    frm.doc.principal_schedule.forEach(row => {
-        total += row.principal_units || 0;
-    });
-
-    if (!total) return;
-
-    frm.doc.principal_schedule.forEach(row => {
-        row.repayment_percent = (row.principal_units / total) * 100;
-    });
-
-    frm.refresh_field('principal_schedule');
+	return schedule_recalculation_state.get(frm);
 }
 
-frappe.ui.form.on('Bond Principal Schedule', {
-    repayment_date: function(frm, cdt, cdn) {
-        update_maturity_date(frm);
-        update_percentages(frm)
-    },
-    principal_schedule_add: function(frm, cdt, cdn) {
-        update_maturity_date(frm);
-        update_percentages(frm)
-    },
-    principal_schedule_remove: function(frm) {
-        update_maturity_date(frm);
-        update_percentages(frm)
-    }
-});
-
-function update_maturity_date(frm) {
-    let max_date = null;
-
-    (frm.doc.principal_schedule || []).forEach(row => {
-        if (row.repayment_date) {
-            if (!max_date || row.repayment_date > max_date) {
-                max_date = row.repayment_date;
-            }
-        }
-    });
-
-    frm.set_value('maturity_date', max_date || null);
+function schedules_are_ready(frm) {
+	const rows = frm.doc.principal_schedule || [];
+	return (
+		frm.doc.issue_date &&
+		frm.doc.face_value_per_unit &&
+		frm.doc.coupon_frequency &&
+		frm.doc.day_count_convention &&
+		rows.length > 0 &&
+		rows.every(
+			(row) =>
+				row.repayment_date &&
+				row.principal_units !== null &&
+				row.principal_units !== undefined &&
+				row.principal_units !== ""
+		)
+	);
 }
-function hide_grid_buttons(frm) {
-    let grid = frm.get_field("coupon_schedule").grid;
 
-        // hide Buttons
-        grid.wrapper.find('.grid-add-row').hide();
-        grid.wrapper.find('.grid-remove-rows').hide();
-        grid.wrapper.find('.grid-edit-rows').hide();
-        grid.wrapper.find('.grid-duplicate-rows').hide();
+function recalculate_schedules(frm) {
+	const state = get_schedule_state(frm);
+	const request_id = ++state.request_id;
+	if (!schedules_are_ready(frm)) {
+		return Promise.resolve();
+	}
 
-        // also prevent row insert/delete programmatically via UI
-        grid.cannot_add_rows = true;
-        grid.cannot_delete_rows = true;
-        grid.cannot_edit_rows = true;
-        grid.cannot_duplicate_rows = true;
+	const document_snapshot = JSON.stringify(frm.doc);
+
+	return frappe
+		.call({
+			method: schedule_recalculation_method,
+			type: "POST",
+			args: { doc: document_snapshot },
+		})
+		.then((response) => {
+			if (request_id !== state.request_id) {
+				return response.message;
+			}
+
+			return apply_recalculated_schedules(frm, state, request_id, response.message);
+		});
+}
+
+async function apply_recalculated_schedules(frm, state, request_id, schedules) {
+	if (!schedules) {
+		return schedules;
+	}
+
+	await frm.set_value("maturity_date", schedules.maturity_date);
+	if (request_id !== state.request_id) {
+		return schedules;
+	}
+
+	await apply_principal_percentages(frm, schedules.principal_schedule || []);
+	if (request_id !== state.request_id) {
+		return schedules;
+	}
+
+	await frm.set_value("coupon_schedule", schedules.coupon_schedule || []);
+	frm.refresh_field("maturity_date");
+	frm.refresh_field("principal_schedule");
+	frm.refresh_field("coupon_schedule");
+
+	return schedules;
+}
+
+function apply_principal_percentages(frm, calculated_rows) {
+	const rows_by_name = new Map(
+		calculated_rows.filter((row) => row.name).map((row) => [row.name, row])
+	);
+	const rows_by_index = new Map(calculated_rows.map((row) => [row.idx, row]));
+	const updates = (frm.doc.principal_schedule || []).map((row) => {
+		const calculated = rows_by_name.get(row.name) || rows_by_index.get(row.idx);
+		if (!calculated) {
+			return Promise.resolve();
+		}
+
+		return frappe.model.set_value(
+			row.doctype,
+			row.name,
+			"repayment_percent",
+			calculated.repayment_percent
+		);
+	});
+
+	return Promise.all(updates);
 }

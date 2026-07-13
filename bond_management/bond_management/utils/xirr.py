@@ -1,14 +1,17 @@
 from collections import defaultdict
 
 import frappe
-from frappe.utils import add_days, getdate
+from frappe.utils import getdate
 from pyxirr import InvalidPaymentsError, xirr
 
 from bond_management.bond_management.utils.accrual import (
     calculate_principal_factor,
     unit_accrued_interest,
 )
-from bond_management.bond_management.utils.portfolio import get_position
+from bond_management.bond_management.utils.portfolio import (
+    get_position,
+    get_position_for_payment,
+)
 
 DEFAULT_XIRR_GUESS = 0.1
 
@@ -45,7 +48,7 @@ def get_last_xirr_guess(isin, date):
         "Bond Market Date",
         fields=["bond_market_prices.future_xirr"],
         filters={"date": ["<=", date], "bond_market_prices.isin": isin},
-        order_by="date desc",
+        order_by="date desc, name desc",
         ignore_permissions=False,
     ).run(as_dict=True)
 
@@ -85,7 +88,9 @@ def create_future_cash_flows(isin, date, market_price):
         settlement_date=settlement_date,
     )
 
-    # Add accrued interest as a cash flow on the settlement date
+    # The bank quotes per 100 of original face value even after amortisation.
+    # The lower quoted price itself reflects principal already repaid, so no
+    # remaining-principal factor belongs in this market-price cash flow.
     future_cash_flows.append(
         {
             "bond": isin,
@@ -106,18 +111,18 @@ def create_future_cash_flows(isin, date, market_price):
     # Get the coupon schedule and principal schedule from the bond document
     coupon_schedule = bond_doc.get("coupon_schedule")
     principal_schedule = bond_doc.get("principal_schedule")
-    maturity_date = bond_doc.get("maturity_date")
+    maturity_date = getdate(bond_doc.get("maturity_date"))
 
     # Iterate through the coupon schedule to add future coupon payments
     for coupon_period in coupon_schedule:
         coupon_date = getdate(coupon_period.get("coupon_date"))
         coupon_factor = coupon_period.get("coupon_factor")
         if coupon_date and coupon_factor is not None and coupon_date > settlement_date:
+            # On a repayment date this is the pre-payment factor. That day's
+            # coupon is paid before the factor affects subsequent coupons.
             principal_factor = calculate_principal_factor(isin, coupon_date)
             coupon_factor /= 100
-            coupon_payment = (
-                coupon_factor * bond_doc.face_value_per_unit * principal_factor
-            )
+            coupon_payment = coupon_factor * bond_doc.face_value_per_unit * principal_factor
             future_cash_flows.append(
                 {
                     "bond": isin,
@@ -132,9 +137,7 @@ def create_future_cash_flows(isin, date, market_price):
         repayment_date = getdate(principal_period.get("repayment_date"))
         if repayment_date and repayment_date > settlement_date:
             principal_payment = (
-                bond_doc.face_value_per_unit
-                * (principal_period.get("repayment_percent") or 0.0)
-                / 100.0
+                bond_doc.face_value_per_unit * (principal_period.get("repayment_percent") or 0.0) / 100.0
             )
             if repayment_date == maturity_date:
                 future_cash_flows.append(
@@ -173,7 +176,8 @@ def create_past_cash_flows(isin, date, market_price, portfolio):
         settlement_date=settlement_date,
     )
 
-    # Add accrued interest as a cash flow on the settlement date
+    # The bank quote remains per 100 of original face value after amortisation;
+    # applying a principal factor here would double-adjust the quoted price.
     past_cash_flows.append(
         {
             "bond": isin,
@@ -194,41 +198,23 @@ def create_past_cash_flows(isin, date, market_price, portfolio):
     # Get the coupon schedule and principal schedule from the bond document
     coupon_schedule = bond_doc.get("coupon_schedule")
     principal_schedule = bond_doc.get("principal_schedule")
-    maturity_date = bond_doc.get("maturity_date")
+    maturity_date = getdate(bond_doc.get("maturity_date"))
 
     # Iterate through the coupon schedule to add past coupon payments
     for coupon_period in coupon_schedule:
         coupon_date = getdate(coupon_period.get("coupon_date"))
         if not coupon_date:
             continue
-        position = get_position(
-            isin, statement_date=coupon_date, portfolio_name=portfolio
-        )
         coupon_factor = coupon_period.get("coupon_factor")
         if coupon_factor is None:
             continue
         coupon_factor /= 100
         if coupon_date <= settlement_date:
+            position = get_position_for_payment(isin, coupon_date, portfolio)
             principal_factor = calculate_principal_factor(isin, coupon_date)
-            coupon_rate = (
-                coupon_factor * bond_doc.face_value_per_unit * principal_factor
-            )
+            coupon_rate = coupon_factor * bond_doc.face_value_per_unit * principal_factor
 
-            if coupon_date == maturity_date:
-                position = get_position(
-                    isin,
-                    statement_date=add_days(coupon_date, days=-1),
-                    portfolio_name=portfolio,
-                )
-                past_cash_flows.append(
-                    {
-                        "bond": isin,
-                        "type": "coupon",
-                        "date": coupon_date,
-                        "amount": coupon_rate * position,
-                    }
-                )
-            elif position > 0:
+            if position > 0:
                 past_cash_flows.append(
                     {
                         "bond": isin,
@@ -243,10 +229,10 @@ def create_past_cash_flows(isin, date, market_price, portfolio):
         repayment_date = getdate(principal_period.get("repayment_date"))
         if not repayment_date:
             continue
-        position = get_position(
-            isin, statement_date=repayment_date, portfolio_name=portfolio
-        )
         if repayment_date <= settlement_date:
+            # Equality belongs to past performance. Same-day settlements occur
+            # immediately before payment and participate in the entitlement.
+            position = get_position_for_payment(isin, repayment_date, portfolio)
             principal_amount = (
                 bond_doc.face_value_per_unit
                 * (principal_period.get("repayment_percent") or 0.0)
@@ -283,6 +269,8 @@ def create_past_cash_flows(isin, date, market_price, portfolio):
         ignore_permissions=False,
     ).run(as_dict=True)
 
+    # settlement_amount already contains the commission-inclusive bank price;
+    # adding commission_amount here would double-count it in XIRR.
     for row in rows:
         if row["transaction_type"] == "Purchase":
             past_cash_flows.append(

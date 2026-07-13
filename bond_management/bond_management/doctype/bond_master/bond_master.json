@@ -115,7 +115,8 @@
    "fieldname": "coupon_schedule",
    "fieldtype": "Table",
    "label": "Coupon Schedule",
-   "options": "Bond Coupon Schedule"
+   "options": "Bond Coupon Schedule",
+   "read_only": 1
   },
   {
    "fieldname": "section_break_qwjg",

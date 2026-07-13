@@ -24,12 +24,14 @@
    "fieldname": "portfolio_name",
    "fieldtype": "Link",
    "label": "Portfolio Name",
-   "options": "Bond Portfolio"
+   "options": "Bond Portfolio",
+   "reqd": 1
   },
   {
    "fieldname": "statement_date",
    "fieldtype": "Date",
-   "label": "Statement Date"
+   "label": "Statement Date",
+   "reqd": 1
   },
   {
    "fieldname": "column_break_omxg",
@@ -48,7 +50,8 @@
    "fieldname": "bond_statement_details",
    "fieldtype": "Table",
    "label": "Bond Statement Details",
-   "options": "Bond Statement Details"
+   "options": "Bond Statement Details",
+   "read_only": 1
   }
  ],
  "grid_page_length": 50,

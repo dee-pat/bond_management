@@ -20,9 +20,7 @@ def make_bond(**overrides):
         "first_coupon_date": "2025-07-01",
         "day_count_convention": "30E/360",
         "bond_type": "Kenya Treasury Bond",
-        "principal_schedule": [
-            {"repayment_date": "2027-01-01", "principal_units": 100}
-        ],
+        "principal_schedule": [{"repayment_date": "2027-01-01", "principal_units": 100}],
     }
     values.update(overrides)
     return frappe.get_doc(values).insert()
@@ -39,7 +37,7 @@ def make_portfolio():
     ).insert()
 
 
-def make_transaction(bond, portfolio, **overrides):
+def make_transaction(bond, portfolio, *, insert=True, **overrides):
     values = {
         "doctype": "Bond Transaction",
         "transaction_reference": unique_name("TEST-TRANSACTION"),
@@ -58,14 +56,15 @@ def make_transaction(bond, portfolio, **overrides):
         "maturity_date": bond.maturity_date,
     }
     values.update(overrides)
-    return frappe.get_doc(values).insert()
+    document = frappe.get_doc(values)
+    return document.insert() if insert else document
 
 
-def make_market_date(bond, market_price=100):
+def make_market_date(bond, market_price=100, date="2025-12-30"):
     return frappe.get_doc(
         {
             "doctype": "Bond Market Date",
-            "date": "2025-12-31",
+            "date": date,
             "bond_market_prices": [
                 {"isin": bond.name, "market_price": market_price, "currency": bond.currency}
             ],

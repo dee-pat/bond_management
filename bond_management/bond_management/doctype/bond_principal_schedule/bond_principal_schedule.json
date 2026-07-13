@@ -26,10 +26,12 @@
   },
   {
    "default": "1",
+   "description": "Original principal units repaid on this date. Enter a value greater than zero.",
    "fieldname": "principal_units",
    "fieldtype": "Int",
    "in_list_view": 1,
    "label": "Principal Units",
+   "non_negative": 1,
    "reqd": 1
   },
   {

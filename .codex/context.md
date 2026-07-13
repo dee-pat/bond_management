@@ -15,6 +15,7 @@ Rules:
 - Use modern Frappe patterns (no deprecated APIs)
 - No monkey patching, use server scripts and hooks instead 
 - Follow Frappe app structure (doctype, hooks.py, patches)
+- All python code should use indent using 4 spaces, no tabs
 
 Project:
 - Custom Frappe apps only (no ERPNext unless specified)

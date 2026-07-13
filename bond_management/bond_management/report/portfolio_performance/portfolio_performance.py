@@ -1,26 +1,28 @@
 # Copyright (c) 2026, Deepak Patel and contributors
 # For license information, please see license.txt
 
-import frappe
-from frappe.utils import getdate
 from collections import defaultdict
-from bond_management.bond_management.utils.performance import (
-    get_market_price,
-    get_distinct_isins,
-)
+
+import frappe
+from frappe.utils import flt, getdate
+
 from bond_management.bond_management.utils.accrual import (
-    unit_accrued_interest,
     calculate_principal_factor,
+    unit_accrued_interest,
 )
-from bond_management.bond_management.utils.xirr import (
-    create_past_cash_flows,
-    create_future_cash_flows,
-    calculate_xirr,
-    consolidate_cashflows,
-    calculate_past_xirr,
-    calculate_future_xirr,
+from bond_management.bond_management.utils.performance import (
+    get_distinct_isins,
+    get_market_price,
 )
 from bond_management.bond_management.utils.portfolio import get_position
+from bond_management.bond_management.utils.xirr import (
+    DEFAULT_XIRR_GUESS,
+    calculate_xirr,
+    consolidate_cashflows,
+    create_future_cash_flows,
+    create_past_cash_flows,
+    get_last_xirr_guess,
+)
 
 # ---------- ENTRY POINT ----------
 
@@ -34,24 +36,12 @@ def execute(filters: dict | None = None):
     """
     filters = filters or {}
 
-    portfolio = filters.get("portfolio")
-    valuation_date = filters.get("valuation_date")
-
-    if not portfolio:
-        frappe.throw("Portfolio is required")
-    if not valuation_date:
-        frappe.throw("Valuation Date is required")
-
-    valuation_date = getdate(valuation_date)
-
-    # Permission check
-    if not frappe.has_permission("Bond Portfolio", "read", doc=portfolio):
-        frappe.throw("Not permitted")
+    portfolio, valuation_date = validate_report_inputs(
+        filters.get("portfolio"), filters.get("valuation_date")
+    )
 
     columns = get_columns()
-    data, combined_cashflow, combined_future_cashflow = get_data(
-        portfolio, valuation_date
-    )
+    data, combined_cashflow, combined_future_cashflow = get_data(portfolio, valuation_date)
 
     # Add summary row
     currencies = {row["currency"] for row in data if row.get("currency")}
@@ -64,31 +54,40 @@ def execute(filters: dict | None = None):
 @frappe.whitelist(methods=["POST"])
 def get_xirr_cashflows(portfolio, valuation_date, isin, xirr_type):
     """Return the raw cash flows behind a report XIRR value for spreadsheet review."""
+    portfolio, valuation_date = validate_report_inputs(portfolio, valuation_date)
+
+    if not isin:
+        frappe.throw("ISIN is required")
     if xirr_type not in {"past", "future"}:
         frappe.throw("Invalid XIRR type")
-    if not frappe.has_permission("Bond Portfolio", "read", doc=portfolio):
-        frappe.throw("Not permitted")
 
-    valuation_date = getdate(valuation_date)
     if isin == "TOTAL":
         _, past_cashflows, future_cashflows = get_data(portfolio, valuation_date)
         cashflows = past_cashflows if xirr_type == "past" else future_cashflows
     else:
+        portfolio_isins = {
+            row["isin"] for row in get_distinct_isins(portfolio=portfolio, valuation_date=valuation_date)
+        }
+        if isin not in portfolio_isins:
+            frappe.throw(f"ISIN {frappe.bold(isin)} is not in this portfolio on or before the valuation date")
+        if not frappe.has_permission("Bond Master", "read", doc=isin):
+            frappe.throw("Not permitted", frappe.PermissionError)
+
+        quantity = get_position(isin, valuation_date, portfolio)
         market_price = get_market_price(isin, valuation_date)
+        terminal_market_price = get_terminal_market_price(isin, valuation_date, quantity, market_price)
         if xirr_type == "past":
             cashflows = create_past_cash_flows(
                 isin=isin,
                 date=valuation_date,
-                market_price=market_price,
+                market_price=terminal_market_price,
                 portfolio=portfolio,
             )
+        elif not quantity:
+            cashflows = []
         else:
-            quantity = get_position(isin, valuation_date, portfolio)
-            cashflows = create_future_cash_flows(isin, valuation_date, market_price)
-            cashflows = [
-                {**cashflow, "amount": cashflow["amount"] * quantity}
-                for cashflow in cashflows
-            ]
+            cashflows = create_future_cash_flows(isin, valuation_date, terminal_market_price)
+            cashflows = [{**cashflow, "amount": cashflow["amount"] * quantity} for cashflow in cashflows]
 
     return [
         {
@@ -103,6 +102,40 @@ def get_xirr_cashflows(portfolio, valuation_date, isin, xirr_type):
         )
         if float(cashflow["amount"]) != 0
     ]
+
+
+def validate_report_inputs(portfolio, valuation_date):
+    if not portfolio:
+        frappe.throw("Portfolio is required")
+    if not valuation_date:
+        frappe.throw("Valuation Date is required")
+    if not frappe.db.exists("Bond Portfolio", portfolio):
+        frappe.throw(f"Bond Portfolio {frappe.bold(portfolio)} does not exist")
+    if not frappe.has_permission("Bond Portfolio", "read", doc=portfolio):
+        frappe.throw("Not permitted", frappe.PermissionError)
+
+    return portfolio, getdate(valuation_date)
+
+
+def get_terminal_market_price(isin, valuation_date, quantity, market_price):
+    """Require a valid quote only when a position still has market exposure."""
+    if quantity and market_price is None:
+        frappe.throw(f"No market price found for {frappe.bold(isin)} on or before {valuation_date}")
+    if quantity and flt(market_price) <= 0:
+        frappe.throw(f"Market price for {frappe.bold(isin)} must be greater than zero")
+
+    # A closed/matured position needs no artificial terminal valuation. Zero is
+    # passed only to the cash-flow builder so it omits that zero-value line.
+    return market_price if market_price is not None else 0.0
+
+
+def calculate_future_xirr_from_cashflows(isin, valuation_date, cashflows):
+    """Calculate future XIRR with the same bounded historical guess as the utility."""
+    guess = get_last_xirr_guess(isin, valuation_date)
+    if guess is None:
+        guess = DEFAULT_XIRR_GUESS
+    guess = max(min(guess, 1.0), -0.5)
+    return calculate_xirr(consolidate_cashflows(cashflows), guess)
 
 
 # ---------- COLUMNS ----------
@@ -124,7 +157,7 @@ def get_columns() -> list[dict]:
         {"label": "Currency", "fieldname": "currency", "width": 50},
         # {"label": "Face Value/Unit", "fieldname": "face_value_per_unit", "width": 150},
         {
-            "label": "Princlipal Factor",
+            "label": "Principal Factor",
             "fieldname": "principal_factor",
             "fieldtype": "Float",
             "width": 60,
@@ -161,7 +194,7 @@ def get_columns() -> list[dict]:
             "width": 130,
         },
         {
-            "label": "Amotisation Value",
+            "label": "Amortisation Value",
             "fieldname": "amortisation_value",
             "fieldtype": "Currency",
             "options": "currency",
@@ -205,9 +238,7 @@ def get_data(portfolio, valuation_date):
     for bond in isins:
         isin = bond["isin"]
 
-        quantity = get_position(
-            isin=isin, statement_date=valuation_date, portfolio_name=portfolio
-        )
+        quantity = get_position(isin=isin, statement_date=valuation_date, portfolio_name=portfolio)
 
         # ---------- MASTER DATA ----------
         bonds = frappe.qb.get_query(
@@ -225,12 +256,9 @@ def get_data(portfolio, valuation_date):
 
         # ---------- MARKET DATA ----------
         market_price = get_market_price(isin=isin, valuation_date=valuation_date)
-        accrued_interest = unit_accrued_interest(
-            isin=isin, settlement_date=valuation_date
-        )
-        market_value = quantity * (
-            face_value_per_unit * market_price / 100 + accrued_interest
-        )
+        terminal_market_price = get_terminal_market_price(isin, valuation_date, quantity, market_price)
+        accrued_interest = unit_accrued_interest(isin=isin, settlement_date=valuation_date)
+        market_value = quantity * (face_value_per_unit * terminal_market_price / 100 + accrued_interest)
 
         # ---------- CASHFLOW DATA ----------
         principal_factor = calculate_principal_factor(isin=isin, date=valuation_date)
@@ -239,7 +267,7 @@ def get_data(portfolio, valuation_date):
         cashflows = create_past_cash_flows(
             isin=isin,
             date=valuation_date,
-            market_price=market_price,
+            market_price=terminal_market_price,
             portfolio=portfolio,
         )
         combined_cashflow.extend(cashflows)
@@ -255,30 +283,24 @@ def get_data(portfolio, valuation_date):
         purchases_value = -totals["purchase"]
         sales_value = totals["sale"]
 
-        xirr = calculate_past_xirr(
-            isin=isin,
-            date=valuation_date,
-            market_price=market_price,
-            portfolio=portfolio,
-        )
-        xirr = xirr * 100.0 if xirr else 0.0  # percent and handle None
+        xirr = calculate_xirr(consolidate_cashflows(cashflows))
+        xirr = xirr * 100.0 if xirr is not None else 0.0
 
-        future_cashflows = create_future_cash_flows(
-            isin=isin,
-            date=valuation_date,
-            market_price=market_price,
-        )
-        for row in future_cashflows:
-            row["amount"] = row["amount"] * quantity
+        if quantity:
+            unit_future_cashflows = create_future_cash_flows(
+                isin=isin,
+                date=valuation_date,
+                market_price=terminal_market_price,
+            )
+            future_xirr = calculate_future_xirr_from_cashflows(isin, valuation_date, unit_future_cashflows)
+            future_cashflows = [{**row, "amount": row["amount"] * quantity} for row in unit_future_cashflows]
+        else:
+            future_xirr = None
+            future_cashflows = []
 
         combined_future_cashflow.extend(future_cashflows)
 
-        future_xirr = calculate_future_xirr(
-            isin=isin, date=valuation_date, market_price=market_price
-        )
-        future_xirr = (
-            future_xirr * 100.0 if future_xirr else 0.0
-        )  # percent and handle None
+        future_xirr = future_xirr * 100.0 if future_xirr is not None else None
 
         rows.append(
             {
@@ -296,11 +318,7 @@ def get_data(portfolio, valuation_date):
                 "amortisation_value": amortisation_value,
                 "market_value": market_value,
                 "gain_value": (
-                    market_value
-                    + amortisation_value
-                    + coupons_value
-                    + sales_value
-                    - purchases_value
+                    market_value + amortisation_value + coupons_value + sales_value - purchases_value
                 ),
                 "xirr": xirr,
                 "future_xirr": future_xirr,
@@ -325,9 +343,7 @@ def make_total_row(data, combined_cashflow, combined_future_cashflow):
     cash_flows = consolidate_cashflows(cash_flows=combined_cashflow)
     xirr_value = calculate_xirr(cash_flows)
 
-    combined_future_cashflow = consolidate_cashflows(
-        cash_flows=combined_future_cashflow
-    )
+    combined_future_cashflow = consolidate_cashflows(cash_flows=combined_future_cashflow)
 
     future_xirr = calculate_xirr(combined_future_cashflow)
 
@@ -344,5 +360,5 @@ def make_total_row(data, combined_cashflow, combined_future_cashflow):
         "market_value": market_value,
         "gain_value": gain_value,
         "xirr": xirr_value * 100 if xirr_value is not None else 0.0,
-        "future_xirr": future_xirr * 100 if future_xirr is not None else 0.0,
+        "future_xirr": future_xirr * 100 if future_xirr is not None else None,
     }

@@ -54,19 +54,22 @@
   },
   {
    "allow_in_quick_entry": 1,
+   "description": "Number of original face-value units traded. Must be greater than zero.",
    "fieldname": "quantity_face_value",
    "fieldtype": "Int",
    "in_list_view": 1,
    "label": "Quantity/ Face Value",
+   "non_negative": 1,
    "reqd": 1
   },
   {
    "allow_in_quick_entry": 1,
+   "description": "Bank transaction price per 100 of original face value. This price already includes commission; commission is not added again to settlement.",
    "fieldname": "price",
-   "fieldtype": "Currency",
+   "fieldtype": "Float",
    "in_list_view": 1,
    "label": "Price",
-   "options": "currency",
+   "non_negative": 1,
    "precision": "6",
    "reqd": 1
   },
@@ -79,9 +82,11 @@
   },
   {
    "default": "0.45",
+   "description": "Informational commission rate. The commission is already embedded in the bank transaction Price.",
    "fieldname": "commission",
    "fieldtype": "Percent",
    "label": "Commission %",
+   "non_negative": 1,
    "reqd": 1
   },
   {
@@ -128,6 +133,7 @@
    "read_only": 1
   },
   {
+   "description": "Informational commission component calculated from original principal. It is already embedded in Price and is not added to settlement.",
    "fieldname": "commission_amount",
    "fieldtype": "Currency",
    "label": "Commission Amount",
@@ -151,6 +157,7 @@
    "reqd": 1
   },
   {
+   "description": "Original principal multiplied by the commission-inclusive bank Price, plus accrued interest paid.",
    "fieldname": "settlement_amount",
    "fieldtype": "Currency",
    "label": "Settlement Amount",
@@ -195,14 +202,14 @@
   {
    "fetch_from": "isin.maturity_date",
    "fieldname": "maturity_date",
-   "fieldtype": "Data",
+   "fieldtype": "Date",
    "label": "Maturity Date",
    "read_only": 1
   },
   {
    "fetch_from": "isin.issue_date",
    "fieldname": "issue_date",
-   "fieldtype": "Data",
+   "fieldtype": "Date",
    "label": "Issue Date",
    "read_only": 1
   },

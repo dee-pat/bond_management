@@ -47,7 +47,6 @@ def calculate_accrued_fraction(
 
 
 def calculate_principal_factor(isin, date):
-
     bond_doc = frappe.get_doc("Bond Master", isin)
     principal_schedule = bond_doc.get("principal_schedule")
 
@@ -57,15 +56,12 @@ def calculate_principal_factor(isin, date):
     for period in principal_schedule:
         repayment_date = getdate(period.get("repayment_date"))
         if repayment_date and settlement_date > repayment_date:
-            principal_factor = (
-                principal_factor - (period.get("repayment_percent") or 0.0) / 100.0
-            )
+            principal_factor = principal_factor - (period.get("repayment_percent") or 0.0) / 100.0
 
     return principal_factor
 
 
 def unit_accrued_interest(isin=None, settlement_date=None):
-
     if not isin or not settlement_date:
         return 0
 
@@ -95,6 +91,4 @@ def get_accrued_interest(isin=None, settlement_date=None, quantity_face_value=No
         return 0
     settlement_date = getdate(settlement_date)
 
-    return unit_accrued_interest(isin=isin, settlement_date=settlement_date) * float(
-        quantity_face_value
-    )
+    return unit_accrued_interest(isin=isin, settlement_date=settlement_date) * float(quantity_face_value)
