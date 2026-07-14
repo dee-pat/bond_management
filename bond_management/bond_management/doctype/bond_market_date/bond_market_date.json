@@ -21,8 +21,7 @@
    "fieldname": "date",
    "fieldtype": "Date",
    "label": "Date",
-   "reqd": 1,
-   "unique": 1
+   "reqd": 1
   },
   {
    "description": "Quoted price is per original full unit. Amortisation is already reflected by the bank (for example, principal factor 0.5 may quote near 50), so calculations do not apply the principal factor again.",

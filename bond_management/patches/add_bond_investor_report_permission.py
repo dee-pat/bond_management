@@ -6,13 +6,10 @@ ROLE = "Bond Investor Read Only"
 
 def execute():
     """Allow investors to run reports whose reference DocType is Bond Portfolio."""
-    portfolio = frappe.get_doc("DocType", "Bond Portfolio")
-    permission = next(
-        (permission for permission in portfolio.permissions if permission.role == ROLE), None
+    permission_name = frappe.db.get_value(
+        "DocPerm", {"parent": "Bond Portfolio", "role": ROLE, "permlevel": 0}, "name"
     )
-    if permission is None:
+    if not permission_name:
         return
 
-    if not permission.report:
-        permission.report = 1
-        portfolio.save(ignore_permissions=True)
+    frappe.db.set_value("DocPerm", permission_name, "report", 1, update_modified=False)

@@ -30,25 +30,42 @@ def execute():
         ).insert(ignore_permissions=True)
 
     for doctype in READ_ONLY_DOCTYPES:
-        doc = frappe.get_doc("DocType", doctype)
-        permission = next(
-            (permission for permission in doc.permissions if permission.role == ROLE), None
-        )
-        if permission is None:
-            permission = doc.append(
-                "permissions",
-                {
-                    "role": ROLE,
-                    "read": 1,
-                    "print": int(doctype in PRINTABLE_DOCTYPES),
-                },
-            )
-
-        if doctype == "Bond Portfolio":
-            permission.report = 1
-        doc.save(ignore_permissions=True)
+        _ensure_docperm(doctype)
 
     report = frappe.get_doc("Report", "Portfolio Performance")
     if ROLE not in {row.role for row in report.roles}:
         report.append("roles", {"role": ROLE})
         report.save(ignore_permissions=True)
+
+
+def _ensure_docperm(doctype: str) -> None:
+    """Create or update only the investor DocPerm, without saving its parent DocType.
+
+    Saving the parent can validate unrelated legacy field definitions during a
+    migration. Direct DocPerm updates keep this patch idempotent and scoped to
+    the access rule it owns.
+    """
+    permission_name = frappe.db.get_value(
+        "DocPerm", {"parent": doctype, "role": ROLE, "permlevel": 0}, "name"
+    )
+    values = {
+        "read": 1,
+        "print": int(doctype in PRINTABLE_DOCTYPES),
+        "report": int(doctype == "Bond Portfolio"),
+    }
+
+    if permission_name:
+        frappe.db.set_value("DocPerm", permission_name, values, update_modified=False)
+        return
+
+    frappe.get_doc(
+        {
+            "doctype": "DocPerm",
+            "parent": doctype,
+            "parenttype": "DocType",
+            "parentfield": "permissions",
+            "role": ROLE,
+            "permlevel": 0,
+            **values,
+        }
+    ).insert(ignore_permissions=True)
