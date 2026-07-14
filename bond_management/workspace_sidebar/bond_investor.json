@@ -1,0 +1,58 @@
+{
+ "app": "bond_management",
+ "doctype": "Workspace Sidebar",
+ "header_icon": "landmark",
+ "items": [
+  {
+   "icon": "home",
+   "idx": 1,
+   "label": "Home",
+   "link_to": "Bond Investor",
+   "link_type": "Workspace",
+   "type": "Link"
+  },
+  {
+   "icon": "list",
+   "idx": 2,
+   "label": "Bond Transaction",
+   "link_to": "Bond Transaction",
+   "link_type": "DocType",
+   "type": "Link"
+  },
+  {
+   "icon": "file-text",
+   "idx": 3,
+   "label": "Bond Statement",
+   "link_to": "Bond Statement",
+   "link_type": "DocType",
+   "type": "Link"
+  },
+  {
+   "icon": "book-open",
+   "idx": 4,
+   "label": "Bond Master",
+   "link_to": "Bond Master",
+   "link_type": "DocType",
+   "type": "Link"
+  },
+  {
+   "icon": "calendar-days",
+   "idx": 5,
+   "label": "Bond Market Date",
+   "link_to": "Bond Market Date",
+   "link_type": "DocType",
+   "type": "Link"
+  },
+  {
+   "icon": "chart-line",
+   "idx": 6,
+   "label": "Portfolio Performance",
+   "link_to": "Portfolio Performance",
+   "link_type": "Report",
+   "type": "Link"
+  }
+ ],
+ "name": "Bond Investor",
+ "standard": 1,
+ "title": "Bond Investor"
+}

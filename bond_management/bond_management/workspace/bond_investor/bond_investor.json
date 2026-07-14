@@ -1,0 +1,30 @@
+{
+ "app": "bond_management",
+ "charts": [],
+ "content": "[{\"id\":\"bond-investor-header\",\"type\":\"header\",\"data\":{\"text\":\"Bond Investor\",\"level\":1}},{\"id\":\"bond-transactions-shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Bond Transactions\",\"col\":3}},{\"id\":\"bond-statements-shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Bond Statements\",\"col\":3}},{\"id\":\"bond-master-shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Bond Master\",\"col\":3}},{\"id\":\"bond-market-dates-shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Bond Market Dates\",\"col\":3}},{\"id\":\"portfolio-performance-shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Portfolio Performance\",\"col\":3}}]",
+ "custom_blocks": [],
+ "doctype": "Workspace",
+ "for_user": "",
+ "hide_custom": 1,
+ "icon": "chart",
+ "is_hidden": 0,
+ "label": "Bond Investor",
+ "links": [],
+ "module": "Bond Management",
+ "name": "Bond Investor",
+ "number_cards": [],
+ "parent_page": "",
+ "public": 1,
+ "quick_lists": [],
+ "roles": [{"role": "Bond Investor Read Only"}],
+ "sequence_id": 0,
+ "shortcuts": [
+  {"color": "Grey", "doc_view": "List", "label": "Bond Transactions", "link_to": "Bond Transaction", "type": "DocType"},
+  {"color": "Grey", "doc_view": "List", "label": "Bond Statements", "link_to": "Bond Statement", "type": "DocType"},
+  {"color": "Grey", "doc_view": "List", "label": "Bond Master", "link_to": "Bond Master", "type": "DocType"},
+  {"color": "Grey", "doc_view": "List", "label": "Bond Market Dates", "link_to": "Bond Market Date", "type": "DocType"},
+  {"color": "Grey", "label": "Portfolio Performance", "link_to": "Portfolio Performance", "type": "Report"}
+ ],
+ "title": "Bond Investor",
+ "type": "Workspace"
+}

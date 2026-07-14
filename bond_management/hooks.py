@@ -11,15 +11,14 @@ app_license = "mit"
 # required_apps = []
 
 # Each item in the list will be shown as an app in the apps page
-# add_to_apps_screen = [
-#     {
-#         "name": "bond_management",
-#         "logo": "/assets/bond_management/logo.png",
-#         "title": "Bond Management",
-#         "route": "/bond_management",
-#         "has_permission": "bond_management.api.permission.has_app_permission"
-#     }
-# ]
+add_to_apps_screen = [
+    {
+        "name": "bond_management",
+        "title": "Bond Management",
+        "route": "/desk/bond-investor",
+        "has_permission": "bond_management.bond_management.utils.investor_permissions.has_investor_desk_access",
+    }
+]
 
 # Includes in <head>
 # ------------------
@@ -126,13 +125,17 @@ app_license = "mit"
 # -----------
 # Permissions evaluated in scripted ways
 
-# permission_query_conditions = {
-#     "Event": "frappe.desk.doctype.event.event.get_permission_query_conditions",
-# }
-#
-# has_permission = {
-#     "Event": "frappe.desk.doctype.event.event.has_permission",
-# }
+permission_query_conditions = {
+    "Bond Portfolio": "bond_management.bond_management.utils.investor_permissions.portfolio_query_condition",
+    "Bond Transaction": "bond_management.bond_management.utils.investor_permissions.transaction_query_condition",
+    "Bond Statement": "bond_management.bond_management.utils.investor_permissions.statement_query_condition",
+}
+
+has_permission = {
+    "Bond Portfolio": "bond_management.bond_management.utils.investor_permissions.has_portfolio_permission",
+    "Bond Transaction": "bond_management.bond_management.utils.investor_permissions.has_transaction_permission",
+    "Bond Statement": "bond_management.bond_management.utils.investor_permissions.has_statement_permission",
+}
 
 # Document Events
 # ---------------
@@ -243,6 +246,16 @@ app_license = "mit"
 # auth_hooks = [
 #     "bond_management.auth.validate"
 # ]
+
+on_session_creation = [
+    "bond_management.bond_management.utils.investor_permissions.redirect_investor_to_workspace"
+]
+
+# Investor logouts from Desk include ``redirect-to=/desk`` in the login URL.
+# Frappe's login client gives that URL precedence over the server-provided
+# home_page, so redirect the resulting generic Desk route to the restricted
+# investor Workspace after boot.
+app_include_js = "/assets/bond_management/js/investor_desk_redirect.js"
 
 # Automatically update python controller files with type annotations for this app.
 # export_python_type_annotations = True

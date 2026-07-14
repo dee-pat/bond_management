@@ -20,6 +20,10 @@
  "ref_doctype": "Bond Portfolio",
  "report_name": "Portfolio Performance",
  "report_type": "Script Report",
- "roles": [],
+ "roles": [
+  {
+   "role": "Bond Investor Read Only"
+  }
+ ],
  "timeout": 0
 }
