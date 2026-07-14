@@ -22,6 +22,7 @@ from bond_management.bond_management.utils.xirr import (
     create_future_cash_flows,
     create_past_cash_flows,
     get_last_xirr_guess,
+    round_cashflow_amount,
 )
 
 # ---------- ENTRY POINT ----------
@@ -96,19 +97,17 @@ def get_xirr_cashflows(portfolio, valuation_date, isin, xirr_type):
             cashflows = []
         else:
             cashflows = create_future_cash_flows(
-                isin, valuation_date, terminal_market_price
+                isin, valuation_date, terminal_market_price, quantity=quantity
             )
-            cashflows = [
-                {**cashflow, "amount": cashflow["amount"] * quantity}
-                for cashflow in cashflows
-            ]
 
     return [
         {
             "isin": cashflow["bond"],
             "transaction_type": cashflow["type"],
             "date": getdate(cashflow["date"]).isoformat(),
-            "amount": float(cashflow["amount"]),
+            "amount": round_cashflow_amount(cashflow["amount"]),
+            "quantity": float(cashflow["quantity"]),
+            "rate": round_cashflow_amount(cashflow["amount"] / cashflow["quantity"]),
         }
         for cashflow in sorted(
             cashflows,
@@ -296,18 +295,15 @@ def get_data(portfolio, valuation_date):
         xirr = xirr * 100.0 if xirr is not None else 0.0
 
         if quantity:
-            unit_future_cashflows = create_future_cash_flows(
+            future_cashflows = create_future_cash_flows(
                 isin=isin,
                 date=valuation_date,
                 market_price=terminal_market_price,
+                quantity=quantity,
             )
             future_xirr = calculate_future_xirr_from_cashflows(
-                isin, valuation_date, unit_future_cashflows
+                isin, valuation_date, future_cashflows
             )
-            future_cashflows = [
-                {**row, "amount": row["amount"] * quantity}
-                for row in unit_future_cashflows
-            ]
         else:
             future_xirr = None
             future_cashflows = []

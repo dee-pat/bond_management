@@ -90,6 +90,12 @@ class TestPortfolioPerformance(IntegrationTestCase):
         self.assertIn("purchase", [cashflow["transaction_type"] for cashflow in past])
         self.assertEqual(future[0]["transaction_type"], "market_price")
         self.assertEqual(future[0]["amount"], -1000)
+        self.assertEqual(future[0]["quantity"], 10)
+        self.assertEqual(future[0]["rate"], -100)
+
+        purchase = next(cashflow for cashflow in past if cashflow["transaction_type"] == "purchase")
+        self.assertEqual(purchase["quantity"], 10)
+        self.assertEqual(purchase["rate"], -105.1)
 
         def sort_key(cashflow):
             return cashflow["date"], cashflow["amount"]
@@ -97,6 +103,28 @@ class TestPortfolioPerformance(IntegrationTestCase):
         self.assertEqual(past, sorted(past, key=sort_key))
         self.assertEqual(future, sorted(future, key=sort_key))
         self.assertNotIn(0, [cashflow["amount"] for cashflow in past + future])
+
+    def test_past_and_future_accrued_interest_use_the_same_total_rounding(self):
+        bond = make_bond()
+        portfolio = make_portfolio()
+        make_transaction(
+            bond,
+            portfolio,
+            trade_date="2025-06-29",
+            settlement_date="2025-06-30",
+            accrued_interest_paid=0,
+            commission=0,
+        )
+        make_market_date(bond, date="2025-09-14")
+
+        past = get_xirr_cashflows(portfolio.name, "2025-09-14", bond.name, "past")
+        future = get_xirr_cashflows(portfolio.name, "2025-09-14", bond.name, "future")
+
+        past_accrued = next(flow for flow in past if flow["transaction_type"] == "accrued_interest")
+        future_accrued = next(flow for flow in future if flow["transaction_type"] == "accrued_interest")
+        self.assertEqual(past_accrued["quantity"], future_accrued["quantity"])
+        self.assertEqual(past_accrued["amount"], -future_accrued["amount"])
+        self.assertEqual(past_accrued["amount"], 14.1944)
 
     def test_real_report_arithmetic_preserves_bank_price_convention(self):
         bond = make_bond(

@@ -1,4 +1,5 @@
 from collections import defaultdict
+from decimal import Decimal, ROUND_HALF_EVEN
 
 import frappe
 from frappe.utils import flt, getdate
@@ -10,10 +11,30 @@ from bond_management.bond_management.utils.accrual import (
 )
 from bond_management.bond_management.utils.portfolio import (
     get_position,
+    get_position_for_coupon_payment,
     get_position_for_payment,
 )
 
 DEFAULT_XIRR_GUESS = 0.1
+CASHFLOW_AMOUNT_PRECISION = Decimal("0.0001")
+
+
+def round_cashflow_amount(amount):
+    """Round a cash-flow amount to four decimal places using bankers' rounding."""
+    return float(
+        Decimal(str(amount or 0)).quantize(
+            CASHFLOW_AMOUNT_PRECISION,
+            rounding=ROUND_HALF_EVEN,
+        )
+    )
+
+
+def round_cashflow_amounts(cash_flows):
+    """Apply the cash-flow amount convention without changing other metadata."""
+    return [
+        {**cash_flow, "amount": round_cashflow_amount(cash_flow["amount"])}
+        for cash_flow in cash_flows
+    ]
 
 
 def calculate_future_xirr(isin, date, market_price):
@@ -74,10 +95,11 @@ def consolidate_cashflows(cash_flows):
     return dict(consolidated_cash_flows)
 
 
-def create_future_cash_flows(isin, date, market_price):
+def create_future_cash_flows(isin, date, market_price, quantity=1):
     # Fetch the bond document
     bond_doc = frappe.get_doc("Bond Master", isin)
     market_price = flt(market_price)
+    quantity = flt(quantity)
 
     # Initialize future cash flows list
     future_cash_flows = []
@@ -158,7 +180,12 @@ def create_future_cash_flows(isin, date, market_price):
                         "amount": principal_payment,
                     }
                 )
-    future_cash_flows = [d for d in future_cash_flows if d.get("amount") != 0.0]
+    future_cash_flows = [
+        {**cash_flow, "amount": cash_flow["amount"] * quantity, "quantity": quantity}
+        for cash_flow in future_cash_flows
+        if cash_flow.get("amount") != 0.0
+    ]
+    future_cash_flows = round_cashflow_amounts(future_cash_flows)
     return sorted(future_cash_flows, key=lambda x: x["date"])
 
 
@@ -186,6 +213,7 @@ def create_past_cash_flows(isin, date, market_price, portfolio):
             "type": "market_price",
             "date": settlement_date,
             "amount": bond_doc.face_value_per_unit * market_price / 100 * position,
+            "quantity": position,
         }
     )
     past_cash_flows.append(
@@ -194,6 +222,7 @@ def create_past_cash_flows(isin, date, market_price, portfolio):
             "type": "accrued_interest",
             "date": settlement_date,
             "amount": accrued_interest * position,
+            "quantity": position,
         }
     )
 
@@ -212,9 +241,14 @@ def create_past_cash_flows(isin, date, market_price, portfolio):
             continue
         coupon_factor /= 100
         if coupon_date <= settlement_date:
-            position = get_position_for_payment(isin, coupon_date, portfolio)
             principal_factor = calculate_principal_factor(isin, coupon_date)
             coupon_rate = coupon_factor * bond_doc.face_value_per_unit * principal_factor
+            position = get_position_for_coupon_payment(
+                isin,
+                coupon_date,
+                coupon_rate,
+                portfolio,
+            )
 
             if position > 0:
                 past_cash_flows.append(
@@ -223,6 +257,7 @@ def create_past_cash_flows(isin, date, market_price, portfolio):
                         "type": "coupon",
                         "date": coupon_date,
                         "amount": coupon_rate * position,
+                        "quantity": position,
                     }
                 )
 
@@ -248,6 +283,7 @@ def create_past_cash_flows(isin, date, market_price, portfolio):
                         "type": "sale",
                         "date": repayment_date,
                         "amount": principal_amount,
+                        "quantity": position,
                     }
                 )
             else:
@@ -257,6 +293,7 @@ def create_past_cash_flows(isin, date, market_price, portfolio):
                         "type": "amortisation",
                         "date": repayment_date,
                         "amount": principal_amount,
+                        "quantity": position,
                     }
                 )
 
@@ -267,7 +304,12 @@ def create_past_cash_flows(isin, date, market_price, portfolio):
             "portfolio_name": portfolio,
             "settlement_date": ["<=", date],
         },
-        fields=["transaction_type", "settlement_amount", "settlement_date"],
+        fields=[
+            "transaction_type",
+            "settlement_amount",
+            "settlement_date",
+            "quantity_face_value",
+        ],
         ignore_permissions=False,
     ).run(as_dict=True)
 
@@ -281,6 +323,7 @@ def create_past_cash_flows(isin, date, market_price, portfolio):
                     "type": "purchase",
                     "date": row["settlement_date"],
                     "amount": -row["settlement_amount"],
+                    "quantity": row["quantity_face_value"],
                 }
             )
         elif row["transaction_type"] == "Sale":
@@ -290,9 +333,11 @@ def create_past_cash_flows(isin, date, market_price, portfolio):
                     "type": "sale",
                     "date": row["settlement_date"],
                     "amount": row["settlement_amount"],
+                    "quantity": row["quantity_face_value"],
                 }
             )
     past_cash_flows = [d for d in past_cash_flows if d.get("amount") != 0.0]
+    past_cash_flows = round_cashflow_amounts(past_cash_flows)
     return sorted(past_cash_flows, key=lambda x: x["date"])
 
 

@@ -34,6 +34,50 @@ def get_position_for_payment(isin, payment_date, portfolio_name):
     return _get_ledger_position(isin, payment_date, portfolio_name)
 
 
+def get_position_for_coupon_payment(isin, coupon_date, coupon_per_unit, portfolio_name):
+    """Return the position entitled to a coupon on ``coupon_date``.
+
+    Holdings acquired before the coupon date receive the coupon and holdings
+    sold on that date retain it. A purchase settling on the coupon date is
+    entitled only where the recorded accrued-interest payment covers that
+    purchase's full scheduled coupon. This reflects the bank settlement rather
+    than assuming that all same-day settlements occur before the payment.
+    """
+    coupon_date = getdate(coupon_date)
+    coupon_per_unit = flt(coupon_per_unit)
+    rows = frappe.qb.get_query(
+        "Bond Transaction",
+        filters={
+            "isin": isin,
+            "portfolio_name": portfolio_name,
+            "settlement_date": ["<=", coupon_date],
+        },
+        fields=[
+            "transaction_type",
+            "quantity_face_value",
+            "settlement_date",
+            "accrued_interest_paid",
+        ],
+        ignore_permissions=False,
+    ).run(as_dict=True)
+
+    position = 0.0
+    for row in rows:
+        quantity = flt(row.quantity_face_value)
+        settlement_date = getdate(row.settlement_date)
+
+        if settlement_date < coupon_date:
+            position += quantity if row.transaction_type == "Purchase" else -quantity
+        elif row.transaction_type == "Purchase":
+            full_coupon = coupon_per_unit * quantity
+            # A tiny tolerance only protects against binary floating-point noise;
+            # it is not a materiality threshold for a short-paid coupon.
+            if flt(row.accrued_interest_paid) + 0.000001 >= full_coupon:
+                position += quantity
+
+    return position
+
+
 def _get_ledger_position(isin, statement_date, portfolio_name, exclude_name=None):
     statement_date = getdate(statement_date)
     rows = frappe.qb.get_query(

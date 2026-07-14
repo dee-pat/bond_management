@@ -66,10 +66,10 @@ function copy_xirr_cashflows(report, isin, xirr_type) {
 			}
 
 			const tsv = [
-				"isin\ttransaction_type\tdate\tamount",
+				"isin\ttransaction_type\tdate\tamount\tquantity\trate",
 				...cashflows.map(
 					(flow) =>
-						`${flow.isin}\t${flow.transaction_type}\t${flow.date}\t${flow.amount}`
+						`${flow.isin}\t${flow.transaction_type}\t${flow.date}\t${flow.amount}\t${flow.quantity}\t${flow.rate}`
 				),
 			].join("\n");
 			frappe.utils.copy_to_clipboard(tsv, `Copied ${cashflows.length} cash flows`);

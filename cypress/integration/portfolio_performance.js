@@ -55,6 +55,8 @@ context("Portfolio Performance", () => {
 							transaction_type: "purchase",
 							date: "2025-12-31",
 							amount: -1000,
+							quantity: 10,
+							rate: -100,
 						},
 					],
 				},
@@ -82,7 +84,7 @@ context("Portfolio Performance", () => {
 		});
 		cy.get("@copyToClipboard").should(
 			"have.been.calledWith",
-			"isin\ttransaction_type\tdate\tamount\nTEST-BOND\tpurchase\t2025-12-31\t-1000",
+			"isin\ttransaction_type\tdate\tamount\tquantity\trate\nTEST-BOND\tpurchase\t2025-12-31\t-1000\t10\t-100",
 			"Copied 1 cash flows"
 		);
 	});
