@@ -17,8 +17,37 @@ from bond_management.bond_management.utils.xirr import (
 
 class BondMarketDate(Document):
     def validate(self):
+        self._validate_unique_date()
         self._validate_market_price_rows(require_complete=True)
         self._recalculate_market_data()
+
+    def _validate_unique_date(self):
+        """Allow one market-data snapshot for each valuation date.
+
+        Frappe v16 does not permit a database ``unique`` constraint on Date
+        fields, so this business rule is enforced at the document boundary.
+        """
+        if not self.date:
+            return
+
+        filters = {"date": self.date}
+        if not self.is_new():
+            filters["name"] = ["!=", self.name]
+
+        existing = frappe.qb.get_query(
+            "Bond Market Date",
+            fields=["name"],
+            filters=filters,
+            limit=1,
+            # A document validation must see an existing duplicate even when
+            # the submitting user has restricted read permissions.
+            ignore_permissions=True,
+        ).run(pluck=True)
+        if existing:
+            frappe.throw(
+                f"Bond Market Date already exists for {self.date}",
+                frappe.UniqueValidationError,
+            )
 
     def _recalculate_market_data(self):
         for row in self.bond_market_prices:
