@@ -173,6 +173,24 @@ context("Bond Market Date", () => {
 			.should("contain.text", TARGET_ISIN)
 			.and("contain.text", TARGET_WEIGHTED_DATE);
 	});
+
+	it("recalculates child rows before the parent date is entered", () => {
+		cy.window().then((window) => {
+			const frm = window.cur_frm;
+			const target = frm.doc.bond_market_prices.find(
+				(row) => row.isin === TARGET_ISIN
+			);
+			frm.doc.date = undefined;
+			frm.refresh_field("date");
+
+			return frm.script_manager.trigger("market_price", target.doctype, target.name);
+		});
+
+		cy.wait("@marketData").then(({ request }) => {
+			const body = parse_request_body(request.body);
+			expect(body.date).to.equal("");
+		});
+	});
 });
 
 function find_point(points, isin) {

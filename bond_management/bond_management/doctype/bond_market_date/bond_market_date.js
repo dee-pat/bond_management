@@ -158,7 +158,9 @@ async function recalculate_market_data(frm, state, request_id) {
 		method: market_recalculation_method,
 		type: "POST",
 		args: {
-			date: frm.doc.date,
+			// Frappe omits undefined request arguments. Send an empty value so
+			// rows can be populated before the parent market date is entered.
+			date: frm.doc.date || "",
 			rows: JSON.stringify(rows),
 		},
 	});

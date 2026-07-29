@@ -67,6 +67,18 @@ class TestBondMarketDate(IntegrationTestCase):
         self.assertIsNone(result[1]["principal_factor"])
         self.assertIsNone(result[1]["future_xirr"])
 
+    def test_value_endpoint_allows_rows_before_parent_date(self):
+        bond = make_bond()
+
+        result = get_recalculated_market_data(
+            rows=[{"name": "new-row", "isin": bond.name, "market_price": 100}],
+        )
+
+        self.assertEqual(result[0]["currency"], bond.currency)
+        self.assertEqual(result[0]["maturity_date"], bond.maturity_date)
+        self.assertIsNone(result[0]["principal_factor"])
+        self.assertIsNone(result[0]["future_xirr"])
+
     def test_persists_remaining_principal_weighted_repayment_values(self):
         bond = make_bond(
             principal_schedule=[

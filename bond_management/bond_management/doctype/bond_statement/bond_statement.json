@@ -23,6 +23,7 @@
   {
    "fieldname": "portfolio_name",
    "fieldtype": "Link",
+   "in_list_view": 1,
    "label": "Portfolio Name",
    "options": "Bond Portfolio",
    "reqd": 1
@@ -57,7 +58,7 @@
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-07-02 21:30:48.509031",
+ "modified": "2026-07-29 08:47:16.765770",
  "modified_by": "Administrator",
  "module": "Bond Management",
  "name": "Bond Statement",

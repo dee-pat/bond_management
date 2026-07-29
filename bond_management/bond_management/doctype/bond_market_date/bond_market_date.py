@@ -79,7 +79,7 @@ class BondMarketDate(Document):
 
 
 @frappe.whitelist(methods=["POST"])
-def get_recalculated_market_data(date, rows):
+def get_recalculated_market_data(date=None, rows=None):
     """Return derived row values without accepting or returning a form document."""
     if not (
         frappe.has_permission("Bond Market Date", "write")
