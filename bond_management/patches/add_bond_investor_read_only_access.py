@@ -50,7 +50,17 @@ def _ensure_docperm(doctype: str) -> None:
     )
     values = {
         "read": 1,
+        "write": 0,
+        "create": 0,
+        "delete": 0,
+        "submit": 0,
+        "cancel": 0,
+        "amend": 0,
         "print": int(doctype in PRINTABLE_DOCTYPES),
+        "email": 0,
+        "share": 0,
+        "export": 0,
+        "import": 0,
         "report": int(doctype == "Bond Portfolio"),
     }
 

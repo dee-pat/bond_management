@@ -37,7 +37,7 @@ class TestCouponSchedule(IntegrationTestCase):
             2,
             reference_end_date="2025-07-01",
         )
-        self.assertAlmostEqual(short_stub, 91 / (181 * 2))
+        self.assertAlmostEqual(float(short_stub), 91 / (181 * 2))
 
         # This long stub spans two notional semi-annual periods of different
         # lengths. Each contributes exactly one half-year under ICMA.
@@ -60,7 +60,7 @@ class TestCouponSchedule(IntegrationTestCase):
         )
 
         expected = (date(2024, 8, 31) - date(2024, 5, 15)).days / (184 * 2) + 0.5
-        self.assertAlmostEqual(fraction, expected)
+        self.assertAlmostEqual(float(fraction), expected)
 
     def test_rejects_invalid_coupon_frequency_and_keeps_zero_coupon_factor(self):
         self.assertRaises(

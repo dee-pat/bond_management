@@ -1,5 +1,7 @@
 import frappe
-from frappe.utils import flt, getdate
+from frappe.utils import getdate
+
+from bond_management.bond_management.utils.financial import to_decimal
 
 
 def get_position(
@@ -44,7 +46,7 @@ def get_position_for_coupon_payment(isin, coupon_date, coupon_per_unit, portfoli
     than assuming that all same-day settlements occur before the payment.
     """
     coupon_date = getdate(coupon_date)
-    coupon_per_unit = flt(coupon_per_unit)
+    coupon_per_unit = to_decimal(coupon_per_unit)
     rows = frappe.qb.get_query(
         "Bond Transaction",
         filters={
@@ -61,18 +63,23 @@ def get_position_for_coupon_payment(isin, coupon_date, coupon_per_unit, portfoli
         ignore_permissions=False,
     ).run(as_dict=True)
 
-    position = 0.0
+    return get_coupon_position_from_transactions(rows, coupon_date, coupon_per_unit)
+
+
+def get_coupon_position_from_transactions(rows, coupon_date, coupon_per_unit):
+    """Calculate coupon entitlement from already-fetched ledger rows."""
+    coupon_date = getdate(coupon_date)
+    coupon_per_unit = to_decimal(coupon_per_unit)
+    position = to_decimal(0)
     for row in rows:
-        quantity = flt(row.quantity_face_value)
-        settlement_date = getdate(row.settlement_date)
+        quantity = to_decimal(row.get("quantity_face_value"))
+        settlement_date = getdate(row.get("settlement_date"))
 
         if settlement_date < coupon_date:
-            position += quantity if row.transaction_type == "Purchase" else -quantity
-        elif row.transaction_type == "Purchase":
+            position += quantity if row.get("transaction_type") == "Purchase" else -quantity
+        elif settlement_date == coupon_date and row.get("transaction_type") == "Purchase":
             full_coupon = coupon_per_unit * quantity
-            # A tiny tolerance only protects against binary floating-point noise;
-            # it is not a materiality threshold for a short-paid coupon.
-            if flt(row.accrued_interest_paid) + 0.000001 >= full_coupon:
+            if to_decimal(row.get("accrued_interest_paid")) >= full_coupon:
                 position += quantity
 
     return position
@@ -87,18 +94,24 @@ def _get_ledger_position(isin, statement_date, portfolio_name, exclude_name=None
             "portfolio_name": portfolio_name,
             "settlement_date": ["<=", statement_date],
         },
-        fields=["name", "transaction_type", "quantity_face_value"],
+        fields=["name", "transaction_type", "quantity_face_value", "settlement_date"],
         ignore_permissions=False,
     ).run(as_dict=True)
 
-    position = 0
+    return get_ledger_position_from_transactions(rows, statement_date, exclude_name=exclude_name)
+
+
+def get_ledger_position_from_transactions(rows, statement_date, exclude_name=None):
+    """Calculate an end-of-day ledger position without additional database reads."""
+    statement_date = getdate(statement_date)
+    position = to_decimal(0)
     for row in rows:
-        if row["name"] == exclude_name:
+        if row.get("name") == exclude_name or getdate(row.get("settlement_date")) > statement_date:
             continue
-        if row["transaction_type"] == "Purchase":
-            position += flt(row["quantity_face_value"])
-        elif row["transaction_type"] == "Sale":
-            position -= flt(row["quantity_face_value"])
+        if row.get("transaction_type") == "Purchase":
+            position += to_decimal(row.get("quantity_face_value"))
+        elif row.get("transaction_type") == "Sale":
+            position -= to_decimal(row.get("quantity_face_value"))
 
     return position
 

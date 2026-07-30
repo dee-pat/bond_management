@@ -1,5 +1,19 @@
 # Bond Management agent guidance
 
+## External skill precedence
+
+- The upstream `frappe-app-dev` skill provides generic Frappe guidance and is
+  intentionally kept unmodified so it can be updated from its maintainer.
+- Its canonical source is `netchampfaris/frappe-agent-skills`, under
+  `skills/frappe-app-dev`.
+- Apply that skill only where its instructions are consistent with this file.
+- If the skill conflicts with this `AGENTS.md`, this `AGENTS.md` governs.
+- In particular, the project requirements for Frappe v16, Query Builder reads,
+  permissions, financial precision, migrations, testing, and application
+  structure supersede generic examples in the skill.
+- Do not copy a conflicting upstream example merely because it appears in the
+  skill; adapt it to comply with this project's rules.
+
 ## Project baseline
 
 - This is a custom Frappe Framework v16 app for bond portfolio management,

@@ -1,38 +1,35 @@
 from collections import defaultdict
-from decimal import Decimal, ROUND_HALF_EVEN
+from decimal import Decimal
 
 import frappe
-from frappe.utils import flt, getdate
+from frappe.utils import getdate
 from pyxirr import InvalidPaymentsError, xirr
 
 from bond_management.bond_management.utils.accrual import (
-    calculate_principal_factor,
-    unit_accrued_interest,
+    calculate_principal_factor_from_schedule,
+    unit_accrued_interest_from_bond,
 )
+from bond_management.bond_management.utils.financial import quantize_money, to_decimal
 from bond_management.bond_management.utils.portfolio import (
+    get_coupon_position_from_transactions,
+    get_ledger_position_from_transactions,
     get_position,
     get_position_for_coupon_payment,
     get_position_for_payment,
 )
 
 DEFAULT_XIRR_GUESS = 0.1
-CASHFLOW_AMOUNT_PRECISION = Decimal("0.0001")
 
 
 def round_cashflow_amount(amount):
     """Round a cash-flow amount to four decimal places using bankers' rounding."""
-    return float(
-        Decimal(str(amount or 0)).quantize(
-            CASHFLOW_AMOUNT_PRECISION,
-            rounding=ROUND_HALF_EVEN,
-        )
-    )
+    return float(quantize_money(amount))
 
 
 def round_cashflow_amounts(cash_flows):
     """Apply the cash-flow amount convention without changing other metadata."""
     return [
-        {**cash_flow, "amount": round_cashflow_amount(cash_flow["amount"])}
+        {**cash_flow, "amount": quantize_money(cash_flow["amount"])}
         for cash_flow in cash_flows
     ]
 
@@ -53,13 +50,16 @@ def calculate_xirr(cash_flows, guess=DEFAULT_XIRR_GUESS):
         return None
 
     try:
-        return xirr(cash_flows, guess=guess)
+        return xirr({date: float(amount) for date, amount in cash_flows.items()}, guess=guess)
     except (ArithmeticError, InvalidPaymentsError, ValueError):
         if guess == DEFAULT_XIRR_GUESS:
             return None
 
     try:
-        return xirr(cash_flows, guess=DEFAULT_XIRR_GUESS)
+        return xirr(
+            {date: float(amount) for date, amount in cash_flows.items()},
+            guess=DEFAULT_XIRR_GUESS,
+        )
     except (ArithmeticError, InvalidPaymentsError, ValueError):
         return None
 
@@ -75,41 +75,38 @@ def get_last_xirr_guess(isin, date):
 
     for result in results:
         if result.get("future_xirr") is not None:
-            return result["future_xirr"] / 100
+            return float(to_decimal(result["future_xirr"]) / to_decimal(100))
 
     return None
 
 
 def consolidate_cashflows(cash_flows):
-    consolidated_cash_flows = defaultdict(float)
+    consolidated_cash_flows = defaultdict(Decimal)
 
     for cash_flow in cash_flows:
         if not cash_flow.get("date") or cash_flow.get("amount") is None:
             continue
 
         cash_flow_date = getdate(cash_flow["date"])
-        amount = float(cash_flow["amount"] or 0.0)
+        amount = to_decimal(cash_flow["amount"])
 
         consolidated_cash_flows[cash_flow_date] += amount
 
     return dict(consolidated_cash_flows)
 
 
-def create_future_cash_flows(isin, date, market_price, quantity=1):
+def create_future_cash_flows(isin, date, market_price, quantity=1, bond_doc=None):
     # Fetch the bond document
-    bond_doc = frappe.get_doc("Bond Master", isin)
-    market_price = flt(market_price)
-    quantity = flt(quantity)
+    bond_doc = bond_doc or frappe.get_doc("Bond Master", isin)
+    market_price = to_decimal(market_price)
+    quantity = to_decimal(quantity)
 
     # Initialize future cash flows list
     future_cash_flows = []
 
     # Calculate accrued interest up to the settlement date
     settlement_date = getdate(date)
-    accrued_interest = unit_accrued_interest(
-        isin=isin,
-        settlement_date=settlement_date,
-    )
+    accrued_interest = unit_accrued_interest_from_bond(bond_doc, settlement_date)
 
     # The bank quotes per 100 of original face value even after amortisation.
     # The lower quoted price itself reflects principal already repaid, so no
@@ -119,7 +116,11 @@ def create_future_cash_flows(isin, date, market_price, quantity=1):
             "bond": isin,
             "type": "market_price",
             "date": settlement_date,
-            "amount": -(bond_doc.face_value_per_unit * market_price / 100),
+            "amount": -(
+                to_decimal(bond_doc.get("face_value_per_unit"))
+                * market_price
+                / to_decimal(100)
+            ),
         }
     )
     future_cash_flows.append(
@@ -143,9 +144,13 @@ def create_future_cash_flows(isin, date, market_price, quantity=1):
         if coupon_date and coupon_factor is not None and coupon_date > settlement_date:
             # On a repayment date this is the pre-payment factor. That day's
             # coupon is paid before the factor affects subsequent coupons.
-            principal_factor = calculate_principal_factor(isin, coupon_date)
-            coupon_factor /= 100
-            coupon_payment = coupon_factor * bond_doc.face_value_per_unit * principal_factor
+            principal_factor = calculate_principal_factor_from_schedule(
+                principal_schedule, coupon_date, include_repayment_on_date=False
+            )
+            coupon_factor = to_decimal(coupon_factor) / to_decimal(100)
+            coupon_payment = (
+                coupon_factor * to_decimal(bond_doc.get("face_value_per_unit")) * principal_factor
+            )
             future_cash_flows.append(
                 {
                     "bond": isin,
@@ -160,7 +165,9 @@ def create_future_cash_flows(isin, date, market_price, quantity=1):
         repayment_date = getdate(principal_period.get("repayment_date"))
         if repayment_date and repayment_date > settlement_date:
             principal_payment = (
-                bond_doc.face_value_per_unit * (principal_period.get("repayment_percent") or 0.0) / 100.0
+                to_decimal(bond_doc.get("face_value_per_unit"))
+                * to_decimal(principal_period.get("repayment_percent"))
+                / to_decimal(100)
             )
             if repayment_date == maturity_date:
                 future_cash_flows.append(
@@ -183,27 +190,29 @@ def create_future_cash_flows(isin, date, market_price, quantity=1):
     future_cash_flows = [
         {**cash_flow, "amount": cash_flow["amount"] * quantity, "quantity": quantity}
         for cash_flow in future_cash_flows
-        if cash_flow.get("amount") != 0.0
+        if to_decimal(cash_flow.get("amount")) != 0
     ]
     future_cash_flows = round_cashflow_amounts(future_cash_flows)
     return sorted(future_cash_flows, key=lambda x: x["date"])
 
 
-def create_past_cash_flows(isin, date, market_price, portfolio):
+def create_past_cash_flows(isin, date, market_price, portfolio, bond_doc=None, transactions=None):
     # Fetch the bond document
-    bond_doc = frappe.get_doc("Bond Master", isin)
-    market_price = flt(market_price)
+    bond_doc = bond_doc or frappe.get_doc("Bond Master", isin)
+    market_price = to_decimal(market_price)
 
     # Initialize past cash flows list
     past_cash_flows = []
 
     # Calculate accrued interest up to the settlement date
     settlement_date = getdate(date)
-    position = get_position(isin, statement_date=date, portfolio_name=portfolio)
-    accrued_interest = unit_accrued_interest(
-        isin=isin,
-        settlement_date=settlement_date,
-    )
+    if transactions is None:
+        position = get_position(isin, statement_date=date, portfolio_name=portfolio)
+    else:
+        position = get_ledger_position_from_transactions(transactions, settlement_date)
+        if getdate(bond_doc.get("maturity_date")) <= settlement_date:
+            position = to_decimal(0)
+    accrued_interest = unit_accrued_interest_from_bond(bond_doc, settlement_date)
 
     # The bank quote remains per 100 of original face value after amortisation;
     # applying a principal factor here would double-adjust the quoted price.
@@ -212,7 +221,10 @@ def create_past_cash_flows(isin, date, market_price, portfolio):
             "bond": isin,
             "type": "market_price",
             "date": settlement_date,
-            "amount": bond_doc.face_value_per_unit * market_price / 100 * position,
+            "amount": to_decimal(bond_doc.get("face_value_per_unit"))
+            * market_price
+            / to_decimal(100)
+            * position,
             "quantity": position,
         }
     )
@@ -239,15 +251,20 @@ def create_past_cash_flows(isin, date, market_price, portfolio):
         coupon_factor = coupon_period.get("coupon_factor")
         if coupon_factor is None:
             continue
-        coupon_factor /= 100
         if coupon_date <= settlement_date:
-            principal_factor = calculate_principal_factor(isin, coupon_date)
-            coupon_rate = coupon_factor * bond_doc.face_value_per_unit * principal_factor
-            position = get_position_for_coupon_payment(
-                isin,
-                coupon_date,
-                coupon_rate,
-                portfolio,
+            principal_factor = calculate_principal_factor_from_schedule(
+                principal_schedule, coupon_date, include_repayment_on_date=False
+            )
+            coupon_rate = (
+                to_decimal(coupon_factor)
+                / to_decimal(100)
+                * to_decimal(bond_doc.get("face_value_per_unit"))
+                * principal_factor
+            )
+            position = (
+                get_position_for_coupon_payment(isin, coupon_date, coupon_rate, portfolio)
+                if transactions is None
+                else get_coupon_position_from_transactions(transactions, coupon_date, coupon_rate)
             )
 
             if position > 0:
@@ -269,11 +286,15 @@ def create_past_cash_flows(isin, date, market_price, portfolio):
         if repayment_date <= settlement_date:
             # Equality belongs to past performance. Same-day settlements occur
             # immediately before payment and participate in the entitlement.
-            position = get_position_for_payment(isin, repayment_date, portfolio)
+            position = (
+                get_position_for_payment(isin, repayment_date, portfolio)
+                if transactions is None
+                else get_ledger_position_from_transactions(transactions, repayment_date)
+            )
             principal_amount = (
-                bond_doc.face_value_per_unit
-                * (principal_period.get("repayment_percent") or 0.0)
-                / 100.0
+                to_decimal(bond_doc.get("face_value_per_unit"))
+                * to_decimal(principal_period.get("repayment_percent"))
+                / to_decimal(100)
                 * position
             )
             if repayment_date == maturity_date:
@@ -297,21 +318,23 @@ def create_past_cash_flows(isin, date, market_price, portfolio):
                     }
                 )
 
-    rows = frappe.qb.get_query(
-        "Bond Transaction",
-        filters={
-            "isin": isin,
-            "portfolio_name": portfolio,
-            "settlement_date": ["<=", date],
-        },
-        fields=[
-            "transaction_type",
-            "settlement_amount",
-            "settlement_date",
-            "quantity_face_value",
-        ],
-        ignore_permissions=False,
-    ).run(as_dict=True)
+    rows = transactions
+    if rows is None:
+        rows = frappe.qb.get_query(
+            "Bond Transaction",
+            filters={
+                "isin": isin,
+                "portfolio_name": portfolio,
+                "settlement_date": ["<=", date],
+            },
+            fields=[
+                "transaction_type",
+                "settlement_amount",
+                "settlement_date",
+                "quantity_face_value",
+            ],
+            ignore_permissions=False,
+        ).run(as_dict=True)
 
     # settlement_amount already contains the commission-inclusive bank price;
     # adding commission_amount here would double-count it in XIRR.
@@ -322,7 +345,7 @@ def create_past_cash_flows(isin, date, market_price, portfolio):
                     "bond": isin,
                     "type": "purchase",
                     "date": row["settlement_date"],
-                    "amount": -row["settlement_amount"],
+                    "amount": -to_decimal(row["settlement_amount"]),
                     "quantity": row["quantity_face_value"],
                 }
             )
@@ -332,11 +355,11 @@ def create_past_cash_flows(isin, date, market_price, portfolio):
                     "bond": isin,
                     "type": "sale",
                     "date": row["settlement_date"],
-                    "amount": row["settlement_amount"],
+                    "amount": to_decimal(row["settlement_amount"]),
                     "quantity": row["quantity_face_value"],
                 }
             )
-    past_cash_flows = [d for d in past_cash_flows if d.get("amount") != 0.0]
+    past_cash_flows = [d for d in past_cash_flows if to_decimal(d.get("amount")) != 0]
     past_cash_flows = round_cashflow_amounts(past_cash_flows)
     return sorted(past_cash_flows, key=lambda x: x["date"])
 

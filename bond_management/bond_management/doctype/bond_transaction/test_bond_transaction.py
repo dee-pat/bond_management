@@ -1,12 +1,15 @@
 # Copyright (c) 2026, Deepak Patel and Contributors
 # See license.txt
 
+from decimal import Decimal
+
 import frappe
 from frappe.exceptions import ValidationError
 from frappe.tests import IntegrationTestCase
 from frappe.utils import getdate
 
 from bond_management.bond_management.doctype.bond_transaction.bond_transaction import (
+    _calculate_amount_values,
     get_calculated_amounts,
 )
 from bond_management.bond_management.tests.factories import (
@@ -34,6 +37,22 @@ class TestBondTransaction(IntegrationTestCase):
             + transaction.accrued_interest_paid
             + transaction.commission_amount,
         )
+
+    def test_amount_pipeline_uses_decimal_and_explicit_four_place_rounding(self):
+        bond = make_bond(face_value_per_unit="100.03")
+
+        amounts = _calculate_amount_values(
+            bond,
+            bond.issue_date,
+            "3",
+            "99.99",
+            "0.005",
+            "0.015",
+        )
+
+        self.assertEqual(amounts["principal"], Decimal("300.0900"))
+        self.assertEqual(amounts["commission_amount"], Decimal("0.0450"))
+        self.assertEqual(amounts["settlement_amount"], Decimal("300.0650"))
 
     def test_value_endpoint_clears_amounts_without_an_isin(self):
         self.assertEqual(

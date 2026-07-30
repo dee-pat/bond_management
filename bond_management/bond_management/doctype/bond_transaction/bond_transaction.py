@@ -2,12 +2,18 @@
 # For license information, please see license.txt
 
 from collections import defaultdict
+from decimal import Decimal
 
 import frappe
 from frappe.model.document import Document
-from frappe.utils import flt, getdate
+from frappe.utils import getdate
 
 from bond_management.bond_management.utils.accrual import get_accrued_interest
+from bond_management.bond_management.utils.financial import (
+    DecimalInput,
+    quantize_money,
+    to_decimal,
+)
 
 BOND_SNAPSHOT_FIELDS = (
     "bond_name",
@@ -24,34 +30,36 @@ BOND_SNAPSHOT_FIELDS = (
 def _calculate_amount_values(
     bond, settlement_date, quantity_face_value, price, accrued_interest_paid, commission
 ):
-    principal = flt(bond.face_value_per_unit) * flt(quantity_face_value)
-    commission_amount = principal * flt(commission) / 100
+    principal = to_decimal(bond.face_value_per_unit) * to_decimal(quantity_face_value)
+    commission_amount = principal * to_decimal(commission) / Decimal("100")
     # The bank transaction price is commission-inclusive, so commission_amount is
     # informational and must not be added to settlement or XIRR cash flows again.
-    settlement_amount = principal * flt(price) / 100 + flt(accrued_interest_paid)
+    settlement_amount = (
+        principal * to_decimal(price) / Decimal("100") + to_decimal(accrued_interest_paid)
+    )
     accrued_interest_calculated = get_accrued_interest(
         isin=bond.name,
         settlement_date=settlement_date,
         quantity_face_value=quantity_face_value,
     )
     return {
-        "principal": principal,
-        "commission_amount": commission_amount,
-        "settlement_amount": settlement_amount,
-        "accrued_interest_calculated": accrued_interest_calculated,
+        "principal": quantize_money(principal),
+        "commission_amount": quantize_money(commission_amount),
+        "settlement_amount": quantize_money(settlement_amount),
+        "accrued_interest_calculated": quantize_money(accrued_interest_calculated),
     }
 
 
 @frappe.whitelist(methods=["POST"])
 def get_calculated_amounts(
-    isin=None,
-    settlement_date=None,
-    quantity_face_value=None,
-    price=None,
-    accrued_interest_paid=None,
-    commission=None,
-    transaction_name=None,
-):
+    isin: str | None = None,
+    settlement_date: str | None = None,
+    quantity_face_value: DecimalInput = None,
+    price: DecimalInput = None,
+    accrued_interest_paid: DecimalInput = None,
+    commission: DecimalInput = None,
+    transaction_name: str | None = None,
+) -> dict[str, Decimal]:
     """Return value-only calculations so stale RPCs cannot sync an older Document."""
     if transaction_name and frappe.db.exists("Bond Transaction", transaction_name):
         frappe.has_permission("Bond Transaction", "write", doc=transaction_name, throw=True)
@@ -60,10 +68,10 @@ def get_calculated_amounts(
 
     if not isin:
         return {
-            "principal": 0.0,
-            "commission_amount": 0.0,
-            "settlement_amount": 0.0,
-            "accrued_interest_calculated": 0.0,
+            "principal": Decimal("0"),
+            "commission_amount": Decimal("0"),
+            "settlement_amount": Decimal("0"),
+            "accrued_interest_calculated": Decimal("0"),
         }
 
     bond = frappe.get_doc("Bond Master", isin)
@@ -115,13 +123,13 @@ class BondTransaction(Document):
             self.set(fieldname, bond.get(fieldname))
 
     def validate_financial_terms(self):
-        if flt(self.quantity_face_value) <= 0:
+        if to_decimal(self.quantity_face_value) <= 0:
             frappe.throw("Quantity / Face Value must be greater than zero")
-        if flt(self.face_value_per_unit) <= 0:
+        if to_decimal(self.face_value_per_unit) <= 0:
             frappe.throw("Face Value Per Unit must be greater than zero")
-        if flt(self.price) <= 0:
+        if to_decimal(self.price) <= 0:
             frappe.throw("Price must be greater than zero")
-        if flt(self.commission) < 0:
+        if to_decimal(self.commission) < 0:
             frappe.throw("Commission must be zero or greater")
 
     def validate_transaction_dates(self):
@@ -214,15 +222,15 @@ class BondTransaction(Document):
         if replacement:
             ledger_rows.append(replacement)
 
-        daily_movements = defaultdict(float)
+        daily_movements = defaultdict(Decimal)
         for row in ledger_rows:
-            quantity = flt(row.get("quantity_face_value"))
+            quantity = to_decimal(row.get("quantity_face_value"))
             if quantity <= 0:
                 frappe.throw(f"Transaction {row.get('name') or '(unsaved)'} must have a positive quantity")
             direction = 1 if row.get("transaction_type") == "Purchase" else -1
             daily_movements[getdate(row.get("settlement_date"))] += direction * quantity
 
-        position = 0.0
+        position = Decimal("0")
         for settlement_date in sorted(daily_movements):
             position += daily_movements[settlement_date]
             if position < 0:

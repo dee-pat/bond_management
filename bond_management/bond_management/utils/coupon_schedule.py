@@ -3,6 +3,8 @@ from dateutil.relativedelta import relativedelta
 from frappe.utils import add_days, add_months, getdate
 from frappe.utils.data import get_last_day
 
+from bond_management.bond_management.utils.financial import to_decimal
+
 
 def generate_coupon_schedule(
     issue_date,
@@ -72,7 +74,7 @@ def generate_coupon_schedule(
             coupon_frequency=coupon_frequency,
         )
 
-        coupon_factor = (coupon_rate or 0) * fraction
+        coupon_factor = to_decimal(coupon_rate) * fraction
 
         coupon_schedule.append(
             {
@@ -117,13 +119,13 @@ def year_fraction(
     coupon_frequency = int(coupon_frequency)
 
     if end <= start:
-        return 0
+        return to_decimal(0)
 
     if day_count_convention == "ACT/365":
-        return (end - start).days / 365
+        return to_decimal((end - start).days) / to_decimal(365)
 
     if day_count_convention in {"ACT/364", "Actual/364(Kenya)"}:
-        return (end - start).days / 364
+        return to_decimal((end - start).days) / to_decimal(364)
 
     if day_count_convention in {"ACT/ACT", "Actual/Actual(ICMA)"}:
         if coupon_frequency <= 0 or 12 % coupon_frequency:
@@ -137,7 +139,7 @@ def year_fraction(
         months_per_period = 12 // coupon_frequency
         preserve_eom = reference_end == get_last_day(reference_end)
         quasi_end = reference_end
-        fraction = 0.0
+        fraction = to_decimal(0)
 
         while quasi_end > start:
             quasi_start = add_months(quasi_end, -months_per_period)
@@ -148,7 +150,7 @@ def year_fraction(
             overlap_end = min(end, quasi_end)
             if overlap_end > overlap_start:
                 denominator = (quasi_end - quasi_start).days * coupon_frequency
-                fraction += (overlap_end - overlap_start).days / denominator
+                fraction += to_decimal((overlap_end - overlap_start).days) / to_decimal(denominator)
 
             quasi_end = quasi_start
 
@@ -158,6 +160,7 @@ def year_fraction(
         d1 = min(start.day, 30)
         d2 = min(end.day, 30)
 
-        return ((end.year - start.year) * 360 + (end.month - start.month) * 30 + (d2 - d1)) / 360
+        numerator = (end.year - start.year) * 360 + (end.month - start.month) * 30 + (d2 - d1)
+        return to_decimal(numerator) / to_decimal(360)
 
     raise ValueError(f"Unsupported day count convention: {day_count_convention}")

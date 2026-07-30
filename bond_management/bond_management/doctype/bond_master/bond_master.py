@@ -3,9 +3,10 @@
 
 import frappe
 from frappe.model.document import Document
-from frappe.utils import flt, getdate
+from frappe.utils import getdate
 
 from bond_management.bond_management.utils.coupon_schedule import generate_coupon_schedule
+from bond_management.bond_management.utils.financial import quantize_percent, to_decimal
 
 
 class BondMaster(Document):
@@ -46,9 +47,9 @@ class BondMaster(Document):
         self.validate_principal_alignment()
 
     def validate_financial_terms(self):
-        if flt(self.face_value_per_unit) <= 0:
+        if to_decimal(self.face_value_per_unit) <= 0:
             frappe.throw("Face Value Per Unit must be greater than zero")
-        if flt(self.coupon_rate) < 0:
+        if to_decimal(self.coupon_rate) < 0:
             frappe.throw("Coupon Rate must be zero or greater")
 
     def validate_dates(self):
@@ -63,7 +64,7 @@ class BondMaster(Document):
 
         repayment_dates = set()
         for row in self.principal_schedule:
-            if flt(row.principal_units) <= 0:
+            if to_decimal(row.principal_units) <= 0:
                 frappe.throw("Principal Units must be greater than zero in every row")
             if not row.repayment_date:
                 frappe.throw("Repayment Date is required in every principal schedule row")
@@ -74,9 +75,19 @@ class BondMaster(Document):
             repayment_dates.add(repayment_date)
 
     def update_principal_percentages(self):
-        total_units = sum(flt(row.principal_units) for row in self.principal_schedule)
-        for row in self.principal_schedule:
-            row.repayment_percent = flt(row.principal_units) / total_units * 100
+        total_units = sum(
+            (to_decimal(row.principal_units) for row in self.principal_schedule),
+            start=to_decimal(0),
+        )
+        allocated_percent = to_decimal(0)
+        for index, row in enumerate(self.principal_schedule):
+            if index == len(self.principal_schedule) - 1:
+                row.repayment_percent = quantize_percent(to_decimal(100) - allocated_percent)
+            else:
+                row.repayment_percent = quantize_percent(
+                    to_decimal(row.principal_units) / total_units * to_decimal(100)
+                )
+                allocated_percent += row.repayment_percent
 
     def update_maturity_date(self):
         dates = [getdate(row.repayment_date) for row in self.principal_schedule if row.repayment_date]
@@ -109,7 +120,7 @@ class BondMaster(Document):
 
 
 @frappe.whitelist(methods=["POST"])
-def get_recalculated_schedules(doc):
+def get_recalculated_schedules(doc: str) -> dict:
     """Return authoritative values without syncing a stale unsaved Document to the form."""
     values = frappe.parse_json(doc)
     if not isinstance(values, dict):

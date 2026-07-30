@@ -1,14 +1,16 @@
 # Copyright (c) 2026, Deepak Patel and contributors
 # For license information, please see license.txt
 
+from datetime import date as Date
+
 import frappe
 from frappe.model.document import Document
-from frappe.utils import flt
 
 from bond_management.bond_management.utils.accrual import (
-    calculate_principal_factor,
+    calculate_principal_factor_from_schedule,
     calculate_weighted_average_repayment,
 )
+from bond_management.bond_management.utils.financial import DecimalInput, to_decimal
 from bond_management.bond_management.utils.xirr import (
     calculate_future_xirr,
     create_future_cash_flows,
@@ -73,13 +75,15 @@ class BondMarketDate(Document):
                     frappe.throw(f"Market Price is required in row {row.idx}")
                 continue
 
-            if flt(row.market_price) <= 0:
+            if to_decimal(row.market_price) <= 0:
                 row.future_xirr = None
                 frappe.throw(f"Market Price must be greater than zero in row {row.idx}")
 
 
 @frappe.whitelist(methods=["POST"])
-def get_recalculated_market_data(date=None, rows=None):
+def get_recalculated_market_data(
+    date: str | None = None, rows: str | list | None = None
+) -> list[dict]:
     """Return derived row values without accepting or returning a form document."""
     if not (
         frappe.has_permission("Bond Market Date", "write")
@@ -114,7 +118,7 @@ def get_recalculated_market_data(date=None, rows=None):
             if not frappe.has_permission("Bond Master", "read", doc=isin):
                 frappe.throw("Not permitted", frappe.PermissionError)
 
-        if market_price is not None and flt(market_price) <= 0:
+        if market_price is not None and to_decimal(market_price) <= 0:
             frappe.throw(f"Market Price must be greater than zero in row {index}")
 
         result.append(
@@ -128,13 +132,15 @@ def get_recalculated_market_data(date=None, rows=None):
 
 
 @frappe.whitelist(methods=["POST"])
-def get_cashflows(date, isin, market_price):
+def get_cashflows(
+    date: Date | str | None, isin: str | None, market_price: DecimalInput
+) -> list[dict]:
     """Return value-only cash flows without syncing a form Document response."""
     if not date:
         frappe.throw("Date is required")
     if not isin:
         frappe.throw("ISIN is required")
-    market_price = flt(market_price)
+    market_price = to_decimal(market_price)
     if market_price <= 0:
         frappe.throw("Market Price must be greater than zero")
 
@@ -169,7 +175,9 @@ def _calculate_market_data(date, isin, market_price):
     if not date:
         return values
 
-    values["principal_factor"] = calculate_principal_factor(isin, date)
+    values["principal_factor"] = calculate_principal_factor_from_schedule(
+        bond_doc.get("principal_schedule"), date
+    )
     weighted_date, weighted_years = calculate_weighted_average_repayment(
         bond_doc.get("principal_schedule"), date
     )

@@ -33,6 +33,22 @@ class TestXirr(IntegrationTestCase):
 
                 self.assertEqual(cashflows[0]["amount"], -1050)
 
+    def test_future_coupon_uses_principal_before_same_day_repayment(self):
+        bond = make_bond(
+            coupon_rate=10,
+            principal_schedule=[
+                {"repayment_date": "2025-07-01", "principal_units": 50},
+                {"repayment_date": "2027-01-01", "principal_units": 50},
+            ],
+        )
+
+        cashflows = create_future_cash_flows(bond.name, "2025-06-30", 100)
+
+        first_coupon = next(
+            flow for flow in cashflows if flow["type"] == "coupon" and str(flow["date"]) == "2025-07-01"
+        )
+        self.assertEqual(first_coupon["amount"], 5)
+
     def test_maturity_day_purchase_receives_redemption_without_double_counting_commission(self):
         bond = make_bond(coupon_rate=0)
         portfolio = make_portfolio()

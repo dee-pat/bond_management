@@ -178,6 +178,63 @@ class TestPortfolioPerformance(IntegrationTestCase):
         self.assertAlmostEqual(rows[0]["gain_value"], rows[0]["market_value"] + 650 - 1050)
         self.assertEqual(future_cashflows[0]["amount"], -400)
 
+    def test_repayment_day_uses_post_payment_nominal_and_pre_payment_coupon(self):
+        bond = make_bond(
+            coupon_rate=10,
+            principal_schedule=[
+                {"repayment_date": "2025-07-01", "principal_units": 50},
+                {"repayment_date": "2027-01-01", "principal_units": 50},
+            ],
+        )
+        portfolio = make_portfolio()
+        make_transaction(
+            bond,
+            portfolio,
+            trade_date="2025-06-29",
+            settlement_date="2025-06-30",
+            accrued_interest_paid=0,
+            commission=0,
+        )
+        make_market_date(bond, market_price=50, date="2025-07-01")
+
+        rows, past_cashflows, _ = get_data(portfolio.name, "2025-07-01")
+
+        self.assertEqual(rows[0]["principal_factor"], 0.5)
+        self.assertEqual(rows[0]["nominal_value"], 500)
+        self.assertEqual(
+            next(flow["amount"] for flow in past_cashflows if flow["type"] == "coupon"),
+            50,
+        )
+        self.assertEqual(
+            next(flow["amount"] for flow in past_cashflows if flow["type"] == "amortisation"),
+            500,
+        )
+
+    def test_report_batch_load_query_count_does_not_grow_per_bond(self):
+        portfolio = make_portfolio()
+        bonds = [make_bond(), make_bond()]
+        for bond in bonds:
+            make_transaction(bond, portfolio)
+        frappe.get_doc(
+            {
+                "doctype": "Bond Market Date",
+                "date": "2025-12-30",
+                "bond_market_prices": [
+                    {"isin": bond.name, "market_price": 100, "currency": bond.currency}
+                    for bond in bonds
+                ],
+            }
+        ).insert()
+
+        with patch(
+            "bond_management.bond_management.utils.performance.frappe.qb.get_query",
+            wraps=frappe.qb.get_query,
+        ) as get_query:
+            rows, _, _ = get_data(portfolio.name, "2025-12-31")
+
+        self.assertEqual(len(rows), 2)
+        self.assertEqual(get_query.call_count, 5)
+
     def test_open_position_requires_a_market_price(self):
         bond = make_bond()
         portfolio = make_portfolio()
