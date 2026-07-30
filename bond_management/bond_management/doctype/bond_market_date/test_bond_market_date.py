@@ -1,6 +1,8 @@
 # Copyright (c) 2026, Deepak Patel and Contributors
 # See license.txt
 
+from decimal import ROUND_HALF_UP, Decimal
+
 import frappe
 from frappe.tests import IntegrationTestCase
 
@@ -10,6 +12,12 @@ from bond_management.bond_management.doctype.bond_market_date.bond_market_date i
 )
 from bond_management.bond_management.tests.factories import make_bond, make_market_date
 from bond_management.bond_management.utils.performance import get_market_price
+from bond_management.patches.add_bond_query_indexes import (
+    LEDGER_INDEX,
+    MARKET_DATE_UNIQUE,
+    REPORT_INDEX,
+    execute as add_bond_query_indexes,
+)
 from bond_management.patches.backfill_weighted_avg_repayment import execute as backfill_weighted_repayment
 
 
@@ -17,12 +25,12 @@ class TestBondMarketDate(IntegrationTestCase):
     def test_updates_market_price_derived_fields_and_cashflows(self):
         bond = make_bond()
         market_date = make_market_date(bond, date="2025-12-29")
-        price_row = market_date.bond_market_prices[0]
+        price_row = market_date.bond_market_prices[-1]
 
         self.assertEqual(price_row.maturity_date, bond.maturity_date)
         self.assertEqual(price_row.principal_factor, 1)
         self.assertEqual(price_row.weighted_avg_repayment_date, bond.maturity_date)
-        self.assertAlmostEqual(price_row.weighted_avg_repayment_years, 368 / 365)
+        self.assertEqual(price_row.weighted_avg_repayment_years, Decimal(368) / Decimal(365))
         self.assertIsNotNone(price_row.future_xirr)
 
         cashflows = get_cashflows(market_date.date, bond.name, "100")
@@ -33,10 +41,15 @@ class TestBondMarketDate(IntegrationTestCase):
     def test_cashflow_endpoint_rejects_invalid_market_prices(self):
         bond = make_bond()
 
-        for market_price in (None, "", "not-a-number", "0", "-1"):
+        for market_price in (None, "", "0", "-1"):
             with self.subTest(market_price=market_price):
                 with self.assertRaisesRegex(frappe.ValidationError, "must be greater than zero"):
                     get_cashflows("2025-12-29", bond.name, market_price)
+
+        with self.assertRaisesRegex(frappe.ValidationError, "Market Price must be a valid number"):
+            get_cashflows("2025-12-29", bond.name, "not-a-number")
+        with self.assertRaisesRegex(frappe.ValidationError, "Market Price must be a finite number"):
+            get_cashflows("2025-12-29", bond.name, "NaN")
 
     def test_value_endpoint_clears_stale_derived_fields_for_incomplete_rows(self):
         result = get_recalculated_market_data(
@@ -87,10 +100,10 @@ class TestBondMarketDate(IntegrationTestCase):
             ]
         )
 
-        price_row = make_market_date(bond, date="2025-02-03").bond_market_prices[0]
+        price_row = make_market_date(bond, date="2025-02-03").bond_market_prices[-1]
 
         self.assertEqual(price_row.weighted_avg_repayment_date.isoformat(), "2026-10-20")
-        self.assertAlmostEqual(price_row.weighted_avg_repayment_years, 624 / 365)
+        self.assertEqual(price_row.weighted_avg_repayment_years, Decimal(624) / Decimal(365))
 
     def test_backfill_patch_updates_existing_market_price_rows(self):
         bond = make_bond(
@@ -100,7 +113,7 @@ class TestBondMarketDate(IntegrationTestCase):
             ]
         )
         market_date = make_market_date(bond, date="2025-02-04")
-        price_row = market_date.bond_market_prices[0]
+        price_row = market_date.bond_market_prices[-1]
         frappe.db.set_value(
             "Bond Market Prices",
             price_row.name,
@@ -113,10 +126,13 @@ class TestBondMarketDate(IntegrationTestCase):
 
         backfill_weighted_repayment()
         market_date.reload()
-        price_row = market_date.bond_market_prices[0]
+        price_row = market_date.bond_market_prices[-1]
 
         self.assertEqual(price_row.weighted_avg_repayment_date.isoformat(), "2026-10-20")
-        self.assertAlmostEqual(price_row.weighted_avg_repayment_years, 623 / 365)
+        expected_years = (Decimal(623) / Decimal(365)).quantize(
+            Decimal("0.000000001"), rounding=ROUND_HALF_UP
+        )
+        self.assertEqual(Decimal(str(price_row.weighted_avg_repayment_years)), expected_years)
 
     def test_market_price_must_be_greater_than_zero(self):
         bond = make_bond()
@@ -127,7 +143,7 @@ class TestBondMarketDate(IntegrationTestCase):
                     make_market_date(bond, market_price=invalid_price, date="2025-12-27")
 
         self.assertEqual(
-            make_market_date(bond, market_price=0.01, date="2025-12-27").bond_market_prices[0].market_price,
+            make_market_date(bond, market_price=0.01, date="2025-12-27").bond_market_prices[-1].market_price,
             0.01,
         )
 
@@ -165,22 +181,31 @@ class TestBondMarketDate(IntegrationTestCase):
                 }
             ).insert()
 
+    def test_database_indexes_enforce_market_dates_and_support_hot_queries(self):
+        add_bond_query_indexes()
+        add_bond_query_indexes()
+
+        self.assertTrue(frappe.db.has_index("tabBond Transaction", LEDGER_INDEX))
+        self.assertTrue(frappe.db.has_index("tabBond Transaction", REPORT_INDEX))
+        self.assertTrue(frappe.db.has_index("tabBond Market Date", MARKET_DATE_UNIQUE))
+
+        bond = make_bond()
+        market_date = make_market_date(bond, date="2025-12-23")
+        duplicate = frappe.get_doc(
+            {
+                "doctype": "Bond Market Date",
+                "date": market_date.date,
+                "bond_market_prices": [{"isin": make_bond().name, "market_price": 100}],
+            }
+        )
+        duplicate.flags.ignore_validate = True
+        with self.assertRaises(frappe.UniqueValidationError):
+            duplicate.insert()
+
     def test_market_price_lookup_uses_latest_price_on_or_before_date(self):
         bond = make_bond()
-        frappe.get_doc(
-            {
-                "doctype": "Bond Market Date",
-                "date": "2025-06-29",
-                "bond_market_prices": [{"isin": bond.name, "market_price": 90}],
-            }
-        ).insert()
-        frappe.get_doc(
-            {
-                "doctype": "Bond Market Date",
-                "date": "2025-12-26",
-                "bond_market_prices": [{"isin": bond.name, "market_price": 100}],
-            }
-        ).insert()
+        make_market_date(bond, market_price=90, date="2025-06-29")
+        make_market_date(bond, market_price=100, date="2025-12-26")
 
         self.assertIsNone(get_market_price(bond.name, "2025-06-28"))
         self.assertEqual(get_market_price(bond.name, "2025-06-29"), 90)
@@ -195,7 +220,7 @@ class TestBondMarketDate(IntegrationTestCase):
             ],
         )
         market_date = make_market_date(bond, market_price=50, date="2025-12-24")
-        price_row = market_date.bond_market_prices[0]
+        price_row = market_date.bond_market_prices[-1]
 
         self.assertEqual(price_row.principal_factor, 0.5)
         self.assertEqual(get_cashflows(market_date.date, bond.name, 50)[0]["amount"], -50)

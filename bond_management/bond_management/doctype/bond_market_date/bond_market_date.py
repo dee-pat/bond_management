@@ -75,7 +75,7 @@ class BondMarketDate(Document):
                     frappe.throw(f"Market Price is required in row {row.idx}")
                 continue
 
-            if to_decimal(row.market_price) <= 0:
+            if to_decimal(row.market_price, "Market Price") <= 0:
                 row.future_xirr = None
                 frappe.throw(f"Market Price must be greater than zero in row {row.idx}")
 
@@ -118,7 +118,7 @@ def get_recalculated_market_data(
             if not frappe.has_permission("Bond Master", "read", doc=isin):
                 frappe.throw("Not permitted", frappe.PermissionError)
 
-        if market_price is not None and to_decimal(market_price) <= 0:
+        if market_price is not None and to_decimal(market_price, "Market Price") <= 0:
             frappe.throw(f"Market Price must be greater than zero in row {index}")
 
         result.append(
@@ -140,7 +140,7 @@ def get_cashflows(
         frappe.throw("Date is required")
     if not isin:
         frappe.throw("ISIN is required")
-    market_price = to_decimal(market_price)
+    market_price = to_decimal(market_price, "Market Price")
     if market_price <= 0:
         frappe.throw("Market Price must be greater than zero")
 

@@ -2,6 +2,8 @@ from collections import defaultdict
 
 import frappe
 from frappe.utils import getdate
+from pypika.analytics import RowNumber
+from pypika.enums import Order
 
 
 def get_distinct_isins(portfolio=None, valuation_date=None):
@@ -36,6 +38,48 @@ def get_market_price(isin, valuation_date):
         return result[0].market_price
 
     return None
+
+
+def get_latest_market_rows(isins, valuation_date):
+    """Return only the latest persisted market row per ISIN."""
+    if not isins:
+        return []
+
+    market_date = frappe.qb.DocType("Bond Market Date")
+    market_price = frappe.qb.DocType("Bond Market Prices")
+    price_rank = (
+        RowNumber()
+        .over(market_price.isin)
+        .orderby(market_date.date, order=Order.desc)
+        .orderby(market_date.name, order=Order.desc)
+        .as_("price_rank")
+    )
+    ranked_query = frappe.qb.get_query(
+        "Bond Market Date",
+        fields=[
+            "bond_market_prices.isin as isin",
+            "bond_market_prices.market_price as market_price",
+            "bond_market_prices.future_xirr as future_xirr",
+            price_rank,
+        ],
+        filters={
+            "date": ["<=", valuation_date],
+            "bond_market_prices.isin": ["in", isins],
+        },
+        ignore_permissions=False,
+    )
+    ranked_market = ranked_query.as_("ranked_market")
+
+    return (
+        frappe.qb.from_(ranked_market)
+        .select(
+            ranked_market["isin"],
+            ranked_market["market_price"],
+            ranked_market["future_xirr"],
+            ranked_market["price_rank"],
+        )
+        .where(ranked_market["price_rank"] == 1)
+    ).run(as_dict=True)
 
 
 def load_portfolio_performance_context(portfolio, valuation_date):
@@ -129,29 +173,12 @@ def load_portfolio_performance_context(portfolio, valuation_date):
     for row in principal_rows:
         bonds_by_isin[row.parent]["principal_schedule"].append(row)
 
-    market_rows = frappe.qb.get_query(
-        "Bond Market Date",
-        fields=[
-            "date",
-            "name",
-            "bond_market_prices.isin as isin",
-            "bond_market_prices.market_price as market_price",
-            "bond_market_prices.future_xirr as future_xirr",
-        ],
-        filters={
-            "date": ["<=", valuation_date],
-            "bond_market_prices.isin": ["in", visible_isins],
-        },
-        order_by="date desc, name desc",
-        ignore_permissions=False,
-    ).run(as_dict=True)
-
     market_prices = {}
     xirr_guesses = {}
-    for row in market_rows:
-        market_prices.setdefault(row.isin, row.market_price)
+    for row in get_latest_market_rows(visible_isins, valuation_date):
+        market_prices[row.isin] = row.market_price
         if row.future_xirr is not None:
-            xirr_guesses.setdefault(row.isin, row.future_xirr)
+            xirr_guesses[row.isin] = row.future_xirr
 
     return {
         "isins": visible_isins,

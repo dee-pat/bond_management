@@ -28,7 +28,8 @@
    "in_list_view": 1,
    "label": "ISIN",
    "options": "Bond Master",
-   "reqd": 1
+   "reqd": 1,
+   "search_index": 1
   },
   {
    "description": "Enter the bank quote per original full unit. For an amortising bond with 50% principal remaining, a quote near 50 already reflects amortisation; do not restate it per 100 of remaining principal.",

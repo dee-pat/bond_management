@@ -16,6 +16,7 @@ from bond_management.bond_management.tests.factories import (
     make_portfolio,
     make_transaction,
 )
+from bond_management.bond_management.utils.performance import get_latest_market_rows
 from bond_management.bond_management.utils.xirr import create_future_cash_flows
 
 
@@ -215,16 +216,8 @@ class TestPortfolioPerformance(IntegrationTestCase):
         bonds = [make_bond(), make_bond()]
         for bond in bonds:
             make_transaction(bond, portfolio)
-        frappe.get_doc(
-            {
-                "doctype": "Bond Market Date",
-                "date": "2025-12-30",
-                "bond_market_prices": [
-                    {"isin": bond.name, "market_price": 100, "currency": bond.currency}
-                    for bond in bonds
-                ],
-            }
-        ).insert()
+        for bond in bonds:
+            make_market_date(bond)
 
         with patch(
             "bond_management.bond_management.utils.performance.frappe.qb.get_query",
@@ -234,6 +227,21 @@ class TestPortfolioPerformance(IntegrationTestCase):
 
         self.assertEqual(len(rows), 2)
         self.assertEqual(get_query.call_count, 5)
+
+    def test_market_history_query_returns_one_latest_row_per_bond(self):
+        bond = make_bond()
+        make_market_date(bond, market_price=90, date="2025-11-28")
+        latest = make_market_date(bond, market_price=101, date="2025-11-29")
+
+        rows = get_latest_market_rows([bond.name], "2025-11-30")
+
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0].market_price, 101)
+        self.assertAlmostEqual(
+            rows[0].future_xirr,
+            latest.bond_market_prices[-1].future_xirr,
+            places=9,
+        )
 
     def test_open_position_requires_a_market_price(self):
         bond = make_bond()

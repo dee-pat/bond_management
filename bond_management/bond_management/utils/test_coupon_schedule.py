@@ -1,4 +1,5 @@
 from datetime import date
+from decimal import Decimal
 from unittest.mock import patch
 
 import frappe
@@ -20,7 +21,10 @@ class TestCouponSchedule(IntegrationTestCase):
 
     def test_year_fraction_supports_configured_conventions(self):
         self.assertEqual(year_fraction("30E/360", "2025-01-01", "2025-07-01", 2), 0.5)
-        self.assertEqual(year_fraction("Actual/364(Kenya)", "2025-01-01", "2025-01-02", 2), 1 / 364)
+        self.assertEqual(
+            year_fraction("Actual/364(Kenya)", "2025-01-01", "2025-01-02", 2),
+            Decimal(1) / Decimal(364),
+        )
         self.assertEqual(year_fraction("30E/360", "2025-01-01", "2025-01-01", 2), 0)
 
     def test_actual_actual_icma_handles_string_frequency_and_eom_periods(self):

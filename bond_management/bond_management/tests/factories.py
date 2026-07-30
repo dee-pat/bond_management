@@ -61,6 +61,21 @@ def make_transaction(bond, portfolio, *, insert=True, **overrides):
 
 
 def make_market_date(bond, market_price=100, date="2025-12-30"):
+    existing = frappe.qb.get_query(
+        "Bond Market Date",
+        fields=["name"],
+        filters={"date": date},
+        limit=1,
+        ignore_permissions=False,
+    ).run(pluck=True)
+    if existing:
+        market_date = frappe.get_doc("Bond Market Date", existing[0])
+        market_date.append(
+            "bond_market_prices",
+            {"isin": bond.name, "market_price": market_price, "currency": bond.currency},
+        )
+        return market_date.save()
+
     return frappe.get_doc(
         {
             "doctype": "Bond Market Date",

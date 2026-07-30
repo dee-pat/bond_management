@@ -7,3 +7,4 @@
 bond_management.patches.backfill_weighted_avg_repayment
 bond_management.patches.add_bond_investor_read_only_access
 bond_management.patches.add_bond_investor_report_permission
+bond_management.patches.add_bond_query_indexes

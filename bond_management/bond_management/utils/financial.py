@@ -1,4 +1,6 @@
-from decimal import ROUND_HALF_EVEN, Decimal
+from decimal import ROUND_HALF_EVEN, Decimal, InvalidOperation
+
+import frappe
 
 
 MONEY_PRECISION = Decimal("0.0001")
@@ -6,11 +8,17 @@ PERCENT_PRECISION = Decimal("0.000000001")
 DecimalInput = Decimal | int | float | str | None
 
 
-def to_decimal(value: DecimalInput) -> Decimal:
-    """Convert framework values without introducing binary floating-point noise."""
-    if isinstance(value, Decimal):
-        return value
-    return Decimal(str(value or 0))
+def to_decimal(value: DecimalInput, field_label: str = "Value") -> Decimal:
+    """Convert framework values and reject malformed or non-finite numbers."""
+    try:
+        result = value if isinstance(value, Decimal) else Decimal(str(value or 0))
+    except (InvalidOperation, TypeError, ValueError):
+        frappe.throw(f"{field_label} must be a valid number")
+
+    if not result.is_finite():
+        frappe.throw(f"{field_label} must be a finite number")
+
+    return result
 
 
 def quantize_money(value) -> Decimal:
