@@ -26,15 +26,29 @@ def make_bond(**overrides):
     return frappe.get_doc(values).insert()
 
 
-def make_portfolio():
+def make_portfolio(**overrides):
     portfolio_name = unique_name("TEST-PORTFOLIO")
-    return frappe.get_doc(
-        {
-            "doctype": "Bond Portfolio",
-            "portfolio_name": portfolio_name,
-            "account_no": "TEST-ACCOUNT",
-        }
-    ).insert()
+    values = {
+        "doctype": "Bond Portfolio",
+        "portfolio_name": portfolio_name,
+        "account_no": unique_name("TEST-ACCOUNT"),
+        "statement_pdf_password": "test-password",
+    }
+    values.update(overrides)
+    return frappe.get_doc(values).insert()
+
+
+def make_statement(portfolio, statement_date="2025-12-31", *, insert=True, **overrides):
+    values = {
+        "doctype": "Bond Statement",
+        "portfolio_name": portfolio.name,
+        "statement_date": statement_date,
+        "attachment": "/private/files/test-statement.pdf",
+    }
+    values.update(overrides)
+    statement = frappe.get_doc(values)
+    statement.flags.ignore_statement_pdf = True
+    return statement.insert() if insert else statement
 
 
 def make_transaction(bond, portfolio, *, insert=True, **overrides):

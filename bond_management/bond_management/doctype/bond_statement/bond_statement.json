@@ -10,6 +10,8 @@
   "section_break_dggq",
   "portfolio_name",
   "statement_date",
+  "market_price_posting",
+  "quantity_reconciliation_report",
   "column_break_omxg",
   "attachment",
   "section_break_4jh1",
@@ -26,13 +28,28 @@
    "in_list_view": 1,
    "label": "Portfolio Name",
    "options": "Bond Portfolio",
+   "read_only": 1,
    "reqd": 1
   },
   {
    "fieldname": "statement_date",
    "fieldtype": "Date",
    "label": "Statement Date",
+   "read_only": 1,
    "reqd": 1
+  },
+  {
+   "fieldname": "market_price_posting",
+   "fieldtype": "Link",
+   "label": "Market Price Posting",
+   "options": "Bond Market Date",
+   "read_only": 1
+  },
+  {
+   "fieldname": "quantity_reconciliation_report",
+   "fieldtype": "Attach",
+   "label": "Quantity Reconciliation Report",
+   "read_only": 1
   },
   {
    "fieldname": "column_break_omxg",
@@ -41,7 +58,8 @@
   {
    "fieldname": "attachment",
    "fieldtype": "Attach",
-   "label": "Attachment"
+   "label": "Attachment",
+   "reqd": 1
   },
   {
    "fieldname": "section_break_4jh1",

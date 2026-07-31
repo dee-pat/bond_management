@@ -9,7 +9,8 @@
  "field_order": [
   "section_break_dizk",
   "portfolio_name",
-  "account_no"
+  "account_no",
+  "statement_pdf_password"
  ],
  "fields": [
   {
@@ -28,7 +29,14 @@
    "fieldname": "account_no",
    "fieldtype": "Data",
    "label": "Account No",
-   "reqd": 1
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "description": "Stored encrypted and used only on the server to read this portfolio's attached bank statements.",
+   "fieldname": "statement_pdf_password",
+   "fieldtype": "Password",
+   "label": "Statement PDF Password"
   }
  ],
  "grid_page_length": 50,

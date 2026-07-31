@@ -1,0 +1,59 @@
+context("Bond Statement", () => {
+	beforeEach(() => {
+		cy.login();
+		cy.visit("/desk/bond-statement/new");
+		cy.get("body").should("have.attr", "data-ajax-state", "complete");
+		cy.window().should((window) => {
+			expect(window.cur_frm?.doctype).to.equal("Bond Statement");
+			expect(
+				window.frappe.ui.form.handlers["Bond Statement"]?.attachment
+			).to.have.length.greaterThan(0);
+		});
+	});
+
+	it("reads the portfolio and date when a PDF is attached", () => {
+		cy.window().then((window) => {
+			const frm = window.cur_frm;
+			expect(frm.get_field("portfolio_name").df.read_only).to.equal(1);
+			expect(frm.get_field("statement_date").df.read_only).to.equal(1);
+			expect(frm.get_field("market_price_posting").df.read_only).to.equal(1);
+
+			cy.stub(frm, "call")
+				.withArgs("read_statement_pdf")
+				.resolves({
+					message: {
+						portfolio_name: "Nanda",
+						statement_date: "2026-06-30",
+						account_no: "1110700431102",
+					},
+				})
+				.as("readStatementPdf");
+
+			frm.doc.attachment = "/private/files/statement.pdf";
+			frm.refresh_field("attachment");
+			return frm.script_manager.trigger("attachment");
+		});
+
+		cy.get("@readStatementPdf").should("have.been.calledOnce");
+		cy.window().then((window) => {
+			expect(window.cur_frm.doc.portfolio_name).to.equal("Nanda");
+			expect(window.cur_frm.doc.statement_date).to.equal("2026-06-30");
+		});
+	});
+
+	it("clears derived fields when the attachment is removed", () => {
+		cy.window().then((window) => {
+			const frm = window.cur_frm;
+			frm.doc.portfolio_name = "Nanda";
+			frm.doc.statement_date = "2026-06-30";
+			frm.doc.attachment = null;
+
+			return frm.script_manager.trigger("attachment");
+		});
+
+		cy.window().then((window) => {
+			expect(window.cur_frm.doc.portfolio_name ?? null).to.be.null;
+			expect(window.cur_frm.doc.statement_date ?? null).to.be.null;
+		});
+	});
+});

@@ -8,6 +8,7 @@ from bond_management.bond_management.tests.factories import (
     make_bond,
     make_market_date,
     make_portfolio,
+    make_statement,
     make_transaction,
 )
 
@@ -18,13 +19,7 @@ class TestBondStatementDetails(IntegrationTestCase):
         portfolio = make_portfolio()
         make_transaction(bond, portfolio)
         make_market_date(bond)
-        statement = frappe.get_doc(
-            {
-                "doctype": "Bond Statement",
-                "portfolio_name": portfolio.name,
-                "statement_date": "2025-12-31",
-            }
-        ).insert()
+        statement = make_statement(portfolio)
 
         detail = statement.bond_statement_details[0]
         self.assertEqual(detail.parent, statement.name)

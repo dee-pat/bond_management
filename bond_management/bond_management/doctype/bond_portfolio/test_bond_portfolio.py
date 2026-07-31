@@ -11,4 +11,9 @@ class TestBondPortfolio(IntegrationTestCase):
         portfolio = make_portfolio()
 
         self.assertTrue(portfolio.name)
-        self.assertEqual(portfolio.account_no, "TEST-ACCOUNT")
+        self.assertTrue(portfolio.account_no.startswith("TEST-ACCOUNT-"))
+        self.assertEqual(portfolio.get_password("statement_pdf_password"), "test-password")
+
+        meta = portfolio.meta
+        self.assertTrue(meta.get_field("account_no").unique)
+        self.assertEqual(meta.get_field("statement_pdf_password").fieldtype, "Password")
