@@ -15,6 +15,7 @@
   "bond_name",
   "column_break_vi9v",
   "portfolio_name",
+  "attachment_portfolio_override",
   "account_number",
   "section_break_jjet",
   "currency",
@@ -61,6 +62,15 @@
    "label": "Quantity/ Face Value",
    "non_negative": 1,
    "reqd": 1
+  },
+  {
+   "default": "0",
+   "description": "Records an intentional portfolio selection that differs from the account shown in a multi-transaction PDF.",
+   "fieldname": "attachment_portfolio_override",
+   "fieldtype": "Check",
+   "hidden": 1,
+   "label": "PDF Portfolio Override",
+   "read_only": 1
   },
   {
    "allow_in_quick_entry": 1,

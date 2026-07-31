@@ -19,6 +19,19 @@ from bond_management.bond_management.tests.factories import (
     unique_name,
 )
 from bond_management.bond_management.tests.pdf_factory import make_text_pdf
+from bond_management.patches.add_bond_query_indexes import STATEMENT_ATTACHMENT_UNIQUE
+from bond_management.patches.backfill_statement_reconciliation_statuses import (
+    execute as backfill_reconciliation_statuses,
+)
+from bond_management.patches.regenerate_legacy_face_value_reconciliations import (
+    execute as regenerate_legacy_reconciliations,
+)
+from bond_management.patches.remove_duplicate_bond_statements import (
+    get_redundant_statement_names,
+)
+from bond_management.patches.standardize_bond_statement_attachment_names import (
+    execute as standardize_existing_statement_attachments,
+)
 
 
 class TestBondStatement(IntegrationTestCase):
@@ -109,6 +122,119 @@ class TestBondStatement(IntegrationTestCase):
                 statement.insert()
                 self.assertEqual(statement.portfolio_name, portfolio.name)
                 self.assertEqual(statement.statement_date.isoformat(), expected_date)
+                self.assertEqual(
+                    statement.attachment,
+                    f"/private/files/PortfolioStatement-{account_no}-{expected_date.replace('-', '')}.pdf",
+                )
+
+                attachment_files = frappe.qb.get_query(
+                    "File",
+                    fields=[
+                        "file_name",
+                        "attached_to_doctype",
+                        "attached_to_name",
+                        "attached_to_field",
+                    ],
+                    filters={"file_url": statement.attachment},
+                    limit=1,
+                    ignore_permissions=False,
+                ).run(as_dict=True)
+                self.assertEqual(len(attachment_files), 1)
+                self.assertEqual(
+                    attachment_files[0].file_name,
+                    statement.attachment.removeprefix("/private/files/"),
+                )
+                self.assertEqual(attachment_files[0].attached_to_doctype, "Bond Statement")
+                self.assertEqual(attachment_files[0].attached_to_name, statement.name)
+                self.assertEqual(attachment_files[0].attached_to_field, "attachment")
+
+    def test_attachment_accepts_transaction_account_and_keeps_product_account_filename(self):
+        product_account_no = unique_name("PRODUCT-ACCOUNT")
+        transaction_account_no = unique_name("TRANSACTION-ACCOUNT")
+        password = unique_name("PDF-PASSWORD")
+        portfolio = make_portfolio(
+            account_no=product_account_no,
+            transaction_account_no=transaction_account_no,
+            statement_pdf_password=password,
+        )
+        attachment = self._attach_pdf(
+            f"Portfolio Summary as of 30/06/2026\nProduct Account No.: {transaction_account_no}",
+            password,
+        )
+
+        statement = frappe.get_doc(
+            {
+                "doctype": "Bond Statement",
+                "attachment": attachment,
+            }
+        ).insert()
+
+        self.assertEqual(statement.portfolio_name, portfolio.name)
+        self.assertEqual(statement.statement_date.isoformat(), "2026-06-30")
+        self.assertEqual(
+            statement.attachment,
+            f"/private/files/PortfolioStatement-{product_account_no}-20260630.pdf",
+        )
+
+    def test_rejects_duplicate_attachment_in_controller_and_database(self):
+        account_no = unique_name("DUPLICATE-ACCOUNT")
+        password = unique_name("PDF-PASSWORD")
+        portfolio = make_portfolio(
+            account_no=account_no,
+            statement_pdf_password=password,
+        )
+        attachment = self._attach_pdf(
+            f"Portfolio Summary as of 30/06/2026\nProduct Account No.: {account_no}",
+            password,
+        )
+        statement = frappe.get_doc(
+            {
+                "doctype": "Bond Statement",
+                "attachment": attachment,
+            }
+        ).insert()
+
+        duplicate = frappe.get_doc(
+            {
+                "doctype": "Bond Statement",
+                "attachment": statement.attachment,
+            }
+        )
+        with self.assertRaisesRegex(frappe.ValidationError, f"already used.*{statement.name}"):
+            duplicate.insert()
+
+        self.assertTrue(frappe.db.has_index("tabBond Statement", STATEMENT_ATTACHMENT_UNIQUE))
+        database_duplicate = frappe.get_doc(
+            {
+                "doctype": "Bond Statement",
+                "portfolio_name": portfolio.name,
+                "statement_date": statement.statement_date,
+                "attachment": statement.attachment,
+            }
+        )
+        with self.assertRaises(frappe.UniqueValidationError):
+            database_duplicate.db_insert()
+
+    def test_duplicate_cleanup_keeps_the_earliest_statement(self):
+        rows = [
+            frappe._dict(
+                name="BS-NEWER",
+                attachment="/private/files/duplicate.pdf",
+                creation="2026-07-31 18:20:00",
+            ),
+            frappe._dict(
+                name="BS-ONLY",
+                attachment="/private/files/only.pdf",
+                creation="2026-07-31 18:21:00",
+            ),
+            frappe._dict(
+                name="BS-OLDER",
+                attachment="/private/files/duplicate.pdf",
+                creation="2026-07-31 18:10:00",
+            ),
+        ]
+
+        self.assertEqual(get_redundant_statement_names(rows), ["BS-NEWER"])
 
     def test_rejects_unconfigured_passwords_and_unknown_accounts(self):
         configured_password = unique_name("CONFIGURED-PASSWORD")
@@ -163,6 +289,47 @@ class TestBondStatement(IntegrationTestCase):
         self.assertEqual(statement.portfolio_name, portfolio.name)
         self.assertEqual(statement.statement_date.isoformat(), "2022-10-31")
 
+    def test_patch_standardizes_an_existing_statement_attachment(self):
+        account_no = unique_name("PATCH-ACCOUNT")
+        portfolio = make_portfolio(account_no=account_no)
+        attachment = self._attach_pdf(
+            f"Portfolio Summary as of 31/03/2034\nProduct Account No.: {account_no}",
+            "test-password",
+            file_name=f"{unique_name('old-statement-name')}.pdf",
+        )
+        statement = frappe.get_doc(
+            {
+                "doctype": "Bond Statement",
+                "portfolio_name": portfolio.name,
+                "statement_date": "2034-03-31",
+                "attachment": attachment,
+            }
+        )
+        statement.flags.ignore_statement_pdf = True
+        statement.insert()
+        self.assertEqual(statement.attachment, attachment)
+
+        standardize_existing_statement_attachments([statement.name])
+        statement.reload()
+
+        expected_url = f"/private/files/PortfolioStatement-{account_no}-20340331.pdf"
+        self.assertEqual(statement.attachment, expected_url)
+        standardized_files = frappe.qb.get_query(
+            "File",
+            fields=["file_name", "attached_to_name", "attached_to_field"],
+            filters={"file_url": expected_url},
+            limit=1,
+            ignore_permissions=False,
+        ).run(as_dict=True)
+        self.assertEqual(len(standardized_files), 1)
+        self.assertEqual(standardized_files[0].file_name, expected_url.removeprefix("/private/files/"))
+        self.assertEqual(standardized_files[0].attached_to_name, statement.name)
+        self.assertEqual(standardized_files[0].attached_to_field, "attachment")
+
+        standardize_existing_statement_attachments([statement.name])
+        statement.reload()
+        self.assertEqual(statement.attachment, expected_url)
+
     def test_pdf_managed_fields_are_read_only_and_cannot_be_changed_directly(self):
         account_no = unique_name("PDF-ACCOUNT")
         password = unique_name("PDF-PASSWORD")
@@ -185,6 +352,7 @@ class TestBondStatement(IntegrationTestCase):
         self.assertTrue(statement.meta.get_field("statement_date").read_only)
         self.assertTrue(statement.meta.get_field("market_price_posting").read_only)
         self.assertTrue(statement.meta.get_field("quantity_reconciliation_report").read_only)
+        self.assertTrue(statement.meta.get_field("reconciliation_status").read_only)
         self.assertTrue(statement.meta.get_field("attachment").reqd)
 
         statement.statement_date = "2026-05-31"
@@ -303,6 +471,8 @@ class TestBondStatement(IntegrationTestCase):
         self.assertIn("DISCREPANCIES FOUND", report_text)
         self.assertIn(bond.name, report_text)
         self.assertIn("-5", report_text)
+        self.assertIn("MISMATCH", report_text)
+        self.assertEqual(statement.reconciliation_status, "Mismatched")
 
         statement.reload()
         with patch("frappe.msgprint") as update_msgprint:
@@ -313,16 +483,16 @@ class TestBondStatement(IntegrationTestCase):
         self.assertNotEqual(statement.quantity_reconciliation_report, first_report_url)
         self._read_reconciliation_report(statement.quantity_reconciliation_report, "test-password")
 
-    def test_legacy_face_value_matching_calculated_units_does_not_report(self):
+    def test_legacy_face_value_is_rescaled_by_face_value_per_unit(self):
         portfolio = make_portfolio()
-        bond = self._make_long_dated_bond()
-        make_transaction(bond, portfolio, quantity_face_value=15)
+        bond = self._make_long_dated_bond(face_value_per_unit=100)
+        make_transaction(bond, portfolio, quantity_face_value=2000)
         attachment = self._attach_pdf(
             "\n".join(
                 [
                     f"SUMMARY OF ACCOUNT As of 30/06/2038 IS Account: {portfolio.account_no}",
                     bond.name,
-                    "USD 1,500.00 99.000000 7.000000 101.250000",
+                    "USD 200,000.00 99.000000 7.000000 101.250000 198,000.00 202,500.00",
                 ]
             ),
             "test-password",
@@ -343,6 +513,94 @@ class TestBondStatement(IntegrationTestCase):
         )
         self.assertIn("Status:     MATCHED", report_text)
         self.assertIn("No quantity discrepancies found.", report_text)
+        self.assertIn("Matched:    1", report_text)
+        self.assertIn(f"{bond.name}", report_text)
+        self.assertIn("2,000", report_text)
+        self.assertIn("MATCHED", report_text)
+        self.assertEqual(statement.reconciliation_status, "Matched")
+
+        regenerate_legacy_reconciliations([statement.name])
+        statement.reload()
+        versioned_report_url = statement.quantity_reconciliation_report
+        self.assertIn("FaceValue-v2", versioned_report_url)
+        self._read_reconciliation_report(versioned_report_url, "test-password")
+
+        regenerate_legacy_reconciliations([statement.name])
+        statement.reload()
+        self.assertEqual(statement.quantity_reconciliation_report, versioned_report_url)
+
+        backfill_reconciliation_statuses([statement.name])
+        statement.reload()
+        quantity_basis_report_url = statement.quantity_reconciliation_report
+        self.assertIn("QuantityBasis-v3", quantity_basis_report_url)
+        self.assertEqual(statement.reconciliation_status, "Matched")
+
+        backfill_reconciliation_statuses([statement.name])
+        statement.reload()
+        self.assertEqual(statement.quantity_reconciliation_report, quantity_basis_report_url)
+
+    def test_legacy_face_value_column_can_contain_units_without_rescaling(self):
+        portfolio = make_portfolio()
+        bond = self._make_long_dated_bond(face_value_per_unit=100)
+        make_transaction(bond, portfolio, quantity_face_value=2000)
+        attachment = self._attach_pdf(
+            "\n".join(
+                [
+                    f"SUMMARY OF ACCOUNT As of 31/03/2038 IS Account: {portfolio.account_no}",
+                    bond.name,
+                    "USD 2,000.00 99.250000 0.00000000 110.000000 198,500.00 220,000.00",
+                ]
+            ),
+            "test-password",
+        )
+
+        statement = frappe.get_doc(
+            {
+                "doctype": "Bond Statement",
+                "attachment": attachment,
+            }
+        ).insert()
+
+        self.assertEqual(statement.reconciliation_status, "Matched")
+        report_text = self._read_reconciliation_report(
+            statement.quantity_reconciliation_report,
+            "test-password",
+        )
+        self.assertRegex(report_text, rf"{bond.name}.*2,000.*2,000.*0.*MATCHED")
+
+    def test_reconciliation_report_lists_matched_and_mismatched_isins(self):
+        portfolio = make_portfolio()
+        matched_bond = self._make_long_dated_bond()
+        mismatched_bond = self._make_long_dated_bond()
+        make_transaction(matched_bond, portfolio, quantity_face_value=10)
+        make_transaction(mismatched_bond, portfolio, quantity_face_value=15)
+        attachment = self._attach_pdf(
+            self._current_statement_text(
+                portfolio.account_no,
+                statement_date="30/06/2035",
+                prices={
+                    matched_bond.name: "101.250000",
+                    mismatched_bond.name: "102.500000",
+                },
+            ),
+            "test-password",
+        )
+
+        statement = frappe.get_doc(
+            {
+                "doctype": "Bond Statement",
+                "attachment": attachment,
+            }
+        ).insert()
+
+        report_text = self._read_reconciliation_report(
+            statement.quantity_reconciliation_report,
+            "test-password",
+        )
+        self.assertIn("Matched:    1", report_text)
+        self.assertIn("Mismatched: 1", report_text)
+        self.assertRegex(report_text, rf"{matched_bond.name}.*0\s+MATCHED")
+        self.assertRegex(report_text, rf"{mismatched_bond.name}.*-5\s+MISMATCH")
 
     def test_reports_when_pdf_quantity_is_greater_than_calculated_quantity(self):
         portfolio = make_portfolio()

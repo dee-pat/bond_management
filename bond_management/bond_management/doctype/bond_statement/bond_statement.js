@@ -2,7 +2,11 @@
 // For license information, please see license.txt
 
 frappe.ui.form.on("Bond Statement", {
+	refresh(frm) {
+		make_statement_attachment_filename_readable(frm);
+	},
 	attachment(frm) {
+		make_statement_attachment_filename_readable(frm);
 		if (!frm.doc.attachment) {
 			return Promise.all([
 				frm.set_value("portfolio_name", null),
@@ -26,3 +30,20 @@ frappe.ui.form.on("Bond Statement", {
 			});
 	},
 });
+
+function make_statement_attachment_filename_readable(frm) {
+	const attachment = frm.get_field("attachment");
+	attachment?.$value?.css({
+		"min-height": "56px",
+		padding: "8px 10px",
+		gap: "8px",
+		"align-items": "flex-start",
+	});
+	attachment?.$value?.find(".ellipsis, .attached-file-link").css({
+		"white-space": "normal",
+		overflow: "visible",
+		"text-overflow": "clip",
+		"overflow-wrap": "anywhere",
+		"line-height": "1.35",
+	});
+}

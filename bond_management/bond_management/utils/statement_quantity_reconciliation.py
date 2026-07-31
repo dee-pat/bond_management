@@ -8,17 +8,21 @@ from bond_management.bond_management.utils.statement_pdf import ParsedMarketPric
 
 
 @dataclass(frozen=True)
-class StatementQuantityMismatch:
+class StatementQuantityComparison:
     isin: str
     pdf_quantity: Decimal | None
     calculated_quantity: Decimal
     difference: Decimal
 
+    @property
+    def matches(self) -> bool:
+        return self.pdf_quantity is not None and self.difference == Decimal("0")
+
 
 def reconcile_statement_quantities(
     parsed_rows: tuple[ParsedMarketPrice, ...],
     statement_rows,
-) -> tuple[StatementQuantityMismatch, ...]:
+) -> tuple[StatementQuantityComparison, ...]:
     """Compare normalized PDF units with calculated statement ledger quantities."""
     parsed_isins = [row.isin for row in parsed_rows]
     bonds = (
@@ -44,6 +48,10 @@ def reconcile_statement_quantities(
         if face_value_per_unit <= 0:
             frappe.throw(f"Face Value Per Unit for ISIN {frappe.bold(row.isin)} must be greater than zero")
 
+        # Current statements report transaction units directly as "Quantity".
+        # Older statements report monetary nominal under "Face Value", where
+        # face value = quantity * Bond Master's face value per unit (100 for the
+        # affected bank statements).
         pdf_quantities[row.isin] = (
             row.reported_quantity / face_value_per_unit
             if row.quantity_is_face_value
@@ -53,25 +61,24 @@ def reconcile_statement_quantities(
     calculated_quantities = {
         row.isin: to_decimal(row.quantity, "Calculated Quantity") for row in statement_rows
     }
-    mismatches = []
+    comparisons = []
     for isin in sorted(set(pdf_quantities) | set(calculated_quantities)):
         pdf_quantity = pdf_quantities.get(isin)
         calculated_quantity = calculated_quantities.get(isin, Decimal("0"))
-        if pdf_quantity is None or pdf_quantity != calculated_quantity:
-            mismatches.append(
-                StatementQuantityMismatch(
-                    isin=isin,
-                    pdf_quantity=pdf_quantity,
-                    calculated_quantity=calculated_quantity,
-                    difference=(
-                        pdf_quantity - calculated_quantity
-                        if pdf_quantity is not None
-                        else -calculated_quantity
-                    ),
-                )
+        comparisons.append(
+            StatementQuantityComparison(
+                isin=isin,
+                pdf_quantity=pdf_quantity,
+                calculated_quantity=calculated_quantity,
+                difference=(
+                    pdf_quantity - calculated_quantity
+                    if pdf_quantity is not None
+                    else -calculated_quantity
+                ),
             )
+        )
 
-    return tuple(mismatches)
+    return tuple(comparisons)
 
 
 def format_quantity(value: Decimal | None) -> str:

@@ -28,10 +28,12 @@ def make_bond(**overrides):
 
 def make_portfolio(**overrides):
     portfolio_name = unique_name("TEST-PORTFOLIO")
+    account_no = overrides.pop("account_no", unique_name("TEST-ACCOUNT"))
     values = {
         "doctype": "Bond Portfolio",
         "portfolio_name": portfolio_name,
-        "account_no": unique_name("TEST-ACCOUNT"),
+        "account_no": account_no,
+        "transaction_account_no": account_no,
         "statement_pdf_password": "test-password",
     }
     values.update(overrides)
@@ -43,7 +45,7 @@ def make_statement(portfolio, statement_date="2025-12-31", *, insert=True, **ove
         "doctype": "Bond Statement",
         "portfolio_name": portfolio.name,
         "statement_date": statement_date,
-        "attachment": "/private/files/test-statement.pdf",
+        "attachment": f"/private/files/{unique_name('test-statement')}.pdf",
     }
     values.update(overrides)
     statement = frappe.get_doc(values)

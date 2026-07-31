@@ -13,6 +13,9 @@ from bond_management.bond_management.utils.performance import load_portfolio_per
 from bond_management.bond_management.utils.portfolio import (
     get_ledger_position_from_transactions,
 )
+from bond_management.bond_management.utils.statement_attachment import (
+    standardize_statement_attachment,
+)
 from bond_management.bond_management.utils.statement_market_prices import (
     sync_statement_market_prices,
 )
@@ -52,9 +55,8 @@ class BondStatement(Document):
             )
 
         details = get_statement_attachment_details(self.attachment)
-        if (
-            details.portfolio_name != self.portfolio_name
-            or getdate(details.statement_date) != getdate(self.statement_date)
+        if details.portfolio_name != self.portfolio_name or getdate(details.statement_date) != getdate(
+            self.statement_date
         ):
             frappe.throw(
                 "The attached PDF no longer matches this Bond Statement's portfolio and date. "
@@ -72,11 +74,33 @@ class BondStatement(Document):
         if not details:
             return
 
+        self.attachment = standardize_statement_attachment(
+            self,
+            details.portfolio_account_no,
+            details.statement_date,
+        )
+        self._validate_unique_attachment()
         market_date = sync_statement_market_prices(
             details.statement_date,
             details.market_prices,
         )
         self.market_price_posting = market_date.name if market_date else None
+
+    def _validate_unique_attachment(self):
+        existing = frappe.qb.get_query(
+            "Bond Statement",
+            fields=["name"],
+            filters=[
+                ["attachment", "=", self.attachment],
+                ["name", "!=", self.name],
+            ],
+            limit=1,
+            # Attachment uniqueness is a system-wide integrity rule. A statement
+            # hidden by portfolio permissions must still prevent a duplicate.
+            ignore_permissions=True,
+        ).run(pluck=True)
+        if existing:
+            frappe.throw(f"This PDF attachment is already used by Bond Statement {frappe.bold(existing[0])}.")
 
     def on_update(self):
         details = self.flags.statement_attachment_details
@@ -85,10 +109,12 @@ class BondStatement(Document):
 
         report_url = attach_quantity_reconciliation_report(
             self,
-            self.flags.quantity_reconciliation_mismatches or (),
+            self.flags.quantity_reconciliation_comparisons or (),
+            file_name=self.flags.quantity_reconciliation_report_file_name,
         )
         self.db_set("quantity_reconciliation_report", report_url, update_modified=False)
-        self._report_quantity_mismatches()
+        if not self.flags.suppress_quantity_reconciliation_message:
+            self._report_quantity_mismatches()
 
     @frappe.whitelist(methods=["POST"])
     def read_statement_pdf(self):
@@ -128,12 +154,21 @@ class BondStatement(Document):
     def _reconcile_attachment_quantities(self):
         details = self.flags.statement_attachment_details
         if not details:
+            self.flags.quantity_reconciliation_comparisons = ()
             self.flags.quantity_reconciliation_mismatches = ()
+            self.reconciliation_status = None
             return
 
-        self.flags.quantity_reconciliation_mismatches = reconcile_statement_quantities(
+        comparisons = reconcile_statement_quantities(
             details.market_prices,
             self.bond_statement_details,
+        )
+        self.flags.quantity_reconciliation_comparisons = comparisons
+        self.flags.quantity_reconciliation_mismatches = tuple(
+            comparison for comparison in comparisons if not comparison.matches
+        )
+        self.reconciliation_status = (
+            "Mismatched" if self.flags.quantity_reconciliation_mismatches else "Matched"
         )
 
     def _report_quantity_mismatches(self):

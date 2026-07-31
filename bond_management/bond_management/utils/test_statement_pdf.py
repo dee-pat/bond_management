@@ -40,6 +40,15 @@ class TestStatementPdf(UnitTestCase):
         with self.assertRaisesRegex(StatementPdfError, "Product Account No. or IS Account"):
             parse_statement_pdf_text("Portfolio Summary as of 30/06/2026")
 
+        with self.assertRaisesRegex(StatementPdfError, "Bond Transaction confirmation"):
+            parse_statement_pdf_text(
+                """
+                Bonds - Confirmation Notice
+                Account No: 1110700351101
+                Transaction Reference: U1046471
+                """
+            )
+
         with self.assertRaisesRegex(StatementPdfError, "conflicting product account"):
             parse_statement_pdf_text(
                 """
@@ -88,6 +97,7 @@ class TestStatementPdf(UnitTestCase):
             SUMMARY OF ACCOUNT As of 31/10/2022
             XS2354781614
             USD 3,900,000.00 101.384699 6.30000000 98.750000
+            3,954,003.26 3,851,250.00 23/01/2034
             """,
             password="correct-password",
         )
@@ -144,12 +154,22 @@ class TestStatementPdf(UnitTestCase):
         self.assertEqual(legacy_prices[0].reported_quantity, Decimal("3900000.00"))
         self.assertTrue(legacy_prices[0].quantity_is_face_value)
 
+        legacy_unit_prices = parse_statement_market_prices(
+            """
+            REPUBLIC OF KENYA - ISIN XS1028952403
+            XS1028952403 USD 2,000.000000 99.250000 0.00000000 110.000000
+            198,500.00 220,000.00 24/06/2024
+            """
+        )
+        self.assertEqual(legacy_unit_prices[0].reported_quantity, Decimal("2000.000000"))
+        self.assertFalse(legacy_unit_prices[0].quantity_is_face_value)
+
     def test_rejects_conflicting_market_prices_for_an_isin(self):
         with self.assertRaisesRegex(StatementPdfError, "conflicting market prices"):
             parse_statement_market_prices(
                 """
                 XS1843435766 1,000 100 99 99,000 30/06/2026 101.25
-                XS1843435766 USD 1,000 99 8 102.25
+                XS1843435766 USD 1,000 99 8 102.25 99,000 1,022.50
                 """
             )
 

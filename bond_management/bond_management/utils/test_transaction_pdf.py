@@ -1,0 +1,158 @@
+from decimal import Decimal
+
+from frappe.tests import UnitTestCase
+
+from bond_management.bond_management.tests.pdf_factory import make_text_pdf
+from bond_management.bond_management.utils.transaction_pdf import (
+    TransactionPdfError,
+    TransactionPdfPasswordError,
+    extract_transaction_pdf,
+    parse_transaction_pdf_text,
+)
+
+
+class TestTransactionPdf(UnitTestCase):
+    def test_parses_current_multi_transaction_confirmation(self):
+        parsed = parse_transaction_pdf_text(
+            _current_transaction_text("U1999155", quantity="20,000.000000")
+            + "\n"
+            + _current_transaction_text(
+                "R0775727",
+                transaction_label="Redemption",
+                quantity="10,000.000000",
+                commission="N/A",
+            )
+        )
+
+        self.assertEqual(parsed.account_no, "1110700431101")
+        self.assertEqual(len(parsed.transactions), 2)
+        purchase, sale = parsed.transactions
+        self.assertEqual(purchase.transaction_type, "Purchase")
+        self.assertEqual(purchase.quantity_face_value, Decimal("20000.000000"))
+        self.assertEqual(purchase.trade_date.isoformat(), "2026-06-02")
+        self.assertEqual(purchase.commission_percent, Decimal("0.45"))
+        self.assertEqual(sale.transaction_type, "Sale")
+        self.assertEqual(sale.commission_percent, Decimal("0"))
+
+    def test_parses_multiple_rows_under_one_subscription_heading(self):
+        parsed = parse_transaction_pdf_text(
+            _current_transaction_text("U0792275", quantity="39,000.000000")
+            + "\n"
+            + _current_transaction_row_text("U0792348", quantity="2,500.000000")
+        )
+
+        self.assertEqual(
+            [row.transaction_reference for row in parsed.transactions],
+            ["U0792275", "U0792348"],
+        )
+        self.assertEqual(parsed.transactions[1].quantity_face_value, Decimal("2500.000000"))
+
+    def test_parses_legacy_confirmation_and_uses_settlement_as_trade_date(self):
+        parsed = parse_transaction_pdf_text(
+            """
+            Account No: 1110700351101
+            TRANSACTION DETAILS :
+            Subscription
+            Bonds Name : REPUBLIC OF KENYA - XS1781710543 / XS1781710543
+            Currency : USD Quantity / Face Value : 3,000.000000
+            Price : 96.000000 Principal : 288,000.00
+            Settlement Date : 02/06/2020 Settlement Amount in Currency : 293,679.17
+            Accrued Interest : 5,679.17 Commission : 2,025.00
+            Transaction Reference : U0667558
+            """
+        )
+
+        row = parsed.transactions[0]
+        self.assertEqual(row.isin, "XS1781710543")
+        self.assertEqual(row.trade_date, row.settlement_date)
+        self.assertIsNone(row.commission_percent)
+        self.assertEqual(row.commission_amount, Decimal("2025.00"))
+
+    def test_decrypts_with_configured_password(self):
+        content = make_text_pdf(_current_transaction_text("U1999155"), "portfolio-password")
+
+        parsed = extract_transaction_pdf(content, ["wrong", "portfolio-password"])
+
+        self.assertEqual(parsed.transactions[0].transaction_reference, "U1999155")
+        self.assertNotIn("portfolio-password", repr(parsed))
+        with self.assertRaises(TransactionPdfPasswordError):
+            extract_transaction_pdf(content, ["wrong"])
+
+    def test_blank_commission_fields_mean_zero(self):
+        parsed = parse_transaction_pdf_text(
+            """
+            Account No : 1110700351101
+            Redemption
+            Bonds Name : REPUBLIC OF KENYA - ISIN XS1028952403
+            ISIN : XS1028952403
+            Quantity / Face Value : 2,000.000000
+            Price : 110.025000
+            Trade Date : 30/07/2021
+            Settlement Date : 30/07/2021
+            Commission % :
+            Accrued Interest : 1,375.00
+            Commission Amount :
+            Transaction Reference : R0362130
+            """
+        )
+
+        self.assertEqual(parsed.transactions[0].commission_percent, Decimal("0"))
+        self.assertIsNone(parsed.transactions[0].commission_amount)
+
+    def test_valid_password_does_not_mask_a_format_error(self):
+        content = make_text_pdf(
+            "Account No: 1110700351101\nNo transaction rows",
+            "portfolio-password",
+        )
+
+        with self.assertRaisesRegex(TransactionPdfError, "reference starting with R or U"):
+            extract_transaction_pdf(content, ["portfolio-password"])
+
+    def test_rejects_missing_accounts_transactions_and_conflicting_rows(self):
+        with self.assertRaisesRegex(TransactionPdfError, "Account No"):
+            parse_transaction_pdf_text("Subscription Transaction Reference: U123")
+        with self.assertRaisesRegex(TransactionPdfError, "reference starting with R or U"):
+            parse_transaction_pdf_text("Account No: 1110700431101")
+
+        conflicting = (
+            _current_transaction_text("U1999155", price="100.350000")
+            + "\n"
+            + (_current_transaction_text("U1999155", price="101.350000"))
+        )
+        with self.assertRaisesRegex(TransactionPdfError, "conflicting values"):
+            parse_transaction_pdf_text(conflicting)
+
+
+def _current_transaction_text(
+    reference,
+    *,
+    transaction_label="Subscription",
+    quantity="20,000.000000",
+    price="100.350000",
+    commission="0.45",
+):
+    return f"""
+    Account No : 1110700431101
+    TRANSACTION DETAILS:
+    {transaction_label}
+    {_current_transaction_row_text(reference, quantity=quantity, price=price, commission=commission)}
+    """
+
+
+def _current_transaction_row_text(
+    reference,
+    *,
+    quantity="20,000.000000",
+    price="100.350000",
+    commission="0.45",
+):
+    return f"""
+    Bonds Name : REPUBLIC OF KENYA - XS3196101201
+    ISIN : XS3196101201
+    Currency : USD Quantity : {quantity}
+    Price : {price} Face Value : 2,000,000.00
+    Trade Date : 02/06/2026 Settlement Amount in Currency : 2,031,062.50
+    Settlement Date : 03/06/2026 Commission % : {commission}%
+    Accrued Interest : 24,062.50 Commission Amount : 9,000.00
+    Transaction Reference : {reference}
+    """

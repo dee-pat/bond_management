@@ -34,7 +34,8 @@ LEGACY_MARKET_PRICE_PATTERN = re.compile(
     rf"\b(?P<isin>{ISIN_PATTERN})\s+[A-Z]{{3}}\s+"
     rf"(?P<reported_quantity>{NUMBER_PATTERN})\s+"
     rf"{NUMBER_PATTERN}\s+{NUMBER_PATTERN}\s+"
-    rf"(?P<market_price>{NUMBER_PATTERN})\b"
+    rf"(?P<market_price>{NUMBER_PATTERN})\s+"
+    rf"{NUMBER_PATTERN}\s+(?P<market_value>{NUMBER_PATTERN})\b"
 )
 ACCOUNT_FILENAME_PATTERN = re.compile(
     r"\bPortfolioStatement[-_](?P<account_no>[A-Za-z0-9-]+)[-_]\d{8}\.pdf$",
@@ -70,6 +71,7 @@ class ParsedStatementPdf:
 class PortfolioPdfCredentials:
     portfolio_name: str
     account_no: str
+    transaction_account_no: str | None = None
     password: str | None = field(default=None, repr=False)
 
 
@@ -77,6 +79,7 @@ class PortfolioPdfCredentials:
 class StatementAttachmentDetails:
     portfolio_name: str
     account_no: str
+    portfolio_account_no: str
     statement_date: date
     market_prices: tuple[ParsedMarketPrice, ...] = ()
 
@@ -88,6 +91,15 @@ def parse_statement_pdf_text(
     """Extract the account and statement date from supported bank statement layouts."""
     account_numbers = _unique_matches(text, ACCOUNT_PATTERNS, normalize_account_number)
     if not account_numbers:
+        if re.search(
+            r"\bBonds\s*-\s*Confirmation\s+Notice\b|\bTransaction\s+Reference\b",
+            text or "",
+            re.IGNORECASE,
+        ):
+            raise StatementPdfError(
+                "This PDF is a Bond Transaction confirmation, not a Bond Statement. "
+                "Attach it on a new Bond Transaction instead."
+            )
         if account_no_hint:
             account_numbers = [normalize_account_number(account_no_hint)]
         else:
@@ -114,10 +126,7 @@ def parse_statement_pdf_text(
 def parse_statement_market_prices(text: str) -> tuple[ParsedMarketPrice, ...]:
     """Extract fixed-income ISIN prices from current and legacy statement tables."""
     rows_by_isin: dict[str, ParsedMarketPrice] = {}
-    for pattern, quantity_is_face_value in (
-        (CURRENT_MARKET_PRICE_PATTERN, False),
-        (LEGACY_MARKET_PRICE_PATTERN, True),
-    ):
+    for pattern in (CURRENT_MARKET_PRICE_PATTERN, LEGACY_MARKET_PRICE_PATTERN):
         for match in pattern.finditer(text or ""):
             isin = match.group("isin").upper()
             try:
@@ -130,8 +139,17 @@ def parse_statement_market_prices(text: str) -> tuple[ParsedMarketPrice, ...]:
             if not market_price.is_finite() or market_price <= 0:
                 raise StatementPdfError(f"The PDF market price for ISIN {isin} must be greater than zero.")
             if not reported_quantity.is_finite() or reported_quantity < 0:
-                raise StatementPdfError(
-                    f"The PDF reported quantity for ISIN {isin} must be zero or greater."
+                raise StatementPdfError(f"The PDF reported quantity for ISIN {isin} must be zero or greater.")
+
+            quantity_is_face_value = False
+            if pattern is LEGACY_MARKET_PRICE_PATTERN:
+                market_value = Decimal(match.group("market_value").replace(",", ""))
+                if not market_value.is_finite() or market_value < 0:
+                    raise StatementPdfError(f"The PDF market value for ISIN {isin} must be zero or greater.")
+                quantity_is_face_value = _legacy_quantity_is_monetary_nominal(
+                    reported_quantity,
+                    market_price,
+                    market_value,
                 )
 
             parsed_row = ParsedMarketPrice(
@@ -151,6 +169,17 @@ def parse_statement_market_prices(text: str) -> tuple[ParsedMarketPrice, ...]:
             rows_by_isin[isin] = parsed_row
 
     return tuple(rows_by_isin.values())
+
+
+def _legacy_quantity_is_monetary_nominal(
+    reported_quantity: Decimal,
+    market_price: Decimal,
+    market_value: Decimal,
+) -> bool:
+    """Distinguish monetary nominal from unit counts in legacy Face Value columns."""
+    nominal_market_value = reported_quantity * market_price / Decimal("100")
+    unit_market_value = reported_quantity * market_price
+    return abs(market_value - nominal_market_value) < abs(market_value - unit_market_value)
 
 
 def extract_statement_pdf(
@@ -211,17 +240,22 @@ def get_statement_attachment_details(attachment: str) -> StatementAttachmentDeta
     matching = [
         credential
         for credential in credentials
-        if normalize_account_number(credential.account_no) == parsed.account_no
+        if parsed.account_no
+        in {
+            normalize_account_number(credential.account_no),
+            normalize_account_number(credential.transaction_account_no),
+        }
     ]
     if not matching:
         frappe.throw(
             f"No accessible Bond Portfolio has account number {parsed.account_no}. "
-            "Add the account to Bond Portfolio, then attach the statement again."
+            "Add it as Account No or Transaction Account No on Bond Portfolio, "
+            "then attach the statement again."
         )
     if len(matching) > 1:
         frappe.throw(
             f"More than one Bond Portfolio uses account number {parsed.account_no}. "
-            "Account numbers must be unique."
+            "Account No and Transaction Account No values must identify only one portfolio."
         )
 
     portfolio = matching[0]
@@ -236,6 +270,7 @@ def get_statement_attachment_details(attachment: str) -> StatementAttachmentDeta
     return StatementAttachmentDetails(
         portfolio_name=portfolio.portfolio_name,
         account_no=parsed.account_no,
+        portfolio_account_no=portfolio.account_no,
         statement_date=parsed.statement_date,
         market_prices=parsed.market_prices,
     )
@@ -308,7 +343,7 @@ def _get_filename_account_hint(filename: str) -> str | None:
 def _get_portfolio_credentials() -> list[PortfolioPdfCredentials]:
     portfolios = frappe.qb.get_query(
         "Bond Portfolio",
-        fields=["name", "account_no"],
+        fields=["name", "account_no", "transaction_account_no"],
         order_by="name asc",
         ignore_permissions=False,
     ).run(as_dict=True)
@@ -320,6 +355,7 @@ def _get_portfolio_credentials() -> list[PortfolioPdfCredentials]:
             PortfolioPdfCredentials(
                 portfolio_name=portfolio.name,
                 account_no=portfolio.account_no,
+                transaction_account_no=portfolio.transaction_account_no,
                 password=portfolio_doc.get_password(
                     "statement_pdf_password",
                     raise_exception=False,

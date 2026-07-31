@@ -10,6 +10,7 @@
   "section_break_dizk",
   "portfolio_name",
   "account_no",
+  "transaction_account_no",
   "statement_pdf_password"
  ],
  "fields": [
@@ -33,7 +34,14 @@
    "unique": 1
   },
   {
-   "description": "Stored encrypted and used only on the server to read this portfolio's attached bank statements.",
+   "description": "Account number shown on transaction confirmations. Leave blank when it is the same as Account No.",
+   "fieldname": "transaction_account_no",
+   "fieldtype": "Data",
+   "label": "Transaction Account No",
+   "unique": 1
+  },
+  {
+   "description": "Stored encrypted and used only on the server to read this portfolio's bank statements and transaction confirmations.",
    "fieldname": "statement_pdf_password",
    "fieldtype": "Password",
    "label": "Statement PDF Password"

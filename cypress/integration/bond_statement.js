@@ -12,6 +12,12 @@ context("Bond Statement", () => {
 	});
 
 	it("reads the portfolio and date when a PDF is attached", () => {
+		cy.get('.frappe-control[data-fieldname="attachment"] .attached-file')
+			.should("have.css", "min-height", "56px")
+			.find(".attached-file-link")
+			.should("have.css", "white-space", "normal")
+			.and("have.css", "overflow-wrap", "anywhere");
+
 		cy.window().then((window) => {
 			const frm = window.cur_frm;
 			expect(frm.get_field("portfolio_name").df.read_only).to.equal(1);

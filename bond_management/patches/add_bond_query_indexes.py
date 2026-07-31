@@ -4,6 +4,7 @@ import frappe
 LEDGER_INDEX = "bond_transaction_portfolio_isin_settlement"
 REPORT_INDEX = "bond_transaction_portfolio_settlement_isin"
 MARKET_DATE_UNIQUE = "unique_bond_market_date"
+STATEMENT_ATTACHMENT_UNIQUE = "unique_bond_statement_attachment"
 
 
 def execute():
@@ -26,6 +27,24 @@ def ensure_bond_query_indexes():
             f"{dates}. Merge or remove the duplicate snapshots, then run migrate again."
         )
 
+    duplicate_attachments = frappe.qb.get_query(
+        "Bond Statement",
+        fields=["attachment", {"COUNT": "name", "as": "statement_count"}],
+        group_by="attachment",
+        ignore_permissions=True,
+    ).run(as_dict=True)
+    duplicate_attachments = [
+        row.attachment
+        for row in duplicate_attachments
+        if row.attachment and row.statement_count > 1
+    ]
+    if duplicate_attachments:
+        attachments = ", ".join(duplicate_attachments[:10])
+        frappe.throw(
+            "Cannot enforce one Bond Statement per attachment because duplicates exist: "
+            f"{attachments}. Run the duplicate cleanup patch, then migrate again."
+        )
+
     frappe.db.add_index(
         "Bond Transaction",
         ["portfolio_name", "isin", "settlement_date"],
@@ -40,4 +59,9 @@ def ensure_bond_query_indexes():
         "Bond Market Date",
         ["date"],
         constraint_name=MARKET_DATE_UNIQUE,
+    )
+    frappe.db.add_unique(
+        "Bond Statement",
+        ["attachment"],
+        constraint_name=STATEMENT_ATTACHMENT_UNIQUE,
     )

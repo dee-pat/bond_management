@@ -6,15 +6,31 @@ from pypdf import PdfWriter
 from pypdf.generic import DecodedStreamObject, DictionaryObject, NameObject
 
 from bond_management.bond_management.utils.statement_quantity_reconciliation import (
-    StatementQuantityMismatch,
+    StatementQuantityComparison,
     format_quantity,
 )
 
 REPORT_FILENAME_PREFIX = "Bond-Quantity-Reconciliation-"
 
 
-def attach_quantity_reconciliation_report(statement, mismatches) -> str:
+def attach_quantity_reconciliation_report(statement, comparisons, *, file_name=None) -> str:
     """Create a private reconciliation PDF attached to a persisted Bond Statement."""
+    if file_name:
+        existing = frappe.qb.get_query(
+            "File",
+            fields=["file_url"],
+            filters={
+                "file_name": file_name,
+                "attached_to_doctype": "Bond Statement",
+                "attached_to_name": statement.name,
+                "attached_to_field": "quantity_reconciliation_report",
+            },
+            limit=1,
+            ignore_permissions=True,
+        ).run(pluck=True)
+        if existing:
+            return existing[0]
+
     generated_at = now_datetime()
     portfolio = frappe.get_doc("Bond Portfolio", statement.portfolio_name)
     portfolio.check_permission("read")
@@ -29,13 +45,14 @@ def attach_quantity_reconciliation_report(statement, mismatches) -> str:
         portfolio_name=statement.portfolio_name,
         statement_date=str(statement.statement_date),
         generated_at=generated_at.strftime("%Y-%m-%d %H:%M:%S"),
-        mismatches=tuple(mismatches),
+        comparisons=tuple(comparisons),
         password=password,
     )
     file_doc = frappe.get_doc(
         {
             "doctype": "File",
-            "file_name": (
+            "file_name": file_name
+            or (
                 f"{REPORT_FILENAME_PREFIX}{statement.name}-"
                 f"{generated_at.strftime('%Y%m%d-%H%M%S')}-{frappe.generate_hash(length=6)}.pdf"
             ),
@@ -55,14 +72,16 @@ def build_quantity_reconciliation_pdf(
     portfolio_name: str,
     statement_date: str,
     generated_at: str,
-    mismatches: tuple[StatementQuantityMismatch, ...],
+    comparisons: tuple[StatementQuantityComparison, ...],
     password: str,
 ) -> bytes:
     """Build a compact text PDF that remains readable when the table spans pages."""
     writer = PdfWriter()
     regular_font = writer._add_object(_font("/Courier"))
     bold_font = writer._add_object(_font("/Courier-Bold"))
-    status = "DISCREPANCIES FOUND" if mismatches else "MATCHED"
+    mismatch_count = sum(not comparison.matches for comparison in comparisons)
+    matched_count = len(comparisons) - mismatch_count
+    status = "DISCREPANCIES FOUND" if mismatch_count else "MATCHED"
     first_page_lines = [
         ("Bond Quantity Reconciliation", "/FB", 15),
         ("", "/FR", 10),
@@ -71,13 +90,17 @@ def build_quantity_reconciliation_pdf(
         (f"Date:       {statement_date}", "/FR", 10),
         (f"Generated:  {generated_at}", "/FR", 10),
         (f"Status:     {status}", "/FB", 10),
+        (f"Matched:    {matched_count}", "/FR", 10),
+        (f"Mismatched: {mismatch_count}", "/FR", 10),
         ("", "/FR", 10),
     ]
-    if mismatches:
+    if comparisons:
         table_lines = [_table_header()]
-        table_lines.extend(_table_row(mismatch) for mismatch in mismatches)
+        table_lines.extend(_table_row(comparison) for comparison in comparisons)
+        if not mismatch_count:
+            table_lines.insert(0, "No quantity discrepancies found.")
     else:
-        table_lines = ["No quantity discrepancies found."]
+        table_lines = ["No comparable ISIN quantities found."]
     table_lines.append("")
     table_lines.append("Note: ISINs missing from Bond Master are excluded.")
 
@@ -89,15 +112,16 @@ def build_quantity_reconciliation_pdf(
         remaining_lines = remaining_lines[47:]
 
     for page_index, chunk in enumerate(page_chunks):
-        lines = list(first_page_lines) if page_index == 0 else [
-            ("Bond Quantity Reconciliation (continued)", "/FB", 13),
-            ("", "/FR", 10),
-            (_table_header(), "/FB", 9),
-        ]
-        lines.extend(
-            line if isinstance(line, tuple) else (line, "/FR", 9)
-            for line in chunk
+        lines = (
+            list(first_page_lines)
+            if page_index == 0
+            else [
+                ("Bond Quantity Reconciliation (continued)", "/FB", 13),
+                ("", "/FR", 10),
+                (_table_header(), "/FB", 9),
+            ]
         )
+        lines.extend(line if isinstance(line, tuple) else (line, "/FR", 9) for line in chunk)
         _add_text_page(writer, lines, regular_font, bold_font)
 
     writer.add_metadata({"/Title": f"Bond Quantity Reconciliation - {statement_name}"})
@@ -144,15 +168,16 @@ def _add_text_page(writer, lines, regular_font, bold_font):
 
 
 def _table_header() -> str:
-    return f"{'ISIN':<14}{'PDF Quantity':>18}{'Calculated':>18}{'Difference':>18}"
+    return f"{'ISIN':<14}{'PDF Quantity':>18}{'Calculated':>18}{'Difference':>18}{'Result':>12}"
 
 
-def _table_row(mismatch: StatementQuantityMismatch) -> str:
+def _table_row(comparison: StatementQuantityComparison) -> str:
     return (
-        f"{mismatch.isin:<14}"
-        f"{format_quantity(mismatch.pdf_quantity):>18}"
-        f"{format_quantity(mismatch.calculated_quantity):>18}"
-        f"{format_quantity(mismatch.difference):>18}"
+        f"{comparison.isin:<14}"
+        f"{format_quantity(comparison.pdf_quantity):>18}"
+        f"{format_quantity(comparison.calculated_quantity):>18}"
+        f"{format_quantity(comparison.difference):>18}"
+        f"{'MATCHED' if comparison.matches else 'MISMATCH':>12}"
     )
 
 
