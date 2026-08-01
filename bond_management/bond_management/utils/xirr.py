@@ -22,7 +22,7 @@ DEFAULT_XIRR_GUESS = 0.1
 
 
 def round_cashflow_amount(amount):
-    """Round a cash-flow amount to four decimal places using bankers' rounding."""
+    """Round a cash-flow amount for the JSON/clipboard serialization boundary."""
     return float(quantize_money(amount))
 
 
@@ -47,18 +47,23 @@ def calculate_xirr(cash_flows, guess=DEFAULT_XIRR_GUESS):
         return None
 
     try:
-        return xirr({date: float(amount) for date, amount in cash_flows.items()}, guess=guess)
+        return xirr(_to_pyxirr_cashflows(cash_flows), guess=guess)
     except (ArithmeticError, InvalidPaymentsError, ValueError):
         if guess == DEFAULT_XIRR_GUESS:
             return None
 
     try:
         return xirr(
-            {date: float(amount) for date, amount in cash_flows.items()},
+            _to_pyxirr_cashflows(cash_flows),
             guess=DEFAULT_XIRR_GUESS,
         )
     except (ArithmeticError, InvalidPaymentsError, ValueError):
         return None
+
+
+def _to_pyxirr_cashflows(cash_flows):
+    """Adapt Decimal cash flows to pyxirr's float-only input contract."""
+    return {date: float(amount) for date, amount in cash_flows.items()}
 
 
 def get_last_xirr_guess(isin, date):

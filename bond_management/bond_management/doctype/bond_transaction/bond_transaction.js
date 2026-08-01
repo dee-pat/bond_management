@@ -2,6 +2,7 @@
 // For license information, please see license.txt
 
 const transaction_calculation_state = new WeakMap();
+const transaction_attachment_state = new WeakMap();
 const transaction_calculation_method =
 	"bond_management.bond_management.doctype.bond_transaction.bond_transaction.get_calculated_amounts";
 const pdf_managed_fields = [
@@ -24,6 +25,8 @@ frappe.ui.form.on("Bond Transaction", {
 	},
 	attachment(frm) {
 		make_transaction_attachment_filename_readable(frm);
+		const state = get_attachment_state(frm);
+		const request_id = ++state.request_id;
 		if (!frm.doc.attachment) {
 			set_pdf_fields_read_only(frm, false);
 			return Promise.resolve();
@@ -39,11 +42,14 @@ frappe.ui.form.on("Bond Transaction", {
 		}
 
 		return frm.call("read_transaction_pdf").then(({ message }) => {
+			if (!is_attachment_request_current(state, request_id)) {
+				return message;
+			}
 			const transactions = message?.transactions || [];
 			if (transactions.length === 1) {
-				return apply_pdf_transaction(frm, transactions[0]);
+				return apply_pdf_transaction(frm, transactions[0], state, request_id);
 			}
-			return show_transaction_selection(frm, transactions);
+			return show_transaction_selection(frm, transactions, state, request_id);
 		});
 	},
 	face_value_per_unit: calculate_all,
@@ -54,6 +60,17 @@ frappe.ui.form.on("Bond Transaction", {
 	settlement_date: calculate_all,
 	isin: calculate_all,
 });
+
+function get_attachment_state(frm) {
+	if (!transaction_attachment_state.has(frm)) {
+		transaction_attachment_state.set(frm, { request_id: 0 });
+	}
+	return transaction_attachment_state.get(frm);
+}
+
+function is_attachment_request_current(state, request_id) {
+	return request_id === state.request_id;
+}
 
 function make_transaction_attachment_filename_readable(frm) {
 	const attachment = frm.get_field("attachment");
@@ -82,7 +99,10 @@ function set_pdf_fields_read_only(frm, read_only) {
 	});
 }
 
-async function apply_pdf_transaction(frm, transaction) {
+async function apply_pdf_transaction(frm, transaction, state, request_id) {
+	if (!is_attachment_request_current(state, request_id)) {
+		return transaction;
+	}
 	await frm.set_value({
 		transaction_reference: transaction.transaction_reference,
 		transaction_type: transaction.transaction_type,
@@ -95,14 +115,21 @@ async function apply_pdf_transaction(frm, transaction) {
 		accrued_interest_paid: transaction.accrued_interest_paid,
 		commission: transaction.commission,
 	});
+	if (!is_attachment_request_current(state, request_id)) {
+		return transaction;
+	}
 	set_pdf_fields_read_only(frm, true);
 	frappe.show_alert({
 		message: __("Bond transaction values read from PDF"),
 		indicator: "green",
 	});
+	return transaction;
 }
 
-function show_transaction_selection(frm, transactions) {
+function show_transaction_selection(frm, transactions, state, request_id) {
+	if (!is_attachment_request_current(state, request_id)) {
+		return Promise.resolve();
+	}
 	const dialog = new frappe.ui.Dialog({
 		title: __("Select Bond Transactions"),
 		fields: [
@@ -179,6 +206,10 @@ function show_transaction_selection(frm, transactions) {
 		],
 		primary_action_label: __("Post Selected Transactions"),
 		primary_action: async (values) => {
+			if (!is_attachment_request_current(state, request_id)) {
+				dialog.hide();
+				return;
+			}
 			const selections = (values.transactions || [])
 				.filter((row) => row.post)
 				.map((row) => ({
@@ -197,11 +228,18 @@ function show_transaction_selection(frm, transactions) {
 				selections.length === 1 &&
 				selections[0].portfolio_name === selected_transaction.portfolio_name
 			) {
-				await apply_pdf_transaction(frm, {
-					...selected_transaction,
-					portfolio_name: selections[0].portfolio_name,
-				});
-				dialog.hide();
+				await apply_pdf_transaction(
+					frm,
+					{
+						...selected_transaction,
+						portfolio_name: selections[0].portfolio_name,
+					},
+					state,
+					request_id
+				);
+				if (is_attachment_request_current(state, request_id)) {
+					dialog.hide();
+				}
 				return;
 			}
 
@@ -210,6 +248,10 @@ function show_transaction_selection(frm, transactions) {
 				const { message: created } = await frm.call("create_selected_pdf_transactions", {
 					transaction_selections: selections,
 				});
+				if (!is_attachment_request_current(state, request_id)) {
+					dialog.hide();
+					return;
+				}
 				dialog.hide();
 				frm.doc.__unsaved = 0;
 				frappe.show_alert({

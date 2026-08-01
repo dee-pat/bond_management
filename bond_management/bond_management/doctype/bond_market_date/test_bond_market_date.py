@@ -4,6 +4,7 @@
 from decimal import ROUND_HALF_UP, Decimal
 
 import frappe
+from frappe.exceptions import FrappeTypeError
 from frappe.tests import IntegrationTestCase
 
 from bond_management.bond_management.doctype.bond_market_date.bond_market_date import (
@@ -54,6 +55,11 @@ class TestBondMarketDate(IntegrationTestCase):
         with self.assertRaisesRegex(frappe.ValidationError, "Market Price must be a finite number"):
             get_cashflows("2025-12-29", bond.name, "NaN")
 
+        with self.assertRaisesRegex(FrappeTypeError, "date.*str"):
+            get_cashflows([], bond.name, "100")
+        with self.assertRaisesRegex(FrappeTypeError, "isin.*str"):
+            get_cashflows("2025-12-29", {}, "100")
+
     def test_value_endpoint_clears_stale_derived_fields_for_incomplete_rows(self):
         result = get_recalculated_market_data(
             "",
@@ -82,6 +88,14 @@ class TestBondMarketDate(IntegrationTestCase):
         self.assertIsNotNone(result[1]["maturity_date"])
         self.assertIsNone(result[1]["principal_factor"])
         self.assertIsNone(result[1]["future_xirr"])
+
+    def test_value_endpoint_rejects_complex_boundary_values(self):
+        with self.assertRaisesRegex(FrappeTypeError, "date.*str"):
+            get_recalculated_market_data(date=[], rows=[])
+        with self.assertRaisesRegex(frappe.ValidationError, "Row 1 name must be a string"):
+            get_recalculated_market_data(rows=[{"name": [], "isin": None, "market_price": 100}])
+        with self.assertRaisesRegex(frappe.ValidationError, "Row 1 ISIN must be a string"):
+            get_recalculated_market_data(rows=[{"name": "row", "isin": {}, "market_price": 100}])
 
     def test_value_endpoint_allows_rows_before_parent_date(self):
         bond = make_bond()

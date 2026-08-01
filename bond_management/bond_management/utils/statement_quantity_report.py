@@ -1,7 +1,7 @@
 from io import BytesIO
 
 import frappe
-from frappe.utils import now_datetime
+from frappe.utils import escape_html, now_datetime
 from pypdf import PdfWriter
 from pypdf.generic import DecodedStreamObject, DictionaryObject, NameObject
 
@@ -26,6 +26,9 @@ def attach_quantity_reconciliation_report(statement, comparisons, *, file_name=N
                 "attached_to_field": "quantity_reconciliation_report",
             },
             limit=1,
+            # The caller has already passed Bond Statement permission checks;
+            # this system-generated child File lookup is only an idempotency
+            # check for the report attached to that statement.
             ignore_permissions=True,
         ).run(pluck=True)
         if existing:
@@ -37,7 +40,7 @@ def attach_quantity_reconciliation_report(statement, comparisons, *, file_name=N
     password = portfolio.get_password("statement_pdf_password", raise_exception=False)
     if not password:
         frappe.throw(
-            f"Configure Statement PDF Password on portfolio {frappe.bold(statement.portfolio_name)} "
+            f"Configure Statement PDF Password on portfolio {frappe.bold(escape_html(statement.portfolio_name))} "
             "before saving its quantity reconciliation report."
         )
     content = build_quantity_reconciliation_pdf(

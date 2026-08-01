@@ -129,4 +129,47 @@ context("Bond Transaction PDF entry", () => {
 		cy.get("@transactionPdfCall").should("have.been.calledTwice");
 		cy.get("@setRoute").should("have.been.calledOnce");
 	});
+
+	it("ignores a stale transaction PDF response after a newer attachment is selected", () => {
+		cy.window().then((window) => {
+			const frm = window.cur_frm;
+			let resolve_first;
+			const first_response = new Promise((resolve) => {
+				resolve_first = resolve;
+			});
+			let call_count = 0;
+			cy.stub(frm, "call")
+				.withArgs("read_transaction_pdf")
+				.callsFake(() => {
+					call_count += 1;
+					return call_count === 1
+						? first_response
+						: Promise.resolve({
+								message: {
+									transactions: [
+										{
+											...SINGLE_TRANSACTION,
+											transaction_reference: "U2000002",
+										},
+									],
+								},
+						  });
+				})
+				.as("readTransactionPdfWithDelay");
+
+			frm.doc.attachment = "/private/files/first.pdf";
+			const first_trigger = frm.script_manager.trigger("attachment");
+			frm.doc.attachment = "/private/files/second.pdf";
+			const second_trigger = frm.script_manager.trigger("attachment");
+
+			return second_trigger.then(() => {
+				resolve_first({ message: { transactions: [SINGLE_TRANSACTION] } });
+				return first_trigger;
+			});
+		});
+
+		cy.window().then((window) => {
+			expect(window.cur_frm.doc.transaction_reference).to.equal("U2000002");
+		});
+	});
 });

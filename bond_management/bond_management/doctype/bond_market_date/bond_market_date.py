@@ -5,12 +5,14 @@ from datetime import date as Date
 
 import frappe
 from frappe.model.document import Document
+from frappe.utils import escape_html
 
 from bond_management.bond_management.utils.accrual import (
     calculate_principal_factor_from_schedule,
     calculate_weighted_average_repayment,
 )
 from bond_management.bond_management.utils.financial import DecimalInput, to_decimal
+from bond_management.bond_management.utils.validation import optional_string, required_string
 from bond_management.bond_management.utils.xirr import (
     calculate_future_xirr,
     create_future_cash_flows,
@@ -67,7 +69,9 @@ class BondMarketDate(Document):
                 continue
 
             if row.isin in seen_isins:
-                frappe.throw(f"ISIN {frappe.bold(row.isin)} appears more than once in Bond Market Prices")
+                frappe.throw(
+                    f"ISIN {frappe.bold(escape_html(row.isin))} appears more than once in Bond Market Prices"
+                )
             seen_isins.add(row.isin)
 
             if row.market_price is None:
@@ -83,26 +87,21 @@ class BondMarketDate(Document):
 @frappe.whitelist(methods=["POST"])
 def get_recalculated_market_data(date: str | None = None, rows: str | list | None = None) -> list[dict]:
     """Return derived row values without accepting or returning a form document."""
-    if not (
-        frappe.has_permission("Bond Market Date", "write")
-        or frappe.has_permission("Bond Market Date", "create")
-    ):
-        frappe.throw("Not permitted", frappe.PermissionError)
-
+    date = optional_string(date, "Date")
     rows = frappe.parse_json(rows)
     if not isinstance(rows, list):
         frappe.throw("Rows must be a list")
 
     seen_names = set()
     seen_isins = set()
-    result = []
+    validated_rows = []
 
     for index, row in enumerate(rows, start=1):
         if not isinstance(row, dict):
             frappe.throw(f"Row {index} must be an object")
 
-        row_name = row.get("name")
-        isin = row.get("isin")
+        row_name = required_string(row.get("name"), f"Row {index} name")
+        isin = optional_string(row.get("isin"), f"Row {index} ISIN")
         market_price = row.get("market_price")
 
         if not row_name or row_name in seen_names:
@@ -111,13 +110,25 @@ def get_recalculated_market_data(date: str | None = None, rows: str | list | Non
 
         if isin:
             if isin in seen_isins:
-                frappe.throw(f"ISIN {frappe.bold(isin)} appears more than once in Bond Market Prices")
+                frappe.throw(
+                    f"ISIN {frappe.bold(escape_html(isin))} appears more than once in Bond Market Prices"
+                )
             seen_isins.add(isin)
-            if not frappe.has_permission("Bond Master", "read", doc=isin):
-                frappe.throw("Not permitted", frappe.PermissionError)
 
         if market_price is not None and to_decimal(market_price, "Market Price") <= 0:
             frappe.throw(f"Market Price must be greater than zero in row {index}")
+        validated_rows.append((row_name, isin, market_price))
+
+    if not (
+        frappe.has_permission("Bond Market Date", "write")
+        or frappe.has_permission("Bond Market Date", "create")
+    ):
+        frappe.throw("Not permitted", frappe.PermissionError)
+
+    result = []
+    for row_name, isin, market_price in validated_rows:
+        if isin and not frappe.has_permission("Bond Master", "read", doc=isin):
+            frappe.throw("Not permitted", frappe.PermissionError)
 
         result.append(
             {
@@ -132,10 +143,8 @@ def get_recalculated_market_data(date: str | None = None, rows: str | list | Non
 @frappe.whitelist(methods=["POST"])
 def get_cashflows(date: Date | str | None, isin: str | None, market_price: DecimalInput) -> list[dict]:
     """Return value-only cash flows without syncing a form Document response."""
-    if not date:
-        frappe.throw("Date is required")
-    if not isin:
-        frappe.throw("ISIN is required")
+    date = required_string(date, "Date")
+    isin = required_string(isin, "ISIN")
     market_price = to_decimal(market_price, "Market Price")
     if market_price <= 0:
         frappe.throw("Market Price must be greater than zero")

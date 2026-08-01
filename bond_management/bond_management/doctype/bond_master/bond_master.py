@@ -7,6 +7,7 @@ from frappe.utils import getdate
 
 from bond_management.bond_management.utils.coupon_schedule import generate_coupon_schedule
 from bond_management.bond_management.utils.financial import quantize_percent, to_decimal
+from bond_management.bond_management.utils.validation import optional_string
 
 
 class BondMaster(Document):
@@ -127,7 +128,7 @@ def get_recalculated_schedules(doc: str) -> dict:
         frappe.throw("Bond Master data must be an object")
     values["doctype"] = "Bond Master"
 
-    existing_name = values.get("name")
+    existing_name = optional_string(values.get("name"), "Bond Master name")
     if existing_name and frappe.db.exists("Bond Master", existing_name):
         frappe.has_permission("Bond Master", "write", doc=existing_name, throw=True)
     else:

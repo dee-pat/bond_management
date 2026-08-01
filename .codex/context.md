@@ -1,7 +1,9 @@
 # Codex project context
 
-The repository-wide implementation and quality rules live in `AGENTS.md`.
-Use this file for local environment context and troubleshooting notes.
+Shared Frappe v16 implementation and quality rules live in the parent bench
+`../../AGENTS.md`; bond-management-specific rules live in this app's
+`AGENTS.md`. Use this file for local environment context and troubleshooting
+notes.
 
 ## Environment
 
@@ -31,6 +33,11 @@ Use this file for local environment context and troubleshooting notes.
   applicable migration.
 - JavaScript field updates: check form triggers and `frm.refresh_field`.
 - Bench build failures: check the Node and Yarn versions.
+- Cypress startup failures: run
+  `apps/bond_management/scripts/cypress-runtime.sh diagnose`; the UI gate uses
+  a bench-local Cypress cache and repairs a missing or stale binary. If a
+  macOS Electron process aborts after verification, confirm the installed
+  Cypress version supports the host macOS release before replacing test code.
 
 ## Reference commands
 

@@ -3,7 +3,7 @@
 
 import frappe
 from frappe.model.document import Document
-from frappe.utils import getdate
+from frappe.utils import escape_html, getdate
 
 from bond_management.bond_management.utils.accrual import (
     calculate_principal_factor_from_schedule,
@@ -100,7 +100,9 @@ class BondStatement(Document):
             ignore_permissions=True,
         ).run(pluck=True)
         if existing:
-            frappe.throw(f"This PDF attachment is already used by Bond Statement {frappe.bold(existing[0])}.")
+            frappe.throw(
+                f"This PDF attachment is already used by Bond Statement {frappe.bold(escape_html(existing[0]))}."
+            )
 
     def on_update(self):
         details = self.flags.statement_attachment_details

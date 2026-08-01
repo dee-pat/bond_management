@@ -179,7 +179,14 @@ def _legacy_quantity_is_monetary_nominal(
     """Distinguish monetary nominal from unit counts in legacy Face Value columns."""
     nominal_market_value = reported_quantity * market_price / Decimal("100")
     unit_market_value = reported_quantity * market_price
-    return abs(market_value - nominal_market_value) < abs(market_value - unit_market_value)
+    nominal_distance = abs(market_value - nominal_market_value)
+    unit_distance = abs(market_value - unit_market_value)
+    if nominal_distance == unit_distance:
+        raise StatementPdfError(
+            "The PDF contains an ambiguous legacy quantity; the market value matches neither "
+            "nominal nor unit interpretation more closely."
+        )
+    return nominal_distance < unit_distance
 
 
 def extract_statement_pdf(

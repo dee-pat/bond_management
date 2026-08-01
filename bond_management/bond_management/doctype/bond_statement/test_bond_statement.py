@@ -27,6 +27,9 @@ from bond_management.patches.regenerate_legacy_face_value_reconciliations import
     execute as regenerate_legacy_reconciliations,
 )
 from bond_management.patches.remove_duplicate_bond_statements import (
+    execute as remove_duplicate_statements,
+)
+from bond_management.patches.remove_duplicate_bond_statements import (
     get_redundant_statement_names,
 )
 from bond_management.patches.standardize_bond_statement_attachment_names import (
@@ -235,6 +238,42 @@ class TestBondStatement(IntegrationTestCase):
         ]
 
         self.assertEqual(get_redundant_statement_names(rows), ["BS-NEWER"])
+
+    def test_duplicate_cleanup_runs_before_unique_index_patch(self):
+        patch_lines = Path(frappe.get_app_path("bond_management", "patches.txt")).read_text().splitlines()
+        cleanup_index = patch_lines.index("bond_management.patches.remove_duplicate_bond_statements")
+        index_patch_index = patch_lines.index("bond_management.patches.add_bond_query_indexes")
+        self.assertLess(cleanup_index, index_patch_index)
+
+        events = []
+        rows = [
+            frappe._dict(
+                name="BS-NEWER",
+                attachment="/private/files/duplicate.pdf",
+                creation="2026-07-31 18:20:00",
+            ),
+            frappe._dict(
+                name="BS-OLDER",
+                attachment="/private/files/duplicate.pdf",
+                creation="2026-07-31 18:10:00",
+            ),
+        ]
+        with (
+            patch(
+                "bond_management.patches.remove_duplicate_bond_statements.frappe.qb.get_query"
+            ) as get_query,
+            patch("bond_management.patches.remove_duplicate_bond_statements.frappe.delete_doc") as delete_doc,
+            patch(
+                "bond_management.patches.remove_duplicate_bond_statements.ensure_bond_query_indexes"
+            ) as ensure_indexes,
+        ):
+            get_query.return_value.run.return_value = rows
+            delete_doc.side_effect = lambda *args, **kwargs: events.append("delete")
+            ensure_indexes.side_effect = lambda: events.append("index")
+
+            remove_duplicate_statements()
+
+        self.assertEqual(events, ["delete", "index"])
 
     def test_rejects_unconfigured_passwords_and_unknown_accounts(self):
         configured_password = unique_name("CONFIGURED-PASSWORD")

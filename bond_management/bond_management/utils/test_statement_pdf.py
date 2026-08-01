@@ -180,3 +180,12 @@ class TestStatementPdf(UnitTestCase):
                 XS1843435766 2,000 100 99 99,000 30/06/2026 101.25
                 """
             )
+
+    def test_rejects_ambiguous_legacy_quantity_interpretation(self):
+        with self.assertRaisesRegex(StatementPdfError, "ambiguous legacy quantity"):
+            parse_statement_market_prices(
+                """
+                XS1028952403 USD 2,000.000000 99.250000 6.30000000 99.250000
+                0.000000 100,242.50
+                """
+            )

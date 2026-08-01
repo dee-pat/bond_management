@@ -50,12 +50,16 @@ def _get_allowed_portfolios(user: str) -> list[str] | None:
 
 
 def _portfolio_condition(doctype: str, fieldname: str, user: str) -> str | None:
+    """Return Frappe's required permission-query SQL condition safely."""
     portfolios = _get_allowed_portfolios(user)
     if portfolios is None:
         return None
     if not portfolios:
         return "1=0"
 
+    # Frappe's permission-query hook requires a SQL condition string. The
+    # identifiers are fixed by these internal callers; only database-escaped
+    # User Permission values enter the condition.
     values = ", ".join(frappe.db.escape(portfolio) for portfolio in portfolios)
     return f"`tab{doctype}`.`{fieldname}` in ({values})"
 

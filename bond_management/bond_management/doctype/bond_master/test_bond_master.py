@@ -106,6 +106,13 @@ class TestBondMaster(IntegrationTestCase):
         self.assertEqual(result["principal_schedule"][1]["idx"], 2)
         self.assertEqual(result["coupon_schedule"][-1]["coupon_date"].isoformat(), "2027-01-01")
 
+    def test_value_only_schedule_endpoint_rejects_complex_document_names(self):
+        values = make_bond().as_dict()
+        values["name"] = []
+
+        with self.assertRaisesRegex(frappe.ValidationError, "Bond Master name must be a string"):
+            get_recalculated_schedules(frappe.as_json(values))
+
     def test_maturity_date_boundary_rules(self):
         bond = make_bond()
         bond.maturity_date = "2025-01-02"

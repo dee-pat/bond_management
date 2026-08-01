@@ -5,7 +5,7 @@ from collections import defaultdict
 from decimal import Decimal
 
 import frappe
-from frappe.utils import getdate
+from frappe.utils import escape_html, getdate
 
 from bond_management.bond_management.utils.accrual import (
     calculate_principal_factor_from_schedule,
@@ -16,6 +16,7 @@ from bond_management.bond_management.utils.performance import (
     load_portfolio_performance_context,
 )
 from bond_management.bond_management.utils.portfolio import get_ledger_position_from_transactions
+from bond_management.bond_management.utils.validation import required_string
 from bond_management.bond_management.utils.xirr import (
     DEFAULT_XIRR_GUESS,
     calculate_xirr,
@@ -36,7 +37,10 @@ def execute(filters: dict | None = None):
     dictionary and should return columns and data. It is called by the framework
     every time the report is refreshed or a filter is updated.
     """
-    filters = filters or {}
+    if filters is None:
+        filters = {}
+    if not isinstance(filters, dict):
+        frappe.throw("Report filters must be an object")
 
     portfolio, valuation_date = validate_report_inputs(
         filters.get("portfolio"), filters.get("valuation_date")
@@ -58,8 +62,8 @@ def get_xirr_cashflows(portfolio: str, valuation_date: str, isin: str, xirr_type
     """Return the raw cash flows behind a report XIRR value for spreadsheet review."""
     portfolio, valuation_date = validate_report_inputs(portfolio, valuation_date)
 
-    if not isin:
-        frappe.throw("ISIN is required")
+    isin = required_string(isin, "ISIN")
+    xirr_type = required_string(xirr_type, "XIRR type")
     if xirr_type not in {"past", "future"}:
         frappe.throw("Invalid XIRR type")
 
@@ -70,7 +74,9 @@ def get_xirr_cashflows(portfolio: str, valuation_date: str, isin: str, xirr_type
     else:
         portfolio_isins = set(context["isins"])
         if isin not in portfolio_isins:
-            frappe.throw(f"ISIN {frappe.bold(isin)} is not in this portfolio on or before the valuation date")
+            frappe.throw(
+                f"ISIN {frappe.bold(escape_html(isin))} is not in this portfolio on or before the valuation date"
+            )
         if not frappe.has_permission("Bond Master", "read", doc=isin):
             frappe.throw("Not permitted", frappe.PermissionError)
 
@@ -106,6 +112,8 @@ def get_xirr_cashflows(portfolio: str, valuation_date: str, isin: str, xirr_type
             "isin": cashflow["bond"],
             "transaction_type": cashflow["type"],
             "date": getdate(cashflow["date"]).isoformat(),
+            # This endpoint is a spreadsheet/clipboard serialization boundary;
+            # the underlying cash-flow calculations remain Decimal-based.
             "amount": round_cashflow_amount(cashflow["amount"]),
             "quantity": float(cashflow["quantity"]),
             "rate": round_cashflow_amount(to_decimal(cashflow["amount"]) / to_decimal(cashflow["quantity"])),
@@ -119,14 +127,12 @@ def get_xirr_cashflows(portfolio: str, valuation_date: str, isin: str, xirr_type
 
 
 def validate_report_inputs(portfolio, valuation_date):
-    if not portfolio:
-        frappe.throw("Portfolio is required")
-    if not valuation_date:
-        frappe.throw("Valuation Date is required")
-    if not frappe.db.exists("Bond Portfolio", portfolio):
-        frappe.throw(f"Bond Portfolio {frappe.bold(portfolio)} does not exist")
+    portfolio = required_string(portfolio, "Portfolio")
+    valuation_date = required_string(valuation_date, "Valuation Date")
     if not frappe.has_permission("Bond Portfolio", "read", doc=portfolio):
         frappe.throw("Not permitted", frappe.PermissionError)
+    if not frappe.db.exists("Bond Portfolio", portfolio):
+        frappe.throw(f"Bond Portfolio {frappe.bold(escape_html(portfolio))} does not exist")
 
     return portfolio, getdate(valuation_date)
 
@@ -134,9 +140,11 @@ def validate_report_inputs(portfolio, valuation_date):
 def get_terminal_market_price(isin, valuation_date, quantity, market_price):
     """Require a valid quote only when a position still has market exposure."""
     if quantity and market_price is None:
-        frappe.throw(f"No market price found for {frappe.bold(isin)} on or before {valuation_date}")
+        frappe.throw(
+            f"No market price found for {frappe.bold(escape_html(isin))} on or before {valuation_date}"
+        )
     if quantity and to_decimal(market_price) <= 0:
-        frappe.throw(f"Market price for {frappe.bold(isin)} must be greater than zero")
+        frappe.throw(f"Market price for {frappe.bold(escape_html(isin))} must be greater than zero")
 
     # A closed/matured position needs no artificial terminal valuation. Zero is
     # passed only to the cash-flow builder so it omits that zero-value line.

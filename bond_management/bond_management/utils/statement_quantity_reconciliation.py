@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from decimal import Decimal
 
 import frappe
+from frappe.utils import escape_html
 
 from bond_management.bond_management.utils.financial import to_decimal
 from bond_management.bond_management.utils.statement_pdf import ParsedMarketPrice
@@ -45,7 +46,9 @@ def reconcile_statement_quantities(
         if face_value_per_unit is None:
             continue
         if face_value_per_unit <= 0:
-            frappe.throw(f"Face Value Per Unit for ISIN {frappe.bold(row.isin)} must be greater than zero")
+            frappe.throw(
+                f"Face Value Per Unit for ISIN {frappe.bold(escape_html(row.isin))} must be greater than zero"
+            )
 
         # Current statements report transaction units directly as "Quantity".
         # Older statements report monetary nominal under "Face Value", where

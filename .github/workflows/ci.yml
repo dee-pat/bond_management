@@ -153,8 +153,8 @@ jobs:
       - name: Cache Cypress binary
         uses: actions/cache@v4
         with:
-          path: ~/.cache/Cypress
-          key: ${{ runner.os }}-cypress-v16
+          path: /home/runner/frappe-bench/.cache/Cypress
+          key: ${{ runner.os }}-${{ runner.arch }}-cypress-13.17.0
 
       - name: Install MariaDB Client
         run: |
@@ -186,6 +186,12 @@ jobs:
           bench --site test_site execute frappe.utils.install.complete_setup_wizard
           bench --site test_site execute frappe.tests.ui_test_helpers.create_test_user
 
+      - name: Prepare Cypress runtime
+        working-directory: /home/runner/frappe-bench
+        run: apps/bond_management/scripts/cypress-runtime.sh prepare
+        env:
+          CI: 'Yes'
+
       - name: Setup Chrome
         uses: browser-actions/setup-chrome@latest
 
@@ -203,6 +209,12 @@ jobs:
         env:
           CI: 'Yes'
 
+      - name: Capture Cypress diagnostics
+        if: failure()
+        working-directory: /home/runner/frappe-bench
+        run: |
+          apps/bond_management/scripts/cypress-runtime.sh diagnose > "$RUNNER_TEMP/cypress-diagnostics.txt" 2>&1 || true
+
       - name: Upload UI failure artifacts
         if: failure()
         uses: actions/upload-artifact@v6
@@ -212,4 +224,5 @@ jobs:
           path: |
             /home/runner/frappe-bench/cypressVideos
             /home/runner/frappe-bench/apps/bond_management/cypress/screenshots
+            ${{ runner.temp }}/cypress-diagnostics.txt
             ${{ runner.temp }}/bench-web.log

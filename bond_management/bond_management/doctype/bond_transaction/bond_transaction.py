@@ -22,6 +22,7 @@ from bond_management.bond_management.utils.transaction_pdf import (
     TransactionAttachmentRow,
     get_transaction_attachment_details,
 )
+from bond_management.bond_management.utils.validation import optional_string
 
 BOND_SNAPSHOT_FIELDS = (
     "bond_name",
@@ -90,6 +91,9 @@ def get_calculated_amounts(
     transaction_name: str | None = None,
 ) -> dict[str, Decimal]:
     """Return value-only calculations so stale RPCs cannot sync an older Document."""
+    isin = optional_string(isin, "ISIN")
+    settlement_date = optional_string(settlement_date, "Settlement Date")
+    transaction_name = optional_string(transaction_name, "Transaction name")
     if transaction_name and frappe.db.exists("Bond Transaction", transaction_name):
         frappe.has_permission("Bond Transaction", "write", doc=transaction_name, throw=True)
     else:
@@ -282,7 +286,7 @@ class BondTransaction(Document):
         matching = [row for row in details.transactions if row.transaction_reference == reference]
         if not matching:
             frappe.throw(
-                f"Transaction Reference {frappe.bold(reference)} is not present in the attached PDF."
+                f"Transaction Reference {frappe.bold(escape_html(reference))} is not present in the attached PDF."
             )
         return matching[0]
 

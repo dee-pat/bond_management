@@ -63,6 +63,51 @@ context("Bond Statement", () => {
 		});
 	});
 
+	it("ignores a stale PDF response after a newer attachment is selected", () => {
+		cy.window().then((window) => {
+			const frm = window.cur_frm;
+			let resolve_first;
+			const first_response = new Promise((resolve) => {
+				resolve_first = resolve;
+			});
+			let call_count = 0;
+			cy.stub(frm, "call")
+				.withArgs("read_statement_pdf")
+				.callsFake(() => {
+					call_count += 1;
+					return call_count === 1
+						? first_response
+						: Promise.resolve({
+								message: {
+									portfolio_name: "Newest Portfolio",
+									statement_date: "2026-07-31",
+								},
+						  });
+				})
+				.as("readStatementPdfWithDelay");
+
+			frm.doc.attachment = "/private/files/first.pdf";
+			const first_trigger = frm.script_manager.trigger("attachment");
+			frm.doc.attachment = "/private/files/second.pdf";
+			const second_trigger = frm.script_manager.trigger("attachment");
+
+			return second_trigger.then(() => {
+				resolve_first({
+					message: {
+						portfolio_name: "Stale Portfolio",
+						statement_date: "2026-01-01",
+					},
+				});
+				return first_trigger;
+			});
+		});
+
+		cy.window().then((window) => {
+			expect(window.cur_frm.doc.portfolio_name).to.equal("Newest Portfolio");
+			expect(window.cur_frm.doc.statement_date).to.equal("2026-07-31");
+		});
+	});
+
 	it("colors reconciliation status in the list view", () => {
 		cy.visit("/desk/bond-statement/view/list");
 		cy.get("body").should("have.attr", "data-ajax-state", "complete");

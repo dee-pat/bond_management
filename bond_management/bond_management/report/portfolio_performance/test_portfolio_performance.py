@@ -1,6 +1,7 @@
 from unittest.mock import patch
 
 import frappe
+from frappe.exceptions import FrappeTypeError
 from frappe.tests import IntegrationTestCase
 
 from bond_management.bond_management.report.portfolio_performance.portfolio_performance import (
@@ -315,3 +316,13 @@ class TestPortfolioPerformance(IntegrationTestCase):
 
         with self.assertRaisesRegex(frappe.ValidationError, "is not in this portfolio"):
             get_xirr_cashflows(portfolio.name, "2025-12-31", other_bond.name, "past")
+
+    def test_report_endpoints_reject_complex_input_types(self):
+        portfolio = make_portfolio()
+
+        with self.assertRaisesRegex(frappe.ValidationError, "Report filters must be an object"):
+            execute([])
+        with self.assertRaisesRegex(FrappeTypeError, "isin.*str"):
+            get_xirr_cashflows(portfolio.name, "2025-12-31", [], "past")
+        with self.assertRaisesRegex(FrappeTypeError, "xirr_type.*str"):
+            get_xirr_cashflows(portfolio.name, "2025-12-31", "TOTAL", {})

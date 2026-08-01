@@ -1,123 +1,130 @@
 # Bond Management agent guidance
 
-## External skill precedence
+The parent `frappe-bench/AGENTS.md` contains rules shared by Frappe v16 apps.
+This file contains only bond-management-specific additions and overrides. When
+the two files conflict, this app-level file governs.
 
-- The upstream `frappe-app-dev` skill provides generic Frappe guidance and is
-  intentionally kept unmodified so it can be updated from its maintainer.
-- Its canonical source is `netchampfaris/frappe-agent-skills`, under
-  `skills/frappe-app-dev`.
-- Apply that skill only where its instructions are consistent with this file.
-- If the skill conflicts with this `AGENTS.md`, this `AGENTS.md` governs.
-- In particular, the project requirements for Frappe v16, Query Builder reads,
-  permissions, financial precision, migrations, testing, and application
-  structure supersede generic examples in the skill.
-- Do not copy a conflicting upstream example merely because it appears in the
-  skill; adapt it to comply with this project's rules.
+## App baseline and structure
 
-## Project baseline
+- This is a custom Frappe Framework v16 application for bond portfolios,
+  accruals, schedules, and statement/transaction attachments. Do not assume
+  ERPNext is installed.
+- The local and CI development baseline is Python 3.14, Node 24, MariaDB 11.8
+  or 12.3, and Redis 6 or newer. Deployment compatibility must be checked
+  against the target Frappe v16 release and hosting environment.
+- The app root is `<bench>/apps/bond_management`; this checkout is already that
+  app root.
+- The outer Python package is `bond_management/` and uses the import prefix
+  `bond_management`.
+- The Frappe module package is `bond_management/bond_management/` and uses the
+  import prefix `bond_management.bond_management`. There is no third nested
+  `bond_management` package.
+- Before adding an import, inspect the actual package tree and nearby imports;
+  prefer absolute imports and do not infer paths from names alone.
+- Keep DocType controllers focused on their own DocType. Put shared logic under
+  `bond_management/bond_management/utils`.
 
-- This is a custom Frappe Framework v16 app for bond portfolio management,
-  including accruals and schedules. Do not assume ERPNext is installed unless
-  the task explicitly says so.
-- Use Python 3.14, Node 24, MariaDB 11.8 or 12.3, and Redis 6 or newer.
-- Use Frappe v16-compatible bench commands and modern, non-deprecated Frappe
-  APIs. Do not suggest or mix in v15-or-older patterns.
-- Follow the standard Frappe app structure: DocTypes, `hooks.py`, and patches.
+## Bond financial conventions
 
-## Implementation rules
+- Construct precision-sensitive monetary values, accrued interest, yields, and
+  quantities with `Decimal` from strings rather than binary floats. Quantize
+  only at the business-rule boundary with an explicit rounding mode and
+  documented precision.
+- Preserve the existing rounding, cash-flow sign, commission, and bank-price
+  conventions. Change a convention only with an explicit business decision and
+  boundary tests.
+- Normalize financial dates with `frappe.utils.getdate` at system boundaries.
+  Use calendar dates for issue, coupon, trade, settlement, repayment, and
+  maturity rules unless a timestamp is explicitly required.
+- Coupon schedules are generated from issue date through maturity using the
+  configured day-count convention. Preserve their period boundaries and
+  coupon-date semantics.
+- Principal repayment rows must be positive and unique. The latest contractual
+  repayment date determines maturity, and repayment dates must align with
+  coupon dates under the current Bond Master rule.
+- Amortisation changes outstanding principal or the principal factor; it does
+  not reduce transaction quantity unless an explicit business rule says so.
+- Ledger position uses `settlement_date` as its effective date. Maturity-day
+  and same-day coupon/repayment behavior use explicit pre- and post-payment
+  rules; do not replace them with generic date comparisons.
+- Market prices are quoted per 100 of original face value. Do not apply a
+  principal factor a second time to market-price cash flows.
+- Attachment-managed statement fields are server-authoritative; Desk
+  `read_only` settings are not sufficient protection.
 
-- Do not monkey-patch Frappe core. Use hooks or server scripts where an
-  extension point is needed.
-- Use four spaces for Python indentation; never use tabs.
-- Do not use `frappe.db.get_list` or `frappe.db.get_all`; use
-  `frappe.qb.get_query` instead. User-facing query-builder reads must use
-  `ignore_permissions=False` unless a documented service boundary requires
-  otherwise.
-- Keep DocType controllers focused on that DocType. Move logic needed by more
-  than one DocType into an appropriate module under `utils`.
-- Put business calculations in Python, not JavaScript. Expose a Python method
-  to the client only when needed, and remove `@frappe.whitelist()` when it is
-  no longer used by a client integration.
-- Treat values populated by client scripts, including values derived from an
-  attachment, as untrusted input. Recompute or validate them on the server
-  before saving; the client may improve the form experience but must not be
-  the authority for a business rule.
-- JavaScript form flows that perform asynchronous work must return their
-  Promise. Send intentional empty arguments explicitly when Frappe would omit
-  `undefined`, and prevent an older response from overwriting newer form
-  state when requests can overlap.
-
-## Attachment rules
+## Attachments and secrets
 
 - Keep uploaded financial documents private. Read them through Frappe's File
   APIs and storage abstraction rather than assuming a filesystem path.
-- Validate the actual file content and expected document structure; do not
-  trust the extension, MIME type, filename, or client-extracted values alone.
+- Validate actual file content and expected document structure; do not trust
+  extensions, MIME types, filenames, or client-extracted values alone.
 - Never return, log, persist in plain text, or include configured PDF passwords
-  in exceptions. Standardize attachment filenames only after the document has
-  been identified, and preserve Frappe's private-file semantics.
+  in exceptions. Standardize filenames only after identifying the document and
+  preserve private-file semantics.
 - Parsers must reject missing or conflicting identity fields instead of
-  guessing. A documented legacy fallback may be used only when the primary
-  source is absent, and the primary source takes precedence when both exist.
+  guessing. A documented legacy fallback is allowed only when the primary
+  source is absent, and the primary source wins when both exist.
 
-## Financial and migration rules
+## Controlled Frappe integration exceptions
 
-- For monetary values, accrued interest, yields, and other precision-sensitive
-  calculations, use `Decimal` constructed from strings, not binary floats.
-  Quantize only at the business-rule boundary, with an explicit rounding mode
-  and documented precision.
-- Preserve the existing rounding convention when modifying a calculation;
-  change it only with an explicit business rule and tests for the affected
-  boundary cases.
-- For changes that require transforming existing site data, add an idempotent
-  patch under `bond_management/patches/`, register it in
-  `bond_management/patches.txt`, and test both the migration and its resulting
-  business data. Do not use a patch for schema changes that Frappe migrations
-  already handle.
-- Enforce business uniqueness at both boundaries when concurrency is possible:
-  use controller validation for a useful error and a database unique index as
-  the final integrity guarantee. Install manual indexes with an idempotent
-  patch, ensure they are also created on a fresh app installation, and test
-  both paths.
+- `scripts/cypress-runtime.sh` may temporarily add Frappe's v16 Cypress
+  dependencies to the framework manifest because Frappe's own UI runner uses
+  that bootstrap. It must restore `apps/frappe/package.json` on every exit,
+  never commit framework-manifest changes, and keep installed versions pinned.
+- Permission-query hooks may return a SQL condition only where Frappe requires
+  that hook shape. Use fixed DocType/field identifiers, escape every value with
+  Frappe's database API, and never interpolate client-controlled identifiers.
+- `ignore_permissions=True` is allowed for generated reports, migrations, and
+  administrative invariant checks only when the caller's permission boundary is
+  verified separately and the code documents that service boundary.
+- Keep `Decimal` through business calculations. Convert to binary floats only
+  inside a named external-library adapter or an explicit JSON/clipboard
+  serialization boundary, with precision regression tests.
+
+## App-specific migrations and permissions
+
+- For changes that transform existing site data, add an idempotent patch under
+  `bond_management/patches/`, register it in `bond_management/patches.txt`,
+  and test both migration behavior and resulting business data. Do not use a
+  patch for schema changes handled by normal Frappe migrations.
+- Test the registered patch sequence against representative legacy data, not
+  only each patch function in isolation. Include a safe rerun and verify the
+  resulting business data and indexes.
+- Enforce concurrency-sensitive business uniqueness at both boundaries: use
+  controller validation for a useful error and a database unique index as the
+  final integrity guarantee. Install manual indexes idempotently, ensure fresh
+  app installation creates them too, and test both paths.
 - Permission patches should update or create only the `DocPerm` rows they own.
-  Do not save a parent `DocType` merely to change permissions, because doing so
-  can validate or rewrite unrelated metadata during migration.
+  Do not save a parent `DocType` merely to change permissions, because that can
+  validate or rewrite unrelated metadata during migration.
 
-## Test site conventions
+## Test site and app tests
 
 - `test_site` is the canonical site for automated server and UI tests. Use
   `dev.local` for interactive development; never run destructive tests against
-  `dev.local` or any other non-test site.
+  `dev.local` or another non-test site.
 - Before testing, ensure `bond_management` is installed on `test_site`, migrate
-  that site, and enable tests with
+  it, and enable tests with
   `bench --site test_site set-config allow_tests true`.
 - Reuse an existing local `test_site`. Do not recreate, drop, or restore it
-  without explicit user approval.
-- Do not record site credentials or machine-specific database configuration in
-  repository files.
+  without explicit user approval. Do not record site credentials or
+  machine-specific database configuration in repository files.
+- Factories may use collision-safe generated names, but test outcomes must not
+  depend on their random suffixes. Tests must be deterministic, independent,
+  and rerunnable. Attachment parsers need current, supported
+  legacy, malformed, conflicting, encrypted, invalid-password, and non-PDF
+  cases.
+- For bond rules involving `>`, `>=`, `<`, or `<=`, test greater-than,
+  less-than, and equality cases and state equality behavior.
+- Add Cypress tests for reports and other client-side interactions. Promise-
+  returning JavaScript flows are required for testability.
 
-## Quality expectations
-
-- Debug step by step and verify the actual failure; do not guess.
-- Add or update tests for changed functions, utilities, reports, and DocType
-  controllers.
-- For business rules involving `>`, `>=`, `<`, or `<=`, test greater-than,
-  less-than, and equality cases, and state the expected equality behavior.
-- Add Cypress tests under `cypress/integration` for reports and other
-  client-side interactions. Promise-returning JavaScript flows are required
-  for testability.
-- Test attachment parsers with current and supported legacy formats, malformed
-  and non-PDF input, missing and conflicting identity values, and encrypted
-  files with valid and invalid passwords.
-- Test factories must generate collision-safe values. Tests and patches must
-  tolerate reruns without depending on records left behind by an earlier run.
-
-## Pre-push verification gate
+## App verification gate
 
 - Before committing, pushing, or handing off application-code changes, run the
-  relevant targeted test, its complete module, and the full server suite on
-  `test_site`. A passing targeted test is not evidence that the full suite
-  passes; tests must succeed both independently and under full-suite ordering.
+  relevant targeted test, its complete module, and the full server suite. A
+  passing targeted test is not evidence that the full suite passes; tests must
+  succeed both independently and under full-suite ordering.
 - From the bench directory, run
   `apps/bond_management/scripts/verify.sh pre-push`. This shared gate runs
   pre-commit, migrates `test_site`, and runs the complete server suite. GitHub
@@ -126,19 +133,35 @@
   other Desk behavior must run
   `apps/bond_management/scripts/verify.sh pre-push-ui`, which adds the complete
   headless UI suite. Set `CHROME_BIN` when `chrome` is not on `PATH`.
+- The UI gate uses Frappe's Cypress runner with a bench-local cache under
+  `.cache/Cypress`. `scripts/cypress-runtime.sh` pins the Frappe v16 Cypress
+  dependency set, verifies package/binary compatibility, and repairs cache
+  failures before the test run. Host-level Electron launch failures are
+  reported without repeatedly downloading the same binary. It also clears
+  Electron-as-Node and custom-binary environment overrides that make Cypress
+  start incorrectly. Do not rely on a machine-global Cypress cache or bypass
+  this preflight.
+- `CYPRESS_VERSION` in `scripts/cypress-runtime.sh` and the GitHub Actions
+  cache key must be updated together when Frappe v16 changes its supported
+  Cypress release. Do not override the version in CI or reuse a cache for a
+  different binary.
 - Changes to patches, schema, hooks, dependencies, installation, or manual
-  database indexes must also be validated by a fresh-site installation and
-  migration matching GitHub Actions. Obtain explicit user approval before
-  recreating, dropping, or restoring a local site.
-- Do not commit, push, or report a change as complete while a required check is
-  failing or unavailable. State exactly which checks ran, their results, and
-  anything that remains unverified.
+  indexes must also be validated against a freshly installed site matching the
+  GitHub Actions setup. Obtain approval before recreating or dropping a local
+  site.
+- If a required command cannot run because a service, browser, dependency,
+  site, or credential is unavailable, do not substitute an unrelated check.
+  Report the exact command, blocking condition, and verification that remains
+  outstanding.
 - When GitHub Actions fails, inspect the exact traceback and reproduce the
-  failing test locally both in isolation and in the full suite. Do not guess at
-  a fix or weaken an assertion merely to make CI pass.
+  failing test both in isolation and in the full suite. Do not guess at a fix
+  or weaken an assertion merely to make CI pass.
+- Do not commit, push, or report a change as complete while a required check is
+  failing or unavailable. State exactly which checks ran and their results.
 
 ## References
 
-- Project-specific Codex context and troubleshooting: `.codex/context.md`
-- Common local commands: `.codex/commands.md`
+- Parent shared policy: `../../AGENTS.md`
+- Project context and troubleshooting: `.codex/context.md`
+- Common bench and verification commands: `.codex/commands.md`
 - Framework documentation: https://docs.frappe.io/framework/user/en/introduction

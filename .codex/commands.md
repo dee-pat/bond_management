@@ -24,8 +24,9 @@ bench --site dev.local clear-cache
 # Restart
 bench restart
 
-# Kill bench and Redis after broken state before bench start
-pkill -f bench & sudo pkill -f redis
+# Stop only this bench's processes after a broken state; inspect the PIDs first.
+pgrep -af "${PWD}/apps/frappe|${PWD}/Procfile"
+bench restart
 
 # Start mariadb if not running
 brew services start mariadb
@@ -43,3 +44,7 @@ apps/bond_management/scripts/verify.sh pre-push-ui
 apps/bond_management/scripts/verify.sh lint
 apps/bond_management/scripts/verify.sh server
 apps/bond_management/scripts/verify.sh ui
+
+# Cypress runtime diagnostics or repair (uses the bench-local cache)
+apps/bond_management/scripts/cypress-runtime.sh diagnose
+apps/bond_management/scripts/cypress-runtime.sh prepare

@@ -6,6 +6,15 @@ MODE="${1:-pre-push}"
 TEST_SITE_NAME="${TEST_SITE:-test_site}"
 APP_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BENCH_ROOT="$(cd "${APP_ROOT}/../.." && pwd)"
+export CYPRESS_CACHE_FOLDER="${BENCH_ROOT}/.cache/Cypress"
+
+# These overrides affect the subsequent Frappe runner as well as the runtime
+# preflight. Clear them in this parent process, not only inside the helper's
+# child shell, so Electron is launched as an Electron app.
+unset ELECTRON_RUN_AS_NODE CYPRESS_RUN_BINARY
+if [[ -n "${CYPRESS_INSTALL_BINARY:-}" ]]; then
+    unset CYPRESS_INSTALL_BINARY
+fi
 
 usage() {
     echo "Usage: scripts/verify.sh [lint|server|ui|pre-push|pre-push-ui]" >&2
@@ -40,6 +49,8 @@ run_server_tests() {
 }
 
 run_ui_tests() {
+    "${APP_ROOT}/scripts/cypress-runtime.sh" prepare
+
     local chrome_binary="${CHROME_BIN:-}"
     if [[ -z "${chrome_binary}" ]]; then
         chrome_binary="$(command -v chrome || true)"
@@ -49,9 +60,14 @@ run_ui_tests() {
         exit 1
     fi
 
+    # Frappe assembles the Cypress command through a shell string. Pass the
+    # browser by name and let CHROME_BIN carry the executable path so paths
+    # containing spaces (such as the macOS application bundle) are preserved.
+    export CHROME_BIN="${chrome_binary}"
+
     bench --site "${TEST_SITE_NAME}" run-ui-tests bond_management \
         --headless \
-        --browser "${chrome_binary}"
+        --browser chrome
 }
 
 case "${MODE}" in

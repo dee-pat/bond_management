@@ -5,7 +5,7 @@ from decimal import Decimal
 from pathlib import Path
 
 import frappe
-from frappe.exceptions import ValidationError
+from frappe.exceptions import FrappeTypeError, ValidationError
 from frappe.tests import IntegrationTestCase
 from frappe.utils import getdate
 
@@ -411,6 +411,14 @@ class TestBondTransaction(IntegrationTestCase):
                 "accrued_interest_calculated": 0.0,
             },
         )
+
+    def test_value_endpoint_rejects_complex_string_inputs(self):
+        with self.assertRaisesRegex(FrappeTypeError, "isin.*str"):
+            get_calculated_amounts(isin=[])
+        with self.assertRaisesRegex(FrappeTypeError, "settlement_date.*str"):
+            get_calculated_amounts(settlement_date={})
+        with self.assertRaisesRegex(FrappeTypeError, "transaction_name.*str"):
+            get_calculated_amounts(transaction_name=[])
 
     def test_uses_authoritative_bond_snapshot(self):
         bond = make_bond()

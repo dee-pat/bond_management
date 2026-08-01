@@ -82,7 +82,7 @@ async function apply_recalculated_schedules(frm, state, request_id, schedules) {
 		return schedules;
 	}
 
-	await apply_principal_percentages(frm, schedules.principal_schedule || []);
+	await apply_principal_percentages(frm, state, request_id, schedules.principal_schedule || []);
 	if (request_id !== state.request_id) {
 		return schedules;
 	}
@@ -95,24 +95,25 @@ async function apply_recalculated_schedules(frm, state, request_id, schedules) {
 	return schedules;
 }
 
-function apply_principal_percentages(frm, calculated_rows) {
+async function apply_principal_percentages(frm, state, request_id, calculated_rows) {
 	const rows_by_name = new Map(
 		calculated_rows.filter((row) => row.name).map((row) => [row.name, row])
 	);
 	const rows_by_index = new Map(calculated_rows.map((row) => [row.idx, row]));
-	const updates = (frm.doc.principal_schedule || []).map((row) => {
+	for (const row of frm.doc.principal_schedule || []) {
+		if (request_id !== state.request_id) {
+			return;
+		}
 		const calculated = rows_by_name.get(row.name) || rows_by_index.get(row.idx);
 		if (!calculated) {
-			return Promise.resolve();
+			continue;
 		}
 
-		return frappe.model.set_value(
+		await frappe.model.set_value(
 			row.doctype,
 			row.name,
 			"repayment_percent",
 			calculated.repayment_percent
 		);
-	});
-
-	return Promise.all(updates);
+	}
 }
