@@ -11,6 +11,12 @@ Use this file for local environment context and troubleshooting notes.
 - MariaDB 11.8 or 12.3
 - Redis 6 or newer
 
+## Local bench sites
+
+- `dev.local`: interactive development site.
+- `test_site`: automated server and UI test site. The repository-wide usage
+  and safety rules for this site are defined in `AGENTS.md`.
+
 ## Project focus
 
 - Custom Frappe apps only; do not assume ERPNext unless specified.

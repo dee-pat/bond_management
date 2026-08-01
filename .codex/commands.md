@@ -13,13 +13,13 @@ bench new-site dev.local
 bench --site dev.local install-app app_name
 
 # Migrate
-bench migrate
+bench --site dev.local migrate
 
 # Build assets
 bench build
 
 # Clear cache
-bench clear-cache
+bench --site dev.local clear-cache
 
 # Restart
 bench restart

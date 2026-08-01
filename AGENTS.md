@@ -38,6 +38,27 @@
 - Put business calculations in Python, not JavaScript. Expose a Python method
   to the client only when needed, and remove `@frappe.whitelist()` when it is
   no longer used by a client integration.
+- Treat values populated by client scripts, including values derived from an
+  attachment, as untrusted input. Recompute or validate them on the server
+  before saving; the client may improve the form experience but must not be
+  the authority for a business rule.
+- JavaScript form flows that perform asynchronous work must return their
+  Promise. Send intentional empty arguments explicitly when Frappe would omit
+  `undefined`, and prevent an older response from overwriting newer form
+  state when requests can overlap.
+
+## Attachment rules
+
+- Keep uploaded financial documents private. Read them through Frappe's File
+  APIs and storage abstraction rather than assuming a filesystem path.
+- Validate the actual file content and expected document structure; do not
+  trust the extension, MIME type, filename, or client-extracted values alone.
+- Never return, log, persist in plain text, or include configured PDF passwords
+  in exceptions. Standardize attachment filenames only after the document has
+  been identified, and preserve Frappe's private-file semantics.
+- Parsers must reject missing or conflicting identity fields instead of
+  guessing. A documented legacy fallback may be used only when the primary
+  source is absent, and the primary source takes precedence when both exist.
 
 ## Financial and migration rules
 
@@ -53,6 +74,27 @@
   `bond_management/patches.txt`, and test both the migration and its resulting
   business data. Do not use a patch for schema changes that Frappe migrations
   already handle.
+- Enforce business uniqueness at both boundaries when concurrency is possible:
+  use controller validation for a useful error and a database unique index as
+  the final integrity guarantee. Install manual indexes with an idempotent
+  patch, ensure they are also created on a fresh app installation, and test
+  both paths.
+- Permission patches should update or create only the `DocPerm` rows they own.
+  Do not save a parent `DocType` merely to change permissions, because doing so
+  can validate or rewrite unrelated metadata during migration.
+
+## Test site conventions
+
+- `test_site` is the canonical site for automated server and UI tests. Use
+  `dev.local` for interactive development; never run destructive tests against
+  `dev.local` or any other non-test site.
+- Before testing, ensure `bond_management` is installed on `test_site`, migrate
+  that site, and enable tests with
+  `bench --site test_site set-config allow_tests true`.
+- Reuse an existing local `test_site`. Do not recreate, drop, or restore it
+  without explicit user approval.
+- Do not record site credentials or machine-specific database configuration in
+  repository files.
 
 ## Quality expectations
 
@@ -64,6 +106,11 @@
 - Add Cypress tests under `cypress/integration` for reports and other
   client-side interactions. Promise-returning JavaScript flows are required
   for testability.
+- Test attachment parsers with current and supported legacy formats, malformed
+  and non-PDF input, missing and conflicting identity values, and encrypted
+  files with valid and invalid passwords.
+- Test factories must generate collision-safe values. Tests and patches must
+  tolerate reruns without depending on records left behind by an earlier run.
 - From the bench directory, run server tests with
   `bench --site test_site set-config allow_tests true` followed by
   `bench --site test_site run-tests --app bond_management`.
