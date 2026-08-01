@@ -62,4 +62,24 @@ context("Bond Statement", () => {
 			expect(window.cur_frm.doc.statement_date ?? null).to.be.null;
 		});
 	});
+
+	it("colors reconciliation status in the list view", () => {
+		cy.visit("/desk/bond-statement/view/list");
+		cy.get("body").should("have.attr", "data-ajax-state", "complete");
+
+		cy.window().then((window) => {
+			const formatter =
+				window.frappe.listview_settings["Bond Statement"]?.formatters
+					?.reconciliation_status;
+			expect(formatter).to.be.a("function");
+
+			const matched = window.$(formatter("Matched"));
+			const mismatched = window.$(formatter("Mismatched"));
+
+			expect(matched).to.have.class("green");
+			expect(matched.attr("data-filter")).to.equal("reconciliation_status,=,Matched");
+			expect(mismatched).to.have.class("red");
+			expect(mismatched.attr("data-filter")).to.equal("reconciliation_status,=,Mismatched");
+		});
+	});
 });
