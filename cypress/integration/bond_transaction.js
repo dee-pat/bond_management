@@ -11,6 +11,16 @@ const SINGLE_TRANSACTION = {
 	commission: 0.45,
 };
 
+const CALCULATED_AMOUNTS = {
+	principal: 20000,
+	commission_amount: 90,
+	settlement_amount: 44132.5,
+	accrued_interest_calculated: 24062.5,
+};
+
+const TRANSACTION_CALCULATION_METHOD =
+	"bond_management.bond_management.doctype.bond_transaction.bond_transaction.get_calculated_amounts";
+
 context("Bond Transaction PDF entry", () => {
 	beforeEach(() => {
 		cy.login();
@@ -33,6 +43,13 @@ context("Bond Transaction PDF entry", () => {
 
 		cy.window().then((window) => {
 			const frm = window.cur_frm;
+			const original_frappe_call = window.frappe.call.bind(window.frappe);
+			cy.stub(window.frappe, "call").callsFake((options) => {
+				if (options?.method === TRANSACTION_CALCULATION_METHOD) {
+					return Promise.resolve({ message: CALCULATED_AMOUNTS });
+				}
+				return original_frappe_call(options);
+			});
 			cy.stub(frm, "call")
 				.withArgs("read_transaction_pdf")
 				.resolves({ message: { transactions: [SINGLE_TRANSACTION] } })
@@ -100,9 +117,13 @@ context("Bond Transaction PDF entry", () => {
 			return frm.script_manager.trigger("attachment");
 		});
 
-		cy.get('.modal:visible [data-fieldname="transactions"] .grid-body input:checkbox')
+		cy.get(
+			'.modal:visible [data-fieldname="transactions"] .grid-body [data-fieldname="post"] input:checkbox'
+		)
 			.should("have.length", 2)
-			.and("be.checked");
+			.each(($checkbox) => {
+				expect($checkbox).to.have.class("disabled-selected");
+			});
 		cy.get(".modal:visible .modal-footer .btn-primary").click();
 
 		cy.get("@transactionPdfCall").should("have.been.calledTwice");

@@ -85,7 +85,7 @@ add_to_apps_screen = [
 # ------------
 
 # before_install = "bond_management.install.before_install"
-# after_install = "bond_management.install.after_install"
+after_install = "bond_management.patches.add_bond_query_indexes.ensure_bond_query_indexes"
 
 # Frappe schema sync removes manual single-column unique indexes when the
 # DocField cannot declare `unique`. Re-apply the Bond Market Date database
