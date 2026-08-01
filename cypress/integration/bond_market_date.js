@@ -177,9 +177,7 @@ context("Bond Market Date", () => {
 	it("recalculates child rows before the parent date is entered", () => {
 		cy.window().then((window) => {
 			const frm = window.cur_frm;
-			const target = frm.doc.bond_market_prices.find(
-				(row) => row.isin === TARGET_ISIN
-			);
+			const target = frm.doc.bond_market_prices.find((row) => row.isin === TARGET_ISIN);
 			frm.doc.date = undefined;
 			frm.refresh_field("date");
 

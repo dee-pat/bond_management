@@ -32,3 +32,14 @@ brew services start mariadb
 
 # Backup
 bench --site dev.local backup --with-files
+
+# Shared verification (lint, migrate test_site, full server suite)
+apps/bond_management/scripts/verify.sh pre-push
+
+# Shared verification including the complete headless UI suite
+apps/bond_management/scripts/verify.sh pre-push-ui
+
+# Individual verification stages (`ui` expects an already prepared test site)
+apps/bond_management/scripts/verify.sh lint
+apps/bond_management/scripts/verify.sh server
+apps/bond_management/scripts/verify.sh ui

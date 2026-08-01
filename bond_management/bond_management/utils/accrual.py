@@ -174,6 +174,4 @@ def get_accrued_interest(isin=None, settlement_date=None, quantity_face_value=No
         return to_decimal(0)
     settlement_date = getdate(settlement_date)
 
-    return unit_accrued_interest(isin=isin, settlement_date=settlement_date) * to_decimal(
-        quantity_face_value
-    )
+    return unit_accrued_interest(isin=isin, settlement_date=settlement_date) * to_decimal(quantity_face_value)

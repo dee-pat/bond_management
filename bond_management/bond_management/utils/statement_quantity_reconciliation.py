@@ -36,8 +36,7 @@ def reconcile_statement_quantities(
         else []
     )
     face_value_by_isin = {
-        bond.name: to_decimal(bond.face_value_per_unit, "Face Value Per Unit")
-        for bond in bonds
+        bond.name: to_decimal(bond.face_value_per_unit, "Face Value Per Unit") for bond in bonds
     }
 
     pdf_quantities = {}
@@ -71,9 +70,7 @@ def reconcile_statement_quantities(
                 pdf_quantity=pdf_quantity,
                 calculated_quantity=calculated_quantity,
                 difference=(
-                    pdf_quantity - calculated_quantity
-                    if pdf_quantity is not None
-                    else -calculated_quantity
+                    pdf_quantity - calculated_quantity if pdf_quantity is not None else -calculated_quantity
                 ),
             )
         )

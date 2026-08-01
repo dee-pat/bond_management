@@ -8,7 +8,6 @@ report, and direct-document access.
 
 import frappe
 
-
 INVESTOR_ROLE = "Bond Investor Read Only"
 _ALLOWED_PERMISSION_TYPES = {"read", "report", "print", "email"}
 

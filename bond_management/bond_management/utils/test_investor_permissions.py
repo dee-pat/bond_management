@@ -4,7 +4,6 @@ from unittest.mock import patch
 import frappe
 from frappe.tests import IntegrationTestCase
 
-from bond_management.bond_management.utils import investor_permissions
 from bond_management.bond_management.report.portfolio_performance.portfolio_performance import (
     validate_report_inputs,
 )
@@ -14,6 +13,7 @@ from bond_management.bond_management.tests.factories import (
     make_transaction,
     unique_name,
 )
+from bond_management.bond_management.utils import investor_permissions
 from bond_management.patches.add_bond_investor_read_only_access import execute as ensure_investor_access
 
 
@@ -94,9 +94,7 @@ class TestInvestorPermissions(IntegrationTestCase):
         ):
             get_query.return_value.run.return_value = []
 
-            self.assertEqual(
-                investor_permissions.transaction_query_condition("investor@example.com"), "1=0"
-            )
+            self.assertEqual(investor_permissions.transaction_query_condition("investor@example.com"), "1=0")
 
     def test_investor_query_is_restricted_to_assigned_portfolios(self):
         with (
@@ -128,9 +126,7 @@ class TestInvestorPermissions(IntegrationTestCase):
     def test_investor_login_redirects_to_the_investor_workspace(self):
         with patch.object(frappe, "get_roles", return_value=[investor_permissions.INVESTOR_ROLE]):
             frappe.local.response = {"redirect_to": "/desk"}
-            investor_permissions.redirect_investor_to_workspace(
-                SimpleNamespace(user="investor@example.com")
-            )
+            investor_permissions.redirect_investor_to_workspace(SimpleNamespace(user="investor@example.com"))
 
             self.assertEqual(frappe.local.response["home_page"], "/desk/bond-investor")
             self.assertNotIn("redirect_to", frappe.local.response)

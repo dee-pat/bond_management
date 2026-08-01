@@ -1,6 +1,5 @@
 import frappe
 
-
 ROLE = "Bond Investor Read Only"
 READ_ONLY_DOCTYPES = (
     "Bond Portfolio",

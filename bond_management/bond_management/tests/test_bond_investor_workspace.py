@@ -2,7 +2,6 @@ import json
 from pathlib import Path
 from unittest import TestCase
 
-
 ROLE = "Bond Investor Read Only"
 WORKSPACE_PATH = Path(__file__).parents[1] / "workspace" / "bond_investor" / "bond_investor.json"
 

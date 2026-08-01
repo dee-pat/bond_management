@@ -43,9 +43,7 @@ def execute(filters: dict | None = None):
     )
 
     columns = get_columns()
-    data, combined_cashflow, combined_future_cashflow = get_data(
-        portfolio, valuation_date
-    )
+    data, combined_cashflow, combined_future_cashflow = get_data(portfolio, valuation_date)
 
     # Add summary row
     currencies = {row["currency"] for row in data if row.get("currency")}
@@ -56,9 +54,7 @@ def execute(filters: dict | None = None):
 
 
 @frappe.whitelist(methods=["POST"])
-def get_xirr_cashflows(
-    portfolio: str, valuation_date: str, isin: str, xirr_type: str
-) -> list[dict]:
+def get_xirr_cashflows(portfolio: str, valuation_date: str, isin: str, xirr_type: str) -> list[dict]:
     """Return the raw cash flows behind a report XIRR value for spreadsheet review."""
     portfolio, valuation_date = validate_report_inputs(portfolio, valuation_date)
 
@@ -74,9 +70,7 @@ def get_xirr_cashflows(
     else:
         portfolio_isins = set(context["isins"])
         if isin not in portfolio_isins:
-            frappe.throw(
-                f"ISIN {frappe.bold(isin)} is not in this portfolio on or before the valuation date"
-            )
+            frappe.throw(f"ISIN {frappe.bold(isin)} is not in this portfolio on or before the valuation date")
         if not frappe.has_permission("Bond Master", "read", doc=isin):
             frappe.throw("Not permitted", frappe.PermissionError)
 
@@ -86,9 +80,7 @@ def get_xirr_cashflows(
         if getdate(bond.maturity_date) <= getdate(valuation_date):
             quantity = to_decimal(0)
         market_price = context["market_prices"].get(isin)
-        terminal_market_price = get_terminal_market_price(
-            isin, valuation_date, quantity, market_price
-        )
+        terminal_market_price = get_terminal_market_price(isin, valuation_date, quantity, market_price)
         if xirr_type == "past":
             cashflows = create_past_cash_flows(
                 isin=isin,
@@ -116,9 +108,7 @@ def get_xirr_cashflows(
             "date": getdate(cashflow["date"]).isoformat(),
             "amount": round_cashflow_amount(cashflow["amount"]),
             "quantity": float(cashflow["quantity"]),
-            "rate": round_cashflow_amount(
-                to_decimal(cashflow["amount"]) / to_decimal(cashflow["quantity"])
-            ),
+            "rate": round_cashflow_amount(to_decimal(cashflow["amount"]) / to_decimal(cashflow["quantity"])),
         }
         for cashflow in sorted(
             cashflows,
@@ -144,9 +134,7 @@ def validate_report_inputs(portfolio, valuation_date):
 def get_terminal_market_price(isin, valuation_date, quantity, market_price):
     """Require a valid quote only when a position still has market exposure."""
     if quantity and market_price is None:
-        frappe.throw(
-            f"No market price found for {frappe.bold(isin)} on or before {valuation_date}"
-        )
+        frappe.throw(f"No market price found for {frappe.bold(isin)} on or before {valuation_date}")
     if quantity and to_decimal(market_price) <= 0:
         frappe.throw(f"Market price for {frappe.bold(isin)} must be greater than zero")
 
@@ -265,13 +253,10 @@ def get_data(portfolio, valuation_date, context=None):
 
         # ---------- MARKET DATA ----------
         market_price = context["market_prices"].get(isin)
-        terminal_market_price = get_terminal_market_price(
-            isin, valuation_date, quantity, market_price
-        )
+        terminal_market_price = get_terminal_market_price(isin, valuation_date, quantity, market_price)
         accrued_interest = unit_accrued_interest_from_bond(bond, valuation_date)
         market_value = quantity * (
-            face_value_per_unit * to_decimal(terminal_market_price) / to_decimal(100)
-            + accrued_interest
+            face_value_per_unit * to_decimal(terminal_market_price) / to_decimal(100) + accrued_interest
         )
 
         # ---------- CASHFLOW DATA ----------
@@ -359,9 +344,7 @@ def make_total_row(data, combined_cashflow, combined_future_cashflow):
     cash_flows = consolidate_cashflows(cash_flows=combined_cashflow)
     xirr_value = calculate_xirr(cash_flows)
 
-    combined_future_cashflow = consolidate_cashflows(
-        cash_flows=combined_future_cashflow
-    )
+    combined_future_cashflow = consolidate_cashflows(cash_flows=combined_future_cashflow)
 
     future_xirr = calculate_xirr(combined_future_cashflow)
 

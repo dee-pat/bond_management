@@ -100,8 +100,7 @@ jobs:
       - name: Run Tests
         working-directory: /home/runner/frappe-bench
         run: |
-          bench --site test_site set-config allow_tests true
-          bench --site test_site run-tests --app bond_management
+          apps/bond_management/scripts/verify.sh pre-push
         env:
           TYPE: server
 
@@ -200,7 +199,7 @@ jobs:
       - name: Run Cypress
         working-directory: /home/runner/frappe-bench
         run: |
-          bench --site test_site run-ui-tests bond_management --headless --browser "$(which chrome)"
+          apps/bond_management/scripts/verify.sh ui
         env:
           CI: 'Yes'
 

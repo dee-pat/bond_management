@@ -2,7 +2,6 @@ from decimal import ROUND_HALF_EVEN, Decimal, InvalidOperation
 
 import frappe
 
-
 MONEY_PRECISION = Decimal("0.0001")
 PERCENT_PRECISION = Decimal("0.000000001")
 DecimalInput = Decimal | int | float | str | None

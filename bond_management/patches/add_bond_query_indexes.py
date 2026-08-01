@@ -1,6 +1,5 @@
 import frappe
 
-
 LEDGER_INDEX = "bond_transaction_portfolio_isin_settlement"
 REPORT_INDEX = "bond_transaction_portfolio_settlement_isin"
 MARKET_DATE_UNIQUE = "unique_bond_market_date"
@@ -34,9 +33,7 @@ def ensure_bond_query_indexes():
         ignore_permissions=True,
     ).run(as_dict=True)
     duplicate_attachments = [
-        row.attachment
-        for row in duplicate_attachments
-        if row.attachment and row.statement_count > 1
+        row.attachment for row in duplicate_attachments if row.attachment and row.statement_count > 1
     ]
     if duplicate_attachments:
         attachments = ", ".join(duplicate_attachments[:10])

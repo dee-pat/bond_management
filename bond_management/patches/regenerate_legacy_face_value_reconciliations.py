@@ -10,7 +10,6 @@ from bond_management.bond_management.utils.statement_quantity_report import (
     attach_quantity_reconciliation_report,
 )
 
-
 REPORT_VERSION = "FaceValue-v2"
 
 

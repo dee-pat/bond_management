@@ -8,7 +8,6 @@ from bond_management.bond_management.utils.private_attachment import (
 )
 from bond_management.bond_management.utils.statement_pdf import normalize_account_number
 
-
 STATEMENT_FILENAME_PREFIX = "PortfolioStatement-"
 SAFE_ACCOUNT_PATTERN = re.compile(r"^[A-Za-z0-9_-]+$")
 
@@ -19,10 +18,7 @@ def get_standard_statement_filename(account_no: str, statement_date) -> str:
     if not normalized_account or not SAFE_ACCOUNT_PATTERN.fullmatch(normalized_account):
         frappe.throw("Product Account No. contains characters that cannot be used in a filename.")
 
-    return (
-        f"{STATEMENT_FILENAME_PREFIX}{normalized_account}-"
-        f"{getdate(statement_date).strftime('%Y%m%d')}.pdf"
-    )
+    return f"{STATEMENT_FILENAME_PREFIX}{normalized_account}-{getdate(statement_date).strftime('%Y%m%d')}.pdf"
 
 
 def standardize_statement_attachment(statement, account_no: str, statement_date) -> str:

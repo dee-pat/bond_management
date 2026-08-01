@@ -8,7 +8,6 @@ from bond_management.bond_management.utils.private_attachment import (
 )
 from bond_management.bond_management.utils.statement_pdf import normalize_account_number
 
-
 TRANSACTION_FILENAME_PREFIX = "Transaction-"
 SAFE_ACCOUNT_PATTERN = re.compile(r"^[A-Za-z0-9_-]+$")
 
@@ -20,8 +19,7 @@ def get_standard_transaction_filename(account_no: str, settlement_date) -> str:
         frappe.throw("Product Account No. contains characters that cannot be used in a filename.")
 
     return (
-        f"{TRANSACTION_FILENAME_PREFIX}{normalized_account}-"
-        f"{getdate(settlement_date).strftime('%Y%m%d')}.pdf"
+        f"{TRANSACTION_FILENAME_PREFIX}{normalized_account}-{getdate(settlement_date).strftime('%Y%m%d')}.pdf"
     )
 
 

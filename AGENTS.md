@@ -111,13 +111,31 @@
   files with valid and invalid passwords.
 - Test factories must generate collision-safe values. Tests and patches must
   tolerate reruns without depending on records left behind by an earlier run.
-- From the bench directory, run server tests with
-  `bench --site test_site set-config allow_tests true` followed by
-  `bench --site test_site run-tests --app bond_management`.
-- Run UI tests with
-  `bench --site test_site run-ui-tests bond_management --headless --browser "$(which chrome)"`.
-- Run `pre-commit run --all-files` from the app directory before handoff when
-  the environment permits.
+
+## Pre-push verification gate
+
+- Before committing, pushing, or handing off application-code changes, run the
+  relevant targeted test, its complete module, and the full server suite on
+  `test_site`. A passing targeted test is not evidence that the full suite
+  passes; tests must succeed both independently and under full-suite ordering.
+- From the bench directory, run
+  `apps/bond_management/scripts/verify.sh pre-push`. This shared gate runs
+  pre-commit, migrates `test_site`, and runs the complete server suite. GitHub
+  Actions must call the same script so local and CI commands cannot drift.
+- Changes to JavaScript, reports, DocType metadata, permissions, workspaces, or
+  other Desk behavior must run
+  `apps/bond_management/scripts/verify.sh pre-push-ui`, which adds the complete
+  headless UI suite. Set `CHROME_BIN` when `chrome` is not on `PATH`.
+- Changes to patches, schema, hooks, dependencies, installation, or manual
+  database indexes must also be validated by a fresh-site installation and
+  migration matching GitHub Actions. Obtain explicit user approval before
+  recreating, dropping, or restoring a local site.
+- Do not commit, push, or report a change as complete while a required check is
+  failing or unavailable. State exactly which checks ran, their results, and
+  anything that remains unverified.
+- When GitHub Actions fails, inspect the exact traceback and reproduce the
+  failing test locally both in isolation and in the full suite. Do not guess at
+  a fix or weaken an assertion merely to make CI pass.
 
 ## References
 

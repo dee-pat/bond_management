@@ -28,10 +28,7 @@ def round_cashflow_amount(amount):
 
 def round_cashflow_amounts(cash_flows):
     """Apply the cash-flow amount convention without changing other metadata."""
-    return [
-        {**cash_flow, "amount": quantize_money(cash_flow["amount"])}
-        for cash_flow in cash_flows
-    ]
+    return [{**cash_flow, "amount": quantize_money(cash_flow["amount"])} for cash_flow in cash_flows]
 
 
 def calculate_future_xirr(isin, date, market_price):
@@ -116,11 +113,7 @@ def create_future_cash_flows(isin, date, market_price, quantity=1, bond_doc=None
             "bond": isin,
             "type": "market_price",
             "date": settlement_date,
-            "amount": -(
-                to_decimal(bond_doc.get("face_value_per_unit"))
-                * market_price
-                / to_decimal(100)
-            ),
+            "amount": -(to_decimal(bond_doc.get("face_value_per_unit")) * market_price / to_decimal(100)),
         }
     )
     future_cash_flows.append(

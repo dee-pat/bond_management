@@ -81,9 +81,7 @@ class BondMarketDate(Document):
 
 
 @frappe.whitelist(methods=["POST"])
-def get_recalculated_market_data(
-    date: str | None = None, rows: str | list | None = None
-) -> list[dict]:
+def get_recalculated_market_data(date: str | None = None, rows: str | list | None = None) -> list[dict]:
     """Return derived row values without accepting or returning a form document."""
     if not (
         frappe.has_permission("Bond Market Date", "write")
@@ -132,9 +130,7 @@ def get_recalculated_market_data(
 
 
 @frappe.whitelist(methods=["POST"])
-def get_cashflows(
-    date: Date | str | None, isin: str | None, market_price: DecimalInput
-) -> list[dict]:
+def get_cashflows(date: Date | str | None, isin: str | None, market_price: DecimalInput) -> list[dict]:
     """Return value-only cash flows without syncing a form Document response."""
     if not date:
         frappe.throw("Date is required")

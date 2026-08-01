@@ -17,6 +17,8 @@ from bond_management.patches.add_bond_query_indexes import (
     MARKET_DATE_UNIQUE,
     REPORT_INDEX,
     STATEMENT_ATTACHMENT_UNIQUE,
+)
+from bond_management.patches.add_bond_query_indexes import (
     execute as add_bond_query_indexes,
 )
 from bond_management.patches.backfill_weighted_avg_repayment import execute as backfill_weighted_repayment
@@ -189,9 +191,7 @@ class TestBondMarketDate(IntegrationTestCase):
         self.assertTrue(frappe.db.has_index("tabBond Transaction", LEDGER_INDEX))
         self.assertTrue(frappe.db.has_index("tabBond Transaction", REPORT_INDEX))
         self.assertTrue(frappe.db.has_index("tabBond Market Date", MARKET_DATE_UNIQUE))
-        self.assertTrue(
-            frappe.db.has_index("tabBond Statement", STATEMENT_ATTACHMENT_UNIQUE)
-        )
+        self.assertTrue(frappe.db.has_index("tabBond Statement", STATEMENT_ATTACHMENT_UNIQUE))
 
         bond = make_bond()
         market_date = make_market_date(bond, date="2025-12-23")

@@ -103,8 +103,7 @@ def _place_standardized_file(source_path: Path, target_path: Path, *, source_is_
     if target_path.exists():
         if not filecmp.cmp(source_path, target_path, shallow=False):
             frappe.throw(
-                f"Cannot rename the PDF because {target_path.name} already exists "
-                "with different content."
+                f"Cannot rename the PDF because {target_path.name} already exists with different content."
             )
         if not source_is_shared:
             frappe.db.after_commit.add(lambda: source_path.unlink(missing_ok=True))
