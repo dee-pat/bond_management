@@ -43,13 +43,7 @@ context("Bond Transaction PDF entry", () => {
 
 		cy.window().then((window) => {
 			const frm = window.cur_frm;
-			const original_frappe_call = window.frappe.call.bind(window.frappe);
-			cy.stub(window.frappe, "call").callsFake((options) => {
-				if (options?.method === TRANSACTION_CALCULATION_METHOD) {
-					return Promise.resolve({ message: CALCULATED_AMOUNTS });
-				}
-				return original_frappe_call(options);
-			});
+			stub_transaction_calculation(window);
 			cy.stub(frm, "call")
 				.withArgs("read_transaction_pdf")
 				.resolves({ message: { transactions: [SINGLE_TRANSACTION] } })
@@ -133,6 +127,7 @@ context("Bond Transaction PDF entry", () => {
 	it("ignores a stale transaction PDF response after a newer attachment is selected", () => {
 		cy.window().then((window) => {
 			const frm = window.cur_frm;
+			stub_transaction_calculation(window);
 			let resolve_first;
 			const first_response = new Promise((resolve) => {
 				resolve_first = resolve;
@@ -173,3 +168,13 @@ context("Bond Transaction PDF entry", () => {
 		});
 	});
 });
+
+function stub_transaction_calculation(window) {
+	const original_frappe_call = window.frappe.call.bind(window.frappe);
+	cy.stub(window.frappe, "call").callsFake((options) => {
+		if (options?.method === TRANSACTION_CALCULATION_METHOD) {
+			return Promise.resolve({ message: CALCULATED_AMOUNTS });
+		}
+		return original_frappe_call(options);
+	});
+}
