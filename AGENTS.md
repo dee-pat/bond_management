@@ -181,7 +181,8 @@ the two files conflict, this app-level file governs.
   initialization path, step working directories, caches, and artifact paths in
   sync. Use a unique run-scoped directory under the runner's temporary folder;
   never reuse a fixed `/home/runner/frappe-bench` path or overwrite an existing
-  bench.
+  bench. GitHub's `runner` context is unavailable in `jobs.<job_id>.env`; use it
+  in step-level fields or the runner's `$RUNNER_TEMP` variable instead.
 - If a required command cannot run because a service, browser, dependency,
   site, or credential is unavailable, do not substitute an unrelated check.
   Report the exact command, blocking condition, and verification that remains
