@@ -117,6 +117,50 @@ class TestInvestorPermissions(IntegrationTestCase):
         with patch.object(frappe, "get_roles", return_value=[investor_permissions.INVESTOR_ROLE]):
             self.assertIsNone(investor_permissions.portfolio_query_condition("Administrator"))
 
+    def test_bond_management_manager_can_open_bond_management_desk(self):
+        with (
+            patch.dict(frappe.local.session, {"user": "manager@example.com"}),
+            patch.object(frappe, "get_roles", return_value=[investor_permissions.BOND_MANAGER_ROLE]),
+        ):
+            self.assertTrue(investor_permissions.has_investor_desk_access())
+
+    def test_bond_management_manager_has_full_app_permissions(self):
+        doctypes = [
+            "Bond Market Date",
+            "Bond Master",
+            "Bond Portfolio",
+            "Bond Statement",
+            "Bond Transaction",
+        ]
+        permissions = frappe.qb.get_query(
+            "DocPerm",
+            fields=["parent", "read", "write", "create", "delete", "submit", "cancel", "amend", "import"],
+            filters={
+                "role": investor_permissions.BOND_MANAGER_ROLE,
+                "parent": ["in", doctypes],
+                "permlevel": 0,
+            },
+            ignore_permissions=True,
+        ).run(as_dict=True)
+
+        self.assertEqual(len(permissions), len(doctypes))
+        for permission in permissions:
+            self.assertTrue(
+                all(
+                    permission.get(field)
+                    for field in (
+                        "read",
+                        "write",
+                        "create",
+                        "delete",
+                        "submit",
+                        "cancel",
+                        "amend",
+                        "import",
+                    )
+                )
+            )
+
     def test_direct_permission_check_allows_an_assigned_portfolio(self):
         with patch.object(investor_permissions, "_get_allowed_portfolios", return_value=["Nanda"]):
             self.assertTrue(

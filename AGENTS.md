@@ -51,6 +51,11 @@ the two files conflict, this app-level file governs.
   principal factor a second time to market-price cash flows.
 - Attachment-managed statement fields are server-authoritative; Desk
   `read_only` settings are not sufficient protection.
+- Transaction, posting, accrual, reconciliation, and attachment mutations are
+  server-authoritative. Do not use local-first optimistic state for financial
+  values or durable document status; show pending/failed state until the server
+  confirms the result. Optimistic UI is limited to non-financial presentation
+  state and must support recovery.
 
 ## Attachments and secrets
 
@@ -117,7 +122,17 @@ the two files conflict, this app-level file governs.
 - For bond rules involving `>`, `>=`, `<`, or `<=`, test greater-than,
   less-than, and equality cases and state equality behavior.
 - Add Cypress tests for reports and other client-side interactions. Promise-
-  returning JavaScript flows are required for testability.
+  returning JavaScript flows are required for testability. Larger Desk
+  workflows require at least one end-to-end Cypress flow; do not introduce a
+  second browser framework solely because another project mandates it.
+- When a backend field or permission is exposed through Desk, update the
+  relevant form/list/workspace code and Cypress coverage in the same change.
+- For asynchronous Desk flows, Cypress coverage must include delayed success,
+  failed requests, retry/recovery, and stale-response protection. Do not assert
+  a saved, posted, reconciled, or uploaded state before the server response.
+- For mutation APIs that can be retried or involve multiple writes, test
+  permission failures, duplicate/retry behavior, stale-version or modified
+  conflicts, and atomic rollback when one logical operation fails.
 
 ## App verification gate
 
@@ -158,6 +173,9 @@ the two files conflict, this app-level file governs.
   or weaken an assertion merely to make CI pass.
 - Do not commit, push, or report a change as complete while a required check is
   failing or unavailable. State exactly which checks ran and their results.
+- For a multi-phase feature, record the intended slice and verification steps
+  before implementation; for a small bug fix, a focused issue note and
+  regression test are sufficient.
 
 ## References
 
