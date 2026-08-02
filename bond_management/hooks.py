@@ -92,6 +92,7 @@ after_install = [
     "bond_management.patches.add_bond_investor_read_only_access.execute",
     "bond_management.patches.add_bond_investor_report_permission.execute",
     "bond_management.patches.add_bond_management_manager_access.execute",
+    "bond_management.patches.add_bond_management_report_permission.execute",
 ]
 
 # Frappe schema sync removes manual single-column unique indexes when the

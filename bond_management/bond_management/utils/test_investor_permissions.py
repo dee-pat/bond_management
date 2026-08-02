@@ -184,6 +184,14 @@ class TestInvestorPermissions(IntegrationTestCase):
             "bond_management.patches.add_bond_management_manager_access.execute",
             app_hooks.after_install,
         )
+        self.assertIn(
+            "bond_management.patches.add_bond_management_report_permission.execute",
+            app_hooks.after_install,
+        )
+
+    def test_manager_can_run_portfolio_performance_report(self):
+        report = frappe.get_doc("Report", "Portfolio Performance")
+        self.assertIn(investor_permissions.BOND_MANAGER_ROLE, {row.role for row in report.roles})
 
     def test_direct_permission_check_allows_an_assigned_portfolio(self):
         with patch.object(investor_permissions, "_get_allowed_portfolios", return_value=["Nanda"]):
