@@ -2,7 +2,6 @@
 
 import frappe
 
-
 ROLE = "Bond Management Manager"
 BOND_DOCTYPES = (
     "Bond Market Date",

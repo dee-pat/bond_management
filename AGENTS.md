@@ -164,6 +164,11 @@ the two files conflict, this app-level file governs.
   indexes must also be validated against a freshly installed site matching the
   GitHub Actions setup. Obtain approval before recreating or dropping a local
   site.
+- CI's fresh-site bootstrap must initialize an explicit bench root, assert that
+  its `sites/common_site_config.json` exists before running `bench get-app`, and
+  fetch the checked-out app through a local `file://` source. Keep the bench
+  initialization path, step working directories, caches, and artifact paths in
+  sync.
 - If a required command cannot run because a service, browser, dependency,
   site, or credential is unavailable, do not substitute an unrelated check.
   Report the exact command, blocking condition, and verification that remains

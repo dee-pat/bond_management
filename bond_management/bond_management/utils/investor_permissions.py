@@ -16,11 +16,7 @@ _ALLOWED_PERMISSION_TYPES = {"read", "report", "print", "email"}
 def has_investor_desk_access() -> bool:
     """Allow investors and managers to use the dedicated Bond Management Desk route."""
     roles = frappe.get_roles()
-    return (
-        frappe.session.user == "Administrator"
-        or BOND_MANAGER_ROLE in roles
-        or INVESTOR_ROLE in roles
-    )
+    return frappe.session.user == "Administrator" or BOND_MANAGER_ROLE in roles or INVESTOR_ROLE in roles
 
 
 def redirect_investor_to_workspace(login_manager) -> None:
