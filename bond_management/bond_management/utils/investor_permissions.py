@@ -79,12 +79,15 @@ def statement_query_condition(user: str) -> str | None:
 
 
 def _has_portfolio_access(portfolio: str | None, user: str, ptype: str) -> bool | None:
-    if ptype not in _ALLOWED_PERMISSION_TYPES:
-        return None
-
     portfolios = _get_allowed_portfolios(user)
     if portfolios is None:
-        return None
+        # Frappe's controller permission hooks are deny-capable: a falsey
+        # result denies access. Explicitly allow users outside the investor
+        # boundary so their normal DocPerm role permissions remain effective.
+        return True
+
+    if ptype not in _ALLOWED_PERMISSION_TYPES:
+        return False
     return bool(portfolio and portfolio in portfolios)
 
 

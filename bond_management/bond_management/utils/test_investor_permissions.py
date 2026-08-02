@@ -113,6 +113,23 @@ class TestInvestorPermissions(IntegrationTestCase):
     def test_non_investor_uses_the_standard_permission_model(self):
         with patch.object(frappe, "get_roles", return_value=[]):
             self.assertIsNone(investor_permissions.portfolio_query_condition("manager@example.com"))
+            self.assertTrue(
+                investor_permissions.has_portfolio_permission(
+                    SimpleNamespace(name="Nanda"),
+                    "manager@example.com",
+                    "read",
+                )
+            )
+
+    def test_investor_permission_hook_denies_unassigned_portfolio(self):
+        with patch.object(investor_permissions, "_get_allowed_portfolios", return_value=["Other"]):
+            self.assertFalse(
+                investor_permissions.has_transaction_permission(
+                    SimpleNamespace(portfolio_name="Nanda"),
+                    "investor@example.com",
+                    "read",
+                )
+            )
 
     def test_administrator_is_not_restricted_by_the_investor_role(self):
         with patch.object(frappe, "get_roles", return_value=[investor_permissions.INVESTOR_ROLE]):
