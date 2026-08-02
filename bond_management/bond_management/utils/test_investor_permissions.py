@@ -4,6 +4,7 @@ from unittest.mock import patch
 import frappe
 from frappe.tests import IntegrationTestCase
 
+from bond_management import hooks as app_hooks
 from bond_management.bond_management.report.portfolio_performance.portfolio_performance import (
     validate_report_inputs,
 )
@@ -160,6 +161,12 @@ class TestInvestorPermissions(IntegrationTestCase):
                     )
                 )
             )
+
+    def test_manager_permissions_are_bootstrapped_on_fresh_install(self):
+        self.assertIn(
+            "bond_management.patches.add_bond_management_manager_access.execute",
+            app_hooks.after_install,
+        )
 
     def test_direct_permission_check_allows_an_assigned_portfolio(self):
         with patch.object(investor_permissions, "_get_allowed_portfolios", return_value=["Nanda"]):

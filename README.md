@@ -31,7 +31,8 @@ Pre-commit is configured to use the following tools for checking and formatting 
 
 This app can use GitHub Actions for CI. The following workflows are configured:
 
-- CI: Installs this app and runs unit tests on pushes to `main` and `version-16`.
+- CI: Installs this app, runs the server verification gate, and runs a separate
+  focused headless Cypress smoke gate on pushes to `main` and `version-16`.
 - Linters: Runs [Frappe Semgrep Rules](https://github.com/frappe/semgrep-rules) and [pip-audit](https://pypi.org/project/pip-audit/) on every pull request.
 
 

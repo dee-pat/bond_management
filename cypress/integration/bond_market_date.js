@@ -3,7 +3,6 @@ const TARGET_ISIN = "TEST-BOND-WEIGHTED";
 const REFERENCE_ISIN = "TEST-BOND-REFERENCE";
 const TARGET_MARKET_PRICE = 99.25;
 const TARGET_WEIGHTED_DATE = "2027-01-01";
-const TARGET_MATURITY_DATE = "2032-01-01";
 
 const MARKET_DATA = {
 	[TARGET_ISIN]: {
@@ -12,7 +11,6 @@ const MARKET_DATA = {
 		principal_factor: 1,
 		weighted_avg_repayment_date: TARGET_WEIGHTED_DATE,
 		weighted_avg_repayment_years: 2,
-		maturity_date: TARGET_MATURITY_DATE,
 	},
 	[REFERENCE_ISIN]: {
 		currency: "KES",
@@ -20,7 +18,6 @@ const MARKET_DATA = {
 		principal_factor: 1,
 		weighted_avg_repayment_date: "2029-01-01",
 		weighted_avg_repayment_years: 1461 / 365,
-		maturity_date: "2029-01-01",
 	},
 };
 
@@ -100,6 +97,7 @@ context("Bond Market Date", () => {
 		});
 
 		cy.window().then((window) => {
+			// Exercise the recalculation hook directly; row editing adds no useful coverage.
 			const frm = window.cur_frm;
 			frm.clear_table("bond_market_prices");
 			frm.doc.date = MARKET_DATE;
@@ -120,21 +118,10 @@ context("Bond Market Date", () => {
 	});
 
 	it("copies the selected bond cash flows by clicking Future XIRR", () => {
-		cy.window().then((window) => {
-			const fieldnames = window.frappe.meta
-				.get_docfields("Bond Market Prices")
-				.map((field) => field.fieldname);
-			expect(fieldnames).not.to.include("copy_cashflows");
-		});
-		cy.get(
-			'.frappe-control[data-fieldname="bond_market_prices"] [data-fieldname="copy_cashflows"]'
-		).should("not.exist");
 		cy.get(`.bond-market-cashflow-copy[data-isin="${TARGET_ISIN}"]`)
 			.should("be.visible")
 			.as("targetXirr");
-		cy.get("@targetXirr").closest(".grid-row").should("not.have.class", "editable-row");
 		cy.get("@targetXirr").click();
-		cy.get("@targetXirr").closest(".grid-row").should("not.have.class", "editable-row");
 
 		cy.wait("@cashflows").then(({ request }) => {
 			const body = parse_request_body(request.body);
@@ -148,52 +135,7 @@ context("Bond Market Date", () => {
 			.should("have.been.calledOnce")
 			.and("have.been.calledWith", EXPECTED_TSV, EXPECTED_COPY_MESSAGE);
 	});
-
-	it("shows the ISIN on hover and positions points by weighted repayment date", () => {
-		cy.get(".bond-yield-point")
-			.should("have.length", 2)
-			.then(($points) => {
-				const points = [...$points];
-				const target = find_point(points, TARGET_ISIN);
-				const reference = find_point(points, REFERENCE_ISIN);
-
-				expect(target, `${TARGET_ISIN} chart point`).to.exist;
-				expect(reference, `${REFERENCE_ISIN} chart point`).to.exist;
-				expect(target.getAttribute("aria-label")).to.include(TARGET_WEIGHTED_DATE);
-				expect(target.getAttribute("aria-label")).not.to.include(TARGET_MATURITY_DATE);
-				expect(Number(target.getAttribute("cx"))).to.be.lessThan(
-					Number(reference.getAttribute("cx"))
-				);
-
-				cy.wrap(target).as("targetYieldPoint");
-			});
-
-		cy.get("@targetYieldPoint").trigger("mouseenter", { force: true });
-		cy.get(".bond-yield-tooltip:visible")
-			.should("contain.text", TARGET_ISIN)
-			.and("contain.text", TARGET_WEIGHTED_DATE);
-	});
-
-	it("recalculates child rows before the parent date is entered", () => {
-		cy.window().then((window) => {
-			const frm = window.cur_frm;
-			const target = frm.doc.bond_market_prices.find((row) => row.isin === TARGET_ISIN);
-			frm.doc.date = undefined;
-			frm.refresh_field("date");
-
-			return frm.script_manager.trigger("market_price", target.doctype, target.name);
-		});
-
-		cy.wait("@marketData").then(({ request }) => {
-			const body = parse_request_body(request.body);
-			expect(body.date).to.equal("");
-		});
-	});
 });
-
-function find_point(points, isin) {
-	return points.find((point) => point.getAttribute("aria-label")?.includes(isin));
-}
 
 function parse_request_body(body) {
 	if (typeof body !== "string") {

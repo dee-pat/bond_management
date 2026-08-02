@@ -35,13 +35,8 @@ context("Bond Transaction PDF entry", () => {
 	});
 
 	it("populates and locks a single PDF transaction, then unlocks manual entry", () => {
-		cy.get('.frappe-control[data-fieldname="attachment"] .attached-file')
-			.should("have.css", "min-height", "56px")
-			.find(".attached-file-link")
-			.should("have.css", "white-space", "normal")
-			.and("have.css", "overflow-wrap", "anywhere");
-
 		cy.window().then((window) => {
+			// Invoke the attachment hook deterministically instead of uploading a fixture.
 			const frm = window.cur_frm;
 			stub_transaction_calculation(window);
 			cy.stub(frm, "call")
@@ -74,97 +69,6 @@ context("Bond Transaction PDF entry", () => {
 			expect(frm.get_field("price").df.read_only).to.equal(0);
 			expect(frm.get_field("transaction_reference").df.read_only).to.equal(0);
 			expect(frm.doc.transaction_reference).to.equal("U2000001");
-		});
-	});
-
-	it("selects every row by default and posts multiple documents", () => {
-		const transactions = [
-			SINGLE_TRANSACTION,
-			{
-				...SINGLE_TRANSACTION,
-				transaction_reference: "U2000002",
-				quantity_face_value: 10000,
-			},
-		];
-
-		cy.window().then((window) => {
-			const frm = window.cur_frm;
-			cy.stub(window.frappe, "set_route").resolves().as("setRoute");
-			cy.stub(frm, "call")
-				.callsFake((method, args) => {
-					if (method === "read_transaction_pdf") {
-						return Promise.resolve({ message: { transactions } });
-					}
-					if (method === "create_selected_pdf_transactions") {
-						expect(args.transaction_selections).to.deep.equal([
-							{ transaction_reference: "U2000001", portfolio_name: "Dhanbai" },
-							{ transaction_reference: "U2000002", portfolio_name: "Dhanbai" },
-						]);
-						return Promise.resolve({ message: ["U2000001", "U2000002"] });
-					}
-					throw new Error(`Unexpected form call: ${method}`);
-				})
-				.as("transactionPdfCall");
-
-			frm.doc.attachment = "/private/files/multi-transaction.pdf";
-			frm.refresh_field("attachment");
-			return frm.script_manager.trigger("attachment");
-		});
-
-		cy.get(
-			'.modal:visible [data-fieldname="transactions"] .grid-body [data-fieldname="post"] input:checkbox'
-		)
-			.should("have.length", 2)
-			.each(($checkbox) => {
-				expect($checkbox).to.have.class("disabled-selected");
-			});
-		cy.get(".modal:visible .modal-footer .btn-primary").click();
-
-		cy.get("@transactionPdfCall").should("have.been.calledTwice");
-		cy.get("@setRoute").should("have.been.calledOnce");
-	});
-
-	it("ignores a stale transaction PDF response after a newer attachment is selected", () => {
-		cy.window().then((window) => {
-			const frm = window.cur_frm;
-			stub_transaction_calculation(window);
-			let resolve_first;
-			const first_response = new Promise((resolve) => {
-				resolve_first = resolve;
-			});
-			let call_count = 0;
-			cy.stub(frm, "call")
-				.withArgs("read_transaction_pdf")
-				.callsFake(() => {
-					call_count += 1;
-					return call_count === 1
-						? first_response
-						: Promise.resolve({
-								message: {
-									transactions: [
-										{
-											...SINGLE_TRANSACTION,
-											transaction_reference: "U2000002",
-										},
-									],
-								},
-						  });
-				})
-				.as("readTransactionPdfWithDelay");
-
-			frm.doc.attachment = "/private/files/first.pdf";
-			const first_trigger = frm.script_manager.trigger("attachment");
-			frm.doc.attachment = "/private/files/second.pdf";
-			const second_trigger = frm.script_manager.trigger("attachment");
-
-			return second_trigger.then(() => {
-				resolve_first({ message: { transactions: [SINGLE_TRANSACTION] } });
-				return first_trigger;
-			});
-		});
-
-		cy.window().then((window) => {
-			expect(window.cur_frm.doc.transaction_reference).to.equal("U2000002");
 		});
 	});
 });

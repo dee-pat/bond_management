@@ -85,7 +85,14 @@ add_to_apps_screen = [
 # ------------
 
 # before_install = "bond_management.install.before_install"
-after_install = "bond_management.patches.add_bond_query_indexes.ensure_bond_query_indexes"
+# Installation marks patches as completed before running this hook, so
+# permission bootstrap that must exist on a fresh site is also invoked here.
+after_install = [
+    "bond_management.patches.add_bond_query_indexes.ensure_bond_query_indexes",
+    "bond_management.patches.add_bond_investor_read_only_access.execute",
+    "bond_management.patches.add_bond_investor_report_permission.execute",
+    "bond_management.patches.add_bond_management_manager_access.execute",
+]
 
 # Frappe schema sync removes manual single-column unique indexes when the
 # DocField cannot declare `unique`. Re-apply the Bond Market Date database

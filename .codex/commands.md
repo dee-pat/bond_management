@@ -45,6 +45,10 @@ apps/bond_management/scripts/verify.sh lint
 apps/bond_management/scripts/verify.sh server
 apps/bond_management/scripts/verify.sh ui
 
+# Run one Cypress spec while diagnosing a UI failure
+CYPRESS_SPEC="cypress/integration/portfolio_performance.js" \
+    apps/bond_management/scripts/verify.sh ui
+
 # Cypress runtime diagnostics or repair (uses the bench-local cache)
 apps/bond_management/scripts/cypress-runtime.sh diagnose
 apps/bond_management/scripts/cypress-runtime.sh prepare

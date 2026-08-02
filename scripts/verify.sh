@@ -65,9 +65,12 @@ run_ui_tests() {
     # containing spaces (such as the macOS application bundle) are preserved.
     export CHROME_BIN="${chrome_binary}"
 
-    bench --site "${TEST_SITE_NAME}" run-ui-tests bond_management \
-        --headless \
-        --browser chrome
+    local -a cypress_args=(--headless --browser chrome)
+    if [[ -n "${CYPRESS_SPEC:-}" ]]; then
+        cypress_args+=(--spec "${CYPRESS_SPEC}")
+    fi
+
+    bench --site "${TEST_SITE_NAME}" run-ui-tests bond_management "${cypress_args[@]}"
 }
 
 case "${MODE}" in

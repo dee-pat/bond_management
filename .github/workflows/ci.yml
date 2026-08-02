@@ -14,9 +14,9 @@ concurrency:
 jobs:
   tests:
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
     name: Server
+    env:
+      BENCH_ROOT: ${{ runner.temp }}/bond-management-bench-${{ github.run_id }}-${{ github.run_attempt }}
 
     services:
       redis-cache:
@@ -38,11 +38,6 @@ jobs:
     steps:
       - name: Clone
         uses: actions/checkout@v6
-
-      - name: Find tests
-        run: |
-          echo "Finding tests"
-          grep -rn "def test" > /dev/null
 
       - name: Setup Python
         uses: actions/setup-python@v6
@@ -84,11 +79,12 @@ jobs:
       - name: Setup
         run: |
           pip install frappe-bench
-          bench init --frappe-branch version-16 --skip-redis-config-generation --skip-assets --python "$(which python)" /home/runner/frappe-bench
-          test -f /home/runner/frappe-bench/sites/common_site_config.json
+          test ! -e "$BENCH_ROOT"
+          bench init --frappe-branch version-16 --skip-redis-config-generation --skip-assets --python "$(which python)" "$BENCH_ROOT"
+          test -f "$BENCH_ROOT/sites/common_site_config.json"
 
       - name: Install
-        working-directory: /home/runner/frappe-bench
+        working-directory: ${{ env.BENCH_ROOT }}
         run: |
           test -f sites/common_site_config.json
           bench get-app bond_management "file://$GITHUB_WORKSPACE"
@@ -100,16 +96,16 @@ jobs:
           CI: 'Yes'
 
       - name: Run Tests
-        working-directory: /home/runner/frappe-bench
+        working-directory: ${{ env.BENCH_ROOT }}
         run: |
           apps/bond_management/scripts/verify.sh pre-push
-        env:
-          TYPE: server
 
   ui-tests:
     runs-on: ubuntu-latest
     timeout-minutes: 35
     name: UI (Chrome)
+    env:
+      BENCH_ROOT: ${{ runner.temp }}/bond-management-bench-${{ github.run_id }}-${{ github.run_attempt }}
 
     services:
       redis-cache:
@@ -155,7 +151,7 @@ jobs:
       - name: Cache Cypress binary
         uses: actions/cache@v4
         with:
-          path: /home/runner/frappe-bench/.cache/Cypress
+          path: ${{ env.BENCH_ROOT }}/.cache/Cypress
           key: ${{ runner.os }}-${{ runner.arch }}-cypress-13.17.0
 
       - name: Install MariaDB Client
@@ -166,11 +162,12 @@ jobs:
       - name: Setup Bench
         run: |
           pip install frappe-bench
-          bench init --frappe-branch version-16 --skip-redis-config-generation --skip-assets --python "$(which python)" /home/runner/frappe-bench
-          test -f /home/runner/frappe-bench/sites/common_site_config.json
+          test ! -e "$BENCH_ROOT"
+          bench init --frappe-branch version-16 --skip-redis-config-generation --skip-assets --python "$(which python)" "$BENCH_ROOT"
+          test -f "$BENCH_ROOT/sites/common_site_config.json"
 
       - name: Install App and Build Assets
-        working-directory: /home/runner/frappe-bench
+        working-directory: ${{ env.BENCH_ROOT }}
         run: |
           test -f sites/common_site_config.json
           bench get-app bond_management "file://$GITHUB_WORKSPACE"
@@ -185,13 +182,13 @@ jobs:
           CI: 'Yes'
 
       - name: Seed UI Test Site
-        working-directory: /home/runner/frappe-bench
+        working-directory: ${{ env.BENCH_ROOT }}
         run: |
           bench --site test_site execute frappe.utils.install.complete_setup_wizard
           bench --site test_site execute frappe.tests.ui_test_helpers.create_test_user
 
       - name: Prepare Cypress runtime
-        working-directory: /home/runner/frappe-bench
+        working-directory: ${{ env.BENCH_ROOT }}
         run: apps/bond_management/scripts/cypress-runtime.sh prepare
         env:
           CI: 'Yes'
@@ -200,14 +197,14 @@ jobs:
         uses: browser-actions/setup-chrome@latest
 
       - name: Start Web Server
-        working-directory: /home/runner/frappe-bench
+        working-directory: ${{ env.BENCH_ROOT }}
         run: |
           echo "127.0.0.1 test_site" | sudo tee -a /etc/hosts
           nohup bench serve --port 8000 > "$RUNNER_TEMP/bench-web.log" 2>&1 &
           curl --noproxy '*' --fail --silent --show-error --retry 30 --retry-connrefused --retry-delay 2 http://test_site:8000/api/method/ping
 
       - name: Run Cypress
-        working-directory: /home/runner/frappe-bench
+        working-directory: ${{ env.BENCH_ROOT }}
         run: |
           apps/bond_management/scripts/verify.sh ui
         env:
@@ -215,7 +212,7 @@ jobs:
 
       - name: Capture Cypress diagnostics
         if: failure()
-        working-directory: /home/runner/frappe-bench
+        working-directory: ${{ env.BENCH_ROOT }}
         run: |
           apps/bond_management/scripts/cypress-runtime.sh diagnose > "$RUNNER_TEMP/cypress-diagnostics.txt" 2>&1 || true
 
@@ -226,7 +223,7 @@ jobs:
           name: ui-test-failure-artifacts
           if-no-files-found: ignore
           path: |
-            /home/runner/frappe-bench/cypressVideos
-            /home/runner/frappe-bench/apps/bond_management/cypress/screenshots
+            ${{ env.BENCH_ROOT }}/cypressVideos
+            ${{ env.BENCH_ROOT }}/apps/bond_management/cypress/screenshots
             ${{ runner.temp }}/cypress-diagnostics.txt
             ${{ runner.temp }}/bench-web.log

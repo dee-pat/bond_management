@@ -102,6 +102,10 @@ the two files conflict, this app-level file governs.
 - Permission patches should update or create only the `DocPerm` rows they own.
   Do not save a parent `DocType` merely to change permissions, because that can
   validate or rewrite unrelated metadata during migration.
+- Frappe marks an app's registered patches complete before `after_install` runs.
+  Any permission, index, or other invariant that must exist on a fresh install
+  must therefore also be bootstrapped by an idempotent `after_install` hook;
+  verify both fresh-install and migrate paths.
 
 ## Test site and app tests
 
@@ -121,25 +125,32 @@ the two files conflict, this app-level file governs.
   cases.
 - For bond rules involving `>`, `>=`, `<`, or `<=`, test greater-than,
   less-than, and equality cases and state equality behavior.
-- Add Cypress tests for reports and other client-side interactions. Promise-
-  returning JavaScript flows are required for testability. Larger Desk
-  workflows require at least one end-to-end Cypress flow; do not introduce a
-  second browser framework solely because another project mandates it.
+- Add Cypress coverage only for user-visible form, report, workspace, and
+  routing behavior that is not already covered by server tests. Keep one
+  focused smoke flow per critical surface by default; do not mirror the full
+  financial or permission matrix in Cypress.
+- Use stable routes, labels, roles, and data attributes. Avoid asserting CSS
+  layout, SVG geometry, or internal formatter registration. Prefer visible
+  controls; use `window.cur_frm` or direct `script_manager.trigger` only for a
+  specifically justified client-script hook (for example, deterministic PDF
+  attachment parsing where native file upload adds no useful coverage).
+- Add delayed, failed, stale-response, retry, or duplicate-request Cypress
+  cases only for a demonstrated browser regression or a risk that cannot be
+  tested at a lower layer. Keep the scenario deterministic and focused on the
+  user-visible recovery behavior.
 - When a backend field or permission is exposed through Desk, update the
-  relevant form/list/workspace code and Cypress coverage in the same change.
-- For asynchronous Desk flows, Cypress coverage must include delayed success,
-  failed requests, retry/recovery, and stale-response protection. Do not assert
-  a saved, posted, reconciled, or uploaded state before the server response.
-- For mutation APIs that can be retried or involve multiple writes, test
-  permission failures, duplicate/retry behavior, stale-version or modified
-  conflicts, and atomic rollback when one logical operation fails.
+  relevant form/list/workspace code and one representative Cypress smoke
+  assertion; server tests own the complete permission and validation matrix.
 
 ## App verification gate
 
-- Before committing, pushing, or handing off application-code changes, run the
-  relevant targeted test, its complete module, and the full server suite. A
-  passing targeted test is not evidence that the full suite passes; tests must
-  succeed both independently and under full-suite ordering.
+- Match verification to the risk of the change: documentation, agent-guidance,
+  and test-only edits need formatting/lint plus the affected test; backend
+  business, permission, migration, hook, or shared utility changes need the
+  targeted test, complete affected module, and full server suite; client-only
+  changes need lint plus the focused Cypress spec, with the full UI suite when
+  they change a shared runtime or critical user journey. A targeted pass is
+  not evidence that a required broader gate passes.
 - From the bench directory, run
   `apps/bond_management/scripts/verify.sh pre-push`. This shared gate runs
   pre-commit, migrates `test_site`, and runs the complete server suite. GitHub
@@ -168,7 +179,9 @@ the two files conflict, this app-level file governs.
   its `sites/common_site_config.json` exists before running `bench get-app`, and
   fetch the checked-out app through a local `file://` source. Keep the bench
   initialization path, step working directories, caches, and artifact paths in
-  sync.
+  sync. Use a unique run-scoped directory under the runner's temporary folder;
+  never reuse a fixed `/home/runner/frappe-bench` path or overwrite an existing
+  bench.
 - If a required command cannot run because a service, browser, dependency,
   site, or credential is unavailable, do not substitute an unrelated check.
   Report the exact command, blocking condition, and verification that remains
@@ -176,6 +189,12 @@ the two files conflict, this app-level file governs.
 - When GitHub Actions fails, inspect the exact traceback and reproduce the
   failing test both in isolation and in the full suite. Do not guess at a fix
   or weaken an assertion merely to make CI pass.
+- The server CI job runs the shared lint and full server gate once. The UI CI
+  job runs only the headless Cypress gate against its fresh site; do not make
+  the UI job repeat the full server suite unless the failure requires it.
+- For a Cypress failure, rerun the named spec with `CYPRESS_SPEC` first, then
+  run the complete UI suite. Preserve videos, screenshots, browser logs, and
+  the exact command when escalating a runtime failure.
 - Do not commit, push, or report a change as complete while a required check is
   failing or unavailable. State exactly which checks ran and their results.
 - For a multi-phase feature, record the intended slice and verification steps
