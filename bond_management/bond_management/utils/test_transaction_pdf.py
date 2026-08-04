@@ -2,7 +2,7 @@ from decimal import Decimal
 
 from frappe.tests import UnitTestCase
 
-from bond_management.bond_management.tests.pdf_factory import make_text_pdf
+from bond_management.bond_management.tests.pdf_factory import make_positioned_text_pdf, make_text_pdf
 from bond_management.bond_management.utils.transaction_pdf import (
     TransactionPdfError,
     TransactionPdfPasswordError,
@@ -77,6 +77,41 @@ class TestTransactionPdf(UnitTestCase):
         self.assertNotIn("portfolio-password", repr(parsed))
         with self.assertRaises(TransactionPdfPasswordError):
             extract_transaction_pdf(content, ["wrong"])
+
+    def test_parses_column_ordered_confirmation_without_breaking_legacy_formats(self):
+        text_items = [
+            (50, 700, "Account No :"),
+            (50, 650, "Bonds Name :"),
+            (50, 630, "ISIN :"),
+            (50, 610, "Currency :"),
+            (50, 590, "Price :"),
+            (50, 570, "Trade Date :"),
+            (50, 550, "Settlement Date :"),
+            (50, 530, "Accrued Interest :"),
+            (300, 590, "Quantity :"),
+            (300, 570, "Face Value :"),
+            (300, 550, "Commission % :"),
+            (300, 530, "Transaction Reference :"),
+            (150, 700, "1110700351101"),
+            (150, 650, "REPUBLIC OF KENYA - XS3305838602"),
+            (150, 630, "XS3305838602"),
+            (150, 610, "USD"),
+            (150, 590, "99.950000"),
+            (150, 570, "26/02/2026"),
+            (150, 550, "27/02/2026"),
+            (150, 530, "49.22"),
+            (500, 590, "2,250.000000"),
+            (500, 570, "225,000.00"),
+            (500, 550, "0.45%"),
+            (500, 530, "U1903418"),
+        ]
+
+        parsed = extract_transaction_pdf(make_positioned_text_pdf(text_items), [])
+
+        self.assertEqual(parsed.account_no, "1110700351101")
+        self.assertEqual(parsed.transactions[0].transaction_reference, "U1903418")
+        self.assertEqual(parsed.transactions[0].quantity_face_value, Decimal("2250.000000"))
+        self.assertEqual(parsed.transactions[0].settlement_date.isoformat(), "2026-02-27")
 
     def test_blank_commission_fields_mean_zero(self):
         parsed = parse_transaction_pdf_text(

@@ -16,6 +16,7 @@ from bond_management.bond_management.utils.statement_pdf import (
 )
 
 MAX_TRANSACTION_PDF_BYTES = 10 * 1024 * 1024
+POSITIONED_TEXT_Y_TOLERANCE = 2.5
 ISIN_PATTERN = r"[A-Z]{2}[A-Z0-9]{10}"
 NUMBER_PATTERN = r"[+-]?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?"
 ACCOUNT_PATTERN = re.compile(r"\bAccount\s+No\s*:\s*([A-Za-z0-9-]+)", re.IGNORECASE)
@@ -246,7 +247,50 @@ def _parse_reader(reader: PdfReader) -> ParsedTransactionPdf:
         text = "\n".join(page.extract_text() or "" for page in reader.pages)
     except (DependencyError, FileNotDecryptedError, PdfReadError, PdfStreamError) as error:
         raise TransactionPdfError("The transaction PDF pages could not be read.") from error
-    return parse_transaction_pdf_text(text)
+
+    try:
+        return parse_transaction_pdf_text(text)
+    except TransactionPdfError as plain_text_error:
+        # Some Standard Chartered PDFs draw the labels for both columns first
+        # and their values afterwards. Plain pypdf extraction therefore loses
+        # the label/value relationship even though the PDF is visually clear.
+        # Retry with the text fragments grouped by their page coordinates while
+        # preserving the existing parser for older and simpler confirmations.
+        try:
+            positioned_text = "\n".join(_extract_positioned_page_text(page) for page in reader.pages)
+            return parse_transaction_pdf_text(positioned_text)
+        except (DependencyError, FileNotDecryptedError, PdfReadError, PdfStreamError):
+            raise plain_text_error
+        except TransactionPdfError:
+            raise plain_text_error
+
+
+def _extract_positioned_page_text(page) -> str:
+    """Rebuild readable rows from PDFs whose content stream is column-ordered."""
+    fragments = []
+
+    def visitor_text(text, _cm, tm, _font, _font_size):
+        cleaned = " ".join((text or "").split())
+        if cleaned:
+            fragments.append((float(tm[5]), float(tm[4]), cleaned))
+
+    page.extract_text(visitor_text=visitor_text)
+
+    rows = []
+    for y, x, text in fragments:
+        row = next(
+            (candidate for candidate in rows if abs(candidate[0] - y) <= POSITIONED_TEXT_Y_TOLERANCE),
+            None,
+        )
+        if row is None:
+            row = [y, []]
+            rows.append(row)
+        row[1].append((x, text))
+
+    rows.sort(key=lambda row: row[0], reverse=True)
+    return "\n".join(
+        " ".join(text for _x, text in sorted(fragments_for_row)) for _y, fragments_for_row in rows
+    )
 
 
 def _read_private_transaction_attachment(attachment: str) -> bytes:

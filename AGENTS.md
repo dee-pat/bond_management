@@ -4,6 +4,22 @@ The parent `frappe-bench/AGENTS.md` contains rules shared by Frappe v16 apps.
 This file contains only bond-management-specific additions and overrides. When
 the two files conflict, this app-level file governs.
 
+## Non-negotiable completion rules
+
+- Run every applicable verification gate before committing, pushing, or
+  reporting completion.
+- A gate passes only when its command was executed for the current change and
+  observed to exit with status zero; never fabricate or infer command output or
+  exit statuses.
+- Treat an unavailable required gate as a blocker and report the exact command
+  and remaining verification.
+- Verification becomes stale after relevant edits to code, tests, fixtures,
+  metadata, dependencies, runtime scripts, or CI configuration; rerun the
+  applicable gate.
+- When GitHub Actions fails, inspect the actual traceback and reproduce the
+  failing test locally in isolation and in the full relevant suite before
+  changing the implementation or assertion.
+
 ## App baseline and structure
 
 - This is a custom Frappe Framework v16 application for bond portfolios,
@@ -143,6 +159,24 @@ the two files conflict, this app-level file governs.
   assertion; server tests own the complete permission and validation matrix.
 
 ## App verification gate
+
+### Verification evidence format
+
+Before committing, pushing, or reporting completion, record:
+
+- Risk classification:
+- Required gates:
+- Commands executed:
+- Exit statuses:
+- Tests passed:
+- Tests failed:
+- Tests not run:
+- Blockers:
+- Unverified local/CI differences:
+
+For GitHub Actions, fresh-site bootstrap, Cypress runtime setup, or other
+environment-sensitive changes, document the remaining local-vs-CI platform
+differences in the final field.
 
 - Match verification to the risk of the change: documentation, agent-guidance,
   and test-only edits need formatting/lint plus the affected test; backend
