@@ -16,9 +16,9 @@ def valid_framework_transaction_boundary():
 
 def invalid_binary_float_decimal_values():
     # ruleid: bond-management-decimal-from-float-literal
-    positive = Decimal(0.1)
+    positive = Decimal(0.1)  # noqa: RUF032
     # ruleid: bond-management-decimal-from-float-literal
-    negative = Decimal(-1.25)
+    negative = Decimal(-1.25)  # noqa: RUF032
     return positive, negative
 
 
