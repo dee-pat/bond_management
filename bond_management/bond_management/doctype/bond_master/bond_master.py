@@ -2,6 +2,7 @@
 # For license information, please see license.txt
 
 import frappe
+from frappe import _
 from frappe.model.document import Document
 from frappe.utils import getdate
 
@@ -49,26 +50,26 @@ class BondMaster(Document):
 
     def validate_financial_terms(self):
         if to_decimal(self.face_value_per_unit) <= 0:
-            frappe.throw("Face Value Per Unit must be greater than zero")
+            frappe.throw(_("Face Value Per Unit must be greater than zero"))
         if to_decimal(self.coupon_rate) < 0:
-            frappe.throw("Coupon Rate must be zero or greater")
+            frappe.throw(_("Coupon Rate must be zero or greater"))
 
     def validate_dates(self):
         if not self.issue_date or not self.maturity_date:
             return
         if getdate(self.maturity_date) <= getdate(self.issue_date):
-            frappe.throw("Maturity Date must be after Issue Date")
+            frappe.throw(_("Maturity Date must be after Issue Date"))
 
     def validate_principal_schedule(self):
         if not self.principal_schedule:
-            frappe.throw("At least one principal repayment is required")
+            frappe.throw(_("At least one principal repayment is required"))
 
         repayment_dates = set()
         for row in self.principal_schedule:
             if to_decimal(row.principal_units) <= 0:
-                frappe.throw("Principal Units must be greater than zero in every row")
+                frappe.throw(_("Principal Units must be greater than zero in every row"))
             if not row.repayment_date:
-                frappe.throw("Repayment Date is required in every principal schedule row")
+                frappe.throw(_("Repayment Date is required in every principal schedule row"))
 
             repayment_date = getdate(row.repayment_date)
             if repayment_date in repayment_dates:
@@ -125,7 +126,7 @@ def get_recalculated_schedules(doc: str) -> dict:
     """Return authoritative values without syncing a stale unsaved Document to the form."""
     values = frappe.parse_json(doc)
     if not isinstance(values, dict):
-        frappe.throw("Bond Master data must be an object")
+        frappe.throw(_("Bond Master data must be an object"))
     values["doctype"] = "Bond Master"
 
     existing_name = optional_string(values.get("name"), "Bond Master name")

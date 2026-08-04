@@ -1,5 +1,6 @@
 import frappe
 from dateutil.relativedelta import relativedelta
+from frappe import _
 from frappe.utils import add_days, add_months, getdate
 from frappe.utils.data import get_last_day
 
@@ -27,10 +28,10 @@ def generate_coupon_schedule(
     try:
         coupon_frequency = int(coupon_frequency)
     except (TypeError, ValueError):
-        frappe.throw("Coupon Frequency must be a number")
+        frappe.throw(_("Coupon Frequency must be a number"))
 
     if coupon_frequency <= 0 or 12 % coupon_frequency:
-        frappe.throw("Coupon Frequency must be a positive divisor of 12")
+        frappe.throw(_("Coupon Frequency must be a positive divisor of 12"))
 
     step = relativedelta(months=int(12 / coupon_frequency))
 
@@ -51,10 +52,10 @@ def generate_coupon_schedule(
     # Step 2: handle first coupon override (stub)
     if first_coupon_date:
         if first_coupon_date <= issue_date:
-            frappe.throw("First Coupon Date must be after Issue Date")
+            frappe.throw(_("First Coupon Date must be after Issue Date"))
 
         if first_coupon_date >= maturity_date:
-            frappe.throw("First Coupon Date must be before Maturity Date")
+            frappe.throw(_("First Coupon Date must be before Maturity Date"))
 
         dates = [d for d in dates if d > first_coupon_date]
         dates.insert(0, first_coupon_date)

@@ -1,0 +1,22 @@
+rules:
+  - id: bond-management-no-manual-transaction-boundary
+    languages: [python]
+    message: >-
+      Do not manually commit or roll back a Frappe request transaction. Preserve
+      atomicity and let the framework manage the transaction boundary.
+    pattern-either:
+      - pattern: frappe.db.commit()
+      - pattern: frappe.db.rollback()
+    severity: ERROR
+
+  - id: bond-management-decimal-from-float-literal
+    languages: [python]
+    message: >-
+      Construct precision-sensitive Decimal values from strings, not binary
+      float literals.
+    patterns:
+      - pattern: Decimal($VALUE)
+      - metavariable-regex:
+          metavariable: $VALUE
+          regex: '^-?[0-9]+\.[0-9]+$'
+    severity: ERROR

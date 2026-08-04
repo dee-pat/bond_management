@@ -1,6 +1,7 @@
 import re
 
 import frappe
+from frappe import _
 from frappe.utils import getdate
 
 from bond_management.bond_management.utils.private_attachment import (
@@ -16,7 +17,7 @@ def get_standard_statement_filename(account_no: str, statement_date) -> str:
     """Return the canonical private PDF filename for a Bond Statement."""
     normalized_account = normalize_account_number(account_no)
     if not normalized_account or not SAFE_ACCOUNT_PATTERN.fullmatch(normalized_account):
-        frappe.throw("Product Account No. contains characters that cannot be used in a filename.")
+        frappe.throw(_("Product Account No. contains characters that cannot be used in a filename."))
 
     return f"{STATEMENT_FILENAME_PREFIX}{normalized_account}-{getdate(statement_date).strftime('%Y%m%d')}.pdf"
 

@@ -5,6 +5,7 @@ from collections import defaultdict
 from decimal import ROUND_HALF_EVEN, Decimal
 
 import frappe
+from frappe import _
 from frappe.model.document import Document
 from frappe.utils import escape_html, getdate
 
@@ -168,15 +169,15 @@ class BondTransaction(Document):
         }
 
     @frappe.whitelist(methods=["POST"])
-    def create_selected_pdf_transactions(self, transaction_selections):
+    def create_selected_pdf_transactions(self, transaction_selections: str | list | None):
         """Atomically create one document per selected row from a multi-transaction PDF."""
         frappe.has_permission("Bond Transaction", "create", throw=True)
         if self.name and frappe.db.exists("Bond Transaction", self.name):
-            frappe.throw("Multiple PDF transactions can only be created from a new form.")
+            frappe.throw(_("Multiple PDF transactions can only be created from a new form."))
 
         selections = frappe.parse_json(transaction_selections)
         if not isinstance(selections, list):
-            frappe.throw("Select one or more transaction references to create.")
+            frappe.throw(_("Select one or more transaction references to create."))
         normalized_selections = []
         for selection in selections:
             if isinstance(selection, str):
@@ -186,14 +187,14 @@ class BondTransaction(Document):
                 reference = str(selection.get("transaction_reference") or "").strip().upper()
                 portfolio_name = str(selection.get("portfolio_name") or "").strip()
             else:
-                frappe.throw("Each selected transaction must include a reference and portfolio.")
+                frappe.throw(_("Each selected transaction must include a reference and portfolio."))
             if reference:
                 normalized_selections.append((reference, portfolio_name))
 
         selections_by_reference = dict(normalized_selections)
         references = list(selections_by_reference)
         if not references:
-            frappe.throw("Select one or more transaction references to create.")
+            frappe.throw(_("Select one or more transaction references to create."))
 
         details = self._get_transaction_attachment_details()
         rows_by_reference = {row.transaction_reference: row for row in details.transactions}
@@ -233,7 +234,7 @@ class BondTransaction(Document):
         )
         inaccessible = sorted(portfolio_names - accessible_portfolios)
         if inaccessible:
-            frappe.throw("No accessible Bond Portfolio exists for: " + ", ".join(inaccessible) + ".")
+            frappe.throw(_("No accessible Bond Portfolio exists for: {0}.").format(", ".join(inaccessible)))
         selected_rows.sort(
             key=lambda selected: (
                 selected[0].transaction_type == "Sale",
@@ -268,8 +269,10 @@ class BondTransaction(Document):
             if previous and previous.attachment == self.attachment:
                 return None
             frappe.throw(
-                "Automatic Bond Transaction entry requires a PDF attachment. "
-                "Remove the attachment to use manual entry."
+                _(
+                    "Automatic Bond Transaction entry requires a PDF attachment. "
+                    "Remove the attachment to use manual entry."
+                )
             )
 
         details = self._get_transaction_attachment_details()
@@ -314,8 +317,10 @@ class BondTransaction(Document):
             )
             if not (override_is_authorized or override_is_unchanged):
                 frappe.throw(
-                    "PDF portfolio overrides can only be set while selecting transactions "
-                    "from a multi-transaction attachment."
+                    _(
+                        "PDF portfolio overrides can only be set while selecting transactions "
+                        "from a multi-transaction attachment."
+                    )
                 )
             expected_portfolio = self.portfolio_name
         expected_values = self._attachment_row_values(row, expected_portfolio)
@@ -326,9 +331,9 @@ class BondTransaction(Document):
                 mismatches.append(f"{label} (form: {actual or 'blank'}, PDF: {expected})")
         if mismatches:
             frappe.throw(
-                "The Bond Transaction fields no longer match the attached PDF:<br>"
+                _("The Bond Transaction fields no longer match the attached PDF:<br>")
                 + "<br>".join(f"- {escape_html(mismatch)}" for mismatch in mismatches)
-                + "<br>Re-read the PDF, or remove the attachment to use manual entry."
+                + _("<br>Re-read the PDF, or remove the attachment to use manual entry.")
             )
 
     @staticmethod
@@ -384,7 +389,7 @@ class BondTransaction(Document):
             if not self.get(fieldname):
                 frappe.throw(f"{label} is required")
         if self.transaction_type not in {"Purchase", "Sale"}:
-            frappe.throw("Transaction Type must be Purchase or Sale")
+            frappe.throw(_("Transaction Type must be Purchase or Sale"))
 
     def on_trash(self):
         """A purchase cannot be deleted when later transactions depend on it."""
@@ -403,13 +408,13 @@ class BondTransaction(Document):
 
     def validate_financial_terms(self):
         if to_decimal(self.quantity_face_value) <= 0:
-            frappe.throw("Quantity / Face Value must be greater than zero")
+            frappe.throw(_("Quantity / Face Value must be greater than zero"))
         if to_decimal(self.face_value_per_unit) <= 0:
-            frappe.throw("Face Value Per Unit must be greater than zero")
+            frappe.throw(_("Face Value Per Unit must be greater than zero"))
         if to_decimal(self.price) <= 0:
-            frappe.throw("Price must be greater than zero")
+            frappe.throw(_("Price must be greater than zero"))
         if to_decimal(self.commission) < 0:
-            frappe.throw("Commission must be zero or greater")
+            frappe.throw(_("Commission must be zero or greater"))
 
     def validate_transaction_dates(self):
         trade_date = getdate(self.trade_date)
@@ -418,15 +423,15 @@ class BondTransaction(Document):
         maturity_date = getdate(self.maturity_date)
 
         if trade_date < issue_date:
-            frappe.throw("Trade Date must be on or after Issue Date")
+            frappe.throw(_("Trade Date must be on or after Issue Date"))
         if trade_date > maturity_date:
-            frappe.throw("Trade Date must be on or before Maturity Date")
+            frappe.throw(_("Trade Date must be on or before Maturity Date"))
         if settlement_date < issue_date:
-            frappe.throw("Settlement Date must be on or after Issue Date")
+            frappe.throw(_("Settlement Date must be on or after Issue Date"))
         if settlement_date > maturity_date:
-            frappe.throw("Settlement Date must be on or before Maturity Date")
+            frappe.throw(_("Settlement Date must be on or before Maturity Date"))
         if trade_date > settlement_date:
-            frappe.throw("Trade Date must be on or before Settlement Date")
+            frappe.throw(_("Trade Date must be on or before Settlement Date"))
 
     def calculate_amounts(self):
         bond = frappe.get_doc("Bond Master", self.isin)

@@ -23,15 +23,13 @@ jobs:
         with:
           python-version: '3.14'
           cache: pip
-      - uses: pre-commit/action@v3.0.0
 
-      - name: Download Semgrep rules
-        run: git clone --depth 1 https://github.com/frappe/semgrep-rules.git frappe-semgrep-rules
-
-      - name: Run Semgrep rules
+      - name: Install lint tools
         run: |
-          pip install semgrep
-          semgrep ci --config ./frappe-semgrep-rules/rules --config r/python.lang.correctness
+          pip install 'pre-commit>=4,<5' 'semgrep==1.172.0'
+
+      - name: Run shared lint gate
+        run: ./scripts/verify.sh lint
 
   deps-vulnerable-check:
     name: 'Vulnerable Dependency Check'

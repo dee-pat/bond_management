@@ -7,6 +7,7 @@ from io import BytesIO
 from pathlib import Path
 
 import frappe
+from frappe import _
 from pypdf import PdfReader
 from pypdf.errors import DependencyError, FileNotDecryptedError, PdfReadError, PdfStreamError
 
@@ -312,9 +313,9 @@ def _parse_reader(
 
 def _read_private_attachment(attachment: str) -> tuple[bytes, str]:
     if not attachment:
-        frappe.throw("Attach a PDF statement before saving.")
+        frappe.throw(_("Attach a PDF statement before saving."))
     if not attachment.lower().endswith(".pdf"):
-        frappe.throw("Bond Statement attachments must be PDF files.")
+        frappe.throw(_("Bond Statement attachments must be PDF files."))
 
     files = frappe.qb.get_query(
         "File",
@@ -325,19 +326,19 @@ def _read_private_attachment(attachment: str) -> tuple[bytes, str]:
         ignore_permissions=False,
     ).run(pluck=True)
     if not files:
-        frappe.throw("The attached PDF was not found or you do not have permission to read it.")
+        frappe.throw(_("The attached PDF was not found or you do not have permission to read it."))
 
     file_doc = frappe.get_doc("File", files[0])
     file_doc.check_permission("read")
     if not file_doc.is_private:
-        frappe.throw("Bond Statement PDFs must be uploaded as private files.")
+        frappe.throw(_("Bond Statement PDFs must be uploaded as private files."))
 
     file_path = Path(file_doc.get_full_path()).resolve()
     private_files_path = Path(frappe.get_site_path("private", "files")).resolve()
     if not file_path.is_relative_to(private_files_path) or not file_path.is_file():
-        frappe.throw("The attached private PDF could not be found.")
+        frappe.throw(_("The attached private PDF could not be found."))
     if file_path.stat().st_size > MAX_STATEMENT_PDF_BYTES:
-        frappe.throw("The statement PDF must be 10 MB or smaller.")
+        frappe.throw(_("The statement PDF must be 10 MB or smaller."))
 
     return file_path.read_bytes(), file_doc.file_name
 

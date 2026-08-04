@@ -7,6 +7,7 @@ from io import BytesIO
 from pathlib import Path
 
 import frappe
+from frappe import _
 from pypdf import PdfReader
 from pypdf.errors import DependencyError, FileNotDecryptedError, PdfReadError, PdfStreamError
 
@@ -295,9 +296,9 @@ def _extract_positioned_page_text(page) -> str:
 
 def _read_private_transaction_attachment(attachment: str) -> bytes:
     if not attachment:
-        frappe.throw("Attach a PDF transaction confirmation before using automatic entry.")
+        frappe.throw(_("Attach a PDF transaction confirmation before using automatic entry."))
     if not attachment.lower().endswith(".pdf"):
-        frappe.throw("Automatic Bond Transaction entry requires a PDF attachment.")
+        frappe.throw(_("Automatic Bond Transaction entry requires a PDF attachment."))
 
     files = frappe.qb.get_query(
         "File",
@@ -308,19 +309,19 @@ def _read_private_transaction_attachment(attachment: str) -> bytes:
         ignore_permissions=False,
     ).run(pluck=True)
     if not files:
-        frappe.throw("The attached PDF was not found or you do not have permission to read it.")
+        frappe.throw(_("The attached PDF was not found or you do not have permission to read it."))
 
     file_doc = frappe.get_doc("File", files[0])
     file_doc.check_permission("read")
     if not file_doc.is_private:
-        frappe.throw("Bond Transaction PDFs must be uploaded as private files.")
+        frappe.throw(_("Bond Transaction PDFs must be uploaded as private files."))
 
     file_path = Path(file_doc.get_full_path()).resolve()
     private_files_path = Path(frappe.get_site_path("private", "files")).resolve()
     if not file_path.is_relative_to(private_files_path) or not file_path.is_file():
-        frappe.throw("The attached private PDF could not be found.")
+        frappe.throw(_("The attached private PDF could not be found."))
     if file_path.stat().st_size > MAX_TRANSACTION_PDF_BYTES:
-        frappe.throw("The transaction PDF must be 10 MB or smaller.")
+        frappe.throw(_("The transaction PDF must be 10 MB or smaller."))
     return file_path.read_bytes()
 
 

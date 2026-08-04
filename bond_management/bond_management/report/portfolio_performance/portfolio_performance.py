@@ -5,6 +5,7 @@ from collections import defaultdict
 from decimal import Decimal
 
 import frappe
+from frappe import _
 from frappe.utils import escape_html, getdate
 
 from bond_management.bond_management.utils.accrual import (
@@ -40,7 +41,7 @@ def execute(filters: dict | None = None):
     if filters is None:
         filters = {}
     if not isinstance(filters, dict):
-        frappe.throw("Report filters must be an object")
+        frappe.throw(_("Report filters must be an object"))
 
     portfolio, valuation_date = validate_report_inputs(
         filters.get("portfolio"), filters.get("valuation_date")
@@ -65,11 +66,11 @@ def get_xirr_cashflows(portfolio: str, valuation_date: str, isin: str, xirr_type
     isin = required_string(isin, "ISIN")
     xirr_type = required_string(xirr_type, "XIRR type")
     if xirr_type not in {"past", "future"}:
-        frappe.throw("Invalid XIRR type")
+        frappe.throw(_("Invalid XIRR type"))
 
     context = load_portfolio_performance_context(portfolio, valuation_date)
     if isin == "TOTAL":
-        _, past_cashflows, future_cashflows = get_data(portfolio, valuation_date, context=context)
+        _data, past_cashflows, future_cashflows = get_data(portfolio, valuation_date, context=context)
         cashflows = past_cashflows if xirr_type == "past" else future_cashflows
     else:
         portfolio_isins = set(context["isins"])
@@ -78,7 +79,7 @@ def get_xirr_cashflows(portfolio: str, valuation_date: str, isin: str, xirr_type
                 f"ISIN {frappe.bold(escape_html(isin))} is not in this portfolio on or before the valuation date"
             )
         if not frappe.has_permission("Bond Master", "read", doc=isin):
-            frappe.throw("Not permitted", frappe.PermissionError)
+            frappe.throw(_("Not permitted"), frappe.PermissionError)
 
         bond = context["bonds"][isin]
         transactions = context["transactions"][isin]
@@ -130,7 +131,7 @@ def validate_report_inputs(portfolio, valuation_date):
     portfolio = required_string(portfolio, "Portfolio")
     valuation_date = required_string(valuation_date, "Valuation Date")
     if not frappe.has_permission("Bond Portfolio", "read", doc=portfolio):
-        frappe.throw("Not permitted", frappe.PermissionError)
+        frappe.throw(_("Not permitted"), frappe.PermissionError)
     if not frappe.db.exists("Bond Portfolio", portfolio):
         frappe.throw(f"Bond Portfolio {frappe.bold(escape_html(portfolio))} does not exist")
 
@@ -174,23 +175,23 @@ def get_columns() -> list[dict]:
     """
     return [
         {
-            "label": "ISIN",
+            "label": _("ISIN"),
             "fieldname": "isin",
             "fieldtype": "Link",
             "options": "Bond Master",
             "width": 140,
         },
-        {"label": "CCY", "fieldname": "currency", "width": 60},
+        {"label": _("CCY"), "fieldname": "currency", "width": 60},
         # {"label": "Face Value/Unit", "fieldname": "face_value_per_unit", "width": 150},
         {
-            "label": "Prin. Factor",
+            "label": _("Prin. Factor"),
             "fieldname": "principal_factor",
             "fieldtype": "Float",
             "width": 110,
         },
         # {"label": "Number of Units", "fieldname": "quantity", "width": 150},
         {
-            "label": "Nominal Value",
+            "label": _("Nominal Value"),
             "fieldname": "nominal_value",
             "fieldtype": "Currency",
             "options": "currency",
@@ -199,37 +200,37 @@ def get_columns() -> list[dict]:
         # {"label": "Market Price", "fieldname": "market_price", "fieldtype": "Float", "width": 80,},
         # {"label": "Accrued Interest", "fieldname": "accrued_interest", "fieldtype": "Float", "width": 60,},
         {
-            "label": "Purchases Value",
+            "label": _("Purchases Value"),
             "fieldname": "purchases_value",
             "fieldtype": "Currency",
             "options": "currency",
             "width": 135,
         },
         {
-            "label": "Proceeds Value",
+            "label": _("Proceeds Value"),
             "fieldname": "proceeds_value",
             "fieldtype": "Currency",
             "options": "currency",
             "width": 135,
-            "description": "Sales, coupon payments and principal amortisation received.",
+            "description": _("Sales, coupon payments and principal amortisation received."),
         },
         {
-            "label": "Market Value",
+            "label": _("Market Value"),
             "fieldname": "market_value",
             "fieldtype": "Currency",
             "options": "currency",
             "width": 135,
         },
         {
-            "label": "Gain Value",
+            "label": _("Gain Value"),
             "fieldname": "gain_value",
             "fieldtype": "Currency",
             "options": "currency",
             "width": 135,
         },
-        {"label": "XIRR", "fieldname": "xirr", "fieldtype": "Percent", "width": 80},
+        {"label": _("XIRR"), "fieldname": "xirr", "fieldtype": "Percent", "width": 80},
         {
-            "label": "Future XIRR",
+            "label": _("Future XIRR"),
             "fieldname": "future_xirr",
             "fieldtype": "Percent",
             "width": 105,

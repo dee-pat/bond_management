@@ -2,6 +2,7 @@
 # For license information, please see license.txt
 
 import frappe
+from frappe import _
 from frappe.model.document import Document
 from frappe.utils import escape_html, getdate
 
@@ -49,9 +50,11 @@ class BondStatement(Document):
             or previous.quantity_reconciliation_report != self.quantity_reconciliation_report
         ):
             frappe.throw(
-                "Portfolio Name, Statement Date, Market Price Posting, and Quantity "
-                "Reconciliation Report are managed from the attached PDF. Attach the correct "
-                "PDF instead of editing these fields."
+                _(
+                    "Portfolio Name, Statement Date, Market Price Posting, and Quantity "
+                    "Reconciliation Report are managed from the attached PDF. Attach the correct "
+                    "PDF instead of editing these fields."
+                )
             )
 
         details = get_statement_attachment_details(self.attachment)
@@ -59,8 +62,10 @@ class BondStatement(Document):
             self.statement_date
         ):
             frappe.throw(
-                "The attached PDF no longer matches this Bond Statement's portfolio and date. "
-                "Attach the correct PDF before saving."
+                _(
+                    "The attached PDF no longer matches this Bond Statement's portfolio and date. "
+                    "Attach the correct PDF before saving."
+                )
             )
         self.flags.statement_attachment_details = details
 

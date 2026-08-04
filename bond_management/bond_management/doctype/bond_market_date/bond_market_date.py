@@ -4,6 +4,7 @@
 from datetime import date as Date
 
 import frappe
+from frappe import _
 from frappe.model.document import Document
 from frappe.utils import escape_html
 
@@ -90,7 +91,7 @@ def get_recalculated_market_data(date: str | None = None, rows: str | list | Non
     date = optional_string(date, "Date")
     rows = frappe.parse_json(rows)
     if not isinstance(rows, list):
-        frappe.throw("Rows must be a list")
+        frappe.throw(_("Rows must be a list"))
 
     seen_names = set()
     seen_isins = set()
@@ -123,12 +124,12 @@ def get_recalculated_market_data(date: str | None = None, rows: str | list | Non
         frappe.has_permission("Bond Market Date", "write")
         or frappe.has_permission("Bond Market Date", "create")
     ):
-        frappe.throw("Not permitted", frappe.PermissionError)
+        frappe.throw(_("Not permitted"), frappe.PermissionError)
 
     result = []
     for row_name, isin, market_price in validated_rows:
         if isin and not frappe.has_permission("Bond Master", "read", doc=isin):
-            frappe.throw("Not permitted", frappe.PermissionError)
+            frappe.throw(_("Not permitted"), frappe.PermissionError)
 
         result.append(
             {
@@ -147,7 +148,7 @@ def get_cashflows(date: Date | str | None, isin: str | None, market_price: Decim
     isin = required_string(isin, "ISIN")
     market_price = to_decimal(market_price, "Market Price")
     if market_price <= 0:
-        frappe.throw("Market Price must be greater than zero")
+        frappe.throw(_("Market Price must be greater than zero"))
 
     frappe.has_permission("Bond Master", "read", doc=isin, throw=True)
     return [
