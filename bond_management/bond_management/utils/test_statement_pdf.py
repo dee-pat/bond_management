@@ -201,6 +201,18 @@ class TestStatementPdf(UnitTestCase):
         self.assertEqual(rates[0].to_currency, "USD")
         self.assertEqual(rates[0].rate, Decimal("0.00772499"))
 
+    def test_ignores_mutual_fund_rows_when_parsing_fixed_income_prices(self):
+        self.assertEqual(
+            parse_statement_market_prices(
+                """
+                AB SICAV I - ALL MARKET INCOME PORTFOLIO - LU1127387386
+                USD 6,709.696000 12.668234 10.620000 85,000.00 71,256.97
+                -13,743.03 -16.1683
+                """
+            ),
+            (),
+        )
+
     def test_allows_statements_without_exchange_rates_for_manual_fallback(self):
         self.assertEqual(parse_statement_exchange_rates("Currency Pair Rate"), ())
 
@@ -216,7 +228,7 @@ class TestStatementPdf(UnitTestCase):
             parse_statement_market_prices(
                 """
                 XS1843435766 1,000 100 99 99,000 30/06/2026 101.25
-                XS1843435766 USD 1,000 99 8 102.25 99,000 1,022.50
+                XS1843435766 USD 1,000 99 8 102.25 99,000 1,022.50 30/06/2026
                 """
             )
 
@@ -224,7 +236,7 @@ class TestStatementPdf(UnitTestCase):
             parse_statement_market_prices(
                 """
                 XS1843435766 1,000 100 99 99,000 30/06/2026 101.25
-                XS1843435766 2,000 100 99 99,000 30/06/2026 101.25
+                XS1843435766 USD 2,000 100 99 101.25 200,000 202,500 30/06/2026
                 """
             )
 
@@ -233,6 +245,6 @@ class TestStatementPdf(UnitTestCase):
             parse_statement_market_prices(
                 """
                 XS1028952403 USD 2,000.000000 99.250000 6.30000000 99.250000
-                0.000000 100,242.50
+                0.000000 100,242.50 23/01/2034
                 """
             )

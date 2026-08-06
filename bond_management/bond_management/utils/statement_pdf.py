@@ -46,7 +46,8 @@ LEGACY_MARKET_PRICE_PATTERN = re.compile(
     rf"(?P<reported_quantity>{NUMBER_PATTERN})\s+"
     rf"{NUMBER_PATTERN}\s+{NUMBER_PATTERN}\s+"
     rf"(?P<market_price>{NUMBER_PATTERN})\s+"
-    rf"{NUMBER_PATTERN}\s+(?P<market_value>{NUMBER_PATTERN})\b"
+    rf"{NUMBER_PATTERN}\s+(?P<market_value>{NUMBER_PATTERN})\s+"
+    rf"\d{{2}}/\d{{2}}/\d{{4}}\b"
 )
 ACCOUNT_FILENAME_PATTERN = re.compile(
     r"\bPortfolioStatement[-_](?P<account_no>[A-Za-z0-9-]+)[-_]\d{8}\.pdf$",

@@ -619,7 +619,7 @@ class TestBondStatement(IntegrationTestCase):
                 [
                     f"SUMMARY OF ACCOUNT As of 30/06/2038 IS Account: {portfolio.account_no}",
                     bond.name,
-                    "USD 200,000.00 99.000000 7.000000 101.250000 198,000.00 202,500.00",
+                    "USD 200,000.00 99.000000 7.000000 101.250000 198,000.00 202,500.00 01/01/2042",
                 ]
             ),
             "test-password",
@@ -675,7 +675,7 @@ class TestBondStatement(IntegrationTestCase):
                 [
                     f"SUMMARY OF ACCOUNT As of 31/03/2038 IS Account: {portfolio.account_no}",
                     bond.name,
-                    "USD 2,000.00 99.250000 0.00000000 110.000000 198,500.00 220,000.00",
+                    "USD 2,000.00 99.250000 0.00000000 110.000000 198,500.00 220,000.00 01/01/2042",
                 ]
             ),
             "test-password",
