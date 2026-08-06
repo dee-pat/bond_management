@@ -1,3 +1,5 @@
+from datetime import timedelta
+
 import frappe
 from dateutil.relativedelta import relativedelta
 from frappe import _
@@ -5,6 +7,14 @@ from frappe.utils import add_days, add_months, getdate
 from frappe.utils.data import get_last_day
 
 from bond_management.bond_management.utils.financial import to_decimal
+
+KENYA_DAY_COUNT_CONVENTIONS = {"ACT/364(Kenya)", "ACT/364(KENYA)", "Actual/364(Kenya)"}
+KENYA_COUPON_PERIOD_DAYS = 182
+
+
+def is_kenya_day_count_convention(day_count_convention):
+    normalized = str(day_count_convention or "").casefold()
+    return normalized in {convention.casefold() for convention in KENYA_DAY_COUNT_CONVENTIONS}
 
 
 def generate_coupon_schedule(
@@ -14,6 +24,7 @@ def generate_coupon_schedule(
     coupon_rate,
     first_coupon_date,
     day_count_convention,
+    principal_dates=None,
 ):
     issue_date = getdate(issue_date)
     maturity_date = getdate(maturity_date)
@@ -33,23 +44,6 @@ def generate_coupon_schedule(
     if coupon_frequency <= 0 or 12 % coupon_frequency:
         frappe.throw(_("Coupon Frequency must be a positive divisor of 12"))
 
-    step = relativedelta(months=int(12 / coupon_frequency))
-
-    # Step 1: generate schedule backwards
-    dates = []
-    current = maturity_date
-    eom = maturity_date == get_last_day(maturity_date)
-
-    while current > issue_date:
-        dates.append(current)
-        current = current - step
-
-        if eom:
-            current = get_last_day(current)
-
-    dates = sorted(dates)
-
-    # Step 2: handle first coupon override (stub)
     if first_coupon_date:
         if first_coupon_date <= issue_date:
             frappe.throw(_("First Coupon Date must be after Issue Date"))
@@ -57,8 +51,45 @@ def generate_coupon_schedule(
         if first_coupon_date >= maturity_date:
             frappe.throw(_("First Coupon Date must be before Maturity Date"))
 
+    principal_dates = [getdate(repayment_date) for repayment_date in principal_dates or [] if repayment_date]
+
+    # Step 1: generate schedule backwards
+    dates = []
+    current = maturity_date
+    if is_kenya_day_count_convention(day_count_convention):
+        if coupon_frequency != 2:
+            frappe.throw(_("Actual/364(Kenya) requires a semi-annual coupon frequency of 2"))
+
+        while current > issue_date:
+            dates.append(current)
+            current -= timedelta(days=KENYA_COUPON_PERIOD_DAYS)
+    else:
+        step = relativedelta(months=int(12 / coupon_frequency))
+        eom = maturity_date == get_last_day(maturity_date)
+
+        while current > issue_date:
+            dates.append(current)
+            current = current - step
+
+            if eom:
+                current = get_last_day(current)
+
+    dates = sorted(dates)
+
+    # Step 2: handle first coupon override (stub)
+    if first_coupon_date:
         dates = [d for d in dates if d > first_coupon_date]
         dates.insert(0, first_coupon_date)
+
+    # Principal repayments are contractual coupon-date boundaries. They may
+    # create a short or long stub around an otherwise fixed 182-day cadence.
+    if is_kenya_day_count_convention(day_count_convention):
+        dates.extend(
+            repayment_date
+            for repayment_date in principal_dates
+            if issue_date < repayment_date <= maturity_date
+        )
+        dates = sorted(set(dates))
 
     # Step 3: build schedule with factor
     coupon_schedule = []
@@ -68,14 +99,16 @@ def generate_coupon_schedule(
         period_start = prev
         period_end = add_days(d, -1)
 
-        fraction = year_fraction(
-            day_count_convention=day_count_convention,
-            start_date=period_start,
-            end_date=d,
-            coupon_frequency=coupon_frequency,
-        )
-
-        coupon_factor = to_decimal(coupon_rate) * fraction
+        if is_kenya_day_count_convention(day_count_convention):
+            coupon_factor = to_decimal(coupon_rate) / to_decimal(coupon_frequency)
+        else:
+            fraction = year_fraction(
+                day_count_convention=day_count_convention,
+                start_date=period_start,
+                end_date=d,
+                coupon_frequency=coupon_frequency,
+            )
+            coupon_factor = to_decimal(coupon_rate) * fraction
 
         coupon_schedule.append(
             {
@@ -125,7 +158,7 @@ def year_fraction(
     if day_count_convention == "ACT/365":
         return to_decimal((end - start).days) / to_decimal(365)
 
-    if day_count_convention in {"ACT/364", "Actual/364(Kenya)"}:
+    if day_count_convention == "ACT/364" or is_kenya_day_count_convention(day_count_convention):
         return to_decimal((end - start).days) / to_decimal(364)
 
     if day_count_convention in {"ACT/ACT", "Actual/Actual(ICMA)"}:

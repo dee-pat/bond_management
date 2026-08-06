@@ -1,5 +1,6 @@
 from datetime import date
 from decimal import Decimal
+from itertools import pairwise
 from unittest.mock import patch
 
 import frappe
@@ -18,6 +19,46 @@ class TestCouponSchedule(IntegrationTestCase):
 
         self.assertEqual([row["coupon_date"] for row in schedule], [date(2025, 7, 1), date(2026, 1, 1)])
         self.assertEqual(schedule[0]["coupon_factor"], 5)
+
+    def test_kenya_schedule_uses_backward_182_day_cadence_and_equal_factors(self):
+        schedule = generate_coupon_schedule("2025-01-01", "2027-01-01", 2, 10, None, "Actual/364(Kenya)")
+        coupon_dates = [row["coupon_date"] for row in schedule]
+
+        self.assertEqual(
+            [(later - earlier).days for earlier, later in pairwise(coupon_dates)],
+            [182, 182, 182, 182],
+        )
+        self.assertEqual(
+            {Decimal(str(row["coupon_factor"])) for row in schedule},
+            {Decimal("5")},
+        )
+
+    def test_kenya_schedule_keeps_first_coupon_and_principal_dates_as_boundaries(self):
+        schedule = generate_coupon_schedule(
+            "2025-01-01",
+            "2027-01-01",
+            2,
+            10,
+            "2025-07-01",
+            "Actual/364(Kenya)",
+            principal_dates=["2026-07-01"],
+        )
+
+        self.assertEqual(
+            [row["coupon_date"] for row in schedule],
+            [
+                date(2025, 7, 1),
+                date(2025, 7, 4),
+                date(2026, 1, 2),
+                date(2026, 7, 1),
+                date(2026, 7, 3),
+                date(2027, 1, 1),
+            ],
+        )
+        self.assertEqual(
+            {Decimal(str(row["coupon_factor"])) for row in schedule},
+            {Decimal("5")},
+        )
 
     def test_year_fraction_supports_configured_conventions(self):
         self.assertEqual(year_fraction("30E/360", "2025-01-01", "2025-07-01", 2), 0.5)

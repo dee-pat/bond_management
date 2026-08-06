@@ -68,6 +68,25 @@ class TestTransactionPdf(UnitTestCase):
         self.assertIsNone(row.commission_percent)
         self.assertEqual(row.commission_amount, Decimal("2025.00"))
 
+    def test_parses_pdf_principal_and_settlement_amount(self):
+        parsed = parse_transaction_pdf_text(
+            """
+            Account No: 1110700351101
+            TRANSACTION DETAILS :
+            Subscription
+            Bonds Name : FXD1/2019/10 - KE5000009653 / KE5000009653
+            Currency : KES Quantity / Face Value : 400,000.000000
+            Price : 104.039100 Principal : 41,615,640.00
+            Settlement Date : 25/02/2020 Settlement Amount in Currency : 41,629,320.00
+            Accrued Interest : 13,680.00 Commission : 0.00
+            Transaction Reference : U0644850
+            """
+        )
+
+        row = parsed.transactions[0]
+        self.assertEqual(row.principal, Decimal("41615640.00"))
+        self.assertEqual(row.settlement_amount, Decimal("41629320.00"))
+
     def test_decrypts_with_configured_password(self):
         content = make_text_pdf(_current_transaction_text("U1999155"), "portfolio-password")
 

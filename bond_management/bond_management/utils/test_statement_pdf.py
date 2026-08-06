@@ -127,6 +127,16 @@ class TestStatementPdf(UnitTestCase):
         )
         self.assertEqual(embedded_account.account_no, "EMBEDDED-ACCOUNT")
 
+    def test_uses_explicit_account_hint_when_legacy_pdf_omits_account(self):
+        parsed = extract_statement_pdf(
+            make_text_pdf("SUMMARY OF ACCOUNT As of 30/11/2020", "correct-password"),
+            ["correct-password"],
+            account_no_hint="1110700350102",
+        )
+
+        self.assertEqual(parsed.account_no, "1110700350102")
+        self.assertEqual(parsed.statement_date, date(2020, 11, 30))
+
     def test_parses_current_and_legacy_fixed_income_market_prices(self):
         current_prices = parse_statement_market_prices(
             """

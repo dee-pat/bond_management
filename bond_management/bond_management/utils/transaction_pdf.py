@@ -2,7 +2,7 @@ import hmac
 import re
 from dataclasses import dataclass, field
 from datetime import date, datetime
-from decimal import Decimal, InvalidOperation
+from decimal import ROUND_HALF_EVEN, Decimal, InvalidOperation
 from io import BytesIO
 from pathlib import Path
 
@@ -56,6 +56,8 @@ class ParsedTransactionPdfRow:
     accrued_interest_paid: Decimal
     commission_percent: Decimal | None
     commission_amount: Decimal | None
+    principal: Decimal | None = None
+    settlement_amount: Decimal | None = None
 
 
 @dataclass(frozen=True)
@@ -77,6 +79,8 @@ class TransactionAttachmentRow:
     price: Decimal
     accrued_interest_paid: Decimal
     commission: Decimal
+    principal: Decimal | None = None
+    settlement_amount: Decimal | None = None
 
 
 @dataclass(frozen=True)
@@ -124,6 +128,16 @@ def parse_transaction_pdf_text(text: str) -> ParsedTransactionPdf:
             ),
             commission_percent=commission_percent,
             commission_amount=commission_amount,
+            principal=_optional_decimal(
+                body,
+                rf"\bPrincipal\s*:\s*(?P<value>{NUMBER_PATTERN})",
+                "Principal",
+            ),
+            settlement_amount=_optional_decimal(
+                body,
+                rf"\bSettlement\s+Amount(?:\s+in\s+Currency)?\s*:\s*(?P<value>{NUMBER_PATTERN})",
+                "Settlement Amount",
+            ),
         )
         existing = rows_by_reference.get(reference)
         if existing and existing != row:
@@ -210,9 +224,23 @@ def get_transaction_attachment_details(attachment: str) -> TransactionAttachment
     for row in parsed.transactions:
         if row.quantity_face_value != row.quantity_face_value.to_integral_value():
             frappe.throw(f"Transaction {row.transaction_reference} has a non-whole Quantity / Face Value.")
+        face_value_per_unit = face_values[row.isin]
+        if row.principal is not None:
+            pdf_face_value_per_unit = row.principal * Decimal("100") / (row.quantity_face_value * row.price)
+            if pdf_face_value_per_unit <= 0:
+                frappe.throw(
+                    f"Transaction {row.transaction_reference} has a non-positive PDF Face Value Per Unit."
+                )
+            if pdf_face_value_per_unit.quantize(
+                Decimal("0.0001"), rounding=ROUND_HALF_EVEN
+            ) != face_value_per_unit.quantize(Decimal("0.0001"), rounding=ROUND_HALF_EVEN):
+                frappe.throw(
+                    f"Face Value Per Unit for transaction {row.transaction_reference} does not match the PDF. "
+                    f"PDF implies {pdf_face_value_per_unit:.4f}, but Bond Master has {face_value_per_unit:.4f}."
+                )
         commission = row.commission_percent
         if commission is None:
-            original_principal = row.quantity_face_value * face_values[row.isin]
+            original_principal = row.quantity_face_value * face_value_per_unit
             if original_principal <= 0:
                 frappe.throw(
                     f"Transaction {row.transaction_reference} must have a positive original principal."
@@ -231,6 +259,8 @@ def get_transaction_attachment_details(attachment: str) -> TransactionAttachment
                 price=row.price,
                 accrued_interest_paid=row.accrued_interest_paid,
                 commission=quantize_percent(commission),
+                principal=row.principal,
+                settlement_amount=row.settlement_amount,
             )
         )
 
@@ -401,6 +431,12 @@ def _required_decimal(text: str, pattern: str, label: str) -> Decimal:
     if not parsed.is_finite():
         raise TransactionPdfError(f"The transaction PDF contains a non-finite {label}.")
     return parsed
+
+
+def _optional_decimal(text: str, pattern: str, label: str) -> Decimal | None:
+    if not re.search(pattern, text, re.IGNORECASE):
+        return None
+    return _required_decimal(text, pattern, label)
 
 
 def _required_date(text: str, label: str) -> date:

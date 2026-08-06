@@ -11,6 +11,8 @@ from frappe import _
 from pypdf import PdfReader
 from pypdf.errors import DependencyError, FileNotDecryptedError, PdfReadError, PdfStreamError
 
+from bond_management.bond_management.utils.validation import optional_string
+
 MAX_STATEMENT_PDF_BYTES = 10 * 1024 * 1024
 DATE_PATTERNS = (
     re.compile(r"Portfolio\s+Summary\s+as\s+of\s+(\d{2}/\d{2}/\d{4})", re.IGNORECASE),
@@ -277,16 +279,30 @@ def extract_statement_pdf(
     )
 
 
-def get_statement_attachment_details(attachment: str) -> StatementAttachmentDetails:
-    """Read an attached private PDF and resolve its account to a visible portfolio."""
+def get_statement_attachment_details(
+    attachment: str,
+    portfolio_name_hint: str | None = None,
+) -> StatementAttachmentDetails:
+    """Read an attached private PDF and resolve it to a visible portfolio."""
+    portfolio_name_hint = optional_string(portfolio_name_hint, "Portfolio Name")
     content, original_filename = _read_private_attachment(attachment)
     credentials = _get_portfolio_credentials()
+
+    hinted_portfolios = [
+        credential for credential in credentials if credential.portfolio_name == portfolio_name_hint
+    ]
+    if portfolio_name_hint and not hinted_portfolios:
+        frappe.throw(f"No accessible Bond Portfolio exists for the selected portfolio {portfolio_name_hint}.")
+    hinted_portfolio = hinted_portfolios[0] if hinted_portfolios else None
 
     try:
         parsed = extract_statement_pdf(
             content,
             [credential.password for credential in credentials if credential.password],
-            account_no_hint=_get_filename_account_hint(original_filename),
+            account_no_hint=(
+                _get_filename_account_hint(original_filename)
+                or (normalize_account_number(hinted_portfolio.account_no) if hinted_portfolio else None)
+            ),
         )
     except StatementPdfError as error:
         frappe.throw(str(error))
@@ -313,6 +329,11 @@ def get_statement_attachment_details(attachment: str) -> StatementAttachmentDeta
         )
 
     portfolio = matching[0]
+    if hinted_portfolio and portfolio.portfolio_name != hinted_portfolio.portfolio_name:
+        frappe.throw(
+            f"The attached PDF belongs to Bond Portfolio {portfolio.portfolio_name}, "
+            f"not the selected portfolio {hinted_portfolio.portfolio_name}."
+        )
     if parsed.unlock_password is not None and (
         not portfolio.password or not hmac.compare_digest(portfolio.password, parsed.unlock_password)
     ):

@@ -63,11 +63,12 @@ PDF_PERCENT_PRECISION = Decimal("0.000000001")
 def _calculate_amount_values(
     bond, settlement_date, quantity_face_value, price, accrued_interest_paid, commission
 ):
-    principal = to_decimal(bond.face_value_per_unit) * to_decimal(quantity_face_value)
-    commission_amount = principal * to_decimal(commission) / Decimal("100")
+    original_principal = to_decimal(bond.face_value_per_unit) * to_decimal(quantity_face_value)
+    principal = original_principal * to_decimal(price) / Decimal("100")
+    commission_amount = original_principal * to_decimal(commission) / Decimal("100")
     # The bank transaction price is commission-inclusive, so commission_amount is
     # informational and must not be added to settlement or XIRR cash flows again.
-    settlement_amount = principal * to_decimal(price) / Decimal("100") + to_decimal(accrued_interest_paid)
+    settlement_amount = principal + to_decimal(accrued_interest_paid)
     accrued_interest_calculated = get_accrued_interest(
         isin=bond.name,
         settlement_date=settlement_date,
@@ -138,7 +139,8 @@ class BondTransaction(Document):
         self.set_authoritative_bond_snapshot()
         self.validate_financial_terms()
         self.validate_transaction_dates()
-        self.calculate_amounts()
+        calculated_amounts = self.calculate_amounts()
+        self.validate_pdf_amounts(calculated_amounts)
         self.validate_portfolio_ledger()
 
     def before_save(self):
@@ -446,6 +448,30 @@ class BondTransaction(Document):
         for fieldname, value in values.items():
             self.set(fieldname, value)
         return values
+
+    def validate_pdf_amounts(self, calculated_amounts):
+        if not self.attachment or not self.attachment.lower().endswith(".pdf"):
+            return
+
+        row = self._get_selected_attachment_row()
+        mismatches = []
+        for fieldname, label in (
+            ("principal", "Principal"),
+            ("settlement_amount", "Settlement Amount"),
+        ):
+            expected = getattr(row, fieldname)
+            if expected is None:
+                continue
+            actual = calculated_amounts[fieldname]
+            if not self._attachment_values_match(actual, expected, "money"):
+                mismatches.append(f"{label} (calculated: {actual}, PDF: {expected})")
+
+        if mismatches:
+            frappe.throw(
+                _("The calculated Bond Transaction amounts no longer match the attached PDF:<br>")
+                + "<br>".join(f"- {escape_html(mismatch)}" for mismatch in mismatches)
+                + _("<br>Correct the Bond Master Face Value Per Unit or re-read the PDF.")
+            )
 
     def validate_portfolio_ledger(self):
         previous = self.get_doc_before_save()

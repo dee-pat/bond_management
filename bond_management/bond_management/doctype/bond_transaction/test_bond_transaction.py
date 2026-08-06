@@ -60,6 +60,8 @@ class TestBondTransaction(IntegrationTestCase):
         self.assertEqual(transaction.price, 105)
         self.assertEqual(transaction.accrued_interest_paid, 1)
         self.assertEqual(transaction.commission, 2)
+        self.assertEqual(transaction.principal, 1050)
+        self.assertEqual(transaction.settlement_amount, 1051)
         self.assertEqual(
             transaction.attachment,
             f"/private/files/Transaction-{portfolio.account_no}-20251231.pdf",
@@ -365,10 +367,54 @@ class TestBondTransaction(IntegrationTestCase):
         with self.assertRaisesRegex(ValidationError, "requires a PDF attachment"):
             transaction.insert()
 
+    def test_pdf_amounts_must_match_calculated_values(self):
+        bond = self._make_pdf_bond()
+        portfolio = make_portfolio()
+        reference = self._numeric_reference("U")
+        attachment = self._attach_transaction_pdf(
+            self._confirmation_text(
+                portfolio.transaction_account_no,
+                reference,
+                bond.name,
+                settlement_amount="1,052.00",
+            ),
+            "test-password",
+        )
+
+        with self.assertRaisesRegex(ValidationError, "calculated Bond Transaction amounts"):
+            frappe.get_doc(
+                {
+                    "doctype": "Bond Transaction",
+                    "attachment": attachment,
+                }
+            ).insert()
+
+    def test_pdf_principal_must_imply_bond_master_face_value_per_unit(self):
+        bond = self._make_pdf_bond()
+        bond.db_set("face_value_per_unit", 100000)
+        portfolio = make_portfolio()
+        reference = self._numeric_reference("U")
+        attachment = self._attach_transaction_pdf(
+            self._confirmation_text(
+                portfolio.transaction_account_no,
+                reference,
+                bond.name,
+            ),
+            "test-password",
+        )
+
+        with self.assertRaisesRegex(ValidationError, "Face Value Per Unit.*does not match the PDF"):
+            frappe.get_doc(
+                {
+                    "doctype": "Bond Transaction",
+                    "attachment": attachment,
+                }
+            ).insert()
+
     def test_calculates_transaction_amounts(self):
         transaction = make_transaction(make_bond(), make_portfolio())
 
-        self.assertEqual(transaction.principal, 1000)
+        self.assertEqual(transaction.principal, 1050)
         self.assertEqual(transaction.commission_amount, 20)
         self.assertEqual(transaction.settlement_amount, 1051)
         self.assertNotEqual(
@@ -390,7 +436,7 @@ class TestBondTransaction(IntegrationTestCase):
             "0.015",
         )
 
-        self.assertEqual(amounts["principal"], Decimal("300.0900"))
+        self.assertEqual(amounts["principal"], Decimal("300.0600"))
         self.assertEqual(amounts["commission_amount"], Decimal("0.0450"))
         self.assertEqual(amounts["settlement_amount"], Decimal("300.0650"))
 
@@ -645,13 +691,28 @@ class TestBondTransaction(IntegrationTestCase):
         *,
         transaction_label="Subscription",
         quantity="10.000000",
+        price="105.000000",
+        accrued_interest="1.00",
         commission="2.000000",
+        principal=None,
+        settlement_amount=None,
     ):
         return f"""
         Account No : {account_no}
         TRANSACTION DETAILS:
         {transaction_label}
-        {self._confirmation_row_text(reference, isin, quantity=quantity, commission=commission)}
+        {
+            self._confirmation_row_text(
+                reference,
+                isin,
+                quantity=quantity,
+                price=price,
+                accrued_interest=accrued_interest,
+                commission=commission,
+                principal=principal,
+                settlement_amount=settlement_amount,
+            )
+        }
         """
 
     def _confirmation_row_text(
@@ -660,15 +721,36 @@ class TestBondTransaction(IntegrationTestCase):
         isin,
         *,
         quantity="10.000000",
+        price="105.000000",
+        accrued_interest="1.00",
         commission="2.000000",
+        principal=None,
+        settlement_amount=None,
     ):
+        quantity_value = Decimal(quantity.replace(",", ""))
+        price_value = Decimal(price.replace(",", ""))
+        accrued_interest_value = Decimal(accrued_interest.replace(",", ""))
+        principal_value = principal.replace(",", "") if isinstance(principal, str) else principal
+        principal_value = (
+            Decimal(principal_value)
+            if principal_value is not None
+            else quantity_value * Decimal("100") * price_value / Decimal("100")
+        )
+        settlement_value = (
+            settlement_amount.replace(",", "") if isinstance(settlement_amount, str) else settlement_amount
+        )
+        settlement_value = (
+            Decimal(settlement_value)
+            if settlement_value is not None
+            else principal_value + accrued_interest_value
+        )
         return f"""
         Bonds Name : REPUBLIC OF KENYA - {isin}
         ISIN : {isin}
         Currency : USD Quantity : {quantity}
-        Price : 105.000000 Face Value : 1,000.00
-        Trade Date : 30/12/2025 Settlement Amount in Currency : 1,051.00
+        Price : {price} Face Value : 1,000.00 Principal : {principal_value:,.2f}
+        Trade Date : 30/12/2025 Settlement Amount in Currency : {settlement_value:,.2f}
         Settlement Date : 31/12/2025 Commission % : {commission}%
-        Accrued Interest : 1.00 Commission Amount : 20.00
+        Accrued Interest : {accrued_interest} Commission Amount : 20.00
         Transaction Reference : {reference}
         """

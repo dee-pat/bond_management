@@ -15,6 +15,20 @@ from bond_management.bond_management.utils.accrual import (
 
 
 class TestAccrual(IntegrationTestCase):
+    def test_kenya_accrual_prorates_fixed_coupon_factor_over_stub_period(self):
+        schedule = [
+            {
+                "period_start": "2025-01-01",
+                "period_end": "2025-01-30",
+                "coupon_date": "2025-01-31",
+                "coupon_factor": 5,
+            }
+        ]
+
+        accrued_interest = calculate_accrued_fraction(schedule, "2025-01-16", "Actual/364(Kenya)", 100, 2, 10)
+
+        self.assertEqual(accrued_interest, Decimal("2.5"))
+
     def test_batched_frappe_dict_schedule_rows_are_accepted(self):
         bond = frappe._dict(
             {

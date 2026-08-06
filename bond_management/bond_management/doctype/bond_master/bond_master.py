@@ -106,6 +106,7 @@ class BondMaster(Document):
             self.coupon_rate,
             self.first_coupon_date,
             self.day_count_convention,
+            principal_dates=[row.repayment_date for row in self.principal_schedule],
         )
         self.set("coupon_schedule", [])
         for row in schedule:

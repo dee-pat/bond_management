@@ -225,6 +225,29 @@ class TestBondStatement(IntegrationTestCase):
             f"/private/files/PortfolioStatement-{product_account_no}-20260630.pdf",
         )
 
+    def test_accountless_pdf_uses_explicitly_selected_portfolio(self):
+        portfolio = make_portfolio(statement_pdf_password="test-password")
+        attachment = self._attach_pdf(
+            "SUMMARY OF ACCOUNT As of 30/11/2020",
+            "test-password",
+            file_name="KEUTS03Dec20075717763794.pdf",
+        )
+
+        statement = frappe.get_doc(
+            {
+                "doctype": "Bond Statement",
+                "portfolio_name": portfolio.name,
+                "attachment": attachment,
+            }
+        )
+
+        preview = statement.read_statement_pdf()
+
+        self.assertEqual(preview["portfolio_name"], portfolio.name)
+        self.assertEqual(preview["account_no"], portfolio.account_no)
+        self.assertEqual(preview["statement_date"].isoformat(), "2020-11-30")
+        statement.insert()
+
     def test_rejects_duplicate_attachment_in_controller_and_database(self):
         account_no = unique_name("DUPLICATE-ACCOUNT")
         password = unique_name("PDF-PASSWORD")

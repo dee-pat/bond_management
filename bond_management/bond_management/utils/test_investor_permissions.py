@@ -185,6 +185,10 @@ class TestInvestorPermissions(IntegrationTestCase):
             app_hooks.after_install,
         )
         self.assertIn(
+            "bond_management.patches.add_bond_management_manager_access.execute",
+            app_hooks.after_migrate,
+        )
+        self.assertIn(
             "bond_management.patches.add_bond_management_report_permission.execute",
             app_hooks.after_install,
         )

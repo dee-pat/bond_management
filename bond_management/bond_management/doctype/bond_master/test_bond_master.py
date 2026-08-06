@@ -1,6 +1,9 @@
 # Copyright (c) 2026, Deepak Patel and Contributors
 # See license.txt
 
+from decimal import Decimal
+from itertools import pairwise
+
 import frappe
 from frappe.exceptions import ValidationError
 from frappe.tests import IntegrationTestCase
@@ -19,6 +22,19 @@ class TestBondMaster(IntegrationTestCase):
         self.assertEqual(len(bond.coupon_schedule), 4)
         self.assertEqual(bond.principal_schedule[0].repayment_percent, 100)
         self.assertEqual(bond.coupon_schedule[-1].coupon_date.isoformat(), "2027-01-01")
+
+    def test_kenya_convention_uses_182_day_periods_and_equal_coupon_factors(self):
+        bond = make_bond(day_count_convention="Actual/364(Kenya)")
+        coupon_dates = [row.coupon_date for row in bond.coupon_schedule]
+
+        self.assertEqual(
+            [(later - earlier).days for earlier, later in pairwise(coupon_dates)],
+            [3, 182, 182, 182],
+        )
+        self.assertEqual(
+            {Decimal(str(row.coupon_factor)) for row in bond.coupon_schedule},
+            {Decimal("3.5")},
+        )
 
     def test_rejects_empty_principal_schedule(self):
         bond = make_bond()

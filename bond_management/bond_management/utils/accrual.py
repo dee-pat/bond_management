@@ -4,7 +4,10 @@ from decimal import ROUND_HALF_UP, Decimal
 import frappe
 from frappe.utils import getdate
 
-from bond_management.bond_management.utils.coupon_schedule import year_fraction
+from bond_management.bond_management.utils.coupon_schedule import (
+    is_kenya_day_count_convention,
+    year_fraction,
+)
 from bond_management.bond_management.utils.financial import (
     PERCENT_PRECISION,
     quantize_percent,
@@ -46,6 +49,21 @@ def calculate_accrued_fraction(
 
     start = getdate(period.get("period_start"))
     settlement = getdate(settlement_date)
+    if is_kenya_day_count_convention(day_count_convention):
+        coupon_date = getdate(period.get("coupon_date")) if period.get("coupon_date") else None
+        period_days = (coupon_date - start).days if coupon_date else 0
+        elapsed_days = (settlement - start).days
+        if period_days <= 0:
+            return to_decimal(0)
+
+        period_fraction = to_decimal(elapsed_days) / to_decimal(period_days)
+        coupon_factor = to_decimal(
+            period.get("coupon_factor")
+            if period.get("coupon_factor") is not None
+            else to_decimal(coupon_rate) / to_decimal(coupon_frequency)
+        )
+        return coupon_factor / to_decimal(100) * to_decimal(face_value_per_unit) * period_fraction
+
     fraction = year_fraction(
         day_count_convention=day_count_convention,
         start_date=start,

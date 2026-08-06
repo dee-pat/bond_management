@@ -151,6 +151,7 @@
    "read_only": 1
   },
   {
+   "description": "Original principal multiplied by the commission-inclusive bank Price, matching the Principal reported on the transaction PDF.",
    "fieldname": "principal",
    "fieldtype": "Currency",
    "label": "Principal",
@@ -167,7 +168,7 @@
    "reqd": 1
   },
   {
-   "description": "Original principal multiplied by the commission-inclusive bank Price, plus accrued interest paid.",
+   "description": "Principal reported by the bank plus accrued interest paid, matching the Settlement Amount on the transaction PDF.",
    "fieldname": "settlement_amount",
    "fieldtype": "Currency",
    "label": "Settlement Amount",

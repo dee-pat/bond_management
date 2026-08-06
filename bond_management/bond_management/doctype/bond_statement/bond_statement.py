@@ -60,7 +60,7 @@ class BondStatement(Document):
                 )
             )
 
-        details = get_statement_attachment_details(self.attachment)
+        details = get_statement_attachment_details(self.attachment, self.portfolio_name)
         if details.portfolio_name != self.portfolio_name or getdate(details.statement_date) != getdate(
             self.statement_date
         ):
@@ -131,7 +131,7 @@ class BondStatement(Document):
     def read_statement_pdf(self):
         """Preview the portfolio and date extracted from the current attachment."""
         self.check_permission("create" if self.is_new() else "write")
-        details = get_statement_attachment_details(self.attachment)
+        details = get_statement_attachment_details(self.attachment, self.portfolio_name)
         return {
             "portfolio_name": details.portfolio_name,
             "statement_date": details.statement_date,
@@ -147,7 +147,7 @@ class BondStatement(Document):
         }
 
     def _set_details_from_attachment(self):
-        details = get_statement_attachment_details(self.attachment)
+        details = get_statement_attachment_details(self.attachment, self.portfolio_name)
         self.flags.statement_attachment_details = details
         self.portfolio_name = details.portfolio_name
         self.statement_date = details.statement_date
