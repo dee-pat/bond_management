@@ -1,6 +1,6 @@
 import frappe
 
-REPORT_VERSION = "QuantityBasis-v3"
+REPORT_VERSION = "QuantityBasis-v4"
 
 
 def execute(statement_names=None):

@@ -20,6 +20,12 @@ from bond_management.bond_management.tests.factories import (
     unique_name,
 )
 from bond_management.bond_management.tests.pdf_factory import make_text_pdf
+from bond_management.bond_management.utils.statement_quantity_reconciliation import (
+    StatementQuantityComparison,
+)
+from bond_management.bond_management.utils.statement_quantity_report import (
+    build_quantity_reconciliation_pdf,
+)
 from bond_management.patches.add_bond_query_indexes import STATEMENT_ATTACHMENT_UNIQUE
 from bond_management.patches.backfill_statement_reconciliation_statuses import (
     execute as backfill_reconciliation_statuses,
@@ -659,7 +665,7 @@ class TestBondStatement(IntegrationTestCase):
         backfill_reconciliation_statuses([statement.name])
         statement.reload()
         quantity_basis_report_url = statement.quantity_reconciliation_report
-        self.assertIn("QuantityBasis-v3", quantity_basis_report_url)
+        self.assertIn("QuantityBasis-v4", quantity_basis_report_url)
         self.assertEqual(statement.reconciliation_status, "Matched")
 
         backfill_reconciliation_statuses([statement.name])
@@ -728,6 +734,31 @@ class TestBondStatement(IntegrationTestCase):
         self.assertIn("Mismatched: 1", report_text)
         self.assertRegex(report_text, rf"{matched_bond.name}.*0\s+MATCHED")
         self.assertRegex(report_text, rf"{mismatched_bond.name}.*-5\s+MISMATCH")
+
+    def test_reconciliation_report_shows_calculated_only_isin(self):
+        comparison = StatementQuantityComparison(
+            isin="KE6000008430",
+            pdf_quantity=None,
+            calculated_quantity=Decimal("200000"),
+            difference=Decimal("-200000"),
+        )
+
+        content = build_quantity_reconciliation_pdf(
+            statement_name="BS-TEST",
+            portfolio_name="Amrat",
+            statement_date="2025-04-30",
+            generated_at="2026-08-06 12:00:00",
+            comparisons=(comparison,),
+            password="test-password",
+        )
+        reader = PdfReader(BytesIO(content))
+        self.assertGreater(reader.decrypt("test-password"), 0)
+        report_text = "\n".join(page.extract_text() or "" for page in reader.pages)
+
+        self.assertIn("Not present", report_text)
+        self.assertIn("200,000", report_text)
+        self.assertIn("-200,000", report_text)
+        self.assertIn("MISMATCH", report_text)
 
     def test_reports_when_pdf_quantity_is_greater_than_calculated_quantity(self):
         portfolio = make_portfolio()
