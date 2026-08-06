@@ -44,8 +44,16 @@
    "type": "Link"
   },
   {
-   "icon": "chart-line",
+   "icon": "arrow-left-right",
    "idx": 6,
+   "label": "Bond Exchange Rate",
+   "link_to": "Bond Exchange Rate",
+   "link_type": "DocType",
+   "type": "Link"
+  },
+  {
+   "icon": "chart-line",
+   "idx": 7,
    "label": "Portfolio Performance",
    "link_to": "Portfolio Performance",
    "link_type": "Report",

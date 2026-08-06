@@ -12,6 +12,7 @@ from pypdf import PdfReader
 
 from bond_management.bond_management.tests.factories import (
     make_bond,
+    make_exchange_rate,
     make_market_date,
     make_portfolio,
     make_statement,
@@ -150,6 +151,51 @@ class TestBondStatement(IntegrationTestCase):
                 self.assertEqual(attachment_files[0].attached_to_doctype, "Bond Statement")
                 self.assertEqual(attachment_files[0].attached_to_name, statement.name)
                 self.assertEqual(attachment_files[0].attached_to_field, "attachment")
+
+    def test_attachment_upserts_exchange_rates_and_preserves_manual_fallbacks(self):
+        account_no = unique_name("FX-ACCOUNT")
+        password = unique_name("FX-PASSWORD")
+        portfolio = make_portfolio(
+            account_no=account_no,
+            statement_pdf_password=password,
+        )
+        manual_rate = make_exchange_rate(
+            portfolio,
+            rate_date="2026-05-31",
+            rate="0.00770000",
+        )
+        attachment = self._attach_pdf(
+            "\n".join(
+                [
+                    "Portfolio Summary as of 30/06/2026",
+                    f"Product Account No.: {account_no}",
+                    "Currency Pair Rate",
+                    "KES / USD 0.00772499",
+                ]
+            ),
+            password,
+        )
+
+        statement = frappe.get_doc({"doctype": "Bond Statement", "attachment": attachment}).insert()
+
+        parsed_rate = frappe.qb.get_query(
+            "Bond Exchange Rate",
+            fields=["rate", "source", "statement"],
+            filters={
+                "portfolio_name": portfolio.name,
+                "rate_date": "2026-06-30",
+                "from_currency": "KES",
+            },
+            limit=1,
+            ignore_permissions=False,
+        ).run(as_dict=True)[0]
+        self.assertEqual(parsed_rate.rate, 0.00772499)
+        self.assertEqual(parsed_rate.source, "Statement PDF")
+        self.assertEqual(parsed_rate.statement, statement.name)
+
+        manual_rate.reload()
+        self.assertEqual(manual_rate.source, "Manual")
+        self.assertEqual(manual_rate.rate, 0.0077)
 
     def test_attachment_accepts_transaction_account_and_keeps_product_account_filename(self):
         product_account_no = unique_name("PRODUCT-ACCOUNT")

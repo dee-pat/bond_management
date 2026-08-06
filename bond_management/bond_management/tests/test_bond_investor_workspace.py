@@ -20,6 +20,7 @@ class TestBondInvestorWorkspace(TestCase):
                 "Bond Statement",
                 "Bond Master",
                 "Bond Market Date",
+                "Bond Exchange Rate",
                 "Portfolio Performance",
             },
         )

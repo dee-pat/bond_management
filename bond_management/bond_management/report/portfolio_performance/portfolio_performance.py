@@ -12,10 +12,13 @@ from bond_management.bond_management.utils.accrual import (
     calculate_principal_factor_from_schedule,
     unit_accrued_interest_from_bond,
 )
-from bond_management.bond_management.utils.financial import quantize_money, to_decimal
-from bond_management.bond_management.utils.performance import (
-    load_portfolio_performance_context,
+from bond_management.bond_management.utils.exchange_rate import (
+    REPORTING_CURRENCY,
+    convert_cashflows,
+    get_rate_for_date,
 )
+from bond_management.bond_management.utils.financial import quantize_money, to_decimal
+from bond_management.bond_management.utils.performance import load_portfolio_performance_context
 from bond_management.bond_management.utils.portfolio import get_ledger_position_from_transactions
 from bond_management.bond_management.utils.validation import required_string
 from bond_management.bond_management.utils.xirr import (
@@ -32,12 +35,7 @@ from bond_management.bond_management.utils.xirr import (
 
 
 def execute(filters: dict | None = None):
-    """Return columns and data for the report.
-
-    This is the main entry point for the report. It accepts the filters as a
-    dictionary and should return columns and data. It is called by the framework
-    every time the report is refreshed or a filter is updated.
-    """
+    """Return native-currency and USD performance values for one portfolio."""
     if filters is None:
         filters = {}
     if not isinstance(filters, dict):
@@ -48,19 +46,31 @@ def execute(filters: dict | None = None):
     )
 
     columns = get_columns()
-    data, combined_cashflow, combined_future_cashflow = get_data(portfolio, valuation_date)
+    (
+        data,
+        combined_cashflow,
+        combined_future_cashflow,
+        combined_reporting_cashflow,
+        combined_future_reporting_cashflow,
+    ) = get_data(portfolio, valuation_date)
 
-    # Add summary row
-    currencies = {row["currency"] for row in data if row.get("currency")}
-    if data and len(currencies) <= 1:
-        total_row = make_total_row(data, combined_cashflow, combined_future_cashflow)
-        data.append(total_row)
+    data = list(data)
+    if data:
+        data.append(
+            make_total_row(
+                data,
+                combined_cashflow,
+                combined_future_cashflow,
+                combined_reporting_cashflow,
+                combined_future_reporting_cashflow,
+            )
+        )
     return columns, data
 
 
 @frappe.whitelist(methods=["POST"])
 def get_xirr_cashflows(portfolio: str, valuation_date: str, isin: str, xirr_type: str) -> list[dict]:
-    """Return the raw cash flows behind a report XIRR value for spreadsheet review."""
+    """Return native cash flows behind a report XIRR value for spreadsheet review."""
     portfolio, valuation_date = validate_report_inputs(portfolio, valuation_date)
 
     isin = required_string(isin, "ISIN")
@@ -70,7 +80,13 @@ def get_xirr_cashflows(portfolio: str, valuation_date: str, isin: str, xirr_type
 
     context = load_portfolio_performance_context(portfolio, valuation_date)
     if isin == "TOTAL":
-        _data, past_cashflows, future_cashflows = get_data(portfolio, valuation_date, context=context)
+        (
+            _data,
+            past_cashflows,
+            future_cashflows,
+            _reporting_past_cashflows,
+            _reporting_future_cashflows,
+        ) = get_data(portfolio, valuation_date, context=context)
         cashflows = past_cashflows if xirr_type == "past" else future_cashflows
     else:
         portfolio_isins = set(context["isins"])
@@ -169,10 +185,7 @@ def calculate_future_xirr_from_cashflows(isin, valuation_date, cashflows, histor
 
 
 def get_columns() -> list[dict]:
-    """Return columns for the report.
-
-    One field definition per column, just like a DocType field definition.
-    """
+    """Return the native and reporting-currency report columns."""
     return [
         {
             "label": _("ISIN"),
@@ -182,14 +195,14 @@ def get_columns() -> list[dict]:
             "width": 140,
         },
         {"label": _("CCY"), "fieldname": "currency", "width": 60},
-        # {"label": "Face Value/Unit", "fieldname": "face_value_per_unit", "width": 150},
+        {"label": _("Rpt. CCY"), "fieldname": "reporting_currency", "width": 75},
+        {"label": _("FX Rate"), "fieldname": "exchange_rate", "fieldtype": "Float", "width": 90},
         {
             "label": _("Prin. Factor"),
             "fieldname": "principal_factor",
             "fieldtype": "Float",
             "width": 110,
         },
-        # {"label": "Number of Units", "fieldname": "quantity", "width": 150},
         {
             "label": _("Nominal Value"),
             "fieldname": "nominal_value",
@@ -197,14 +210,26 @@ def get_columns() -> list[dict]:
             "options": "currency",
             "width": 135,
         },
-        # {"label": "Market Price", "fieldname": "market_price", "fieldtype": "Float", "width": 80,},
-        # {"label": "Accrued Interest", "fieldname": "accrued_interest", "fieldtype": "Float", "width": 60,},
+        {
+            "label": _("Nominal Value (USD)"),
+            "fieldname": "nominal_value_usd",
+            "fieldtype": "Currency",
+            "options": "reporting_currency",
+            "width": 145,
+        },
         {
             "label": _("Purchases Value"),
             "fieldname": "purchases_value",
             "fieldtype": "Currency",
             "options": "currency",
             "width": 135,
+        },
+        {
+            "label": _("Purchases Value (USD)"),
+            "fieldname": "purchases_value_usd",
+            "fieldtype": "Currency",
+            "options": "reporting_currency",
+            "width": 145,
         },
         {
             "label": _("Proceeds Value"),
@@ -215,11 +240,26 @@ def get_columns() -> list[dict]:
             "description": _("Sales, coupon payments and principal amortisation received."),
         },
         {
+            "label": _("Proceeds Value (USD)"),
+            "fieldname": "proceeds_value_usd",
+            "fieldtype": "Currency",
+            "options": "reporting_currency",
+            "width": 145,
+            "description": _("USD equivalent of sales, coupons and principal amortisation received."),
+        },
+        {
             "label": _("Market Value"),
             "fieldname": "market_value",
             "fieldtype": "Currency",
             "options": "currency",
             "width": 135,
+        },
+        {
+            "label": _("Market Value (USD)"),
+            "fieldname": "market_value_usd",
+            "fieldtype": "Currency",
+            "options": "reporting_currency",
+            "width": 145,
         },
         {
             "label": _("Gain Value"),
@@ -228,12 +268,26 @@ def get_columns() -> list[dict]:
             "options": "currency",
             "width": 135,
         },
+        {
+            "label": _("Gain Value (USD)"),
+            "fieldname": "gain_value_usd",
+            "fieldtype": "Currency",
+            "options": "reporting_currency",
+            "width": 145,
+        },
         {"label": _("XIRR"), "fieldname": "xirr", "fieldtype": "Percent", "width": 80},
         {
             "label": _("Future XIRR"),
             "fieldname": "future_xirr",
             "fieldtype": "Percent",
             "width": 105,
+        },
+        {"label": _("XIRR (USD)"), "fieldname": "xirr_usd", "fieldtype": "Percent", "width": 95},
+        {
+            "label": _("Future XIRR (USD)"),
+            "fieldname": "future_xirr_usd",
+            "fieldtype": "Percent",
+            "width": 120,
         },
     ]
 
@@ -248,6 +302,8 @@ def get_data(portfolio, valuation_date, context=None):
 
     combined_cashflow = []
     combined_future_cashflow = []
+    combined_reporting_cashflow = []
+    combined_future_reporting_cashflow = []
 
     for isin in context["isins"]:
         bond = context["bonds"][isin]
@@ -259,6 +315,13 @@ def get_data(portfolio, valuation_date, context=None):
         # ---------- MASTER DATA ----------
         currency = bond.get("currency")
         face_value_per_unit = to_decimal(bond.get("face_value_per_unit"))
+        exchange_rates = context.get("exchange_rates", {})
+        valuation_exchange_rate = get_rate_for_date(
+            exchange_rates,
+            currency,
+            valuation_date,
+            portfolio=portfolio,
+        )
 
         # ---------- MARKET DATA ----------
         market_price = context["market_prices"].get(isin)
@@ -283,18 +346,32 @@ def get_data(portfolio, valuation_date, context=None):
             transactions=transactions,
         )
         combined_cashflow.extend(cashflows)
+        reporting_cashflows = convert_cashflows(
+            cashflows,
+            exchange_rates,
+            portfolio=portfolio,
+            currency=currency,
+        )
+        combined_reporting_cashflow.extend(reporting_cashflows)
 
         totals = defaultdict(Decimal)
-
+        reporting_totals = defaultdict(Decimal)
         for line in cashflows:
             totals[line.get("type")] += line.get("amount") or 0
+        for line in reporting_cashflows:
+            reporting_totals[line.get("type")] += line.get("amount") or 0
 
-        # access:
         purchases_value = -totals["purchase"]
         proceeds_value = totals["sale"] + totals["coupon"] + totals["amortisation"]
+        purchases_value_usd = -reporting_totals["purchase"]
+        proceeds_value_usd = (
+            reporting_totals["sale"] + reporting_totals["coupon"] + reporting_totals["amortisation"]
+        )
 
         xirr = calculate_xirr(consolidate_cashflows(cashflows))
         xirr = xirr * 100.0 if xirr is not None else 0.0
+        xirr_usd = calculate_xirr(consolidate_cashflows(reporting_cashflows))
+        xirr_usd = xirr_usd * 100.0 if xirr_usd is not None else 0.0
 
         if quantity:
             future_cashflows = create_future_cash_flows(
@@ -315,58 +392,124 @@ def get_data(portfolio, valuation_date, context=None):
             future_cashflows = []
 
         combined_future_cashflow.extend(future_cashflows)
+        future_reporting_cashflows = convert_cashflows(
+            future_cashflows,
+            exchange_rates,
+            portfolio=portfolio,
+            currency=currency,
+            rate_date=valuation_date,
+        )
+        combined_future_reporting_cashflow.extend(future_reporting_cashflows)
 
         future_xirr = future_xirr * 100.0 if future_xirr is not None else None
+        future_xirr_usd = (
+            calculate_future_xirr_from_cashflows(
+                isin,
+                valuation_date,
+                future_reporting_cashflows,
+                historical_guess=context["xirr_guesses"].get(isin),
+            )
+            if quantity
+            else None
+        )
+        future_xirr_usd = future_xirr_usd * 100.0 if future_xirr_usd is not None else None
+
+        market_value_usd = market_value * valuation_exchange_rate
+        nominal_value_usd = nominal_value * valuation_exchange_rate
 
         rows.append(
             {
                 "isin": isin,
                 "currency": currency,
-                # "face_value_per_unit": face_value_per_unit,
+                "reporting_currency": REPORTING_CURRENCY,
+                "exchange_rate": valuation_exchange_rate,
                 "principal_factor": principal_factor,
-                # "quantity": quantity,
                 "nominal_value": quantize_money(nominal_value),
-                # "market_price": market_price,
-                # "accrued_interest": accrued_interest,
+                "nominal_value_usd": quantize_money(nominal_value_usd),
                 "purchases_value": quantize_money(purchases_value),
+                "purchases_value_usd": quantize_money(purchases_value_usd),
                 "proceeds_value": quantize_money(proceeds_value),
+                "proceeds_value_usd": quantize_money(proceeds_value_usd),
                 "market_value": quantize_money(market_value),
+                "market_value_usd": quantize_money(market_value_usd),
                 "gain_value": quantize_money(market_value + proceeds_value - purchases_value),
+                "gain_value_usd": quantize_money(market_value_usd + proceeds_value_usd - purchases_value_usd),
                 "xirr": xirr,
                 "future_xirr": future_xirr,
+                "xirr_usd": xirr_usd,
+                "future_xirr_usd": future_xirr_usd,
             }
         )
 
-    return rows, combined_cashflow, combined_future_cashflow
+    return (
+        rows,
+        combined_cashflow,
+        combined_future_cashflow,
+        combined_reporting_cashflow,
+        combined_future_reporting_cashflow,
+    )
 
 
 # ---------- TOTAL ROW ----------
 
 
-def make_total_row(data, combined_cashflow, combined_future_cashflow):
-    nominal_value = sum(d["nominal_value"] for d in data)
-    purchases_value = sum(d["purchases_value"] for d in data)
-    proceeds_value = sum(d["proceeds_value"] for d in data)
-    market_value = sum(d["market_value"] for d in data)
-    gain_value = sum(d["gain_value"] for d in data)
+def make_total_row(
+    data,
+    combined_cashflow,
+    combined_future_cashflow,
+    combined_reporting_cashflow=None,
+    combined_future_reporting_cashflow=None,
+):
+    currencies = {row["currency"] for row in data if row.get("currency")}
+    single_native_currency = len(currencies) <= 1
+
+    def sum_field(fieldname, fallback_fieldname=None):
+        values = [row.get(fieldname, row.get(fallback_fieldname, 0)) for row in data]
+        return quantize_money(sum((to_decimal(value) for value in values), Decimal(0)))
+
+    native_values = {
+        "nominal_value": sum_field("nominal_value") if single_native_currency else None,
+        "purchases_value": sum_field("purchases_value") if single_native_currency else None,
+        "proceeds_value": sum_field("proceeds_value") if single_native_currency else None,
+        "market_value": sum_field("market_value") if single_native_currency else None,
+        "gain_value": sum_field("gain_value") if single_native_currency else None,
+    }
+    reporting_values = {
+        "nominal_value_usd": sum_field("nominal_value_usd", "nominal_value"),
+        "purchases_value_usd": sum_field("purchases_value_usd", "purchases_value"),
+        "proceeds_value_usd": sum_field("proceeds_value_usd", "proceeds_value"),
+        "market_value_usd": sum_field("market_value_usd", "market_value"),
+        "gain_value_usd": sum_field("gain_value_usd", "gain_value"),
+    }
 
     cash_flows = consolidate_cashflows(cash_flows=combined_cashflow)
-    xirr_value = calculate_xirr(cash_flows)
+    xirr_value = calculate_xirr(cash_flows) if single_native_currency else None
 
-    combined_future_cashflow = consolidate_cashflows(cash_flows=combined_future_cashflow)
+    future_cash_flows = consolidate_cashflows(cash_flows=combined_future_cashflow)
+    future_xirr = calculate_xirr(future_cash_flows) if single_native_currency else None
 
-    future_xirr = calculate_xirr(combined_future_cashflow)
+    reporting_cash_flows = consolidate_cashflows(
+        cash_flows=combined_reporting_cashflow
+        if combined_reporting_cashflow is not None
+        else combined_cashflow
+    )
+    reporting_xirr = calculate_xirr(reporting_cash_flows)
 
-    currencies = {row["currency"] for row in data if row.get("currency")}
+    future_reporting_cash_flows = consolidate_cashflows(
+        cash_flows=combined_future_reporting_cashflow
+        if combined_future_reporting_cashflow is not None
+        else combined_future_cashflow
+    )
+    future_reporting_xirr = calculate_xirr(future_reporting_cash_flows)
 
     return {
         "isin": "TOTAL",
-        "currency": currencies.pop() if len(currencies) == 1 else None,
-        "nominal_value": quantize_money(nominal_value),
-        "purchases_value": quantize_money(purchases_value),
-        "proceeds_value": quantize_money(proceeds_value),
-        "market_value": quantize_money(market_value),
-        "gain_value": quantize_money(gain_value),
+        "currency": currencies.pop() if single_native_currency and currencies else None,
+        "reporting_currency": REPORTING_CURRENCY,
+        **native_values,
+        **reporting_values,
         "xirr": xirr_value * 100 if xirr_value is not None else 0.0,
         "future_xirr": future_xirr * 100 if future_xirr is not None else None,
+        "xirr_usd": reporting_xirr * 100 if reporting_xirr is not None else 0.0,
+        "future_xirr_usd": future_reporting_xirr * 100 if future_reporting_xirr is not None else None,
     }

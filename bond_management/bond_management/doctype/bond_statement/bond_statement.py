@@ -17,6 +17,9 @@ from bond_management.bond_management.utils.portfolio import (
 from bond_management.bond_management.utils.statement_attachment import (
     standardize_statement_attachment,
 )
+from bond_management.bond_management.utils.statement_exchange_rates import (
+    sync_statement_exchange_rates,
+)
 from bond_management.bond_management.utils.statement_market_prices import (
     sync_statement_market_prices,
 )
@@ -114,6 +117,7 @@ class BondStatement(Document):
         if not details:
             return
 
+        sync_statement_exchange_rates(self, details.exchange_rates)
         report_url = attach_quantity_reconciliation_report(
             self,
             self.flags.quantity_reconciliation_comparisons or (),
@@ -132,6 +136,14 @@ class BondStatement(Document):
             "portfolio_name": details.portfolio_name,
             "statement_date": details.statement_date,
             "account_no": details.account_no,
+            "exchange_rates": [
+                {
+                    "from_currency": row.from_currency,
+                    "to_currency": row.to_currency,
+                    "rate": row.rate,
+                }
+                for row in details.exchange_rates
+            ],
         }
 
     def _set_details_from_attachment(self):

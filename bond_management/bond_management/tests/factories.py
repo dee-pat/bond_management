@@ -101,3 +101,22 @@ def make_market_date(bond, market_price=100, date="2025-12-30"):
             ],
         }
     ).insert()
+
+
+def make_exchange_rate(
+    portfolio,
+    from_currency="KES",
+    rate="0.00772499",
+    rate_date="2025-12-30",
+    **overrides,
+):
+    values = {
+        "doctype": "Bond Exchange Rate",
+        "portfolio_name": portfolio.name,
+        "rate_date": rate_date,
+        "from_currency": from_currency,
+        "to_currency": "USD",
+        "rate": rate,
+    }
+    values.update(overrides)
+    return frappe.get_doc(values).insert()

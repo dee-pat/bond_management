@@ -1,3 +1,4 @@
+from decimal import Decimal
 from unittest.mock import patch
 
 import frappe
@@ -13,6 +14,7 @@ from bond_management.bond_management.report.portfolio_performance.portfolio_perf
 )
 from bond_management.bond_management.tests.factories import (
     make_bond,
+    make_exchange_rate,
     make_market_date,
     make_portfolio,
     make_transaction,
@@ -22,16 +24,19 @@ from bond_management.bond_management.utils.xirr import create_future_cash_flows
 
 
 class TestPortfolioPerformance(IntegrationTestCase):
-    def test_columns_are_defined_and_multi_currency_data_has_no_total(self):
+    def test_columns_are_defined_and_multi_currency_totals_use_usd(self):
         columns = get_columns()
         fieldnames = [column["fieldname"] for column in columns]
         self.assertIn("isin", fieldnames)
         self.assertIn("proceeds_value", fieldnames)
+        self.assertIn("proceeds_value_usd", fieldnames)
+        self.assertIn("xirr_usd", fieldnames)
         self.assertNotIn("sales_value", fieldnames)
         self.assertNotIn("coupons_value", fieldnames)
         self.assertNotIn("amortisation_value", fieldnames)
         labels = {column["fieldname"]: column["label"] for column in columns}
         self.assertEqual(labels["currency"], "CCY")
+        self.assertEqual(labels["reporting_currency"], "Rpt. CCY")
         self.assertEqual(labels["principal_factor"], "Prin. Factor")
         widths = {column["fieldname"]: column["width"] for column in columns}
         self.assertEqual(
@@ -47,6 +52,15 @@ class TestPortfolioPerformance(IntegrationTestCase):
                 "gain_value": 135,
                 "xirr": 80,
                 "future_xirr": 105,
+                "reporting_currency": 75,
+                "exchange_rate": 90,
+                "nominal_value_usd": 145,
+                "purchases_value_usd": 145,
+                "proceeds_value_usd": 145,
+                "market_value_usd": 145,
+                "gain_value_usd": 145,
+                "xirr_usd": 95,
+                "future_xirr_usd": 120,
             },
         )
 
@@ -58,6 +72,12 @@ class TestPortfolioPerformance(IntegrationTestCase):
                 "proceeds_value": 3,
                 "market_value": 1,
                 "gain_value": 3,
+                "reporting_currency": "USD",
+                "nominal_value_usd": 1,
+                "purchases_value_usd": 1,
+                "proceeds_value_usd": 3,
+                "market_value_usd": 1,
+                "gain_value_usd": 3,
             },
             {
                 "currency": "KES",
@@ -66,17 +86,27 @@ class TestPortfolioPerformance(IntegrationTestCase):
                 "proceeds_value": 5,
                 "market_value": 1,
                 "gain_value": 5,
+                "reporting_currency": "USD",
+                "nominal_value_usd": 2,
+                "purchases_value_usd": 2,
+                "proceeds_value_usd": 5,
+                "market_value_usd": 2,
+                "gain_value_usd": 5,
             },
         ]
         portfolio = make_portfolio()
         with patch(
             "bond_management.bond_management.report.portfolio_performance.portfolio_performance.get_data",
-            return_value=(rows, [], []),
+            return_value=(rows, [], [], [], []),
         ):
             _, data = execute({"portfolio": portfolio.name, "valuation_date": "2025-01-01"})
 
-        self.assertEqual(data, rows)
-        total = make_total_row(rows[:1], [], [])
+        self.assertEqual(data[:2], rows)
+        total = data[-1]
+        self.assertIsNone(total["currency"])
+        self.assertEqual(total["reporting_currency"], "USD")
+        self.assertEqual(total["proceeds_value_usd"], 8)
+        total = make_total_row(rows[:1], [], [], [], [])
         self.assertEqual(total["currency"], "USD")
         self.assertEqual(total["proceeds_value"], 3)
 
@@ -105,6 +135,46 @@ class TestPortfolioPerformance(IntegrationTestCase):
         self.assertEqual(past, sorted(past, key=sort_key))
         self.assertEqual(future, sorted(future, key=sort_key))
         self.assertNotIn(0, [cashflow["amount"] for cashflow in past + future])
+
+    def test_mixed_currency_rows_include_usd_values_and_usd_total(self):
+        portfolio = make_portfolio()
+        usd_bond = make_bond()
+        kes_bond = make_bond(currency="KES")
+        make_transaction(usd_bond, portfolio)
+        make_transaction(kes_bond, portfolio)
+        make_exchange_rate(portfolio, rate_date="2025-12-30", rate="0.01")
+        make_market_date(usd_bond, date="2025-12-30")
+        make_market_date(kes_bond, date="2025-12-30")
+
+        columns, rows = execute({"portfolio": portfolio.name, "valuation_date": "2025-12-31"})
+
+        self.assertIn("nominal_value_usd", {column["fieldname"] for column in columns})
+        bond_rows = {row["isin"]: row for row in rows if row["isin"] != "TOTAL"}
+        self.assertEqual(bond_rows[kes_bond.name]["currency"], "KES")
+        self.assertEqual(bond_rows[kes_bond.name]["reporting_currency"], "USD")
+        self.assertEqual(bond_rows[kes_bond.name]["exchange_rate"], Decimal("0.01"))
+        self.assertEqual(
+            bond_rows[kes_bond.name]["market_value_usd"],
+            (bond_rows[kes_bond.name]["market_value"] * Decimal("0.01")).quantize(Decimal("0.0001")),
+        )
+
+        total = rows[-1]
+        self.assertEqual(total["isin"], "TOTAL")
+        self.assertIsNone(total["currency"])
+        self.assertEqual(total["reporting_currency"], "USD")
+        self.assertEqual(
+            total["market_value_usd"],
+            sum(row["market_value_usd"] for row in bond_rows.values()),
+        )
+
+    def test_non_usd_report_requires_a_rate_or_manual_fallback(self):
+        bond = make_bond(currency="KES")
+        portfolio = make_portfolio()
+        make_transaction(bond, portfolio)
+        make_market_date(bond)
+
+        with self.assertRaisesRegex(frappe.ValidationError, "Add a Bond Exchange Rate row manually"):
+            execute({"portfolio": portfolio.name, "valuation_date": "2025-12-31"})
 
     def test_past_and_future_accrued_interest_use_the_same_total_rounding(self):
         bond = make_bond()
@@ -162,7 +232,7 @@ class TestPortfolioPerformance(IntegrationTestCase):
             "bond_management.bond_management.report.portfolio_performance.portfolio_performance.create_future_cash_flows",
             wraps=create_future_cash_flows,
         ) as future_cashflow_builder:
-            rows, past_cashflows, future_cashflows = get_data(portfolio.name, "2025-12-31")
+            rows, past_cashflows, future_cashflows, _, _ = get_data(portfolio.name, "2025-12-31")
 
         self.assertEqual(future_cashflow_builder.call_count, 1)
         self.assertEqual(rows[0]["principal_factor"], 0.5)
@@ -199,7 +269,7 @@ class TestPortfolioPerformance(IntegrationTestCase):
         )
         make_market_date(bond, market_price=50, date="2025-07-01")
 
-        rows, past_cashflows, _ = get_data(portfolio.name, "2025-07-01")
+        rows, past_cashflows, _, _, _ = get_data(portfolio.name, "2025-07-01")
 
         self.assertEqual(rows[0]["principal_factor"], 0.5)
         self.assertEqual(rows[0]["nominal_value"], 500)
@@ -224,7 +294,7 @@ class TestPortfolioPerformance(IntegrationTestCase):
             "bond_management.bond_management.utils.performance.frappe.qb.get_query",
             wraps=frappe.qb.get_query,
         ) as get_query:
-            rows, _, _ = get_data(portfolio.name, "2025-12-31")
+            rows, _, _, _, _ = get_data(portfolio.name, "2025-12-31")
 
         self.assertEqual(len(rows), 2)
         self.assertEqual(get_query.call_count, 5)
@@ -268,7 +338,7 @@ class TestPortfolioPerformance(IntegrationTestCase):
             commission=0,
         )
 
-        rows, past_cashflows, future_cashflows = get_data(portfolio.name, "2026-01-03")
+        rows, past_cashflows, future_cashflows, _, _ = get_data(portfolio.name, "2026-01-03")
 
         self.assertEqual(rows[0]["market_value"], 0)
         self.assertIsNone(rows[0]["future_xirr"])
@@ -284,7 +354,7 @@ class TestPortfolioPerformance(IntegrationTestCase):
         portfolio = make_portfolio()
         make_transaction(bond, portfolio)
 
-        rows, _, future_cashflows = get_data(portfolio.name, bond.maturity_date)
+        rows, _, future_cashflows, _, _ = get_data(portfolio.name, bond.maturity_date)
 
         self.assertEqual(rows[0]["market_value"], 0)
         self.assertIsNone(rows[0]["future_xirr"])

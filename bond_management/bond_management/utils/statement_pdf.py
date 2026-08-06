@@ -25,6 +25,12 @@ ACCOUNT_PATTERNS = (
 )
 ISIN_PATTERN = r"[A-Z]{2}[A-Z0-9]{10}"
 NUMBER_PATTERN = r"[+-]?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?"
+CURRENCY_CODE_PATTERN = r"[A-Z]{3}"
+CURRENCY_RATE_PATTERN = re.compile(
+    rf"\b(?P<from_currency>{CURRENCY_CODE_PATTERN})\s*/\s*"
+    rf"(?P<to_currency>{CURRENCY_CODE_PATTERN})\s+(?P<rate>{NUMBER_PATTERN})\b",
+    re.IGNORECASE,
+)
 CURRENT_MARKET_PRICE_PATTERN = re.compile(
     rf"\b(?P<isin>{ISIN_PATTERN})\s+"
     rf"(?P<reported_quantity>{NUMBER_PATTERN})\s+"
@@ -61,10 +67,18 @@ class ParsedMarketPrice:
 
 
 @dataclass(frozen=True)
+class ParsedExchangeRate:
+    from_currency: str
+    to_currency: str
+    rate: Decimal
+
+
+@dataclass(frozen=True)
 class ParsedStatementPdf:
     account_no: str
     statement_date: date
     market_prices: tuple[ParsedMarketPrice, ...] = ()
+    exchange_rates: tuple[ParsedExchangeRate, ...] = ()
     unlock_password: str | None = field(default=None, repr=False)
 
 
@@ -83,6 +97,7 @@ class StatementAttachmentDetails:
     portfolio_account_no: str
     statement_date: date
     market_prices: tuple[ParsedMarketPrice, ...] = ()
+    exchange_rates: tuple[ParsedExchangeRate, ...] = ()
 
 
 def parse_statement_pdf_text(
@@ -172,6 +187,36 @@ def parse_statement_market_prices(text: str) -> tuple[ParsedMarketPrice, ...]:
     return tuple(rows_by_isin.values())
 
 
+def parse_statement_exchange_rates(text: str) -> tuple[ParsedExchangeRate, ...]:
+    """Extract dated currency-pair rates from the statement's exchange table."""
+    rows_by_pair: dict[tuple[str, str], ParsedExchangeRate] = {}
+    for match in CURRENCY_RATE_PATTERN.finditer(text or ""):
+        from_currency = match.group("from_currency").upper()
+        to_currency = match.group("to_currency").upper()
+        try:
+            rate = Decimal(match.group("rate").replace(",", ""))
+        except InvalidOperation as error:
+            raise StatementPdfError(
+                f"The PDF contains an invalid exchange rate for {from_currency} / {to_currency}."
+            ) from error
+
+        if not rate.is_finite() or rate <= 0:
+            raise StatementPdfError(
+                f"The PDF exchange rate for {from_currency} / {to_currency} must be greater than zero."
+            )
+
+        row = ParsedExchangeRate(from_currency, to_currency, rate)
+        key = (from_currency, to_currency)
+        existing_row = rows_by_pair.get(key)
+        if existing_row and existing_row.rate != rate:
+            raise StatementPdfError(
+                f"The PDF contains conflicting exchange rates for {from_currency} / {to_currency}."
+            )
+        rows_by_pair[key] = row
+
+    return tuple(rows_by_pair.values())
+
+
 def _legacy_quantity_is_monetary_nominal(
     reported_quantity: Decimal,
     market_price: Decimal,
@@ -223,6 +268,7 @@ def extract_statement_pdf(
             account_no=parsed.account_no,
             statement_date=parsed.statement_date,
             market_prices=parsed.market_prices,
+            exchange_rates=parsed.exchange_rates,
             unlock_password=password,
         )
 
@@ -281,6 +327,7 @@ def get_statement_attachment_details(attachment: str) -> StatementAttachmentDeta
         portfolio_account_no=portfolio.account_no,
         statement_date=parsed.statement_date,
         market_prices=parsed.market_prices,
+        exchange_rates=parsed.exchange_rates,
     )
 
 
@@ -308,6 +355,7 @@ def _parse_reader(
         account_no=parsed.account_no,
         statement_date=parsed.statement_date,
         market_prices=parse_statement_market_prices(all_text),
+        exchange_rates=parse_statement_exchange_rates(all_text),
     )
 
 

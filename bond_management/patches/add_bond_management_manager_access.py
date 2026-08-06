@@ -9,6 +9,7 @@ BOND_DOCTYPES = (
     "Bond Portfolio",
     "Bond Statement",
     "Bond Transaction",
+    "Bond Exchange Rate",
 )
 
 FULL_PERMISSIONS = {
