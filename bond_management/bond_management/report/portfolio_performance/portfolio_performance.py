@@ -21,7 +21,7 @@ from bond_management.bond_management.utils.exchange_rate import (
 from bond_management.bond_management.utils.financial import quantize_money, to_decimal
 from bond_management.bond_management.utils.performance import load_portfolio_performance_context
 from bond_management.bond_management.utils.portfolio import get_ledger_position_from_transactions
-from bond_management.bond_management.utils.validation import required_string
+from bond_management.bond_management.utils.validation import optional_string, required_string
 from bond_management.bond_management.utils.xirr import (
     DEFAULT_XIRR_GUESS,
     calculate_xirr,
@@ -70,25 +70,41 @@ def execute(filters: dict | None = None):
 
 
 @frappe.whitelist(methods=["POST"])
-def get_xirr_cashflows(portfolio: str, valuation_date: str, isin: str, xirr_type: str) -> list[dict]:
-    """Return native cash flows behind a report XIRR value for spreadsheet review."""
+def get_xirr_cashflows(
+    portfolio: str,
+    valuation_date: str,
+    isin: str,
+    xirr_type: str,
+    cashflow_currency: str | None = None,
+) -> list[dict]:
+    """Return native or reporting-currency cash flows behind a report XIRR."""
     portfolio, valuation_date = validate_report_inputs(portfolio, valuation_date)
 
     isin = required_string(isin, "ISIN")
     xirr_type = required_string(xirr_type, "XIRR type")
     if xirr_type not in {"past", "future"}:
         frappe.throw(_("Invalid XIRR type"))
+    cashflow_currency = optional_string(cashflow_currency, "Cash-flow currency") or "native"
+    if cashflow_currency not in {"native", "reporting"}:
+        frappe.throw(_("Invalid cash-flow currency"))
 
     context = load_portfolio_performance_context(portfolio, valuation_date)
     if isin == "TOTAL":
         (
-            _data,
+            data,
             past_cashflows,
             future_cashflows,
-            _reporting_past_cashflows,
-            _reporting_future_cashflows,
+            reporting_past_cashflows,
+            reporting_future_cashflows,
         ) = get_data(portfolio, valuation_date, context=context)
-        cashflows = past_cashflows if xirr_type == "past" else future_cashflows
+        if cashflow_currency == "native" and len({row["currency"] for row in data}) > 1:
+            frappe.throw(_("Native TOTAL cash flows are unavailable for a mixed-currency portfolio"))
+        if cashflow_currency == "reporting":
+            cashflows = reporting_past_cashflows if xirr_type == "past" else reporting_future_cashflows
+            currency = REPORTING_CURRENCY
+        else:
+            cashflows = past_cashflows if xirr_type == "past" else future_cashflows
+            currency = data[0]["currency"] if data else None
     else:
         portfolio_isins = set(context["isins"])
         if isin not in portfolio_isins:
@@ -125,11 +141,23 @@ def get_xirr_cashflows(portfolio: str, valuation_date: str, isin: str, xirr_type
                 bond_doc=bond,
             )
 
+        currency = bond.currency
+        if cashflow_currency == "reporting":
+            cashflows = convert_cashflows(
+                cashflows,
+                context.get("exchange_rates", {}),
+                portfolio=portfolio,
+                currency=currency,
+                rate_date=valuation_date if xirr_type == "future" else None,
+            )
+            currency = REPORTING_CURRENCY
+
     return [
         {
             "isin": cashflow["bond"],
             "transaction_type": cashflow["type"],
             "date": getdate(cashflow["date"]).isoformat(),
+            "currency": currency,
             # This endpoint is a spreadsheet/clipboard serialization boundary;
             # the underlying cash-flow calculations remain Decimal-based.
             "amount": round_cashflow_amount(cashflow["amount"]),
@@ -196,13 +224,12 @@ def get_columns() -> list[dict]:
             "width": 140,
         },
         {"label": _("CCY"), "fieldname": "currency", "width": 60},
-        {"label": _("Rpt. CCY"), "fieldname": "reporting_currency", "width": 75},
-        {"label": _("FX Rate"), "fieldname": "exchange_rate", "fieldtype": "Float", "width": 90},
         {
             "label": _("Prin. Factor"),
             "fieldname": "principal_factor",
             "fieldtype": "Float",
             "width": 110,
+            "disable_total": True,
         },
         {
             "label": _("Nominal Value"),
@@ -212,25 +239,11 @@ def get_columns() -> list[dict]:
             "width": 135,
         },
         {
-            "label": _("Nominal Value (USD)"),
-            "fieldname": "nominal_value_usd",
-            "fieldtype": "Currency",
-            "options": "reporting_currency",
-            "width": 145,
-        },
-        {
             "label": _("Purchases Value"),
             "fieldname": "purchases_value",
             "fieldtype": "Currency",
             "options": "currency",
             "width": 135,
-        },
-        {
-            "label": _("Purchases Value (USD)"),
-            "fieldname": "purchases_value_usd",
-            "fieldtype": "Currency",
-            "options": "reporting_currency",
-            "width": 145,
         },
         {
             "label": _("Proceeds Value"),
@@ -239,14 +252,6 @@ def get_columns() -> list[dict]:
             "options": "currency",
             "width": 135,
             "description": _("Sales, coupon payments and principal amortisation received."),
-        },
-        {
-            "label": _("Proceeds Value (USD)"),
-            "fieldname": "proceeds_value_usd",
-            "fieldtype": "Currency",
-            "options": "reporting_currency",
-            "width": 145,
-            "description": _("USD equivalent of sales, coupons and principal amortisation received."),
         },
         {
             "label": _("Market Value"),
@@ -269,26 +274,13 @@ def get_columns() -> list[dict]:
             "options": "currency",
             "width": 135,
         },
-        {
-            "label": _("Gain Value (USD)"),
-            "fieldname": "gain_value_usd",
-            "fieldtype": "Currency",
-            "options": "reporting_currency",
-            "width": 145,
-        },
         {"label": _("XIRR"), "fieldname": "xirr", "fieldtype": "Percent", "width": 80},
+        {"label": _("XIRR (USD)"), "fieldname": "xirr_usd", "fieldtype": "Percent", "width": 95},
         {
             "label": _("Future XIRR"),
             "fieldname": "future_xirr",
             "fieldtype": "Percent",
             "width": 105,
-        },
-        {"label": _("XIRR (USD)"), "fieldname": "xirr_usd", "fieldtype": "Percent", "width": 95},
-        {
-            "label": _("Future XIRR (USD)"),
-            "fieldname": "future_xirr_usd",
-            "fieldtype": "Percent",
-            "width": 120,
         },
     ]
 
@@ -509,7 +501,7 @@ def make_total_row(
         "reporting_currency": REPORTING_CURRENCY,
         **native_values,
         **reporting_values,
-        "xirr": xirr_value * 100 if xirr_value is not None else 0.0,
+        "xirr": (xirr_value * 100 if xirr_value is not None else (0.0 if single_native_currency else None)),
         "future_xirr": future_xirr * 100 if future_xirr is not None else None,
         "xirr_usd": reporting_xirr * 100 if reporting_xirr is not None else 0.0,
         "future_xirr_usd": future_reporting_xirr * 100 if future_reporting_xirr is not None else None,

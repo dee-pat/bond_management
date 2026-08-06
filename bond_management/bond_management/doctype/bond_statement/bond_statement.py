@@ -19,6 +19,7 @@ from bond_management.bond_management.utils.statement_attachment import (
     standardize_statement_attachment,
 )
 from bond_management.bond_management.utils.statement_exchange_rates import (
+    delete_statement_exchange_rates,
     sync_statement_exchange_rates,
 )
 from bond_management.bond_management.utils.statement_market_prices import (
@@ -127,6 +128,9 @@ class BondStatement(Document):
         self.db_set("quantity_reconciliation_report", report_url, update_modified=False)
         if not self.flags.suppress_quantity_reconciliation_message:
             self._report_quantity_mismatches()
+
+    def on_trash(self):
+        delete_statement_exchange_rates(self.name)
 
     @frappe.whitelist(methods=["POST"])
     def read_statement_pdf(self):

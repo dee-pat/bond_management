@@ -98,16 +98,16 @@ class TestAccrual(IntegrationTestCase):
             currency="KES",
             day_count_convention="Actual/364(Kenya)",
             principal_schedule=[
-                {"repayment_date": "2025-07-01", "principal_units": 50},
+                {"repayment_date": "2025-07-04", "principal_units": 50},
                 {"repayment_date": "2027-01-01", "principal_units": 50},
             ],
         )
 
-        self.assertEqual(calculate_principal_factor(bond.name, "2025-07-01"), Decimal("1"))
-        self.assertEqual(calculate_quantity_factor_from_bond(bond, "2025-06-30"), Decimal("1"))
-        self.assertEqual(calculate_quantity_factor_from_bond(bond, "2025-07-01"), Decimal("0.5"))
+        self.assertEqual(calculate_principal_factor(bond.name, "2025-07-04"), Decimal("1"))
+        self.assertEqual(calculate_quantity_factor_from_bond(bond, "2025-07-03"), Decimal("1"))
+        self.assertEqual(calculate_quantity_factor_from_bond(bond, "2025-07-04"), Decimal("0.5"))
         self.assertEqual(
-            calculate_quantity_factor_from_bond(bond, "2025-07-01", include_repayment_on_date=False),
+            calculate_quantity_factor_from_bond(bond, "2025-07-04", include_repayment_on_date=False),
             Decimal("1"),
         )
 

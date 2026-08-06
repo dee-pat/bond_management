@@ -10,11 +10,15 @@ from bond_management.bond_management.report.portfolio_performance.portfolio_perf
 )
 from bond_management.bond_management.tests.factories import (
     make_bond,
+    make_exchange_rate,
     make_portfolio,
     make_transaction,
     unique_name,
 )
 from bond_management.bond_management.utils import investor_permissions
+from bond_management.patches.add_bond_exchange_rate_permissions import (
+    execute as ensure_exchange_rate_permissions,
+)
 from bond_management.patches.add_bond_investor_read_only_access import execute as ensure_investor_access
 
 
@@ -192,6 +196,67 @@ class TestInvestorPermissions(IntegrationTestCase):
             "bond_management.patches.add_bond_management_report_permission.execute",
             app_hooks.after_install,
         )
+        self.assertIn(
+            "bond_management.patches.add_bond_exchange_rate_permissions.execute",
+            app_hooks.after_install,
+        )
+        self.assertIn(
+            "bond_management.patches.add_bond_exchange_rate_permissions.execute",
+            app_hooks.after_migrate,
+        )
+
+    def test_exchange_rate_permissions_include_system_manager(self):
+        ensure_exchange_rate_permissions()
+        ensure_exchange_rate_permissions()
+        permissions = frappe.qb.get_query(
+            "DocPerm",
+            fields=["role", "read", "write", "create", "delete"],
+            filters={
+                "parent": "Bond Exchange Rate",
+                "role": ["in", [investor_permissions.BOND_MANAGER_ROLE, "System Manager"]],
+                "permlevel": 0,
+            },
+            ignore_permissions=True,
+        ).run(as_dict=True)
+
+        self.assertEqual(
+            {permission.role for permission in permissions},
+            {
+                investor_permissions.BOND_MANAGER_ROLE,
+                "System Manager",
+            },
+        )
+        for permission in permissions:
+            self.assertTrue(permission.read)
+            self.assertTrue(permission.write)
+            self.assertTrue(permission.create)
+            self.assertTrue(permission.delete)
+
+    def test_system_manager_can_manage_exchange_rates(self):
+        ensure_exchange_rate_permissions()
+        portfolio = make_portfolio()
+        email = f"{unique_name('system-manager').lower()}@example.com"
+        frappe.get_doc(
+            {
+                "doctype": "User",
+                "email": email,
+                "first_name": "System Manager",
+                "send_welcome_email": 0,
+                "roles": [{"role": "System Manager"}],
+            }
+        ).insert(ignore_permissions=True)
+
+        previous_user = frappe.session.user
+        try:
+            frappe.set_user(email)
+            exchange_rate = make_exchange_rate(portfolio)
+            exchange_rate.rate = "0.0078"
+            exchange_rate.save()
+            exchange_rate.delete()
+        finally:
+            frappe.set_user(previous_user)
+
+        self.assertFalse(frappe.db.exists("Bond Exchange Rate", exchange_rate.name))
 
     def test_manager_can_run_portfolio_performance_report(self):
         report = frappe.get_doc("Report", "Portfolio Performance")

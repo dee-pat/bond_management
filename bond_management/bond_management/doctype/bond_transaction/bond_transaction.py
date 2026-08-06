@@ -60,11 +60,22 @@ PDF_MONEY_PRECISION = Decimal("0.01")
 PDF_PERCENT_PRECISION = Decimal("0.000000001")
 
 
+def calculate_transaction_principal_value(face_value_per_unit, quantity_face_value, price) -> Decimal:
+    """Return the unrounded consideration implied by a price quoted per 100."""
+    return (
+        to_decimal(face_value_per_unit) * to_decimal(quantity_face_value) * to_decimal(price) / Decimal("100")
+    )
+
+
 def _calculate_amount_values(
     bond, settlement_date, quantity_face_value, price, accrued_interest_paid, commission
 ):
     original_principal = to_decimal(bond.face_value_per_unit) * to_decimal(quantity_face_value)
-    principal = original_principal * to_decimal(price) / Decimal("100")
+    principal = calculate_transaction_principal_value(
+        bond.face_value_per_unit,
+        quantity_face_value,
+        price,
+    )
     commission_amount = original_principal * to_decimal(commission) / Decimal("100")
     # The bank transaction price is commission-inclusive, so commission_amount is
     # informational and must not be added to settlement or XIRR cash flows again.

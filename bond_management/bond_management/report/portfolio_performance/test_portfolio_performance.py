@@ -29,15 +29,25 @@ class TestPortfolioPerformance(IntegrationTestCase):
         fieldnames = [column["fieldname"] for column in columns]
         self.assertIn("isin", fieldnames)
         self.assertIn("proceeds_value", fieldnames)
-        self.assertIn("proceeds_value_usd", fieldnames)
+        self.assertNotIn("proceeds_value_usd", fieldnames)
+        self.assertNotIn("nominal_value_usd", fieldnames)
+        self.assertNotIn("purchases_value_usd", fieldnames)
+        self.assertNotIn("gain_value_usd", fieldnames)
+        self.assertNotIn("reporting_currency", fieldnames)
+        self.assertNotIn("exchange_rate", fieldnames)
+        self.assertIn("market_value_usd", fieldnames)
         self.assertIn("xirr_usd", fieldnames)
+        self.assertNotIn("future_xirr_usd", fieldnames)
         self.assertNotIn("sales_value", fieldnames)
         self.assertNotIn("coupons_value", fieldnames)
         self.assertNotIn("amortisation_value", fieldnames)
         labels = {column["fieldname"]: column["label"] for column in columns}
         self.assertEqual(labels["currency"], "CCY")
-        self.assertEqual(labels["reporting_currency"], "Rpt. CCY")
         self.assertEqual(labels["principal_factor"], "Prin. Factor")
+        principal_factor_column = next(
+            column for column in columns if column["fieldname"] == "principal_factor"
+        )
+        self.assertTrue(principal_factor_column["disable_total"])
         widths = {column["fieldname"]: column["width"] for column in columns}
         self.assertEqual(
             widths,
@@ -51,16 +61,9 @@ class TestPortfolioPerformance(IntegrationTestCase):
                 "market_value": 135,
                 "gain_value": 135,
                 "xirr": 80,
-                "future_xirr": 105,
-                "reporting_currency": 75,
-                "exchange_rate": 90,
-                "nominal_value_usd": 145,
-                "purchases_value_usd": 145,
-                "proceeds_value_usd": 145,
                 "market_value_usd": 145,
-                "gain_value_usd": 145,
                 "xirr_usd": 95,
-                "future_xirr_usd": 120,
+                "future_xirr": 105,
             },
         )
 
@@ -121,6 +124,7 @@ class TestPortfolioPerformance(IntegrationTestCase):
 
         self.assertIn("purchase", [cashflow["transaction_type"] for cashflow in past])
         self.assertEqual(future[0]["transaction_type"], "market_price")
+        self.assertEqual(future[0]["currency"], "USD")
         self.assertEqual(future[0]["amount"], -1000)
         self.assertEqual(future[0]["quantity"], 10)
         self.assertEqual(future[0]["rate"], -100)
@@ -148,7 +152,7 @@ class TestPortfolioPerformance(IntegrationTestCase):
 
         columns, rows = execute({"portfolio": portfolio.name, "valuation_date": "2025-12-31"})
 
-        self.assertIn("nominal_value_usd", {column["fieldname"] for column in columns})
+        self.assertIn("market_value_usd", {column["fieldname"] for column in columns})
         bond_rows = {row["isin"]: row for row in rows if row["isin"] != "TOTAL"}
         self.assertEqual(bond_rows[kes_bond.name]["currency"], "KES")
         self.assertEqual(bond_rows[kes_bond.name]["reporting_currency"], "USD")
@@ -166,6 +170,25 @@ class TestPortfolioPerformance(IntegrationTestCase):
             total["market_value_usd"],
             sum(row["market_value_usd"] for row in bond_rows.values()),
         )
+        self.assertIsNone(total["xirr"])
+
+        with self.assertRaisesRegex(frappe.ValidationError, "mixed-currency portfolio"):
+            get_xirr_cashflows(portfolio.name, "2025-12-31", "TOTAL", "past")
+
+        reporting_cashflows = get_xirr_cashflows(
+            portfolio.name,
+            "2025-12-31",
+            "TOTAL",
+            "past",
+            "reporting",
+        )
+        kes_purchase = next(
+            cashflow
+            for cashflow in reporting_cashflows
+            if cashflow["isin"] == kes_bond.name and cashflow["transaction_type"] == "purchase"
+        )
+        self.assertEqual(kes_purchase["currency"], "USD")
+        self.assertEqual(kes_purchase["amount"], -10.51)
 
     def test_non_usd_report_requires_a_rate_or_manual_fallback(self):
         bond = make_bond(currency="KES")
@@ -256,7 +279,7 @@ class TestPortfolioPerformance(IntegrationTestCase):
             day_count_convention="Actual/364(Kenya)",
             coupon_rate=0,
             principal_schedule=[
-                {"repayment_date": "2025-07-01", "principal_units": 50},
+                {"repayment_date": "2025-07-04", "principal_units": 50},
                 {"repayment_date": "2027-01-01", "principal_units": 50},
             ],
         )
@@ -270,9 +293,9 @@ class TestPortfolioPerformance(IntegrationTestCase):
             commission=0,
         )
         make_exchange_rate(portfolio, rate_date="2025-06-30", rate="0.01")
-        make_market_date(bond, date="2025-07-02")
+        make_market_date(bond, date="2025-07-05")
 
-        _, rows = execute({"portfolio": portfolio.name, "valuation_date": "2025-07-02"})
+        _, rows = execute({"portfolio": portfolio.name, "valuation_date": "2025-07-05"})
 
         row = rows[0]
         self.assertEqual(row["principal_factor"], 1)
@@ -425,3 +448,5 @@ class TestPortfolioPerformance(IntegrationTestCase):
             get_xirr_cashflows(portfolio.name, "2025-12-31", [], "past")
         with self.assertRaisesRegex(FrappeTypeError, "xirr_type.*str"):
             get_xirr_cashflows(portfolio.name, "2025-12-31", "TOTAL", {})
+        with self.assertRaisesRegex(FrappeTypeError, "cashflow_currency.*str"):
+            get_xirr_cashflows(portfolio.name, "2025-12-31", "TOTAL", "past", [])

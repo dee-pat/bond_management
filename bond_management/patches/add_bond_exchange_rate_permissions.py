@@ -5,6 +5,7 @@ import frappe
 DOCTYPENAME = "Bond Exchange Rate"
 INVESTOR_ROLE = "Bond Investor Read Only"
 MANAGER_ROLE = "Bond Management Manager"
+SYSTEM_MANAGER_ROLE = "System Manager"
 
 INVESTOR_PERMISSIONS = {
     "read": 1,
@@ -29,6 +30,7 @@ MANAGER_PERMISSIONS = {
 def execute():
     _upsert_permission(INVESTOR_ROLE, INVESTOR_PERMISSIONS)
     _upsert_permission(MANAGER_ROLE, MANAGER_PERMISSIONS)
+    _upsert_permission(SYSTEM_MANAGER_ROLE, MANAGER_PERMISSIONS)
 
 
 def _upsert_permission(role, permissions):

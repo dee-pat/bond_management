@@ -11,10 +11,8 @@ frappe.ui.form.on("Bond Master", {
 	coupon_frequency: recalculate_schedules,
 	coupon_rate: recalculate_schedules,
 	currency: update_quantity_change,
-	day_count_convention: (frm) => {
-		update_quantity_change(frm);
-		recalculate_schedules(frm);
-	},
+	day_count_convention: (frm) =>
+		update_quantity_change(frm).then(() => recalculate_schedules(frm)),
 });
 
 frappe.ui.form.on("Bond Principal Schedule", {
@@ -80,7 +78,7 @@ function update_quantity_change(frm) {
 	const kenyaConvention = ["act/364(kenya)", "actual/364(kenya)"].includes(
 		String(frm.doc.day_count_convention || "").toLowerCase()
 	);
-	frm.set_value(
+	return frm.set_value(
 		"quantity_change",
 		String(frm.doc.currency || "").toUpperCase() === "KES" && kenyaConvention ? 1 : 0
 	);
@@ -88,6 +86,9 @@ function update_quantity_change(frm) {
 
 async function apply_recalculated_schedules(frm, state, request_id, schedules) {
 	if (!schedules) {
+		return schedules;
+	}
+	if (request_id !== state.request_id) {
 		return schedules;
 	}
 
@@ -99,6 +100,11 @@ async function apply_recalculated_schedules(frm, state, request_id, schedules) {
 	await frm.set_value("maturity_date", schedules.maturity_date);
 	if (request_id !== state.request_id) {
 		return schedules;
+	}
+
+	if (schedules.first_coupon_date && frm.doc.first_coupon_date !== schedules.first_coupon_date) {
+		frm.doc.first_coupon_date = schedules.first_coupon_date;
+		frm.refresh_field("first_coupon_date");
 	}
 
 	await apply_principal_percentages(frm, state, request_id, schedules.principal_schedule || []);

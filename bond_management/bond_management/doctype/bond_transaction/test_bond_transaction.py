@@ -24,12 +24,43 @@ from bond_management.bond_management.utils.portfolio import (
     get_position,
     get_position_for_payment,
 )
+from bond_management.patches.backfill_transaction_principal_values import (
+    execute as backfill_transaction_principal_values,
+)
 from bond_management.patches.standardize_bond_transaction_attachment_names import (
     execute as standardize_existing_transaction_attachments,
 )
 
 
 class TestBondTransaction(IntegrationTestCase):
+    def test_principal_backfill_is_price_adjusted_and_idempotent(self):
+        bond = make_bond(face_value_per_unit=100)
+        portfolio = make_portfolio()
+        transaction = make_transaction(
+            bond,
+            portfolio,
+            quantity_face_value=10,
+            price=105,
+            accrued_interest_paid=1,
+        )
+        original_settlement = transaction.settlement_amount
+        frappe.db.set_value(
+            "Bond Transaction",
+            transaction.name,
+            "principal",
+            1000,
+            update_modified=False,
+        )
+
+        backfill_transaction_principal_values([transaction.name])
+        transaction.reload()
+        self.assertEqual(transaction.principal, 1050)
+        self.assertEqual(transaction.settlement_amount, original_settlement)
+
+        backfill_transaction_principal_values([transaction.name])
+        transaction.reload()
+        self.assertEqual(transaction.principal, 1050)
+
     def test_pdf_attachment_populates_fields_and_rejects_later_changes(self):
         bond = self._make_pdf_bond()
         portfolio = make_portfolio()

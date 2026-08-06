@@ -102,6 +102,7 @@ after_install = [
 after_migrate = [
     "bond_management.patches.add_bond_query_indexes.ensure_bond_query_indexes",
     "bond_management.patches.add_bond_management_manager_access.execute",
+    "bond_management.patches.add_bond_exchange_rate_permissions.execute",
 ]
 
 # Uninstallation

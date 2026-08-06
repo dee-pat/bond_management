@@ -55,12 +55,12 @@ class TestXirr(IntegrationTestCase):
             day_count_convention="Actual/364(Kenya)",
             coupon_rate=0,
             principal_schedule=[
-                {"repayment_date": "2025-07-01", "principal_units": 50},
+                {"repayment_date": "2025-07-04", "principal_units": 50},
                 {"repayment_date": "2027-01-01", "principal_units": 50},
             ],
         )
 
-        cashflows = create_future_cash_flows(bond.name, "2025-07-02", 100)
+        cashflows = create_future_cash_flows(bond.name, "2025-07-05", 100)
 
         self.assertEqual(
             next(flow["amount"] for flow in cashflows if flow["type"] == "market_price"),

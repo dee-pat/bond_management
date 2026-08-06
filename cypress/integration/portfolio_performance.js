@@ -26,8 +26,8 @@ context("Portfolio Performance", () => {
 							width: 100,
 						},
 						{
-							label: "Future XIRR",
-							fieldname: "future_xirr",
+							label: "XIRR (USD)",
+							fieldname: "xirr_usd",
 							fieldtype: "Percent",
 							width: 120,
 						},
@@ -36,7 +36,7 @@ context("Portfolio Performance", () => {
 						{
 							isin: "TEST-BOND",
 							xirr: 12.5,
-							future_xirr: 8.75,
+							xirr_usd: 8.75,
 						},
 					],
 					execution_time: 0.01,
@@ -54,6 +54,7 @@ context("Portfolio Performance", () => {
 							isin: "TEST-BOND",
 							transaction_type: "purchase",
 							date: "2025-12-31",
+							currency: "USD",
 							amount: -1000,
 							quantity: 10,
 							rate: -100,
@@ -71,7 +72,11 @@ context("Portfolio Performance", () => {
 			cy.stub(window.frappe.utils, "copy_to_clipboard").as("copyToClipboard");
 		});
 
-		cy.get('.portfolio-cashflow-copy[data-xirr-type="past"]').should("be.visible").click();
+		cy.get(
+			'.portfolio-cashflow-copy[data-xirr-type="past"][data-cashflow-currency="reporting"]'
+		)
+			.should("be.visible")
+			.click();
 
 		cy.wait("@cashflows").then(({ request }) => {
 			const body = parse_request_body(request.body);
@@ -80,11 +85,12 @@ context("Portfolio Performance", () => {
 				valuation_date: "2025-12-31",
 				isin: "TEST-BOND",
 				xirr_type: "past",
+				cashflow_currency: "reporting",
 			});
 		});
 		cy.get("@copyToClipboard").should(
 			"have.been.calledWith",
-			"isin\ttransaction_type\tdate\tamount\tquantity\trate\nTEST-BOND\tpurchase\t2025-12-31\t-1000\t10\t-100",
+			"isin\ttransaction_type\tdate\tcurrency\tamount\tquantity\trate\nTEST-BOND\tpurchase\t2025-12-31\tUSD\t-1000\t10\t-100",
 			"Copied 1 cash flows"
 		);
 	});
