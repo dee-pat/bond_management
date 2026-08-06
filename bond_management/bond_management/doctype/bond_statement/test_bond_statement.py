@@ -248,6 +248,25 @@ class TestBondStatement(IntegrationTestCase):
         self.assertEqual(preview["statement_date"].isoformat(), "2020-11-30")
         statement.insert()
 
+    def test_legacy_named_bond_row_populates_market_price(self):
+        bond = make_bond(bond_name="Kenya Treasury Bond FXD3-2019-15")
+        portfolio = make_portfolio()
+        make_transaction(bond, portfolio)
+        attachment = self._attach_pdf(
+            "\n".join(
+                [
+                    f"Portfolio Summary as of 31/12/2025 Product Account No.: {portfolio.account_no}",
+                    "FXD3/2019/15 USD 10 104.000000 0.00000000 98.965410 1,040.00 989.65 01/01/2027",
+                ]
+            ),
+            "test-password",
+        )
+
+        statement = frappe.get_doc({"doctype": "Bond Statement", "attachment": attachment}).insert()
+
+        self.assertEqual(statement.bond_statement_details[0].isin, bond.name)
+        self.assertEqual(statement.bond_statement_details[0].market_price, Decimal("98.965410"))
+
     def test_rejects_duplicate_attachment_in_controller_and_database(self):
         account_no = unique_name("DUPLICATE-ACCOUNT")
         password = unique_name("PDF-PASSWORD")

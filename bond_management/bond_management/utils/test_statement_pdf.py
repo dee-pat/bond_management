@@ -175,6 +175,19 @@ class TestStatementPdf(UnitTestCase):
         self.assertEqual(legacy_unit_prices[0].reported_quantity, Decimal("2000.000000"))
         self.assertFalse(legacy_unit_prices[0].quantity_is_face_value)
 
+        named_prices = parse_statement_market_prices(
+            """
+            FXD3/2019/15 KES 100,000.000000 104.592600 0.00000000 98.965410
+            10,459,260.00 9,896,541.00 10/07/2034
+            """,
+            {"Kenya Treasury Bond FXD3-2019-15": "KE6000001328"},
+        )
+        self.assertEqual(len(named_prices), 1)
+        self.assertEqual(named_prices[0].isin, "KE6000001328")
+        self.assertEqual(named_prices[0].market_price, Decimal("98.965410"))
+        self.assertEqual(named_prices[0].reported_quantity, Decimal("100000.000000"))
+        self.assertFalse(named_prices[0].quantity_is_face_value)
+
     def test_parses_statement_exchange_rates(self):
         rates = parse_statement_exchange_rates(
             """
