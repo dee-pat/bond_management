@@ -188,6 +188,21 @@ class TestStatementPdf(UnitTestCase):
         self.assertEqual(named_prices[0].reported_quantity, Decimal("100000.000000"))
         self.assertFalse(named_prices[0].quantity_is_face_value)
 
+        wrapped_isin_prices = parse_statement_market_prices(
+            """
+            UNITED KINGDOM GILT 1.5% 2026 -
+            GB00BYZW3G
+            56
+            GBP GB00BYZW3G
+            56 900.00 100 94.413000 84,971.70
+            29/02/2024 93.938000 84,544.20
+            """
+        )
+        self.assertEqual(len(wrapped_isin_prices), 1)
+        self.assertEqual(wrapped_isin_prices[0].isin, "GB00BYZW3G56")
+        self.assertEqual(wrapped_isin_prices[0].reported_quantity, Decimal("900.00"))
+        self.assertFalse(wrapped_isin_prices[0].quantity_is_face_value)
+
     def test_parses_statement_exchange_rates(self):
         rates = parse_statement_exchange_rates(
             """
@@ -248,3 +263,15 @@ class TestStatementPdf(UnitTestCase):
                 0.000000 100,242.50 23/01/2034
                 """
             )
+
+    def test_accepts_empty_legacy_holding_with_zero_market_value(self):
+        prices = parse_statement_market_prices(
+            """
+            XS1028952403 USD 0.000000 99.250000 6.30000000 99.250000
+            0.000000 0.000000 23/01/2034
+            """
+        )
+
+        self.assertEqual(len(prices), 1)
+        self.assertEqual(prices[0].reported_quantity, Decimal("0.000000"))
+        self.assertFalse(prices[0].quantity_is_face_value)

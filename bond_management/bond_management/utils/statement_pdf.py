@@ -158,6 +158,7 @@ def parse_statement_market_prices(
     bond_name_to_isin: Mapping[str, str] | None = None,
 ) -> tuple[ParsedMarketPrice, ...]:
     """Extract fixed-income ISIN prices from current and legacy statement tables."""
+    text = _join_wrapped_isins(text or "")
     rows_by_isin: dict[str, ParsedMarketPrice] = {}
     for pattern in (CURRENT_MARKET_PRICE_PATTERN, LEGACY_MARKET_PRICE_PATTERN):
         for match in pattern.finditer(text or ""):
@@ -291,6 +292,10 @@ def _legacy_quantity_is_monetary_nominal(
     market_value: Decimal,
 ) -> bool:
     """Distinguish monetary nominal from unit counts in legacy Face Value columns."""
+    if reported_quantity == 0 and market_value == 0:
+        # Both interpretations produce the same quantity for an empty holding.
+        return False
+
     nominal_market_value = reported_quantity * market_price / Decimal("100")
     unit_market_value = reported_quantity * market_price
     nominal_distance = abs(market_value - nominal_market_value)
@@ -301,6 +306,20 @@ def _legacy_quantity_is_monetary_nominal(
             "nominal nor unit interpretation more closely."
         )
     return nominal_distance < unit_distance
+
+
+def _join_wrapped_isins(text: str) -> str:
+    """Join an ISIN split across lines by PDF text extraction."""
+
+    def replace(match: re.Match[str]) -> str:
+        candidate = f"{match.group('prefix')}{match.group('suffix')}"
+        return candidate if re.fullmatch(ISIN_PATTERN, candidate) else match.group(0)
+
+    return re.sub(
+        r"\b(?P<prefix>[A-Z]{2}[A-Z0-9]{8,10})\s*\n\s*(?P<suffix>[A-Z0-9]{1,4})\b",
+        replace,
+        text,
+    )
 
 
 def extract_statement_pdf(
