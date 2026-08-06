@@ -201,6 +201,9 @@ differences in the final field.
   Electron-as-Node and custom-binary environment overrides that make Cypress
   start incorrectly. Do not rely on a machine-global Cypress cache or bypass
   this preflight.
+- On macOS in the local development environment, Chrome is installed at
+  `/Applications/Google Chrome.app/Contents/MacOS/Google Chrome`; set
+  `CHROME_BIN` to this path when `chrome` is not on `PATH`.
 - `CYPRESS_VERSION` in `scripts/cypress-runtime.sh` and the GitHub Actions
   cache key must be updated together when Frappe v16 changes its supported
   Cypress release. Do not override the version in CI or reuse a cache for a

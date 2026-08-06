@@ -7,7 +7,8 @@ from frappe.model.document import Document
 from frappe.utils import escape_html, getdate
 
 from bond_management.bond_management.utils.accrual import (
-    calculate_principal_factor_from_schedule,
+    calculate_principal_factor_from_bond,
+    calculate_quantity_factor_from_bond,
 )
 from bond_management.bond_management.utils.financial import to_decimal
 from bond_management.bond_management.utils.performance import load_portfolio_performance_context
@@ -181,6 +182,7 @@ class BondStatement(Document):
         comparisons = reconcile_statement_quantities(
             details.market_prices,
             self.bond_statement_details,
+            calculated_quantities=self.flags.matured_calculated_quantities,
         )
         self.flags.quantity_reconciliation_comparisons = comparisons
         self.flags.quantity_reconciliation_mismatches = tuple(
@@ -221,20 +223,22 @@ class BondStatement(Document):
             return
 
         context = load_portfolio_performance_context(self.portfolio_name, self.statement_date)
+        self.flags.matured_calculated_quantities = {}
         for isin in context["isins"]:
             bond = context["bonds"][isin]
             quantity = get_ledger_position_from_transactions(
                 context["transactions"][isin], self.statement_date
             )
-            if getdate(bond.maturity_date) <= getdate(self.statement_date):
+            is_matured = getdate(bond.maturity_date) <= getdate(self.statement_date)
+            if is_matured:
                 quantity = to_decimal(0)
+                self.flags.matured_calculated_quantities[isin] = quantity
             if not quantity:
                 continue
 
             market_price = context["market_prices"].get(isin)
-            principal_factor = calculate_principal_factor_from_schedule(
-                bond.principal_schedule, self.statement_date
-            )
+            quantity *= calculate_quantity_factor_from_bond(bond, self.statement_date)
+            principal_factor = calculate_principal_factor_from_bond(bond, self.statement_date)
 
             self.append(
                 "bond_statement_details",

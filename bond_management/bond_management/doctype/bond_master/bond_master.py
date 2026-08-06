@@ -6,6 +6,7 @@ from frappe import _
 from frappe.model.document import Document
 from frappe.utils import getdate
 
+from bond_management.bond_management.utils.accrual import is_quantity_change_bond
 from bond_management.bond_management.utils.coupon_schedule import generate_coupon_schedule
 from bond_management.bond_management.utils.financial import quantize_percent, to_decimal
 from bond_management.bond_management.utils.validation import optional_string
@@ -18,6 +19,7 @@ class BondMaster(Document):
     def _get_recalculated_values(self):
         return {
             "maturity_date": self.maturity_date,
+            "quantity_change": self.quantity_change,
             "principal_schedule": [
                 {
                     "name": row.name,
@@ -40,6 +42,7 @@ class BondMaster(Document):
         }
 
     def _recalculate_schedules(self):
+        self.quantity_change = 1 if is_quantity_change_bond(self) else 0
         self.validate_financial_terms()
         self.validate_principal_schedule()
         self.update_maturity_date()

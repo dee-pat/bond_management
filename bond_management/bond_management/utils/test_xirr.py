@@ -49,6 +49,28 @@ class TestXirr(IntegrationTestCase):
         )
         self.assertEqual(first_coupon["amount"], 5)
 
+    def test_kes_quantity_change_scales_opening_value_and_future_redemption(self):
+        bond = make_bond(
+            currency="KES",
+            day_count_convention="Actual/364(Kenya)",
+            coupon_rate=0,
+            principal_schedule=[
+                {"repayment_date": "2025-07-01", "principal_units": 50},
+                {"repayment_date": "2027-01-01", "principal_units": 50},
+            ],
+        )
+
+        cashflows = create_future_cash_flows(bond.name, "2025-07-02", 100)
+
+        self.assertEqual(
+            next(flow["amount"] for flow in cashflows if flow["type"] == "market_price"),
+            -50,
+        )
+        self.assertEqual(
+            next(flow["amount"] for flow in cashflows if flow["type"] == "sale"),
+            50,
+        )
+
     def test_maturity_day_purchase_receives_redemption_without_double_counting_commission(self):
         bond = make_bond(coupon_rate=0)
         portfolio = make_portfolio()

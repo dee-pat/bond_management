@@ -70,6 +70,75 @@ class TestBondStatement(IntegrationTestCase):
         self.assertEqual(detail.quantity, 10)
         self.assertEqual(detail.market_price, 100)
 
+    def test_reports_matured_balance_in_reconciliation_without_zero_statement_row(self):
+        matured_bond = make_bond(
+            issue_date="2025-01-01",
+            maturity_date="2025-12-31",
+            first_coupon_date="2025-07-01",
+            principal_schedule=[{"repayment_date": "2025-12-31", "principal_units": 100}],
+        )
+        live_bond = self._make_long_dated_bond()
+        portfolio = make_portfolio()
+        make_transaction(
+            matured_bond,
+            portfolio,
+            trade_date="2025-01-01",
+            settlement_date="2025-01-02",
+        )
+        make_transaction(
+            live_bond,
+            portfolio,
+            trade_date="2025-01-01",
+            settlement_date="2025-01-02",
+        )
+        attachment = self._attach_pdf(
+            self._current_statement_text(
+                portfolio.account_no,
+                statement_date="31/12/2025",
+                prices={live_bond.name: "101.250000"},
+            ),
+            "test-password",
+        )
+
+        statement = frappe.get_doc({"doctype": "Bond Statement", "attachment": attachment}).insert()
+
+        details = {row.isin: row for row in statement.bond_statement_details}
+        self.assertNotIn(matured_bond.name, details)
+        self.assertEqual(details[live_bond.name].quantity, 10)
+        self.assertEqual(statement.reconciliation_status, "Matched")
+        report_text = self._read_reconciliation_report(
+            statement.quantity_reconciliation_report,
+            "test-password",
+        )
+        self.assertRegex(report_text, rf"{matured_bond.name}.*Not present.*0.*0.*MATCHED")
+
+    def test_kes_quantity_change_reduces_statement_quantity_without_principal_factor(self):
+        bond = make_bond(
+            currency="KES",
+            day_count_convention="Actual/364(Kenya)",
+            coupon_rate=0,
+            principal_schedule=[
+                {"repayment_date": "2025-07-01", "principal_units": 50},
+                {"repayment_date": "2027-01-01", "principal_units": 50},
+            ],
+        )
+        portfolio = make_portfolio()
+        make_transaction(
+            bond,
+            portfolio,
+            trade_date="2025-06-29",
+            settlement_date="2025-06-30",
+            accrued_interest_paid=0,
+            commission=0,
+        )
+        make_market_date(bond, date="2025-07-02")
+
+        statement = make_statement(portfolio, statement_date="2025-07-02")
+
+        detail = statement.bond_statement_details[0]
+        self.assertEqual(detail.quantity, 5)
+        self.assertEqual(detail.principal_factor, 1)
+
     def test_missing_market_price_is_blank_instead_of_zero(self):
         bond = make_bond()
         portfolio = make_portfolio()
@@ -665,7 +734,7 @@ class TestBondStatement(IntegrationTestCase):
         backfill_reconciliation_statuses([statement.name])
         statement.reload()
         quantity_basis_report_url = statement.quantity_reconciliation_report
-        self.assertIn("QuantityBasis-v4", quantity_basis_report_url)
+        self.assertIn("QuantityBasis-v8", quantity_basis_report_url)
         self.assertEqual(statement.reconciliation_status, "Matched")
 
         backfill_reconciliation_statuses([statement.name])

@@ -12,6 +12,9 @@ from bond_management.bond_management.doctype.bond_master.bond_master import (
     get_recalculated_schedules,
 )
 from bond_management.bond_management.tests.factories import make_bond
+from bond_management.patches.set_kenya_quantity_change_flags import (
+    execute as synchronize_quantity_change_flags,
+)
 
 
 class TestBondMaster(IntegrationTestCase):
@@ -35,6 +38,31 @@ class TestBondMaster(IntegrationTestCase):
             {Decimal(str(row.coupon_factor)) for row in bond.coupon_schedule},
             {Decimal("3.5")},
         )
+
+    def test_quantity_change_is_derived_only_for_kes_kenya_bonds(self):
+        bond = make_bond(currency="KES", day_count_convention="Actual/364(Kenya)")
+        self.assertEqual(bond.quantity_change, 1)
+
+        bond.currency = "USD"
+        bond.save()
+        self.assertEqual(bond.quantity_change, 0)
+
+    def test_quantity_change_patch_is_idempotent(self):
+        bond = make_bond(currency="KES", day_count_convention="Actual/364(Kenya)")
+        frappe.db.set_value("Bond Master", bond.name, "quantity_change", 0, update_modified=False)
+
+        synchronize_quantity_change_flags()
+        bond.reload()
+        self.assertEqual(bond.quantity_change, 1)
+
+        synchronize_quantity_change_flags()
+        bond.reload()
+        self.assertEqual(bond.quantity_change, 1)
+
+        bond.currency = "KES"
+        bond.day_count_convention = "30E/360"
+        bond.save()
+        self.assertEqual(bond.quantity_change, 0)
 
     def test_rejects_empty_principal_schedule(self):
         bond = make_bond()
@@ -118,6 +146,7 @@ class TestBondMaster(IntegrationTestCase):
             [row["repayment_percent"] for row in result["principal_schedule"]],
             [50, 50],
         )
+        self.assertEqual(result["quantity_change"], 0)
         self.assertTrue(result["principal_schedule"][0]["name"])
         self.assertEqual(result["principal_schedule"][1]["idx"], 2)
         self.assertEqual(result["coupon_schedule"][-1]["coupon_date"].isoformat(), "2027-01-01")

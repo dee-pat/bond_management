@@ -6,7 +6,9 @@ from frappe.utils import getdate
 from pyxirr import InvalidPaymentsError, xirr
 
 from bond_management.bond_management.utils.accrual import (
-    calculate_principal_factor_from_schedule,
+    calculate_principal_factor_from_bond,
+    calculate_quantity_factor_from_bond,
+    is_quantity_change_bond,
     unit_accrued_interest_from_bond,
 )
 from bond_management.bond_management.utils.financial import quantize_money, to_decimal
@@ -108,17 +110,23 @@ def create_future_cash_flows(isin, date, market_price, quantity=1, bond_doc=None
 
     # Calculate accrued interest up to the settlement date
     settlement_date = getdate(date)
-    accrued_interest = unit_accrued_interest_from_bond(bond_doc, settlement_date)
+    quantity_factor = calculate_quantity_factor_from_bond(bond_doc, settlement_date)
+    accrued_interest = unit_accrued_interest_from_bond(bond_doc, settlement_date) * quantity_factor
 
-    # The bank quotes per 100 of original face value even after amortisation.
-    # The lower quoted price itself reflects principal already repaid, so no
-    # remaining-principal factor belongs in this market-price cash flow.
+    # Standard bonds use the bank quote per 100 of original face value. KES
+    # quantity-change bonds instead reduce the quantity represented by that
+    # quote after a repayment.
     future_cash_flows.append(
         {
             "bond": isin,
             "type": "market_price",
             "date": settlement_date,
-            "amount": -(to_decimal(bond_doc.get("face_value_per_unit")) * market_price / to_decimal(100)),
+            "amount": (
+                -to_decimal(bond_doc.get("face_value_per_unit"))
+                * market_price
+                / to_decimal(100)
+                * quantity_factor
+            ),
         }
     )
     future_cash_flows.append(
@@ -142,12 +150,16 @@ def create_future_cash_flows(isin, date, market_price, quantity=1, bond_doc=None
         if coupon_date and coupon_factor is not None and coupon_date > settlement_date:
             # On a repayment date this is the pre-payment factor. That day's
             # coupon is paid before the factor affects subsequent coupons.
-            principal_factor = calculate_principal_factor_from_schedule(
-                principal_schedule, coupon_date, include_repayment_on_date=False
+            coupon_position_factor = (
+                calculate_quantity_factor_from_bond(bond_doc, coupon_date, include_repayment_on_date=False)
+                if is_quantity_change_bond(bond_doc)
+                else calculate_principal_factor_from_bond(
+                    bond_doc, coupon_date, include_repayment_on_date=False
+                )
             )
             coupon_factor = to_decimal(coupon_factor) / to_decimal(100)
             coupon_payment = (
-                coupon_factor * to_decimal(bond_doc.get("face_value_per_unit")) * principal_factor
+                coupon_factor * to_decimal(bond_doc.get("face_value_per_unit")) * coupon_position_factor
             )
             future_cash_flows.append(
                 {
@@ -162,11 +174,15 @@ def create_future_cash_flows(isin, date, market_price, quantity=1, bond_doc=None
     for principal_period in principal_schedule:
         repayment_date = getdate(principal_period.get("repayment_date"))
         if repayment_date and repayment_date > settlement_date:
-            principal_payment = (
-                to_decimal(bond_doc.get("face_value_per_unit"))
-                * to_decimal(principal_period.get("repayment_percent"))
-                / to_decimal(100)
-            )
+            if is_quantity_change_bond(bond_doc):
+                quantity_before = calculate_quantity_factor_from_bond(
+                    bond_doc, repayment_date, include_repayment_on_date=False
+                )
+                quantity_after = calculate_quantity_factor_from_bond(bond_doc, repayment_date)
+                repayment_factor = quantity_before - quantity_after
+            else:
+                repayment_factor = to_decimal(principal_period.get("repayment_percent")) / to_decimal(100)
+            principal_payment = to_decimal(bond_doc.get("face_value_per_unit")) * repayment_factor
             if repayment_date == maturity_date:
                 future_cash_flows.append(
                     {
@@ -212,8 +228,9 @@ def create_past_cash_flows(isin, date, market_price, portfolio, bond_doc=None, t
             position = to_decimal(0)
     accrued_interest = unit_accrued_interest_from_bond(bond_doc, settlement_date)
 
-    # The bank quote remains per 100 of original face value after amortisation;
-    # applying a principal factor here would double-adjust the quoted price.
+    quantity_factor = calculate_quantity_factor_from_bond(bond_doc, settlement_date)
+    # Standard bonds quote per 100 of original face value. KES quantity-change
+    # bonds reduce the represented quantity after a repayment.
     past_cash_flows.append(
         {
             "bond": isin,
@@ -222,6 +239,7 @@ def create_past_cash_flows(isin, date, market_price, portfolio, bond_doc=None, t
             "amount": to_decimal(bond_doc.get("face_value_per_unit"))
             * market_price
             / to_decimal(100)
+            * quantity_factor
             * position,
             "quantity": position,
         }
@@ -231,7 +249,7 @@ def create_past_cash_flows(isin, date, market_price, portfolio, bond_doc=None, t
             "bond": isin,
             "type": "accrued_interest",
             "date": settlement_date,
-            "amount": accrued_interest * position,
+            "amount": accrued_interest * quantity_factor * position,
             "quantity": position,
         }
     )
@@ -250,14 +268,18 @@ def create_past_cash_flows(isin, date, market_price, portfolio, bond_doc=None, t
         if coupon_factor is None:
             continue
         if coupon_date <= settlement_date:
-            principal_factor = calculate_principal_factor_from_schedule(
-                principal_schedule, coupon_date, include_repayment_on_date=False
+            coupon_position_factor = (
+                calculate_quantity_factor_from_bond(bond_doc, coupon_date, include_repayment_on_date=False)
+                if is_quantity_change_bond(bond_doc)
+                else calculate_principal_factor_from_bond(
+                    bond_doc, coupon_date, include_repayment_on_date=False
+                )
             )
             coupon_rate = (
                 to_decimal(coupon_factor)
                 / to_decimal(100)
                 * to_decimal(bond_doc.get("face_value_per_unit"))
-                * principal_factor
+                * coupon_position_factor
             )
             position = (
                 get_position_for_coupon_payment(isin, coupon_date, coupon_rate, portfolio)
@@ -289,12 +311,15 @@ def create_past_cash_flows(isin, date, market_price, portfolio, bond_doc=None, t
                 if transactions is None
                 else get_ledger_position_from_transactions(transactions, repayment_date)
             )
-            principal_amount = (
-                to_decimal(bond_doc.get("face_value_per_unit"))
-                * to_decimal(principal_period.get("repayment_percent"))
-                / to_decimal(100)
-                * position
-            )
+            if is_quantity_change_bond(bond_doc):
+                quantity_before = calculate_quantity_factor_from_bond(
+                    bond_doc, repayment_date, include_repayment_on_date=False
+                )
+                quantity_after = calculate_quantity_factor_from_bond(bond_doc, repayment_date)
+                repayment_factor = quantity_before - quantity_after
+            else:
+                repayment_factor = to_decimal(principal_period.get("repayment_percent")) / to_decimal(100)
+            principal_amount = to_decimal(bond_doc.get("face_value_per_unit")) * repayment_factor * position
             if repayment_date == maturity_date:
                 past_cash_flows.append(
                     {

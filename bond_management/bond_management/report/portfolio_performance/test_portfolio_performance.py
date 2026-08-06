@@ -250,6 +250,35 @@ class TestPortfolioPerformance(IntegrationTestCase):
         self.assertAlmostEqual(rows[0]["gain_value"], rows[0]["market_value"] + 650 - 1050)
         self.assertEqual(future_cashflows[0]["amount"], -400)
 
+    def test_kes_quantity_change_scales_values_and_keeps_principal_factor_one(self):
+        bond = make_bond(
+            currency="KES",
+            day_count_convention="Actual/364(Kenya)",
+            coupon_rate=0,
+            principal_schedule=[
+                {"repayment_date": "2025-07-01", "principal_units": 50},
+                {"repayment_date": "2027-01-01", "principal_units": 50},
+            ],
+        )
+        portfolio = make_portfolio()
+        make_transaction(
+            bond,
+            portfolio,
+            trade_date="2025-06-29",
+            settlement_date="2025-06-30",
+            accrued_interest_paid=0,
+            commission=0,
+        )
+        make_exchange_rate(portfolio, rate_date="2025-06-30", rate="0.01")
+        make_market_date(bond, date="2025-07-02")
+
+        _, rows = execute({"portfolio": portfolio.name, "valuation_date": "2025-07-02"})
+
+        row = rows[0]
+        self.assertEqual(row["principal_factor"], 1)
+        self.assertEqual(row["nominal_value"], 500)
+        self.assertEqual(row["market_value"], 500)
+
     def test_repayment_day_uses_post_payment_nominal_and_pre_payment_coupon(self):
         bond = make_bond(
             coupon_rate=10,

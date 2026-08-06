@@ -10,7 +10,11 @@ frappe.ui.form.on("Bond Master", {
 	first_coupon_date: recalculate_schedules,
 	coupon_frequency: recalculate_schedules,
 	coupon_rate: recalculate_schedules,
-	day_count_convention: recalculate_schedules,
+	currency: update_quantity_change,
+	day_count_convention: (frm) => {
+		update_quantity_change(frm);
+		recalculate_schedules(frm);
+	},
 });
 
 frappe.ui.form.on("Bond Principal Schedule", {
@@ -72,8 +76,23 @@ function recalculate_schedules(frm) {
 		});
 }
 
+function update_quantity_change(frm) {
+	const kenyaConvention = ["act/364(kenya)", "actual/364(kenya)"].includes(
+		String(frm.doc.day_count_convention || "").toLowerCase()
+	);
+	frm.set_value(
+		"quantity_change",
+		String(frm.doc.currency || "").toUpperCase() === "KES" && kenyaConvention ? 1 : 0
+	);
+}
+
 async function apply_recalculated_schedules(frm, state, request_id, schedules) {
 	if (!schedules) {
+		return schedules;
+	}
+
+	await frm.set_value("quantity_change", schedules.quantity_change ? 1 : 0);
+	if (request_id !== state.request_id) {
 		return schedules;
 	}
 

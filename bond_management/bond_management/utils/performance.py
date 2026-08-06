@@ -127,6 +127,7 @@ def load_portfolio_performance_context(portfolio, valuation_date):
             "coupon_frequency",
             "day_count_convention",
             "maturity_date",
+            "quantity_change",
         ],
         filters={"name": ["in", isins]},
         ignore_permissions=False,

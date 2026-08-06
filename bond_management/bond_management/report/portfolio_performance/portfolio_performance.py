@@ -9,7 +9,8 @@ from frappe import _
 from frappe.utils import escape_html, getdate
 
 from bond_management.bond_management.utils.accrual import (
-    calculate_principal_factor_from_schedule,
+    calculate_principal_factor_from_bond,
+    calculate_quantity_factor_from_bond,
     unit_accrued_interest_from_bond,
 )
 from bond_management.bond_management.utils.exchange_rate import (
@@ -327,15 +328,15 @@ def get_data(portfolio, valuation_date, context=None):
         market_price = context["market_prices"].get(isin)
         terminal_market_price = get_terminal_market_price(isin, valuation_date, quantity, market_price)
         accrued_interest = unit_accrued_interest_from_bond(bond, valuation_date)
-        market_value = quantity * (
+        quantity_factor = calculate_quantity_factor_from_bond(bond, valuation_date)
+        effective_quantity = quantity * quantity_factor
+        market_value = effective_quantity * (
             face_value_per_unit * to_decimal(terminal_market_price) / to_decimal(100) + accrued_interest
         )
 
         # ---------- CASHFLOW DATA ----------
-        principal_factor = calculate_principal_factor_from_schedule(
-            bond.get("principal_schedule"), valuation_date
-        )
-        nominal_value = quantity * face_value_per_unit * principal_factor
+        principal_factor = calculate_principal_factor_from_bond(bond, valuation_date)
+        nominal_value = effective_quantity * face_value_per_unit * principal_factor
 
         cashflows = create_past_cash_flows(
             isin=isin,

@@ -17,12 +17,13 @@ class StatementQuantityComparison:
 
     @property
     def matches(self) -> bool:
-        return self.pdf_quantity is not None and self.difference == Decimal("0")
+        return self.difference == Decimal("0")
 
 
 def reconcile_statement_quantities(
     parsed_rows: tuple[ParsedMarketPrice, ...],
     statement_rows,
+    calculated_quantities=None,
 ) -> tuple[StatementQuantityComparison, ...]:
     """Compare normalized PDF units with calculated statement ledger quantities."""
     parsed_isins = [row.isin for row in parsed_rows]
@@ -60,13 +61,20 @@ def reconcile_statement_quantities(
             else row.reported_quantity
         )
 
-    calculated_quantities = {
+    calculated_quantity_by_isin = {
         row.isin: to_decimal(row.quantity, "Calculated Quantity") for row in statement_rows
     }
+    calculated_quantity_by_isin.update(
+        {
+            isin: to_decimal(quantity, "Calculated Quantity")
+            for isin, quantity in (calculated_quantities or {}).items()
+            if isin not in calculated_quantity_by_isin
+        }
+    )
     comparisons = []
-    for isin in sorted(set(pdf_quantities) | set(calculated_quantities)):
+    for isin in sorted(set(pdf_quantities) | set(calculated_quantity_by_isin)):
         pdf_quantity = pdf_quantities.get(isin)
-        calculated_quantity = calculated_quantities.get(isin, Decimal("0"))
+        calculated_quantity = calculated_quantity_by_isin.get(isin, Decimal("0"))
         comparisons.append(
             StatementQuantityComparison(
                 isin=isin,

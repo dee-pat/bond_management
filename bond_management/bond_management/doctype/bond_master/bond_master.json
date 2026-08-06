@@ -21,6 +21,7 @@
   "currency",
   "coupon_rate",
   "day_count_convention",
+  "quantity_change",
   "section_break_qwjg",
   "principal_schedule",
   "coupon_schedule_tab",
@@ -94,6 +95,14 @@
    "label": "Day Count Convention",
    "options": "30E/360\nActual/Actual(ICMA)\nActual/364(Kenya)",
    "reqd": 1
+  },
+  {
+   "default": "0",
+   "description": "For KES ACT/364(Kenya) bonds, repayment schedule changes outstanding quantity instead of principal factor.",
+   "fieldname": "quantity_change",
+   "fieldtype": "Check",
+   "label": "Quantity Change",
+   "read_only": 1
   },
   {
    "default": "Kenya Eurobond",
