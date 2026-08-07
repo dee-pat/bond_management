@@ -8,6 +8,7 @@ from bond_management.bond_management.utils.statement_pdf import (
     StatementPdfError,
     StatementPdfPasswordError,
     extract_statement_pdf,
+    parse_statement_exchange_rates,
     parse_statement_market_prices,
     parse_statement_pdf_text,
 )
@@ -126,6 +127,16 @@ class TestStatementPdf(UnitTestCase):
         )
         self.assertEqual(embedded_account.account_no, "EMBEDDED-ACCOUNT")
 
+    def test_uses_explicit_account_hint_when_legacy_pdf_omits_account(self):
+        parsed = extract_statement_pdf(
+            make_text_pdf("SUMMARY OF ACCOUNT As of 30/11/2020", "correct-password"),
+            ["correct-password"],
+            account_no_hint="1110700350102",
+        )
+
+        self.assertEqual(parsed.account_no, "1110700350102")
+        self.assertEqual(parsed.statement_date, date(2020, 11, 30))
+
     def test_parses_current_and_legacy_fixed_income_market_prices(self):
         current_prices = parse_statement_market_prices(
             """
@@ -164,12 +175,75 @@ class TestStatementPdf(UnitTestCase):
         self.assertEqual(legacy_unit_prices[0].reported_quantity, Decimal("2000.000000"))
         self.assertFalse(legacy_unit_prices[0].quantity_is_face_value)
 
+        named_prices = parse_statement_market_prices(
+            """
+            FXD3/2019/15 KES 100,000.000000 104.592600 0.00000000 98.965410
+            10,459,260.00 9,896,541.00 10/07/2034
+            """,
+            {"Kenya Treasury Bond FXD3-2019-15": "KE6000001328"},
+        )
+        self.assertEqual(len(named_prices), 1)
+        self.assertEqual(named_prices[0].isin, "KE6000001328")
+        self.assertEqual(named_prices[0].market_price, Decimal("98.965410"))
+        self.assertEqual(named_prices[0].reported_quantity, Decimal("100000.000000"))
+        self.assertFalse(named_prices[0].quantity_is_face_value)
+
+        wrapped_isin_prices = parse_statement_market_prices(
+            """
+            UNITED KINGDOM GILT 1.5% 2026 -
+            GB00BYZW3G
+            56
+            GBP GB00BYZW3G
+            56 900.00 100 94.413000 84,971.70
+            29/02/2024 93.938000 84,544.20
+            """
+        )
+        self.assertEqual(len(wrapped_isin_prices), 1)
+        self.assertEqual(wrapped_isin_prices[0].isin, "GB00BYZW3G56")
+        self.assertEqual(wrapped_isin_prices[0].reported_quantity, Decimal("900.00"))
+        self.assertFalse(wrapped_isin_prices[0].quantity_is_face_value)
+
+    def test_parses_statement_exchange_rates(self):
+        rates = parse_statement_exchange_rates(
+            """
+            Currency Pair Rate
+            KES / USD 0.00772499
+            """
+        )
+
+        self.assertEqual(len(rates), 1)
+        self.assertEqual(rates[0].from_currency, "KES")
+        self.assertEqual(rates[0].to_currency, "USD")
+        self.assertEqual(rates[0].rate, Decimal("0.00772499"))
+
+    def test_ignores_mutual_fund_rows_when_parsing_fixed_income_prices(self):
+        self.assertEqual(
+            parse_statement_market_prices(
+                """
+                AB SICAV I - ALL MARKET INCOME PORTFOLIO - LU1127387386
+                USD 6,709.696000 12.668234 10.620000 85,000.00 71,256.97
+                -13,743.03 -16.1683
+                """
+            ),
+            (),
+        )
+
+    def test_allows_statements_without_exchange_rates_for_manual_fallback(self):
+        self.assertEqual(parse_statement_exchange_rates("Currency Pair Rate"), ())
+
+    def test_rejects_invalid_or_conflicting_exchange_rates(self):
+        with self.assertRaisesRegex(StatementPdfError, "must be greater than zero"):
+            parse_statement_exchange_rates("KES / USD 0")
+
+        with self.assertRaisesRegex(StatementPdfError, "conflicting exchange rates"):
+            parse_statement_exchange_rates("KES / USD 0.0077\nKES / USD 0.0078")
+
     def test_rejects_conflicting_market_prices_for_an_isin(self):
         with self.assertRaisesRegex(StatementPdfError, "conflicting market prices"):
             parse_statement_market_prices(
                 """
                 XS1843435766 1,000 100 99 99,000 30/06/2026 101.25
-                XS1843435766 USD 1,000 99 8 102.25 99,000 1,022.50
+                XS1843435766 USD 1,000 99 8 102.25 99,000 1,022.50 30/06/2026
                 """
             )
 
@@ -177,7 +251,7 @@ class TestStatementPdf(UnitTestCase):
             parse_statement_market_prices(
                 """
                 XS1843435766 1,000 100 99 99,000 30/06/2026 101.25
-                XS1843435766 2,000 100 99 99,000 30/06/2026 101.25
+                XS1843435766 USD 2,000 100 99 101.25 200,000 202,500 30/06/2026
                 """
             )
 
@@ -186,6 +260,18 @@ class TestStatementPdf(UnitTestCase):
             parse_statement_market_prices(
                 """
                 XS1028952403 USD 2,000.000000 99.250000 6.30000000 99.250000
-                0.000000 100,242.50
+                0.000000 100,242.50 23/01/2034
                 """
             )
+
+    def test_accepts_empty_legacy_holding_with_zero_market_value(self):
+        prices = parse_statement_market_prices(
+            """
+            XS1028952403 USD 0.000000 99.250000 6.30000000 99.250000
+            0.000000 0.000000 23/01/2034
+            """
+        )
+
+        self.assertEqual(len(prices), 1)
+        self.assertEqual(prices[0].reported_quantity, Decimal("0.000000"))
+        self.assertFalse(prices[0].quantity_is_face_value)

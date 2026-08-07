@@ -9,7 +9,7 @@ from frappe.model.document import Document
 from frappe.utils import escape_html
 
 from bond_management.bond_management.utils.accrual import (
-    calculate_principal_factor_from_schedule,
+    calculate_principal_factor_from_bond,
     calculate_weighted_average_repayment,
 )
 from bond_management.bond_management.utils.financial import DecimalInput, to_decimal
@@ -181,9 +181,7 @@ def _calculate_market_data(date, isin, market_price):
     if not date:
         return values
 
-    values["principal_factor"] = calculate_principal_factor_from_schedule(
-        bond_doc.get("principal_schedule"), date
-    )
+    values["principal_factor"] = calculate_principal_factor_from_bond(bond_doc, date)
     weighted_date, weighted_years = calculate_weighted_average_repayment(
         bond_doc.get("principal_schedule"), date
     )

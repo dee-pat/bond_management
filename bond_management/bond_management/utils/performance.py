@@ -5,6 +5,8 @@ from frappe.utils import getdate
 from pypika.analytics import RowNumber
 from pypika.enums import Order
 
+from bond_management.bond_management.utils.exchange_rate import build_exchange_rate_context
+
 
 def get_distinct_isins(portfolio=None, valuation_date=None):
     filters = {}
@@ -112,6 +114,7 @@ def load_portfolio_performance_context(portfolio, valuation_date):
             "transactions": transactions_by_isin,
             "market_prices": {},
             "xirr_guesses": {},
+            "exchange_rates": {},
         }
 
     bonds = frappe.qb.get_query(
@@ -121,9 +124,11 @@ def load_portfolio_performance_context(portfolio, valuation_date):
             "currency",
             "face_value_per_unit",
             "coupon_rate",
+            "withholding_tax",
             "coupon_frequency",
             "day_count_convention",
             "maturity_date",
+            "quantity_change",
         ],
         filters={"name": ["in", isins]},
         ignore_permissions=False,
@@ -137,6 +142,7 @@ def load_portfolio_performance_context(portfolio, valuation_date):
             "transactions": transactions_by_isin,
             "market_prices": {},
             "xirr_guesses": {},
+            "exchange_rates": {},
         }
 
     for bond in bonds:
@@ -180,10 +186,29 @@ def load_portfolio_performance_context(portfolio, valuation_date):
         if row.future_xirr is not None:
             xirr_guesses[row.isin] = row.future_xirr
 
+    native_currencies = sorted(
+        {bond.get("currency") for bond in bonds if bond.get("currency") and bond.get("currency") != "USD"}
+    )
+    exchange_rate_rows = []
+    if native_currencies:
+        exchange_rate_rows = frappe.qb.get_query(
+            "Bond Exchange Rate",
+            fields=["rate_date", "from_currency", "to_currency", "rate"],
+            filters={
+                "portfolio_name": portfolio,
+                "rate_date": ["<=", valuation_date],
+                "from_currency": ["in", native_currencies],
+                "to_currency": "USD",
+            },
+            order_by="rate_date asc, from_currency asc, name asc",
+            ignore_permissions=False,
+        ).run(as_dict=True)
+
     return {
         "isins": visible_isins,
         "bonds": bonds_by_isin,
         "transactions": transactions_by_isin,
         "market_prices": market_prices,
         "xirr_guesses": xirr_guesses,
+        "exchange_rates": build_exchange_rate_context(exchange_rate_rows),
     }

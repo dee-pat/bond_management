@@ -11,7 +11,7 @@
  "idx": 0,
  "is_standard": "Yes",
  "letter_head": null,
- "modified": "2026-07-05 19:14:24.540188",
+ "modified": "2026-08-07 00:11:34.436757",
  "modified_by": "Administrator",
  "module": "Bond Management",
  "name": "Portfolio Performance",
@@ -23,6 +23,9 @@
  "roles": [
   {
    "role": "Bond Investor Read Only"
+  },
+  {
+   "role": "Bond Management Manager"
   }
  ],
  "timeout": 0

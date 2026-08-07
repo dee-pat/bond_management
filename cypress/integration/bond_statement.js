@@ -15,7 +15,7 @@ context("Bond Statement", () => {
 		cy.window().then((window) => {
 			// Invoke the attachment hook deterministically instead of uploading a fixture.
 			const frm = window.cur_frm;
-			expect(frm.get_field("portfolio_name").df.read_only).to.equal(1);
+			expect(frm.get_field("portfolio_name").df.read_only).to.equal(0);
 			expect(frm.get_field("statement_date").df.read_only).to.equal(1);
 			expect(frm.get_field("market_price_posting").df.read_only).to.equal(1);
 
@@ -39,6 +39,7 @@ context("Bond Statement", () => {
 		cy.window().then((window) => {
 			expect(window.cur_frm.doc.portfolio_name).to.equal("Nanda");
 			expect(window.cur_frm.doc.statement_date).to.equal("2026-06-30");
+			expect(window.cur_frm.get_field("portfolio_name").df.read_only).to.equal(1);
 		});
 	});
 });

@@ -24,6 +24,7 @@
    "fieldtype": "Section Break"
   },
   {
+   "description": "For legacy PDFs without an account number, select the portfolio before attaching the PDF.",
    "fieldname": "portfolio_name",
    "fieldtype": "Link",
    "in_list_view": 1,

@@ -7,7 +7,8 @@ from frappe.model.document import Document
 from frappe.utils import escape_html, getdate
 
 from bond_management.bond_management.utils.accrual import (
-    calculate_principal_factor_from_schedule,
+    calculate_principal_factor_from_bond,
+    calculate_quantity_factor_from_bond,
 )
 from bond_management.bond_management.utils.financial import to_decimal
 from bond_management.bond_management.utils.performance import load_portfolio_performance_context
@@ -16,6 +17,10 @@ from bond_management.bond_management.utils.portfolio import (
 )
 from bond_management.bond_management.utils.statement_attachment import (
     standardize_statement_attachment,
+)
+from bond_management.bond_management.utils.statement_exchange_rates import (
+    delete_statement_exchange_rates,
+    sync_statement_exchange_rates,
 )
 from bond_management.bond_management.utils.statement_market_prices import (
     sync_statement_market_prices,
@@ -57,7 +62,7 @@ class BondStatement(Document):
                 )
             )
 
-        details = get_statement_attachment_details(self.attachment)
+        details = get_statement_attachment_details(self.attachment, self.portfolio_name)
         if details.portfolio_name != self.portfolio_name or getdate(details.statement_date) != getdate(
             self.statement_date
         ):
@@ -114,6 +119,7 @@ class BondStatement(Document):
         if not details:
             return
 
+        sync_statement_exchange_rates(self, details.exchange_rates)
         report_url = attach_quantity_reconciliation_report(
             self,
             self.flags.quantity_reconciliation_comparisons or (),
@@ -123,19 +129,30 @@ class BondStatement(Document):
         if not self.flags.suppress_quantity_reconciliation_message:
             self._report_quantity_mismatches()
 
+    def on_trash(self):
+        delete_statement_exchange_rates(self.name)
+
     @frappe.whitelist(methods=["POST"])
     def read_statement_pdf(self):
         """Preview the portfolio and date extracted from the current attachment."""
         self.check_permission("create" if self.is_new() else "write")
-        details = get_statement_attachment_details(self.attachment)
+        details = get_statement_attachment_details(self.attachment, self.portfolio_name)
         return {
             "portfolio_name": details.portfolio_name,
             "statement_date": details.statement_date,
             "account_no": details.account_no,
+            "exchange_rates": [
+                {
+                    "from_currency": row.from_currency,
+                    "to_currency": row.to_currency,
+                    "rate": row.rate,
+                }
+                for row in details.exchange_rates
+            ],
         }
 
     def _set_details_from_attachment(self):
-        details = get_statement_attachment_details(self.attachment)
+        details = get_statement_attachment_details(self.attachment, self.portfolio_name)
         self.flags.statement_attachment_details = details
         self.portfolio_name = details.portfolio_name
         self.statement_date = details.statement_date
@@ -169,6 +186,7 @@ class BondStatement(Document):
         comparisons = reconcile_statement_quantities(
             details.market_prices,
             self.bond_statement_details,
+            calculated_quantities=self.flags.matured_calculated_quantities,
         )
         self.flags.quantity_reconciliation_comparisons = comparisons
         self.flags.quantity_reconciliation_mismatches = tuple(
@@ -209,20 +227,22 @@ class BondStatement(Document):
             return
 
         context = load_portfolio_performance_context(self.portfolio_name, self.statement_date)
+        self.flags.matured_calculated_quantities = {}
         for isin in context["isins"]:
             bond = context["bonds"][isin]
             quantity = get_ledger_position_from_transactions(
                 context["transactions"][isin], self.statement_date
             )
-            if getdate(bond.maturity_date) <= getdate(self.statement_date):
+            is_matured = getdate(bond.maturity_date) <= getdate(self.statement_date)
+            if is_matured:
                 quantity = to_decimal(0)
+                self.flags.matured_calculated_quantities[isin] = quantity
             if not quantity:
                 continue
 
             market_price = context["market_prices"].get(isin)
-            principal_factor = calculate_principal_factor_from_schedule(
-                bond.principal_schedule, self.statement_date
-            )
+            quantity *= calculate_quantity_factor_from_bond(bond, self.statement_date)
+            principal_factor = calculate_principal_factor_from_bond(bond, self.statement_date)
 
             self.append(
                 "bond_statement_details",

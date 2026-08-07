@@ -68,6 +68,25 @@ class TestTransactionPdf(UnitTestCase):
         self.assertIsNone(row.commission_percent)
         self.assertEqual(row.commission_amount, Decimal("2025.00"))
 
+    def test_parses_pdf_principal_and_settlement_amount(self):
+        parsed = parse_transaction_pdf_text(
+            """
+            Account No: 1110700351101
+            TRANSACTION DETAILS :
+            Subscription
+            Bonds Name : FXD1/2019/10 - KE5000009653 / KE5000009653
+            Currency : KES Quantity / Face Value : 400,000.000000
+            Price : 104.039100 Principal : 41,615,640.00
+            Settlement Date : 25/02/2020 Settlement Amount in Currency : 41,629,320.00
+            Accrued Interest : 13,680.00 Commission : 0.00
+            Transaction Reference : U0644850
+            """
+        )
+
+        row = parsed.transactions[0]
+        self.assertEqual(row.principal, Decimal("41615640.00"))
+        self.assertEqual(row.settlement_amount, Decimal("41629320.00"))
+
     def test_decrypts_with_configured_password(self):
         content = make_text_pdf(_current_transaction_text("U1999155"), "portfolio-password")
 
@@ -134,6 +153,55 @@ class TestTransactionPdf(UnitTestCase):
         self.assertEqual(parsed.transactions[0].commission_percent, Decimal("0"))
         self.assertIsNone(parsed.transactions[0].commission_amount)
 
+    def test_accepts_zero_at_non_negative_transaction_boundaries(self):
+        parsed = parse_transaction_pdf_text(
+            _current_transaction_text(
+                "U1999155",
+                accrued_interest="0",
+                commission="0",
+                commission_amount="0",
+            )
+        )
+
+        row = parsed.transactions[0]
+        self.assertEqual(row.accrued_interest_paid, Decimal("0"))
+        self.assertEqual(row.commission_percent, Decimal("0"))
+
+        amount_only = parse_transaction_pdf_text(
+            _current_transaction_text(
+                "U1999156",
+                commission=None,
+                commission_amount="0",
+            )
+        )
+        self.assertEqual(amount_only.transactions[0].commission_amount, Decimal("0"))
+
+    def test_rejects_non_positive_transaction_values_before_arithmetic(self):
+        invalid_values = (
+            ("quantity", {"quantity": "0"}, "Quantity / Face Value must be greater than zero"),
+            ("quantity", {"quantity": "-1"}, "Quantity / Face Value must be greater than zero"),
+            ("price", {"price": "0"}, "Price must be greater than zero"),
+            ("price", {"price": "-1"}, "Price must be greater than zero"),
+            (
+                "accrued interest",
+                {"accrued_interest": "-0.01"},
+                "Accrued Interest must be zero or greater",
+            ),
+            ("commission percent", {"commission": "-0.01"}, "Commission % must be zero or greater"),
+            (
+                "commission amount",
+                {"commission": None, "commission_amount": "-0.01"},
+                "Commission Amount must be zero or greater",
+            ),
+            ("principal", {"principal": "0"}, "Principal must be greater than zero"),
+            ("settlement amount", {"settlement_amount": "0"}, "Settlement Amount must be greater than zero"),
+        )
+
+        for label, values, message in invalid_values:
+            with self.subTest(label=label):
+                with self.assertRaisesRegex(TransactionPdfError, message):
+                    parse_transaction_pdf_text(_current_transaction_text("U1999155", **values))
+
     def test_valid_password_does_not_mask_a_format_error(self):
         content = make_text_pdf(
             "Account No: 1110700351101\nNo transaction rows",
@@ -164,13 +232,28 @@ def _current_transaction_text(
     transaction_label="Subscription",
     quantity="20,000.000000",
     price="100.350000",
+    accrued_interest="24,062.50",
     commission="0.45",
+    commission_amount="9,000.00",
+    principal="2,000,000.00",
+    settlement_amount="2,031,062.50",
 ):
     return f"""
     Account No : 1110700431101
     TRANSACTION DETAILS:
     {transaction_label}
-    {_current_transaction_row_text(reference, quantity=quantity, price=price, commission=commission)}
+    {
+        _current_transaction_row_text(
+            reference,
+            quantity=quantity,
+            price=price,
+            accrued_interest=accrued_interest,
+            commission=commission,
+            commission_amount=commission_amount,
+            principal=principal,
+            settlement_amount=settlement_amount,
+        )
+    }
     """
 
 
@@ -179,15 +262,24 @@ def _current_transaction_row_text(
     *,
     quantity="20,000.000000",
     price="100.350000",
+    accrued_interest="24,062.50",
     commission="0.45",
+    commission_amount="9,000.00",
+    principal="2,000,000.00",
+    settlement_amount="2,031,062.50",
 ):
+    commission_field = (
+        f"Commission % : {commission}%"
+        if commission is not None
+        else f"Commission Amount : {commission_amount}"
+    )
     return f"""
     Bonds Name : REPUBLIC OF KENYA - XS3196101201
     ISIN : XS3196101201
     Currency : USD Quantity : {quantity}
-    Price : {price} Face Value : 2,000,000.00
-    Trade Date : 02/06/2026 Settlement Amount in Currency : 2,031,062.50
-    Settlement Date : 03/06/2026 Commission % : {commission}%
-    Accrued Interest : 24,062.50 Commission Amount : 9,000.00
+    Price : {price} Face Value : 2,000,000.00 Principal : {principal}
+    Trade Date : 02/06/2026 Settlement Amount in Currency : {settlement_amount}
+    Settlement Date : 03/06/2026 {commission_field}
+    Accrued Interest : {accrued_interest} Commission Amount : {commission_amount}
     Transaction Reference : {reference}
     """

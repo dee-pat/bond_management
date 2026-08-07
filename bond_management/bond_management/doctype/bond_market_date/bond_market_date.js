@@ -8,6 +8,16 @@ const market_cashflow_method =
 	"bond_management.bond_management.doctype.bond_market_date.bond_market_date.get_cashflows";
 const market_recalculation_state = new WeakMap();
 const cashflow_copy_bindings = new WeakMap();
+const YIELD_CURVE_COLORS = [
+	"#3366ff",
+	"#e83e8c",
+	"#20c997",
+	"#f59f00",
+	"#6f42c1",
+	"#dc3545",
+	"#0d9488",
+	"#795548",
+];
 
 frappe.ui.form.on("Bond Market Date", {
 	setup(frm) {
@@ -240,7 +250,10 @@ function copy_cashflows(frm, row) {
 			const tsv = [
 				"isin\ttransaction_type\tdate\tamount",
 				...cashflows.map(
-					(flow) => `${flow.isin}\t${flow.type}\t${flow.date}\t${flow.amount}`
+					(flow) =>
+						`${clipboard_text(flow.isin)}\t${clipboard_text(
+							flow.type
+						)}\t${clipboard_text(flow.date)}\t${clipboard_number(flow.amount)}`
 				),
 			].join("\n");
 
@@ -250,6 +263,15 @@ function copy_cashflows(frm, row) {
 			);
 			return cashflows;
 		});
+}
+
+function clipboard_text(value) {
+	const text = String(value ?? "").replace(/[\u0000-\u001f\u007f]/g, " ");
+	return /^[=+\-@]/.test(text) ? `'${text}` : text;
+}
+
+function clipboard_number(value) {
+	return String(value ?? "");
 }
 
 function render_yield_curve(frm) {
@@ -272,6 +294,8 @@ function render_yield_curve(frm) {
 	const plot_width = width - margin.left - margin.right;
 	const plot_height = height - margin.top - margin.bottom;
 	const x_max = Math.max(...data.map((point) => point.years));
+	const series = get_yield_curve_series(data);
+	const colors_by_currency = new Map(series.map(({ currency, color }) => [currency, color]));
 	const yields = data.map((point) => point.yield_percent);
 	let y_min = Math.min(...yields);
 	let y_max = Math.max(...yields);
@@ -292,7 +316,7 @@ function render_yield_curve(frm) {
 	const svg = append_svg(container, "svg", {
 		viewBox: `0 0 ${width} ${height}`,
 		role: "img",
-		"aria-label": __("Yield curve by weighted average principal repayment"),
+		"aria-label": __("Yield curve by currency and weighted average principal repayment"),
 		style: "display:block;width:100%;height:auto;max-height:340px",
 	});
 	append_svg(svg, "title", {}, __("Yield Curve"));
@@ -317,16 +341,47 @@ function render_yield_curve(frm) {
 		y_position
 	);
 
-	const line_points = data
-		.map((point) => `${x_position(point.years)},${y_position(point.yield_percent)}`)
-		.join(" ");
-	append_svg(svg, "polyline", {
-		points: line_points,
-		fill: "none",
-		stroke: "#3366ff",
-		"stroke-width": 2.5,
-		"stroke-linejoin": "round",
-		"stroke-linecap": "round",
+	series.forEach(({ currency, color, points }) => {
+		const line_points = points
+			.map((point) => `${x_position(point.years)},${y_position(point.yield_percent)}`)
+			.join(" ");
+		append_svg(svg, "polyline", {
+			points: line_points,
+			fill: "none",
+			stroke: color,
+			"stroke-width": 2.5,
+			"stroke-linejoin": "round",
+			"stroke-linecap": "round",
+			"data-currency": currency,
+		});
+	});
+
+	const legend = document.createElement("div");
+	legend.className = "bond-yield-legend";
+	legend.setAttribute("role", "list");
+	Object.assign(legend.style, {
+		display: "flex",
+		flexWrap: "wrap",
+		gap: "8px 16px",
+		marginBottom: "8px",
+		fontSize: "12px",
+	});
+	series.forEach(({ currency, color }) => {
+		const item = document.createElement("span");
+		item.setAttribute("role", "listitem");
+		item.setAttribute("data-currency", currency);
+		const swatch = document.createElement("span");
+		Object.assign(swatch.style, {
+			display: "inline-block",
+			width: "10px",
+			height: "10px",
+			marginRight: "5px",
+			borderRadius: "50%",
+			backgroundColor: color,
+			verticalAlign: "-1px",
+		});
+		item.append(swatch, document.createTextNode(currency));
+		legend.appendChild(item);
 	});
 
 	const tooltip = document.createElement("div");
@@ -350,12 +405,13 @@ function render_yield_curve(frm) {
 	container.appendChild(tooltip);
 
 	data.forEach((point) => {
+		const color = colors_by_currency.get(point.currency);
 		const tooltip_text = format_yield_tooltip(point);
 		const circle = append_svg(svg, "circle", {
 			cx: x_position(point.years),
 			cy: y_position(point.yield_percent),
 			r: 7,
-			fill: "#3366ff",
+			fill: color,
 			stroke: "#ffffff",
 			"stroke-width": 1.5,
 			tabindex: 0,
@@ -392,6 +448,7 @@ function render_yield_curve(frm) {
 		circle.addEventListener("blur", hide_tooltip);
 	});
 
+	container.insertBefore(legend, svg);
 	wrapper.append(container);
 }
 
@@ -403,6 +460,7 @@ function get_yield_curve_data(frm) {
 	return (frm.doc.bond_market_prices || [])
 		.map((row) => {
 			const repayment_date = row.weighted_avg_repayment_date;
+			const currency = typeof row.currency === "string" ? row.currency.trim() : "";
 			const years =
 				row.weighted_avg_repayment_years === null ||
 				row.weighted_avg_repayment_years === undefined
@@ -410,6 +468,7 @@ function get_yield_curve_data(frm) {
 					: Number(row.weighted_avg_repayment_years);
 			return {
 				isin: row.isin,
+				currency,
 				repayment_date,
 				years,
 				yield_percent:
@@ -421,12 +480,31 @@ function get_yield_curve_data(frm) {
 		.filter(
 			(point) =>
 				point.isin &&
+				point.currency &&
 				point.repayment_date &&
 				point.years > 0 &&
 				Number.isFinite(point.years) &&
 				Number.isFinite(point.yield_percent)
 		)
 		.sort((left, right) => left.years - right.years);
+}
+
+function get_yield_curve_series(data) {
+	const points_by_currency = new Map();
+	data.forEach((point) => {
+		if (!points_by_currency.has(point.currency)) {
+			points_by_currency.set(point.currency, []);
+		}
+		points_by_currency.get(point.currency).push(point);
+	});
+
+	return [...points_by_currency.entries()]
+		.sort(([left], [right]) => left.localeCompare(right))
+		.map(([currency, points], index) => ({
+			currency,
+			color: YIELD_CURVE_COLORS[index % YIELD_CURVE_COLORS.length],
+			points,
+		}));
 }
 
 function draw_yield_axes(svg, dimensions, x_position, y_position) {
@@ -537,7 +615,8 @@ function format_years(years) {
 }
 
 function format_yield_tooltip(point) {
-	return __("ISIN: {0} | Weighted repayment: {1} | {2} years | Yield {3}%", [
+	return __("Currency: {0} | ISIN: {1} | Weighted repayment: {2} | {3} years | Yield {4}%", [
+		point.currency,
 		point.isin,
 		point.repayment_date,
 		point.years.toFixed(2),

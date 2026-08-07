@@ -12,6 +12,7 @@ from pypdf import PdfReader
 
 from bond_management.bond_management.tests.factories import (
     make_bond,
+    make_exchange_rate,
     make_market_date,
     make_portfolio,
     make_statement,
@@ -19,9 +20,18 @@ from bond_management.bond_management.tests.factories import (
     unique_name,
 )
 from bond_management.bond_management.tests.pdf_factory import make_text_pdf
+from bond_management.bond_management.utils.statement_quantity_reconciliation import (
+    StatementQuantityComparison,
+)
+from bond_management.bond_management.utils.statement_quantity_report import (
+    build_quantity_reconciliation_pdf,
+)
 from bond_management.patches.add_bond_query_indexes import STATEMENT_ATTACHMENT_UNIQUE
 from bond_management.patches.backfill_statement_reconciliation_statuses import (
     execute as backfill_reconciliation_statuses,
+)
+from bond_management.patches.refresh_statement_reconciliations_v8 import (
+    execute as refresh_statement_reconciliations_v8,
 )
 from bond_management.patches.regenerate_legacy_face_value_reconciliations import (
     execute as regenerate_legacy_reconciliations,
@@ -62,6 +72,75 @@ class TestBondStatement(IntegrationTestCase):
         self.assertEqual(detail.isin, bond.name)
         self.assertEqual(detail.quantity, 10)
         self.assertEqual(detail.market_price, 100)
+
+    def test_reports_matured_balance_in_reconciliation_without_zero_statement_row(self):
+        matured_bond = make_bond(
+            issue_date="2025-01-01",
+            maturity_date="2025-12-31",
+            first_coupon_date="2025-07-01",
+            principal_schedule=[{"repayment_date": "2025-12-31", "principal_units": 100}],
+        )
+        live_bond = self._make_long_dated_bond()
+        portfolio = make_portfolio()
+        make_transaction(
+            matured_bond,
+            portfolio,
+            trade_date="2025-01-01",
+            settlement_date="2025-01-02",
+        )
+        make_transaction(
+            live_bond,
+            portfolio,
+            trade_date="2025-01-01",
+            settlement_date="2025-01-02",
+        )
+        attachment = self._attach_pdf(
+            self._current_statement_text(
+                portfolio.account_no,
+                statement_date="31/12/2025",
+                prices={live_bond.name: "101.250000"},
+            ),
+            "test-password",
+        )
+
+        statement = frappe.get_doc({"doctype": "Bond Statement", "attachment": attachment}).insert()
+
+        details = {row.isin: row for row in statement.bond_statement_details}
+        self.assertNotIn(matured_bond.name, details)
+        self.assertEqual(details[live_bond.name].quantity, 10)
+        self.assertEqual(statement.reconciliation_status, "Matched")
+        report_text = self._read_reconciliation_report(
+            statement.quantity_reconciliation_report,
+            "test-password",
+        )
+        self.assertRegex(report_text, rf"{matured_bond.name}.*Not present.*0.*0.*MATCHED")
+
+    def test_kes_quantity_change_reduces_statement_quantity_without_principal_factor(self):
+        bond = make_bond(
+            currency="KES",
+            day_count_convention="Actual/364(Kenya)",
+            coupon_rate=0,
+            principal_schedule=[
+                {"repayment_date": "2025-07-04", "principal_units": 50},
+                {"repayment_date": "2027-01-01", "principal_units": 50},
+            ],
+        )
+        portfolio = make_portfolio()
+        make_transaction(
+            bond,
+            portfolio,
+            trade_date="2025-06-29",
+            settlement_date="2025-06-30",
+            accrued_interest_paid=0,
+            commission=0,
+        )
+        make_market_date(bond, date="2025-07-05")
+
+        statement = make_statement(portfolio, statement_date="2025-07-05")
+
+        detail = statement.bond_statement_details[0]
+        self.assertEqual(detail.quantity, 5)
+        self.assertEqual(detail.principal_factor, 1)
 
     def test_missing_market_price_is_blank_instead_of_zero(self):
         bond = make_bond()
@@ -151,6 +230,130 @@ class TestBondStatement(IntegrationTestCase):
                 self.assertEqual(attachment_files[0].attached_to_name, statement.name)
                 self.assertEqual(attachment_files[0].attached_to_field, "attachment")
 
+    def test_attachment_upserts_exchange_rates_and_preserves_manual_fallbacks(self):
+        account_no = unique_name("FX-ACCOUNT")
+        password = unique_name("FX-PASSWORD")
+        portfolio = make_portfolio(
+            account_no=account_no,
+            statement_pdf_password=password,
+        )
+        manual_rate = make_exchange_rate(
+            portfolio,
+            rate_date="2026-05-31",
+            rate="0.00770000",
+        )
+        attachment = self._attach_pdf(
+            "\n".join(
+                [
+                    "Portfolio Summary as of 30/06/2026",
+                    f"Product Account No.: {account_no}",
+                    "Currency Pair Rate",
+                    "KES / USD 0.00772499",
+                ]
+            ),
+            password,
+        )
+
+        statement = frappe.get_doc({"doctype": "Bond Statement", "attachment": attachment}).insert()
+
+        parsed_rate = frappe.qb.get_query(
+            "Bond Exchange Rate",
+            fields=["rate", "source", "statement"],
+            filters={
+                "portfolio_name": portfolio.name,
+                "rate_date": "2026-06-30",
+                "from_currency": "KES",
+            },
+            limit=1,
+            ignore_permissions=False,
+        ).run(as_dict=True)[0]
+        self.assertEqual(parsed_rate.rate, 0.00772499)
+        self.assertEqual(parsed_rate.source, "Statement PDF")
+        self.assertEqual(parsed_rate.statement, statement.name)
+
+        manual_rate.reload()
+        self.assertEqual(manual_rate.source, "Manual")
+        self.assertEqual(manual_rate.rate, 0.0077)
+
+    def test_replacing_attachment_removes_stale_statement_exchange_rates(self):
+        account_no = unique_name("FX-REPLACE")
+        password = unique_name("FX-PASSWORD")
+        portfolio = make_portfolio(
+            account_no=account_no,
+            statement_pdf_password=password,
+        )
+        original_attachment = self._attach_pdf(
+            "\n".join(
+                [
+                    "Portfolio Summary as of 30/06/2026",
+                    f"Product Account No.: {account_no}",
+                    "Currency Pair Rate",
+                    "KES / USD 0.00772499",
+                ]
+            ),
+            password,
+        )
+        statement = frappe.get_doc({"doctype": "Bond Statement", "attachment": original_attachment}).insert()
+        self.assertEqual(
+            frappe.db.count("Bond Exchange Rate", {"statement": statement.name}),
+            1,
+        )
+
+        replacement_attachment = self._attach_pdf(
+            "\n".join(
+                [
+                    "Portfolio Summary as of 31/07/2026",
+                    f"Product Account No.: {account_no}",
+                ]
+            ),
+            password,
+        )
+        statement.attachment = replacement_attachment
+        statement.save()
+
+        self.assertEqual(statement.statement_date.isoformat(), "2026-07-31")
+        self.assertEqual(
+            frappe.db.count("Bond Exchange Rate", {"statement": statement.name}),
+            0,
+        )
+        self.assertFalse(
+            frappe.db.exists(
+                "Bond Exchange Rate",
+                {
+                    "portfolio_name": portfolio.name,
+                    "rate_date": "2026-06-30",
+                    "from_currency": "KES",
+                },
+            )
+        )
+
+    def test_deleting_statement_removes_derived_exchange_rates(self):
+        account_no = unique_name("FX-DELETE")
+        password = unique_name("FX-PASSWORD")
+        make_portfolio(account_no=account_no, statement_pdf_password=password)
+        attachment = self._attach_pdf(
+            "\n".join(
+                [
+                    "Portfolio Summary as of 30/06/2026",
+                    f"Product Account No.: {account_no}",
+                    "Currency Pair Rate",
+                    "KES / USD 0.00772499",
+                ]
+            ),
+            password,
+        )
+        statement = frappe.get_doc({"doctype": "Bond Statement", "attachment": attachment}).insert()
+        derived_rate = frappe.db.get_value(
+            "Bond Exchange Rate",
+            {"statement": statement.name},
+            "name",
+        )
+        self.assertTrue(derived_rate)
+
+        statement.delete()
+
+        self.assertFalse(frappe.db.exists("Bond Exchange Rate", derived_rate))
+
     def test_attachment_accepts_transaction_account_and_keeps_product_account_filename(self):
         product_account_no = unique_name("PRODUCT-ACCOUNT")
         transaction_account_no = unique_name("TRANSACTION-ACCOUNT")
@@ -178,6 +381,48 @@ class TestBondStatement(IntegrationTestCase):
             statement.attachment,
             f"/private/files/PortfolioStatement-{product_account_no}-20260630.pdf",
         )
+
+    def test_accountless_pdf_uses_explicitly_selected_portfolio(self):
+        portfolio = make_portfolio(statement_pdf_password="test-password")
+        attachment = self._attach_pdf(
+            "SUMMARY OF ACCOUNT As of 30/11/2020",
+            "test-password",
+            file_name="KEUTS03Dec20075717763794.pdf",
+        )
+
+        statement = frappe.get_doc(
+            {
+                "doctype": "Bond Statement",
+                "portfolio_name": portfolio.name,
+                "attachment": attachment,
+            }
+        )
+
+        preview = statement.read_statement_pdf()
+
+        self.assertEqual(preview["portfolio_name"], portfolio.name)
+        self.assertEqual(preview["account_no"], portfolio.account_no)
+        self.assertEqual(preview["statement_date"].isoformat(), "2020-11-30")
+        statement.insert()
+
+    def test_legacy_named_bond_row_populates_market_price(self):
+        bond = make_bond(bond_name="Kenya Treasury Bond FXD3-2019-15")
+        portfolio = make_portfolio()
+        make_transaction(bond, portfolio)
+        attachment = self._attach_pdf(
+            "\n".join(
+                [
+                    f"Portfolio Summary as of 31/12/2025 Product Account No.: {portfolio.account_no}",
+                    "FXD3/2019/15 USD 10 104.000000 0.00000000 98.965410 1,040.00 989.65 01/01/2027",
+                ]
+            ),
+            "test-password",
+        )
+
+        statement = frappe.get_doc({"doctype": "Bond Statement", "attachment": attachment}).insert()
+
+        self.assertEqual(statement.bond_statement_details[0].isin, bond.name)
+        self.assertEqual(statement.bond_statement_details[0].market_price, Decimal("98.965410"))
 
     def test_rejects_duplicate_attachment_in_controller_and_database(self):
         account_no = unique_name("DUPLICATE-ACCOUNT")
@@ -274,6 +519,15 @@ class TestBondStatement(IntegrationTestCase):
             remove_duplicate_statements()
 
         self.assertEqual(events, ["delete", "index"])
+
+    def test_v8_reconciliation_refresh_has_a_new_registered_patch_identity(self):
+        patch_lines = Path(frappe.get_app_path("bond_management", "patches.txt")).read_text().splitlines()
+        original_index = patch_lines.index(
+            "bond_management.patches.backfill_statement_reconciliation_statuses"
+        )
+        refresh_index = patch_lines.index("bond_management.patches.refresh_statement_reconciliations_v8")
+
+        self.assertLess(original_index, refresh_index)
 
     def test_rejects_unconfigured_passwords_and_unknown_accounts(self):
         configured_password = unique_name("CONFIGURED-PASSWORD")
@@ -531,7 +785,7 @@ class TestBondStatement(IntegrationTestCase):
                 [
                     f"SUMMARY OF ACCOUNT As of 30/06/2038 IS Account: {portfolio.account_no}",
                     bond.name,
-                    "USD 200,000.00 99.000000 7.000000 101.250000 198,000.00 202,500.00",
+                    "USD 200,000.00 99.000000 7.000000 101.250000 198,000.00 202,500.00 01/01/2042",
                 ]
             ),
             "test-password",
@@ -571,10 +825,14 @@ class TestBondStatement(IntegrationTestCase):
         backfill_reconciliation_statuses([statement.name])
         statement.reload()
         quantity_basis_report_url = statement.quantity_reconciliation_report
-        self.assertIn("QuantityBasis-v3", quantity_basis_report_url)
+        self.assertIn("QuantityBasis-v8", quantity_basis_report_url)
         self.assertEqual(statement.reconciliation_status, "Matched")
 
-        backfill_reconciliation_statuses([statement.name])
+        refresh_statement_reconciliations_v8([statement.name])
+        statement.reload()
+        self.assertEqual(statement.quantity_reconciliation_report, quantity_basis_report_url)
+
+        refresh_statement_reconciliations_v8([statement.name])
         statement.reload()
         self.assertEqual(statement.quantity_reconciliation_report, quantity_basis_report_url)
 
@@ -587,7 +845,7 @@ class TestBondStatement(IntegrationTestCase):
                 [
                     f"SUMMARY OF ACCOUNT As of 31/03/2038 IS Account: {portfolio.account_no}",
                     bond.name,
-                    "USD 2,000.00 99.250000 0.00000000 110.000000 198,500.00 220,000.00",
+                    "USD 2,000.00 99.250000 0.00000000 110.000000 198,500.00 220,000.00 01/01/2042",
                 ]
             ),
             "test-password",
@@ -640,6 +898,31 @@ class TestBondStatement(IntegrationTestCase):
         self.assertIn("Mismatched: 1", report_text)
         self.assertRegex(report_text, rf"{matched_bond.name}.*0\s+MATCHED")
         self.assertRegex(report_text, rf"{mismatched_bond.name}.*-5\s+MISMATCH")
+
+    def test_reconciliation_report_shows_calculated_only_isin(self):
+        comparison = StatementQuantityComparison(
+            isin="KE6000008430",
+            pdf_quantity=None,
+            calculated_quantity=Decimal("200000"),
+            difference=Decimal("-200000"),
+        )
+
+        content = build_quantity_reconciliation_pdf(
+            statement_name="BS-TEST",
+            portfolio_name="Amrat",
+            statement_date="2025-04-30",
+            generated_at="2026-08-06 12:00:00",
+            comparisons=(comparison,),
+            password="test-password",
+        )
+        reader = PdfReader(BytesIO(content))
+        self.assertGreater(reader.decrypt("test-password"), 0)
+        report_text = "\n".join(page.extract_text() or "" for page in reader.pages)
+
+        self.assertIn("Not present", report_text)
+        self.assertIn("200,000", report_text)
+        self.assertIn("-200,000", report_text)
+        self.assertIn("MISMATCH", report_text)
 
     def test_reports_when_pdf_quantity_is_greater_than_calculated_quantity(self):
         portfolio = make_portfolio()

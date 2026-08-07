@@ -93,12 +93,17 @@ after_install = [
     "bond_management.patches.add_bond_investor_report_permission.execute",
     "bond_management.patches.add_bond_management_manager_access.execute",
     "bond_management.patches.add_bond_management_report_permission.execute",
+    "bond_management.patches.add_bond_exchange_rate_permissions.execute",
 ]
 
 # Frappe schema sync removes manual single-column unique indexes when the
 # DocField cannot declare `unique`. Re-apply the Bond Market Date database
 # invariant after every migration.
-after_migrate = "bond_management.patches.add_bond_query_indexes.ensure_bond_query_indexes"
+after_migrate = [
+    "bond_management.patches.add_bond_query_indexes.ensure_bond_query_indexes",
+    "bond_management.patches.add_bond_management_manager_access.execute",
+    "bond_management.patches.add_bond_exchange_rate_permissions.execute",
+]
 
 # Uninstallation
 # ------------
@@ -142,12 +147,14 @@ permission_query_conditions = {
     "Bond Portfolio": "bond_management.bond_management.utils.investor_permissions.portfolio_query_condition",
     "Bond Transaction": "bond_management.bond_management.utils.investor_permissions.transaction_query_condition",
     "Bond Statement": "bond_management.bond_management.utils.investor_permissions.statement_query_condition",
+    "Bond Exchange Rate": "bond_management.bond_management.utils.investor_permissions.exchange_rate_query_condition",
 }
 
 has_permission = {
     "Bond Portfolio": "bond_management.bond_management.utils.investor_permissions.has_portfolio_permission",
     "Bond Transaction": "bond_management.bond_management.utils.investor_permissions.has_transaction_permission",
     "Bond Statement": "bond_management.bond_management.utils.investor_permissions.has_statement_permission",
+    "Bond Exchange Rate": "bond_management.bond_management.utils.investor_permissions.has_exchange_rate_permission",
 }
 
 # Document Events

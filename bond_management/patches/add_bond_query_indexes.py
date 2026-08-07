@@ -4,6 +4,7 @@ LEDGER_INDEX = "bond_transaction_portfolio_isin_settlement"
 REPORT_INDEX = "bond_transaction_portfolio_settlement_isin"
 MARKET_DATE_UNIQUE = "unique_bond_market_date"
 STATEMENT_ATTACHMENT_UNIQUE = "unique_bond_statement_attachment"
+EXCHANGE_RATE_UNIQUE = "unique_bond_exchange_rate"
 
 
 def execute():
@@ -42,6 +43,29 @@ def ensure_bond_query_indexes():
             f"{attachments}. Run the duplicate cleanup patch, then migrate again."
         )
 
+    duplicate_exchange_rates = frappe.qb.get_query(
+        "Bond Exchange Rate",
+        fields=[
+            "portfolio_name",
+            "rate_date",
+            "from_currency",
+            "to_currency",
+            {"COUNT": "name", "as": "rate_count"},
+        ],
+        group_by="portfolio_name, rate_date, from_currency, to_currency",
+        ignore_permissions=True,
+    ).run(as_dict=True)
+    duplicate_exchange_rates = [row for row in duplicate_exchange_rates if row.rate_count > 1]
+    if duplicate_exchange_rates:
+        duplicates = ", ".join(
+            f"{row.portfolio_name}/{row.rate_date}/{row.from_currency}/{row.to_currency}"
+            for row in duplicate_exchange_rates[:10]
+        )
+        frappe.throw(
+            "Cannot enforce one Bond Exchange Rate per portfolio/date/currency pair because "
+            f"duplicates exist: {duplicates}. Merge or remove the duplicate rows, then run migrate again."
+        )
+
     frappe.db.add_index(
         "Bond Transaction",
         ["portfolio_name", "isin", "settlement_date"],
@@ -61,4 +85,9 @@ def ensure_bond_query_indexes():
         "Bond Statement",
         ["attachment"],
         constraint_name=STATEMENT_ATTACHMENT_UNIQUE,
+    )
+    frappe.db.add_unique(
+        "Bond Exchange Rate",
+        ["portfolio_name", "rate_date", "from_currency", "to_currency"],
+        constraint_name=EXCHANGE_RATE_UNIQUE,
     )

@@ -4,7 +4,10 @@ from decimal import ROUND_HALF_UP, Decimal
 import frappe
 from frappe.utils import getdate
 
-from bond_management.bond_management.utils.coupon_schedule import year_fraction
+from bond_management.bond_management.utils.coupon_schedule import (
+    is_kenya_day_count_convention,
+    year_fraction,
+)
 from bond_management.bond_management.utils.financial import (
     PERCENT_PRECISION,
     quantize_percent,
@@ -46,6 +49,21 @@ def calculate_accrued_fraction(
 
     start = getdate(period.get("period_start"))
     settlement = getdate(settlement_date)
+    if is_kenya_day_count_convention(day_count_convention):
+        coupon_date = getdate(period.get("coupon_date")) if period.get("coupon_date") else None
+        period_days = (coupon_date - start).days if coupon_date else 0
+        elapsed_days = (settlement - start).days
+        if period_days <= 0:
+            return to_decimal(0)
+
+        period_fraction = to_decimal(elapsed_days) / to_decimal(period_days)
+        coupon_factor = to_decimal(
+            period.get("coupon_factor")
+            if period.get("coupon_factor") is not None
+            else to_decimal(coupon_rate) / to_decimal(coupon_frequency)
+        )
+        return coupon_factor / to_decimal(100) * to_decimal(face_value_per_unit) * period_fraction
+
     fraction = year_fraction(
         day_count_convention=day_count_convention,
         start_date=start,
@@ -58,19 +76,28 @@ def calculate_accrued_fraction(
 
 def calculate_principal_factor(isin, date):
     bond_doc = frappe.get_doc("Bond Master", isin)
-    return calculate_principal_factor_from_schedule(bond_doc.get("principal_schedule"), date)
+    return calculate_principal_factor_from_bond(bond_doc, date)
 
 
 def calculate_coupon_principal_factor(isin, coupon_date):
     """Return principal outstanding immediately before a same-day repayment."""
     bond_doc = frappe.get_doc("Bond Master", isin)
-    return calculate_principal_factor_from_schedule(
-        bond_doc.get("principal_schedule"), coupon_date, include_repayment_on_date=False
+    return calculate_principal_factor_from_bond(bond_doc, coupon_date, include_repayment_on_date=False)
+
+
+def is_quantity_change_bond(bond_doc):
+    """Return whether a bond uses the KES quantity-change convention."""
+    return str(bond_doc.get("currency") or "").upper() == "KES" and is_kenya_day_count_convention(
+        bond_doc.get("day_count_convention")
     )
 
 
 def calculate_principal_factor_from_schedule(
-    principal_schedule, date, *, include_repayment_on_date: bool = True
+    principal_schedule,
+    date,
+    *,
+    include_repayment_on_date: bool = True,
+    quantity_change: bool = False,
 ):
     """Return outstanding principal after payments through ``date`` by default.
 
@@ -82,7 +109,10 @@ def calculate_principal_factor_from_schedule(
     settlement_date = getdate(date)
     principal_factor = to_decimal(1)
 
-    for period in principal_schedule:
+    if quantity_change:
+        return to_decimal(1)
+
+    for period in principal_schedule or []:
         repayment_date = getdate(period.get("repayment_date"))
         repayment_is_effective = repayment_date and (
             repayment_date <= settlement_date
@@ -94,6 +124,58 @@ def calculate_principal_factor_from_schedule(
 
     principal_factor = quantize_percent(principal_factor)
     return to_decimal(0) if abs(principal_factor) <= PERCENT_PRECISION else principal_factor
+
+
+def calculate_quantity_factor_from_schedule(
+    principal_schedule,
+    date,
+    *,
+    include_repayment_on_date: bool = True,
+    quantity_change: bool = False,
+):
+    """Return the outstanding quantity factor for quantity-changing bonds."""
+    if not quantity_change:
+        return to_decimal(1)
+
+    settlement_date = getdate(date)
+    quantity_factor = to_decimal(1)
+    for period in principal_schedule or []:
+        repayment_date = getdate(period.get("repayment_date"))
+        repayment_is_effective = repayment_date and (
+            repayment_date <= settlement_date
+            if include_repayment_on_date
+            else repayment_date < settlement_date
+        )
+        if repayment_is_effective:
+            quantity_factor -= to_decimal(period.get("repayment_percent")) / to_decimal(100)
+
+    quantity_factor = quantize_percent(quantity_factor)
+    return to_decimal(0) if abs(quantity_factor) <= PERCENT_PRECISION else quantity_factor
+
+
+def calculate_principal_factor_from_bond(bond_doc, date, *, include_repayment_on_date: bool = True):
+    return calculate_principal_factor_from_schedule(
+        bond_doc.get("principal_schedule"),
+        date,
+        include_repayment_on_date=include_repayment_on_date,
+        quantity_change=is_quantity_change_bond(bond_doc),
+    )
+
+
+def calculate_quantity_factor_from_bond(bond_doc, date, *, include_repayment_on_date: bool = True):
+    return calculate_quantity_factor_from_schedule(
+        bond_doc.get("principal_schedule"),
+        date,
+        include_repayment_on_date=include_repayment_on_date,
+        quantity_change=is_quantity_change_bond(bond_doc),
+    )
+
+
+def calculate_effective_quantity_factor_from_bond(bond_doc, date, *, include_repayment_on_date: bool = True):
+    """Return the factor applied to a raw transaction quantity for KES holdings."""
+    return calculate_quantity_factor_from_bond(
+        bond_doc, date, include_repayment_on_date=include_repayment_on_date
+    )
 
 
 def calculate_weighted_average_repayment(principal_schedule, valuation_date):
@@ -140,9 +222,7 @@ def calculate_weighted_average_repayment(principal_schedule, valuation_date):
 
 def unit_accrued_interest_from_bond(bond_doc, settlement_date):
     settlement_date = getdate(settlement_date)
-    principal_factor = calculate_principal_factor_from_schedule(
-        bond_doc.get("principal_schedule"), settlement_date
-    )
+    principal_factor = calculate_principal_factor_from_bond(bond_doc, settlement_date)
     schedule = [
         row.as_dict() if callable(getattr(row, "as_dict", None)) else row
         for row in bond_doc.get("coupon_schedule")
@@ -174,4 +254,10 @@ def get_accrued_interest(isin=None, settlement_date=None, quantity_face_value=No
         return to_decimal(0)
     settlement_date = getdate(settlement_date)
 
-    return unit_accrued_interest(isin=isin, settlement_date=settlement_date) * to_decimal(quantity_face_value)
+    bond_doc = frappe.get_doc("Bond Master", isin)
+    quantity_factor = calculate_effective_quantity_factor_from_bond(bond_doc, settlement_date)
+    return (
+        unit_accrued_interest_from_bond(bond_doc, settlement_date)
+        * quantity_factor
+        * to_decimal(quantity_face_value)
+    )

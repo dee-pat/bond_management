@@ -6,12 +6,14 @@ const statement_attachment_state = new WeakMap();
 frappe.ui.form.on("Bond Statement", {
 	refresh(frm) {
 		make_statement_attachment_filename_readable(frm);
+		set_portfolio_field_read_only(frm);
 	},
 	attachment(frm) {
 		make_statement_attachment_filename_readable(frm);
 		const state = get_statement_attachment_state(frm);
 		const request_id = ++state.request_id;
 		if (!frm.doc.attachment) {
+			set_portfolio_field_read_only(frm);
 			if (request_id !== state.request_id) {
 				return Promise.resolve();
 			}
@@ -38,11 +40,17 @@ frappe.ui.form.on("Bond Statement", {
 						message: __("Portfolio and statement date read from PDF"),
 						indicator: "green",
 					});
+					set_portfolio_field_read_only(frm);
 					return message;
 				});
 		});
 	},
 });
+
+function set_portfolio_field_read_only(frm) {
+	const can_select_for_accountless_pdf = frm.is_new() && !frm.doc.attachment;
+	frm.set_df_property("portfolio_name", "read_only", can_select_for_accountless_pdf ? 0 : 1);
+}
 
 function get_statement_attachment_state(frm) {
 	if (!statement_attachment_state.has(frm)) {

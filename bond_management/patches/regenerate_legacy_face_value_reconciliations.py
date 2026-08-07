@@ -47,7 +47,7 @@ def execute(statement_names=None):
                 )
             continue
 
-        details = get_statement_attachment_details(statement.attachment)
+        details = get_statement_attachment_details(statement.attachment, statement.portfolio_name)
         if not any(row.quantity_is_face_value for row in details.market_prices):
             continue
 

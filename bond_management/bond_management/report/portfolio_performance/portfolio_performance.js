@@ -19,15 +19,30 @@ frappe.query_reports["Portfolio Performance"] = {
 	],
 	formatter(value, row, column, data, default_formatter) {
 		const formatted_value = default_formatter(value, row, column, data);
-		if (!data || !["xirr", "future_xirr"].includes(column.fieldname)) {
+		const cashflow_columns = {
+			xirr: { xirr_type: "past", cashflow_currency: "native" },
+			future_xirr: { xirr_type: "future", cashflow_currency: "native" },
+			xirr_usd: { xirr_type: "past", cashflow_currency: "reporting" },
+			future_xirr_usd: { xirr_type: "future", cashflow_currency: "reporting" },
+		};
+		const cashflow = cashflow_columns[column.fieldname];
+		if (
+			!data ||
+			!cashflow ||
+			value === null ||
+			value === undefined ||
+			(data.isin === "TOTAL" && cashflow.cashflow_currency === "native" && !data.currency)
+		) {
 			return formatted_value;
 		}
 
 		return `<button class="btn btn-link btn-xs portfolio-cashflow-copy" data-isin="${frappe.utils.escape_html(
 			data.isin
-		)}" data-xirr-type="${
-			column.fieldname === "xirr" ? "past" : "future"
-		}" title="Copy cash flows for Excel">${formatted_value}</button>`;
+		)}" data-xirr-type="${cashflow.xirr_type}" data-cashflow-currency="${
+			cashflow.cashflow_currency
+		}" title="Copy ${
+			cashflow.cashflow_currency
+		} cash flows for Excel">${formatted_value}</button>`;
 	},
 	onload(report) {
 		const selector = ".portfolio-cashflow-copy";
@@ -39,13 +54,14 @@ frappe.query_reports["Portfolio Performance"] = {
 			return copy_xirr_cashflows(
 				report,
 				button.attr("data-isin"),
-				button.attr("data-xirr-type")
+				button.attr("data-xirr-type"),
+				button.attr("data-cashflow-currency")
 			).catch(frappe.msgprint);
 		});
 	},
 };
 
-function copy_xirr_cashflows(report, isin, xirr_type) {
+function copy_xirr_cashflows(report, isin, xirr_type, cashflow_currency) {
 	const filters = report.get_values();
 	return frappe
 		.call({
@@ -56,6 +72,7 @@ function copy_xirr_cashflows(report, isin, xirr_type) {
 				valuation_date: filters.valuation_date,
 				isin,
 				xirr_type,
+				cashflow_currency,
 			},
 		})
 		.then((response) => {
@@ -66,13 +83,28 @@ function copy_xirr_cashflows(report, isin, xirr_type) {
 			}
 
 			const tsv = [
-				"isin\ttransaction_type\tdate\tamount\tquantity\trate",
+				"isin\ttransaction_type\tdate\tcurrency\tamount\tquantity\trate",
 				...cashflows.map(
 					(flow) =>
-						`${flow.isin}\t${flow.transaction_type}\t${flow.date}\t${flow.amount}\t${flow.quantity}\t${flow.rate}`
+						`${clipboard_text(flow.isin)}\t${clipboard_text(
+							flow.transaction_type
+						)}\t${clipboard_text(flow.date)}\t${clipboard_text(
+							flow.currency
+						)}\t${clipboard_number(flow.amount)}\t${clipboard_number(
+							flow.quantity
+						)}\t${clipboard_number(flow.rate)}`
 				),
 			].join("\n");
 			frappe.utils.copy_to_clipboard(tsv, `Copied ${cashflows.length} cash flows`);
 			return cashflows;
 		});
+}
+
+function clipboard_text(value) {
+	const text = String(value ?? "").replace(/[\u0000-\u001f\u007f]/g, " ");
+	return /^[=+\-@]/.test(text) ? `'${text}` : text;
+}
+
+function clipboard_number(value) {
+	return String(value ?? "");
 }

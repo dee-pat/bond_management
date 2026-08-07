@@ -8,6 +8,7 @@ from bond_management.bond_management.utils.accrual import (
     calculate_accrued_fraction,
     calculate_coupon_principal_factor,
     calculate_principal_factor,
+    calculate_quantity_factor_from_bond,
     calculate_weighted_average_repayment,
     get_coupon_period,
     unit_accrued_interest_from_bond,
@@ -15,6 +16,20 @@ from bond_management.bond_management.utils.accrual import (
 
 
 class TestAccrual(IntegrationTestCase):
+    def test_kenya_accrual_prorates_fixed_coupon_factor_over_stub_period(self):
+        schedule = [
+            {
+                "period_start": "2025-01-01",
+                "period_end": "2025-01-30",
+                "coupon_date": "2025-01-31",
+                "coupon_factor": 5,
+            }
+        ]
+
+        accrued_interest = calculate_accrued_fraction(schedule, "2025-01-16", "Actual/364(Kenya)", 100, 2, 10)
+
+        self.assertEqual(accrued_interest, Decimal("2.5"))
+
     def test_batched_frappe_dict_schedule_rows_are_accepted(self):
         bond = frappe._dict(
             {
@@ -77,6 +92,24 @@ class TestAccrual(IntegrationTestCase):
         self.assertEqual(calculate_coupon_principal_factor(bond.name, "2025-06-30"), 1)
         self.assertEqual(calculate_coupon_principal_factor(bond.name, "2025-07-01"), 1)
         self.assertEqual(calculate_coupon_principal_factor(bond.name, "2025-07-02"), Decimal("0.5"))
+
+    def test_kes_quantity_change_uses_quantity_factor_and_keeps_principal_factor_at_one(self):
+        bond = make_bond(
+            currency="KES",
+            day_count_convention="Actual/364(Kenya)",
+            principal_schedule=[
+                {"repayment_date": "2025-07-04", "principal_units": 50},
+                {"repayment_date": "2027-01-01", "principal_units": 50},
+            ],
+        )
+
+        self.assertEqual(calculate_principal_factor(bond.name, "2025-07-04"), Decimal("1"))
+        self.assertEqual(calculate_quantity_factor_from_bond(bond, "2025-07-03"), Decimal("1"))
+        self.assertEqual(calculate_quantity_factor_from_bond(bond, "2025-07-04"), Decimal("0.5"))
+        self.assertEqual(
+            calculate_quantity_factor_from_bond(bond, "2025-07-04", include_repayment_on_date=False),
+            Decimal("1"),
+        )
 
     def test_weighted_repayment_uses_remaining_principal_with_strict_future_boundary(self):
         schedule = [

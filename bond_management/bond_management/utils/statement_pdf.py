@@ -1,5 +1,7 @@
 import hmac
 import re
+from collections import defaultdict
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
@@ -10,6 +12,8 @@ import frappe
 from frappe import _
 from pypdf import PdfReader
 from pypdf.errors import DependencyError, FileNotDecryptedError, PdfReadError, PdfStreamError
+
+from bond_management.bond_management.utils.validation import optional_string
 
 MAX_STATEMENT_PDF_BYTES = 10 * 1024 * 1024
 DATE_PATTERNS = (
@@ -25,6 +29,12 @@ ACCOUNT_PATTERNS = (
 )
 ISIN_PATTERN = r"[A-Z]{2}[A-Z0-9]{10}"
 NUMBER_PATTERN = r"[+-]?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?"
+CURRENCY_CODE_PATTERN = r"[A-Z]{3}"
+CURRENCY_RATE_PATTERN = re.compile(
+    rf"\b(?P<from_currency>{CURRENCY_CODE_PATTERN})\s*/\s*"
+    rf"(?P<to_currency>{CURRENCY_CODE_PATTERN})\s+(?P<rate>{NUMBER_PATTERN})\b",
+    re.IGNORECASE,
+)
 CURRENT_MARKET_PRICE_PATTERN = re.compile(
     rf"\b(?P<isin>{ISIN_PATTERN})\s+"
     rf"(?P<reported_quantity>{NUMBER_PATTERN})\s+"
@@ -36,10 +46,20 @@ LEGACY_MARKET_PRICE_PATTERN = re.compile(
     rf"(?P<reported_quantity>{NUMBER_PATTERN})\s+"
     rf"{NUMBER_PATTERN}\s+{NUMBER_PATTERN}\s+"
     rf"(?P<market_price>{NUMBER_PATTERN})\s+"
-    rf"{NUMBER_PATTERN}\s+(?P<market_value>{NUMBER_PATTERN})\b"
+    rf"{NUMBER_PATTERN}\s+(?P<market_value>{NUMBER_PATTERN})\s+"
+    rf"\d{{2}}/\d{{2}}/\d{{4}}\b"
 )
 ACCOUNT_FILENAME_PATTERN = re.compile(
     r"\bPortfolioStatement[-_](?P<account_no>[A-Za-z0-9-]+)[-_]\d{8}\.pdf$",
+    re.IGNORECASE,
+)
+LEGACY_NAMED_MARKET_PRICE_PATTERN = re.compile(
+    rf"(?P<bond_name>[^\n]+?)\s+{CURRENCY_CODE_PATTERN}\s+"
+    rf"(?P<reported_quantity>{NUMBER_PATTERN})\s+"
+    rf"{NUMBER_PATTERN}\s+{NUMBER_PATTERN}\s+"
+    rf"(?P<market_price>{NUMBER_PATTERN})\s+"
+    rf"{NUMBER_PATTERN}\s+(?P<market_value>{NUMBER_PATTERN})\s+"
+    rf"\d{{2}}/\d{{2}}/\d{{4}}\b",
     re.IGNORECASE,
 )
 
@@ -61,10 +81,18 @@ class ParsedMarketPrice:
 
 
 @dataclass(frozen=True)
+class ParsedExchangeRate:
+    from_currency: str
+    to_currency: str
+    rate: Decimal
+
+
+@dataclass(frozen=True)
 class ParsedStatementPdf:
     account_no: str
     statement_date: date
     market_prices: tuple[ParsedMarketPrice, ...] = ()
+    exchange_rates: tuple[ParsedExchangeRate, ...] = ()
     unlock_password: str | None = field(default=None, repr=False)
 
 
@@ -83,6 +111,7 @@ class StatementAttachmentDetails:
     portfolio_account_no: str
     statement_date: date
     market_prices: tuple[ParsedMarketPrice, ...] = ()
+    exchange_rates: tuple[ParsedExchangeRate, ...] = ()
 
 
 def parse_statement_pdf_text(
@@ -124,8 +153,12 @@ def parse_statement_pdf_text(
     )
 
 
-def parse_statement_market_prices(text: str) -> tuple[ParsedMarketPrice, ...]:
+def parse_statement_market_prices(
+    text: str,
+    bond_name_to_isin: Mapping[str, str] | None = None,
+) -> tuple[ParsedMarketPrice, ...]:
     """Extract fixed-income ISIN prices from current and legacy statement tables."""
+    text = _join_wrapped_isins(text or "")
     rows_by_isin: dict[str, ParsedMarketPrice] = {}
     for pattern in (CURRENT_MARKET_PRICE_PATTERN, LEGACY_MARKET_PRICE_PATTERN):
         for match in pattern.finditer(text or ""):
@@ -169,7 +202,88 @@ def parse_statement_market_prices(text: str) -> tuple[ParsedMarketPrice, ...]:
                 raise StatementPdfError(f"The PDF contains conflicting reported quantities for ISIN {isin}.")
             rows_by_isin[isin] = parsed_row
 
+    normalized_bond_name_to_isin = {}
+    for name, isin in (bond_name_to_isin or {}).items():
+        for alias in _bond_name_aliases(name):
+            normalized_bond_name_to_isin[alias] = isin
+    for match in LEGACY_NAMED_MARKET_PRICE_PATTERN.finditer(text or ""):
+        bond_name = match.group("bond_name").strip()
+        if re.fullmatch(ISIN_PATTERN, bond_name.upper()):
+            continue
+
+        isin = normalized_bond_name_to_isin.get(_normalize_bond_name(bond_name))
+        if not isin:
+            raise StatementPdfError(
+                f"Could not identify fixed-income security {bond_name} from the PDF in Bond Master records."
+            )
+
+        try:
+            market_price = Decimal(match.group("market_price").replace(",", ""))
+            reported_quantity = Decimal(match.group("reported_quantity").replace(",", ""))
+            market_value = Decimal(match.group("market_value").replace(",", ""))
+        except InvalidOperation as error:
+            raise StatementPdfError(
+                f"The PDF contains invalid fixed-income values for {bond_name}."
+            ) from error
+
+        if not market_price.is_finite() or market_price <= 0:
+            raise StatementPdfError(f"The PDF market price for ISIN {isin} must be greater than zero.")
+        if not reported_quantity.is_finite() or reported_quantity < 0:
+            raise StatementPdfError(f"The PDF reported quantity for ISIN {isin} must be zero or greater.")
+        if not market_value.is_finite() or market_value < 0:
+            raise StatementPdfError(f"The PDF market value for ISIN {isin} must be zero or greater.")
+
+        parsed_row = ParsedMarketPrice(
+            isin=isin,
+            market_price=market_price,
+            reported_quantity=reported_quantity,
+            quantity_is_face_value=_legacy_quantity_is_monetary_nominal(
+                reported_quantity,
+                market_price,
+                market_value,
+            ),
+        )
+        existing_row = rows_by_isin.get(isin)
+        if existing_row and existing_row.market_price != market_price:
+            raise StatementPdfError(f"The PDF contains conflicting market prices for ISIN {isin}.")
+        if existing_row and (
+            existing_row.reported_quantity != reported_quantity
+            or existing_row.quantity_is_face_value != parsed_row.quantity_is_face_value
+        ):
+            raise StatementPdfError(f"The PDF contains conflicting reported quantities for ISIN {isin}.")
+        rows_by_isin[isin] = parsed_row
+
     return tuple(rows_by_isin.values())
+
+
+def parse_statement_exchange_rates(text: str) -> tuple[ParsedExchangeRate, ...]:
+    """Extract dated currency-pair rates from the statement's exchange table."""
+    rows_by_pair: dict[tuple[str, str], ParsedExchangeRate] = {}
+    for match in CURRENCY_RATE_PATTERN.finditer(text or ""):
+        from_currency = match.group("from_currency").upper()
+        to_currency = match.group("to_currency").upper()
+        try:
+            rate = Decimal(match.group("rate").replace(",", ""))
+        except InvalidOperation as error:
+            raise StatementPdfError(
+                f"The PDF contains an invalid exchange rate for {from_currency} / {to_currency}."
+            ) from error
+
+        if not rate.is_finite() or rate <= 0:
+            raise StatementPdfError(
+                f"The PDF exchange rate for {from_currency} / {to_currency} must be greater than zero."
+            )
+
+        row = ParsedExchangeRate(from_currency, to_currency, rate)
+        key = (from_currency, to_currency)
+        existing_row = rows_by_pair.get(key)
+        if existing_row and existing_row.rate != rate:
+            raise StatementPdfError(
+                f"The PDF contains conflicting exchange rates for {from_currency} / {to_currency}."
+            )
+        rows_by_pair[key] = row
+
+    return tuple(rows_by_pair.values())
 
 
 def _legacy_quantity_is_monetary_nominal(
@@ -178,6 +292,10 @@ def _legacy_quantity_is_monetary_nominal(
     market_value: Decimal,
 ) -> bool:
     """Distinguish monetary nominal from unit counts in legacy Face Value columns."""
+    if reported_quantity == 0 and market_value == 0:
+        # Both interpretations produce the same quantity for an empty holding.
+        return False
+
     nominal_market_value = reported_quantity * market_price / Decimal("100")
     unit_market_value = reported_quantity * market_price
     nominal_distance = abs(market_value - nominal_market_value)
@@ -190,11 +308,26 @@ def _legacy_quantity_is_monetary_nominal(
     return nominal_distance < unit_distance
 
 
+def _join_wrapped_isins(text: str) -> str:
+    """Join an ISIN split across lines by PDF text extraction."""
+
+    def replace(match: re.Match[str]) -> str:
+        candidate = f"{match.group('prefix')}{match.group('suffix')}"
+        return candidate if re.fullmatch(ISIN_PATTERN, candidate) else match.group(0)
+
+    return re.sub(
+        r"\b(?P<prefix>[A-Z]{2}[A-Z0-9]{8,10})\s*\n\s*(?P<suffix>[A-Z0-9]{1,4})\b",
+        replace,
+        text,
+    )
+
+
 def extract_statement_pdf(
     content: bytes,
     passwords: list[str],
     *,
     account_no_hint: str | None = None,
+    bond_name_to_isin: Mapping[str, str] | None = None,
 ) -> ParsedStatementPdf:
     """Decrypt a PDF with configured portfolio passwords and parse its first page."""
     if len(content) > MAX_STATEMENT_PDF_BYTES:
@@ -208,7 +341,7 @@ def extract_statement_pdf(
         raise StatementPdfError("The attachment could not be read as a PDF.") from error
 
     if not probe.is_encrypted:
-        return _parse_reader(probe, account_no_hint)
+        return _parse_reader(probe, account_no_hint, bond_name_to_isin)
 
     for password in dict.fromkeys(password for password in passwords if password):
         try:
@@ -218,11 +351,12 @@ def extract_statement_pdf(
         except (DependencyError, FileNotDecryptedError, PdfReadError, PdfStreamError, ValueError):
             continue
 
-        parsed = _parse_reader(reader, account_no_hint)
+        parsed = _parse_reader(reader, account_no_hint, bond_name_to_isin)
         return ParsedStatementPdf(
             account_no=parsed.account_no,
             statement_date=parsed.statement_date,
             market_prices=parsed.market_prices,
+            exchange_rates=parsed.exchange_rates,
             unlock_password=password,
         )
 
@@ -231,16 +365,32 @@ def extract_statement_pdf(
     )
 
 
-def get_statement_attachment_details(attachment: str) -> StatementAttachmentDetails:
-    """Read an attached private PDF and resolve its account to a visible portfolio."""
+def get_statement_attachment_details(
+    attachment: str,
+    portfolio_name_hint: str | None = None,
+) -> StatementAttachmentDetails:
+    """Read an attached private PDF and resolve it to a visible portfolio."""
+    portfolio_name_hint = optional_string(portfolio_name_hint, "Portfolio Name")
     content, original_filename = _read_private_attachment(attachment)
     credentials = _get_portfolio_credentials()
+    bond_name_to_isin = _get_bond_name_to_isin()
+
+    hinted_portfolios = [
+        credential for credential in credentials if credential.portfolio_name == portfolio_name_hint
+    ]
+    if portfolio_name_hint and not hinted_portfolios:
+        frappe.throw(f"No accessible Bond Portfolio exists for the selected portfolio {portfolio_name_hint}.")
+    hinted_portfolio = hinted_portfolios[0] if hinted_portfolios else None
 
     try:
         parsed = extract_statement_pdf(
             content,
             [credential.password for credential in credentials if credential.password],
-            account_no_hint=_get_filename_account_hint(original_filename),
+            account_no_hint=(
+                _get_filename_account_hint(original_filename)
+                or (normalize_account_number(hinted_portfolio.account_no) if hinted_portfolio else None)
+            ),
+            bond_name_to_isin=bond_name_to_isin,
         )
     except StatementPdfError as error:
         frappe.throw(str(error))
@@ -267,6 +417,11 @@ def get_statement_attachment_details(attachment: str) -> StatementAttachmentDeta
         )
 
     portfolio = matching[0]
+    if hinted_portfolio and portfolio.portfolio_name != hinted_portfolio.portfolio_name:
+        frappe.throw(
+            f"The attached PDF belongs to Bond Portfolio {portfolio.portfolio_name}, "
+            f"not the selected portfolio {hinted_portfolio.portfolio_name}."
+        )
     if parsed.unlock_password is not None and (
         not portfolio.password or not hmac.compare_digest(portfolio.password, parsed.unlock_password)
     ):
@@ -281,6 +436,7 @@ def get_statement_attachment_details(attachment: str) -> StatementAttachmentDeta
         portfolio_account_no=portfolio.account_no,
         statement_date=parsed.statement_date,
         market_prices=parsed.market_prices,
+        exchange_rates=parsed.exchange_rates,
     )
 
 
@@ -291,6 +447,7 @@ def normalize_account_number(value: str) -> str:
 def _parse_reader(
     reader: PdfReader,
     account_no_hint: str | None,
+    bond_name_to_isin: Mapping[str, str] | None,
 ) -> ParsedStatementPdf:
     if not reader.pages:
         raise StatementPdfError("The statement PDF has no pages.")
@@ -307,7 +464,8 @@ def _parse_reader(
     return ParsedStatementPdf(
         account_no=parsed.account_no,
         statement_date=parsed.statement_date,
-        market_prices=parse_statement_market_prices(all_text),
+        market_prices=parse_statement_market_prices(all_text, bond_name_to_isin),
+        exchange_rates=parse_statement_exchange_rates(all_text),
     )
 
 
@@ -346,6 +504,39 @@ def _read_private_attachment(attachment: str) -> tuple[bytes, str]:
 def _get_filename_account_hint(filename: str) -> str | None:
     match = ACCOUNT_FILENAME_PATTERN.search(filename or "")
     return normalize_account_number(match.group("account_no")) if match else None
+
+
+def _get_bond_name_to_isin() -> dict[str, str]:
+    """Return only unambiguous visible Bond Master name aliases."""
+    aliases: defaultdict[str, set[str]] = defaultdict(set)
+    bonds = frappe.qb.get_query(
+        "Bond Master",
+        fields=["name", "bond_name"],
+        ignore_permissions=False,
+    ).run(as_dict=True)
+    for bond in bonds:
+        for alias in _bond_name_aliases(bond.bond_name):
+            aliases[alias].add(bond.name)
+
+    return {alias: next(iter(isins)) for alias, isins in aliases.items() if len(isins) == 1}
+
+
+def _bond_name_aliases(value: str) -> set[str]:
+    normalized = _normalize_bond_name(value)
+    aliases = {normalized}
+    for prefix in (
+        "KENYA TREASURY BOND",
+        "KENYA INFRASTRUCTURE BOND",
+        "REPUBLIC OF KENYA",
+    ):
+        normalized_prefix = _normalize_bond_name(prefix)
+        if normalized.startswith(f"{normalized_prefix}-"):
+            aliases.add(normalized.removeprefix(f"{normalized_prefix}-"))
+    return aliases
+
+
+def _normalize_bond_name(value: str) -> str:
+    return re.sub(r"[^A-Z0-9]+", "-", (value or "").upper()).strip("-")
 
 
 def _get_portfolio_credentials() -> list[PortfolioPdfCredentials]:

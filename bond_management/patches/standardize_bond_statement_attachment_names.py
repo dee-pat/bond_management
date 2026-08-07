@@ -20,7 +20,7 @@ def execute(statement_names=None):
 
     for statement_name in statement_names:
         statement = frappe.get_doc("Bond Statement", statement_name)
-        details = get_statement_attachment_details(statement.attachment)
+        details = get_statement_attachment_details(statement.attachment, statement.portfolio_name)
         old_attachment = statement.attachment
         new_attachment = standardize_statement_attachment(
             statement,

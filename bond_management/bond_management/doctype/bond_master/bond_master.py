@@ -6,7 +6,11 @@ from frappe import _
 from frappe.model.document import Document
 from frappe.utils import getdate
 
-from bond_management.bond_management.utils.coupon_schedule import generate_coupon_schedule
+from bond_management.bond_management.utils.accrual import is_quantity_change_bond
+from bond_management.bond_management.utils.coupon_schedule import (
+    generate_coupon_schedule,
+    is_kenya_day_count_convention,
+)
 from bond_management.bond_management.utils.financial import quantize_percent, to_decimal
 from bond_management.bond_management.utils.validation import optional_string
 
@@ -17,7 +21,9 @@ class BondMaster(Document):
 
     def _get_recalculated_values(self):
         return {
+            "first_coupon_date": self.first_coupon_date,
             "maturity_date": self.maturity_date,
+            "quantity_change": self.quantity_change,
             "principal_schedule": [
                 {
                     "name": row.name,
@@ -40,6 +46,7 @@ class BondMaster(Document):
         }
 
     def _recalculate_schedules(self):
+        self.quantity_change = 1 if is_quantity_change_bond(self) else 0
         self.validate_financial_terms()
         self.validate_principal_schedule()
         self.update_maturity_date()
@@ -53,6 +60,9 @@ class BondMaster(Document):
             frappe.throw(_("Face Value Per Unit must be greater than zero"))
         if to_decimal(self.coupon_rate) < 0:
             frappe.throw(_("Coupon Rate must be zero or greater"))
+        withholding_tax = to_decimal(self.withholding_tax)
+        if withholding_tax < 0 or withholding_tax > 100:
+            frappe.throw(_("Withholding Tax must be between 0 and 100"))
 
     def validate_dates(self):
         if not self.issue_date or not self.maturity_date:
@@ -106,7 +116,10 @@ class BondMaster(Document):
             self.coupon_rate,
             self.first_coupon_date,
             self.day_count_convention,
+            principal_dates=[row.repayment_date for row in self.principal_schedule],
         )
+        if schedule and is_kenya_day_count_convention(self.day_count_convention):
+            self.first_coupon_date = schedule[0]["coupon_date"]
         self.set("coupon_schedule", [])
         for row in schedule:
             self.append("coupon_schedule", row)

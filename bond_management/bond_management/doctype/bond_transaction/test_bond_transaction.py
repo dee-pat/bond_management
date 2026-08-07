@@ -3,6 +3,7 @@
 
 from decimal import Decimal
 from pathlib import Path
+from unittest.mock import patch
 
 import frappe
 from frappe.exceptions import FrappeTypeError, ValidationError
@@ -24,12 +25,43 @@ from bond_management.bond_management.utils.portfolio import (
     get_position,
     get_position_for_payment,
 )
+from bond_management.patches.backfill_transaction_principal_values import (
+    execute as backfill_transaction_principal_values,
+)
 from bond_management.patches.standardize_bond_transaction_attachment_names import (
     execute as standardize_existing_transaction_attachments,
 )
 
 
 class TestBondTransaction(IntegrationTestCase):
+    def test_principal_backfill_is_price_adjusted_and_idempotent(self):
+        bond = make_bond(face_value_per_unit=100)
+        portfolio = make_portfolio()
+        transaction = make_transaction(
+            bond,
+            portfolio,
+            quantity_face_value=10,
+            price=105,
+            accrued_interest_paid=1,
+        )
+        original_settlement = transaction.settlement_amount
+        frappe.db.set_value(
+            "Bond Transaction",
+            transaction.name,
+            "principal",
+            1000,
+            update_modified=False,
+        )
+
+        backfill_transaction_principal_values([transaction.name])
+        transaction.reload()
+        self.assertEqual(transaction.principal, 1050)
+        self.assertEqual(transaction.settlement_amount, original_settlement)
+
+        backfill_transaction_principal_values([transaction.name])
+        transaction.reload()
+        self.assertEqual(transaction.principal, 1050)
+
     def test_pdf_attachment_populates_fields_and_rejects_later_changes(self):
         bond = self._make_pdf_bond()
         portfolio = make_portfolio()
@@ -60,6 +92,8 @@ class TestBondTransaction(IntegrationTestCase):
         self.assertEqual(transaction.price, 105)
         self.assertEqual(transaction.accrued_interest_paid, 1)
         self.assertEqual(transaction.commission, 2)
+        self.assertEqual(transaction.principal, 1050)
+        self.assertEqual(transaction.settlement_amount, 1051)
         self.assertEqual(
             transaction.attachment,
             f"/private/files/Transaction-{portfolio.account_no}-20251231.pdf",
@@ -187,6 +221,21 @@ class TestBondTransaction(IntegrationTestCase):
             self.assertEqual(len(attachment_files), 1)
         self.assertEqual(sorted(quantities.values()), [5, 7])
 
+    def test_multi_transaction_creation_rejects_non_text_selection_values(self):
+        staging = frappe.get_doc({"doctype": "Bond Transaction"})
+
+        invalid_selections = (
+            ({"transaction_reference": ["U123"]}, "transaction reference must be text"),
+            (
+                {"transaction_reference": "U123", "portfolio_name": {"name": "TEST"}},
+                "portfolio name must be text",
+            ),
+        )
+        for selection, message in invalid_selections:
+            with self.subTest(selection=selection):
+                with self.assertRaisesRegex(ValidationError, message):
+                    staging.create_selected_pdf_transactions([selection])
+
     def test_multi_transaction_rows_can_be_posted_to_different_portfolios(self):
         bond = self._make_pdf_bond()
         pdf_portfolio = make_portfolio()
@@ -210,18 +259,24 @@ class TestBondTransaction(IntegrationTestCase):
             }
         )
 
-        created = staging.create_selected_pdf_transactions(
-            [
-                {
-                    "transaction_reference": references[0],
-                    "portfolio_name": target_portfolio.name,
-                },
-                {
-                    "transaction_reference": references[1],
-                    "portfolio_name": pdf_portfolio.name,
-                },
-            ]
-        )
+        with patch.object(
+            staging,
+            "_lock_portfolios",
+            wraps=staging._lock_portfolios,
+        ) as lock_portfolios:
+            created = staging.create_selected_pdf_transactions(
+                [
+                    {
+                        "transaction_reference": references[0],
+                        "portfolio_name": target_portfolio.name,
+                    },
+                    {
+                        "transaction_reference": references[1],
+                        "portfolio_name": pdf_portfolio.name,
+                    },
+                ]
+            )
+            lock_portfolios.assert_called_once_with({target_portfolio.name, pdf_portfolio.name})
 
         self.assertCountEqual(created, references)
         overridden = frappe.get_doc("Bond Transaction", references[0])
@@ -365,10 +420,54 @@ class TestBondTransaction(IntegrationTestCase):
         with self.assertRaisesRegex(ValidationError, "requires a PDF attachment"):
             transaction.insert()
 
+    def test_pdf_amounts_must_match_calculated_values(self):
+        bond = self._make_pdf_bond()
+        portfolio = make_portfolio()
+        reference = self._numeric_reference("U")
+        attachment = self._attach_transaction_pdf(
+            self._confirmation_text(
+                portfolio.transaction_account_no,
+                reference,
+                bond.name,
+                settlement_amount="1,052.00",
+            ),
+            "test-password",
+        )
+
+        with self.assertRaisesRegex(ValidationError, "calculated Bond Transaction amounts"):
+            frappe.get_doc(
+                {
+                    "doctype": "Bond Transaction",
+                    "attachment": attachment,
+                }
+            ).insert()
+
+    def test_pdf_principal_must_imply_bond_master_face_value_per_unit(self):
+        bond = self._make_pdf_bond()
+        bond.db_set("face_value_per_unit", 100000)
+        portfolio = make_portfolio()
+        reference = self._numeric_reference("U")
+        attachment = self._attach_transaction_pdf(
+            self._confirmation_text(
+                portfolio.transaction_account_no,
+                reference,
+                bond.name,
+            ),
+            "test-password",
+        )
+
+        with self.assertRaisesRegex(ValidationError, "Face Value Per Unit.*does not match the PDF"):
+            frappe.get_doc(
+                {
+                    "doctype": "Bond Transaction",
+                    "attachment": attachment,
+                }
+            ).insert()
+
     def test_calculates_transaction_amounts(self):
         transaction = make_transaction(make_bond(), make_portfolio())
 
-        self.assertEqual(transaction.principal, 1000)
+        self.assertEqual(transaction.principal, 1050)
         self.assertEqual(transaction.commission_amount, 20)
         self.assertEqual(transaction.settlement_amount, 1051)
         self.assertNotEqual(
@@ -390,7 +489,7 @@ class TestBondTransaction(IntegrationTestCase):
             "0.015",
         )
 
-        self.assertEqual(amounts["principal"], Decimal("300.0900"))
+        self.assertEqual(amounts["principal"], Decimal("300.0600"))
         self.assertEqual(amounts["commission_amount"], Decimal("0.0450"))
         self.assertEqual(amounts["settlement_amount"], Decimal("300.0650"))
 
@@ -645,13 +744,28 @@ class TestBondTransaction(IntegrationTestCase):
         *,
         transaction_label="Subscription",
         quantity="10.000000",
+        price="105.000000",
+        accrued_interest="1.00",
         commission="2.000000",
+        principal=None,
+        settlement_amount=None,
     ):
         return f"""
         Account No : {account_no}
         TRANSACTION DETAILS:
         {transaction_label}
-        {self._confirmation_row_text(reference, isin, quantity=quantity, commission=commission)}
+        {
+            self._confirmation_row_text(
+                reference,
+                isin,
+                quantity=quantity,
+                price=price,
+                accrued_interest=accrued_interest,
+                commission=commission,
+                principal=principal,
+                settlement_amount=settlement_amount,
+            )
+        }
         """
 
     def _confirmation_row_text(
@@ -660,15 +774,36 @@ class TestBondTransaction(IntegrationTestCase):
         isin,
         *,
         quantity="10.000000",
+        price="105.000000",
+        accrued_interest="1.00",
         commission="2.000000",
+        principal=None,
+        settlement_amount=None,
     ):
+        quantity_value = Decimal(quantity.replace(",", ""))
+        price_value = Decimal(price.replace(",", ""))
+        accrued_interest_value = Decimal(accrued_interest.replace(",", ""))
+        principal_value = principal.replace(",", "") if isinstance(principal, str) else principal
+        principal_value = (
+            Decimal(principal_value)
+            if principal_value is not None
+            else quantity_value * Decimal("100") * price_value / Decimal("100")
+        )
+        settlement_value = (
+            settlement_amount.replace(",", "") if isinstance(settlement_amount, str) else settlement_amount
+        )
+        settlement_value = (
+            Decimal(settlement_value)
+            if settlement_value is not None
+            else principal_value + accrued_interest_value
+        )
         return f"""
         Bonds Name : REPUBLIC OF KENYA - {isin}
         ISIN : {isin}
         Currency : USD Quantity : {quantity}
-        Price : 105.000000 Face Value : 1,000.00
-        Trade Date : 30/12/2025 Settlement Amount in Currency : 1,051.00
+        Price : {price} Face Value : 1,000.00 Principal : {principal_value:,.2f}
+        Trade Date : 30/12/2025 Settlement Amount in Currency : {settlement_value:,.2f}
         Settlement Date : 31/12/2025 Commission % : {commission}%
-        Accrued Interest : 1.00 Commission Amount : 20.00
+        Accrued Interest : {accrued_interest} Commission Amount : 20.00
         Transaction Reference : {reference}
         """
