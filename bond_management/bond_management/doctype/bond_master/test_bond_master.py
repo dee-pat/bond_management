@@ -18,6 +18,12 @@ from bond_management.patches.regenerate_kenya_coupon_schedules import (
 from bond_management.patches.set_kenya_quantity_change_flags import (
     execute as synchronize_quantity_change_flags,
 )
+from bond_management.patches.set_kenya_withholding_tax import (
+    KENYA_WITHHOLDING_TAX,
+)
+from bond_management.patches.set_kenya_withholding_tax import (
+    execute as set_kenya_withholding_tax,
+)
 
 
 class TestBondMaster(IntegrationTestCase):
@@ -67,6 +73,46 @@ class TestBondMaster(IntegrationTestCase):
         bond.currency = "USD"
         bond.save()
         self.assertEqual(bond.quantity_change, 0)
+
+    def test_withholding_tax_defaults_to_zero_and_accepts_percentage_boundaries(self):
+        bond = make_bond()
+        self.assertEqual(bond.withholding_tax, 0)
+        self.assertEqual(bond.meta.get_field("withholding_tax").fieldtype, "Percent")
+        self.assertEqual(str(bond.meta.get_field("withholding_tax").default), "0")
+
+        bond.withholding_tax = 100
+        bond.save()
+        self.assertEqual(bond.withholding_tax, 100)
+
+        bond.withholding_tax = 100.01
+        with self.assertRaisesRegex(ValidationError, "Withholding Tax must be between 0 and 100"):
+            bond.save()
+
+        bond.reload()
+        bond.withholding_tax = -0.01
+        with self.assertRaisesRegex(ValidationError, "Withholding Tax must be between 0 and 100"):
+            bond.save()
+
+    def test_known_kenya_withholding_tax_patch_is_idempotent(self):
+        bonds = []
+        for isin in KENYA_WITHHOLDING_TAX:
+            bond = (
+                frappe.get_doc("Bond Master", isin)
+                if frappe.db.exists("Bond Master", isin)
+                else make_bond(isin=isin, bond_name=isin)
+            )
+            frappe.db.set_value("Bond Master", isin, "withholding_tax", 0, update_modified=False)
+            bonds.append(bond)
+
+        set_kenya_withholding_tax()
+        for bond in bonds:
+            bond.reload()
+            self.assertEqual(bond.withholding_tax, 10)
+
+        set_kenya_withholding_tax()
+        for bond in bonds:
+            bond.reload()
+            self.assertEqual(bond.withholding_tax, 10)
 
     def test_quantity_change_patch_is_idempotent(self):
         bond = make_bond(currency="KES", day_count_convention="Actual/364(Kenya)")

@@ -187,6 +187,8 @@ class BondTransaction(Document):
         frappe.has_permission("Bond Transaction", "create", throw=True)
         if self.name and frappe.db.exists("Bond Transaction", self.name):
             frappe.throw(_("Multiple PDF transactions can only be created from a new form."))
+        if transaction_selections is not None and not isinstance(transaction_selections, (str, list)):
+            frappe.throw(_("Selected transaction references must be sent as a JSON list."))
 
         selections = frappe.parse_json(transaction_selections)
         if not isinstance(selections, list):
@@ -197,8 +199,14 @@ class BondTransaction(Document):
                 reference = selection.strip().upper()
                 portfolio_name = None
             elif isinstance(selection, dict):
-                reference = str(selection.get("transaction_reference") or "").strip().upper()
-                portfolio_name = str(selection.get("portfolio_name") or "").strip()
+                raw_reference = selection.get("transaction_reference")
+                raw_portfolio_name = selection.get("portfolio_name")
+                if raw_reference is not None and not isinstance(raw_reference, str):
+                    frappe.throw(_("Each transaction reference must be text."))
+                if raw_portfolio_name is not None and not isinstance(raw_portfolio_name, str):
+                    frappe.throw(_("Each portfolio name must be text."))
+                reference = (raw_reference or "").strip().upper()
+                portfolio_name = (raw_portfolio_name or "").strip() or None
             else:
                 frappe.throw(_("Each selected transaction must include a reference and portfolio."))
             if reference:
@@ -248,6 +256,7 @@ class BondTransaction(Document):
         inaccessible = sorted(portfolio_names - accessible_portfolios)
         if inaccessible:
             frappe.throw(_("No accessible Bond Portfolio exists for: {0}.").format(", ".join(inaccessible)))
+        self._lock_portfolios(portfolio_names)
         selected_rows.sort(
             key=lambda selected: (
                 selected[0].transaction_type == "Sale",

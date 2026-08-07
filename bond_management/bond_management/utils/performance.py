@@ -124,6 +124,7 @@ def load_portfolio_performance_context(portfolio, valuation_date):
             "currency",
             "face_value_per_unit",
             "coupon_rate",
+            "withholding_tax",
             "coupon_frequency",
             "day_count_convention",
             "maturity_date",

@@ -60,6 +60,9 @@ class BondMaster(Document):
             frappe.throw(_("Face Value Per Unit must be greater than zero"))
         if to_decimal(self.coupon_rate) < 0:
             frappe.throw(_("Coupon Rate must be zero or greater"))
+        withholding_tax = to_decimal(self.withholding_tax)
+        if withholding_tax < 0 or withholding_tax > 100:
+            frappe.throw(_("Withholding Tax must be between 0 and 100"))
 
     def validate_dates(self):
         if not self.issue_date or not self.maturity_date:

@@ -13,7 +13,7 @@ const MARKET_DATA = {
 		weighted_avg_repayment_years: 2,
 	},
 	[REFERENCE_ISIN]: {
-		currency: "KES",
+		currency: "USD",
 		future_xirr: 9.25,
 		principal_factor: 1,
 		weighted_avg_repayment_date: "2029-01-01",
@@ -23,8 +23,8 @@ const MARKET_DATA = {
 
 const CASHFLOWS = [
 	{
-		isin: TARGET_ISIN,
-		type: "principal",
+		isin: "=TEST\tBOND\nALERT",
+		type: "+principal",
 		date: TARGET_WEIGHTED_DATE,
 		amount: 100,
 	},
@@ -46,7 +46,7 @@ const EXPECTED_TSV = [
 	"isin\ttransaction_type\tdate\tamount",
 	`${TARGET_ISIN}\tmarket_price\t${MARKET_DATE}\t-${TARGET_MARKET_PRICE}`,
 	`${TARGET_ISIN}\tcoupon\t2026-01-01\t8.5`,
-	`${TARGET_ISIN}\tprincipal\t${TARGET_WEIGHTED_DATE}\t100`,
+	"'=TEST BOND ALERT\t'+principal\t2027-01-01\t100",
 ].join("\n");
 const EXPECTED_COPY_MESSAGE = `Copied ${CASHFLOWS.length} cash flows for ${TARGET_ISIN}`;
 
@@ -134,6 +134,19 @@ context("Bond Market Date", () => {
 		cy.get("@copyToClipboard")
 			.should("have.been.calledOnce")
 			.and("have.been.calledWith", EXPECTED_TSV, EXPECTED_COPY_MESSAGE);
+	});
+
+	it("renders one colored yield-curve line per currency", () => {
+		cy.get(".bond-yield-curve polyline")
+			.should("have.length", 2)
+			.then(($lines) => {
+				const currencies = [...$lines].map((line) => line.getAttribute("data-currency"));
+				const colors = [...$lines].map((line) => line.getAttribute("stroke"));
+
+				expect(currencies).to.deep.equal(["KES", "USD"]);
+				expect(new Set(colors).size).to.equal(2);
+			});
+		cy.get('.bond-yield-legend [role="listitem"]').should("have.length", 2);
 	});
 });
 

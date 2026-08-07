@@ -21,6 +21,7 @@ from bond_management.bond_management.utils.portfolio import (
 )
 
 DEFAULT_XIRR_GUESS = 0.1
+PERCENT = Decimal("100")
 
 
 def round_cashflow_amount(amount):
@@ -31,6 +32,12 @@ def round_cashflow_amount(amount):
 def round_cashflow_amounts(cash_flows):
     """Apply the cash-flow amount convention without changing other metadata."""
     return [{**cash_flow, "amount": quantize_money(cash_flow["amount"])} for cash_flow in cash_flows]
+
+
+def apply_withholding_tax(amount, bond_doc):
+    """Return a coupon or accrued-interest amount after bond-level tax."""
+    withholding_tax = to_decimal(bond_doc.get("withholding_tax"))
+    return to_decimal(amount) * (PERCENT - withholding_tax) / PERCENT
 
 
 def calculate_future_xirr(isin, date, market_price):
@@ -111,7 +118,10 @@ def create_future_cash_flows(isin, date, market_price, quantity=1, bond_doc=None
     # Calculate accrued interest up to the settlement date
     settlement_date = getdate(date)
     quantity_factor = calculate_quantity_factor_from_bond(bond_doc, settlement_date)
-    accrued_interest = unit_accrued_interest_from_bond(bond_doc, settlement_date) * quantity_factor
+    accrued_interest = apply_withholding_tax(
+        unit_accrued_interest_from_bond(bond_doc, settlement_date) * quantity_factor,
+        bond_doc,
+    )
 
     # Standard bonds use the bank quote per 100 of original face value. KES
     # quantity-change bonds instead reduce the quantity represented by that
@@ -158,8 +168,9 @@ def create_future_cash_flows(isin, date, market_price, quantity=1, bond_doc=None
                 )
             )
             coupon_factor = to_decimal(coupon_factor) / to_decimal(100)
-            coupon_payment = (
-                coupon_factor * to_decimal(bond_doc.get("face_value_per_unit")) * coupon_position_factor
+            coupon_payment = apply_withholding_tax(
+                coupon_factor * to_decimal(bond_doc.get("face_value_per_unit")) * coupon_position_factor,
+                bond_doc,
             )
             future_cash_flows.append(
                 {
@@ -226,7 +237,10 @@ def create_past_cash_flows(isin, date, market_price, portfolio, bond_doc=None, t
         position = get_ledger_position_from_transactions(transactions, settlement_date)
         if getdate(bond_doc.get("maturity_date")) <= settlement_date:
             position = to_decimal(0)
-    accrued_interest = unit_accrued_interest_from_bond(bond_doc, settlement_date)
+    accrued_interest = apply_withholding_tax(
+        unit_accrued_interest_from_bond(bond_doc, settlement_date),
+        bond_doc,
+    )
 
     quantity_factor = calculate_quantity_factor_from_bond(bond_doc, settlement_date)
     # Standard bonds quote per 100 of original face value. KES quantity-change
@@ -293,7 +307,7 @@ def create_past_cash_flows(isin, date, market_price, portfolio, bond_doc=None, t
                         "bond": isin,
                         "type": "coupon",
                         "date": coupon_date,
-                        "amount": coupon_rate * position,
+                        "amount": apply_withholding_tax(coupon_rate * position, bond_doc),
                         "quantity": position,
                     }
                 )

@@ -86,10 +86,25 @@ function copy_xirr_cashflows(report, isin, xirr_type, cashflow_currency) {
 				"isin\ttransaction_type\tdate\tcurrency\tamount\tquantity\trate",
 				...cashflows.map(
 					(flow) =>
-						`${flow.isin}\t${flow.transaction_type}\t${flow.date}\t${flow.currency}\t${flow.amount}\t${flow.quantity}\t${flow.rate}`
+						`${clipboard_text(flow.isin)}\t${clipboard_text(
+							flow.transaction_type
+						)}\t${clipboard_text(flow.date)}\t${clipboard_text(
+							flow.currency
+						)}\t${clipboard_number(flow.amount)}\t${clipboard_number(
+							flow.quantity
+						)}\t${clipboard_number(flow.rate)}`
 				),
 			].join("\n");
 			frappe.utils.copy_to_clipboard(tsv, `Copied ${cashflows.length} cash flows`);
 			return cashflows;
 		});
+}
+
+function clipboard_text(value) {
+	const text = String(value ?? "").replace(/[\u0000-\u001f\u007f]/g, " ");
+	return /^[=+\-@]/.test(text) ? `'${text}` : text;
+}
+
+function clipboard_number(value) {
+	return String(value ?? "");
 }

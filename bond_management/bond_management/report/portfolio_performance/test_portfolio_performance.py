@@ -221,6 +221,26 @@ class TestPortfolioPerformance(IntegrationTestCase):
         self.assertEqual(past_accrued["amount"], -future_accrued["amount"])
         self.assertEqual(past_accrued["amount"], 14.1944)
 
+    def test_report_cashflows_use_bond_withholding_tax(self):
+        bond = make_bond(coupon_rate=10, withholding_tax=10)
+        portfolio = make_portfolio()
+        make_transaction(
+            bond,
+            portfolio,
+            trade_date="2025-01-01",
+            settlement_date="2025-01-02",
+            accrued_interest_paid=0,
+            commission=0,
+        )
+        make_market_date(bond, date="2025-12-31")
+
+        _, past_cashflows, future_cashflows, _, _ = get_data(portfolio.name, "2025-12-31")
+
+        past_coupon = next(flow for flow in past_cashflows if flow["type"] == "coupon")
+        future_coupon = next(flow for flow in future_cashflows if flow["type"] == "coupon")
+        self.assertEqual(past_coupon["amount"], 45)
+        self.assertEqual(future_coupon["amount"], 45)
+
     def test_real_report_arithmetic_preserves_bank_price_convention(self):
         bond = make_bond(
             coupon_rate=10,

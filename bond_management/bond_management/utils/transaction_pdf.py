@@ -139,6 +139,7 @@ def parse_transaction_pdf_text(text: str) -> ParsedTransactionPdf:
                 "Settlement Amount",
             ),
         )
+        _validate_transaction_row_values(row)
         existing = rows_by_reference.get(reference)
         if existing and existing != row:
             raise TransactionPdfError(
@@ -472,7 +473,10 @@ def _parse_commission(text: str) -> tuple[Decimal | None, Decimal | None]:
     )
     if percent_match:
         value = percent_match.group("value")
-        return (Decimal("0") if re.fullmatch(r"N/?A", value, re.IGNORECASE) else Decimal(value), None)
+        return (
+            Decimal("0") if re.fullmatch(r"N/?A", value, re.IGNORECASE) else Decimal(value.replace(",", "")),
+            None,
+        )
 
     amount_match = re.search(
         rf"\bCommission(?:\s+Amount)?\s*:\s*(?P<value>{NUMBER_PATTERN})",
@@ -486,3 +490,27 @@ def _parse_commission(text: str) -> tuple[Decimal | None, Decimal | None]:
         return Decimal("0"), None
 
     raise TransactionPdfError("Could not find Commission in a transaction PDF row.")
+
+
+def _validate_transaction_row_values(row: ParsedTransactionPdfRow) -> None:
+    for value, label in (
+        (row.quantity_face_value, "Quantity / Face Value"),
+        (row.price, "Price"),
+    ):
+        if value <= 0:
+            raise TransactionPdfError(f"{label} must be greater than zero.")
+
+    for value, label in (
+        (row.accrued_interest_paid, "Accrued Interest"),
+        (row.commission_percent, "Commission %"),
+        (row.commission_amount, "Commission Amount"),
+    ):
+        if value is not None and value < 0:
+            raise TransactionPdfError(f"{label} must be zero or greater.")
+
+    for value, label in (
+        (row.principal, "Principal"),
+        (row.settlement_amount, "Settlement Amount"),
+    ):
+        if value is not None and value <= 0:
+            raise TransactionPdfError(f"{label} must be greater than zero.")

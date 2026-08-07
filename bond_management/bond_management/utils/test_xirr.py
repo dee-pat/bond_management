@@ -49,6 +49,33 @@ class TestXirr(IntegrationTestCase):
         )
         self.assertEqual(first_coupon["amount"], 5)
 
+    def test_withholding_tax_reduces_future_coupon_and_accrued_interest(self):
+        bond = make_bond(coupon_rate=10, withholding_tax=10)
+
+        cashflows = create_future_cash_flows(bond.name, "2025-06-30", 100, quantity=10)
+
+        accrued_interest = next(flow for flow in cashflows if flow["type"] == "accrued_interest")
+        first_coupon = next(flow for flow in cashflows if flow["type"] == "coupon")
+        self.assertEqual(accrued_interest["amount"], -44.75)
+        self.assertEqual(first_coupon["amount"], 45)
+
+    def test_withholding_tax_reduces_past_coupon_cashflow(self):
+        bond = make_bond(coupon_rate=10, withholding_tax=10)
+        portfolio = make_portfolio()
+        make_transaction(
+            bond,
+            portfolio,
+            trade_date="2025-01-01",
+            settlement_date="2025-01-02",
+            accrued_interest_paid=0,
+            commission=0,
+        )
+
+        cashflows = create_past_cash_flows(bond.name, "2025-07-01", 100, portfolio.name)
+
+        first_coupon = next(flow for flow in cashflows if flow["type"] == "coupon")
+        self.assertEqual(first_coupon["amount"], 45)
+
     def test_kes_quantity_change_scales_opening_value_and_future_redemption(self):
         bond = make_bond(
             currency="KES",

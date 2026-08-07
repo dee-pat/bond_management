@@ -103,8 +103,10 @@ async function apply_recalculated_schedules(frm, state, request_id, schedules) {
 	}
 
 	if (schedules.first_coupon_date && frm.doc.first_coupon_date !== schedules.first_coupon_date) {
-		frm.doc.first_coupon_date = schedules.first_coupon_date;
-		frm.refresh_field("first_coupon_date");
+		await frm.set_value("first_coupon_date", schedules.first_coupon_date);
+		if (request_id !== state.request_id) {
+			return schedules;
+		}
 	}
 
 	await apply_principal_percentages(frm, state, request_id, schedules.principal_schedule || []);

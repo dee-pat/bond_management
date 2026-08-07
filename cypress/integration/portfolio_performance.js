@@ -51,10 +51,10 @@ context("Portfolio Performance", () => {
 				body: {
 					message: [
 						{
-							isin: "TEST-BOND",
-							transaction_type: "purchase",
+							isin: "=TEST\tBOND\nALERT",
+							transaction_type: "+purchase",
 							date: "2025-12-31",
-							currency: "USD",
+							currency: "@USD",
 							amount: -1000,
 							quantity: 10,
 							rate: -100,
@@ -90,7 +90,7 @@ context("Portfolio Performance", () => {
 		});
 		cy.get("@copyToClipboard").should(
 			"have.been.calledWith",
-			"isin\ttransaction_type\tdate\tcurrency\tamount\tquantity\trate\nTEST-BOND\tpurchase\t2025-12-31\tUSD\t-1000\t10\t-100",
+			"isin\ttransaction_type\tdate\tcurrency\tamount\tquantity\trate\n'=TEST BOND ALERT\t'+purchase\t2025-12-31\t'@USD\t-1000\t10\t-100",
 			"Copied 1 cash flows"
 		);
 	});

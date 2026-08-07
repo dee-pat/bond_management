@@ -3,6 +3,7 @@
 
 from decimal import Decimal
 from pathlib import Path
+from unittest.mock import patch
 
 import frappe
 from frappe.exceptions import FrappeTypeError, ValidationError
@@ -220,6 +221,21 @@ class TestBondTransaction(IntegrationTestCase):
             self.assertEqual(len(attachment_files), 1)
         self.assertEqual(sorted(quantities.values()), [5, 7])
 
+    def test_multi_transaction_creation_rejects_non_text_selection_values(self):
+        staging = frappe.get_doc({"doctype": "Bond Transaction"})
+
+        invalid_selections = (
+            ({"transaction_reference": ["U123"]}, "transaction reference must be text"),
+            (
+                {"transaction_reference": "U123", "portfolio_name": {"name": "TEST"}},
+                "portfolio name must be text",
+            ),
+        )
+        for selection, message in invalid_selections:
+            with self.subTest(selection=selection):
+                with self.assertRaisesRegex(ValidationError, message):
+                    staging.create_selected_pdf_transactions([selection])
+
     def test_multi_transaction_rows_can_be_posted_to_different_portfolios(self):
         bond = self._make_pdf_bond()
         pdf_portfolio = make_portfolio()
@@ -243,18 +259,24 @@ class TestBondTransaction(IntegrationTestCase):
             }
         )
 
-        created = staging.create_selected_pdf_transactions(
-            [
-                {
-                    "transaction_reference": references[0],
-                    "portfolio_name": target_portfolio.name,
-                },
-                {
-                    "transaction_reference": references[1],
-                    "portfolio_name": pdf_portfolio.name,
-                },
-            ]
-        )
+        with patch.object(
+            staging,
+            "_lock_portfolios",
+            wraps=staging._lock_portfolios,
+        ) as lock_portfolios:
+            created = staging.create_selected_pdf_transactions(
+                [
+                    {
+                        "transaction_reference": references[0],
+                        "portfolio_name": target_portfolio.name,
+                    },
+                    {
+                        "transaction_reference": references[1],
+                        "portfolio_name": pdf_portfolio.name,
+                    },
+                ]
+            )
+            lock_portfolios.assert_called_once_with({target_portfolio.name, pdf_portfolio.name})
 
         self.assertCountEqual(created, references)
         overridden = frappe.get_doc("Bond Transaction", references[0])

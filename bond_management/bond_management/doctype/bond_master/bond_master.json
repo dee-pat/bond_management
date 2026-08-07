@@ -20,6 +20,7 @@
   "maturity_date",
   "currency",
   "coupon_rate",
+  "withholding_tax",
   "day_count_convention",
   "quantity_change",
   "section_break_qwjg",
@@ -65,6 +66,12 @@
    "fieldtype": "Percent",
    "label": "Coupon Rate %",
    "reqd": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "withholding_tax",
+   "fieldtype": "Percent",
+   "label": "Withholding Tax %"
   },
   {
    "default": "2",
