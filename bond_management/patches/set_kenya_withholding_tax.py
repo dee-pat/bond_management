@@ -2,7 +2,6 @@ from decimal import Decimal
 
 import frappe
 
-
 KENYA_WITHHOLDING_TAX = {
     "KE5000009653": Decimal("10"),
     "KE6000001328": Decimal("10"),
