@@ -9,12 +9,12 @@
  "engine": "InnoDB",
  "field_order": [
   "rate_date",
-  "column_break_exchange_rate",
   "from_currency",
   "to_currency",
+  "source",
+  "column_break_exchange_rate",
   "rate",
   "reverse_rate",
-  "source",
   "statement"
  ],
  "fields": [

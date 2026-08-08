@@ -6,6 +6,9 @@ the two files conflict, this app-level file governs.
 
 ## Non-negotiable completion rules
 
+- Never install or update skills globally. App-specific skills must live under
+  `.agents/skills/` in this app.
+
 - Run every applicable verification gate before committing, pushing, or
   reporting completion.
 - A gate passes only when its command was executed for the current change and
