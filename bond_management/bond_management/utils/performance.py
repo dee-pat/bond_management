@@ -195,7 +195,6 @@ def load_portfolio_performance_context(portfolio, valuation_date):
             "Bond Exchange Rate",
             fields=["rate_date", "from_currency", "to_currency", "rate"],
             filters={
-                "portfolio_name": portfolio,
                 "rate_date": ["<=", valuation_date],
                 "from_currency": ["in", native_currencies],
                 "to_currency": "USD",

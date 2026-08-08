@@ -1,6 +1,7 @@
 [pre_model_sync]
 # Patches added in this section will be executed before doctypes are migrated
 # Read docs to understand patches: https://docs.frappe.io/framework/user/en/database-migrations
+bond_management.patches.prepare_bond_exchange_rate_scope
 
 [post_model_sync]
 # Patches added in this section will be executed after doctypes are migrated
@@ -24,3 +25,4 @@ bond_management.patches.backfill_transaction_principal_values
 bond_management.patches.refresh_statement_reconciliations_v8
 bond_management.patches.backfill_kenya_quantity_change_market_data
 bond_management.patches.backfill_bond_exchange_reverse_rates
+bond_management.patches.remove_bond_exchange_rate_portfolio_column

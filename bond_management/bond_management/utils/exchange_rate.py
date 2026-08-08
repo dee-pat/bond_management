@@ -30,8 +30,6 @@ def get_rate_for_date(
     exchange_rates: dict[str, list[dict]],
     from_currency: str,
     rate_date,
-    *,
-    portfolio: str,
 ) -> Decimal:
     """Return the latest known source-to-USD rate on or before ``rate_date``."""
     if from_currency == REPORTING_CURRENCY:
@@ -46,9 +44,9 @@ def get_rate_for_date(
 
     frappe.throw(
         _(
-            "No USD exchange rate is available for {0} on or before {1} in portfolio {2}. "
+            "No USD exchange rate is available for {0} on or before {1}. "
             "Add a Bond Exchange Rate row manually, or attach a statement containing this rate."
-        ).format(from_currency, normalized_date, portfolio)
+        ).format(from_currency, normalized_date)
     )
 
 
@@ -56,7 +54,6 @@ def convert_cashflows(
     cashflows,
     exchange_rates,
     *,
-    portfolio: str,
     currency: str,
     rate_date=None,
 ):
@@ -68,7 +65,6 @@ def convert_cashflows(
             exchange_rates,
             currency,
             effective_date,
-            portfolio=portfolio,
         )
         converted.append(
             {

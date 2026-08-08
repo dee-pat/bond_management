@@ -13,5 +13,7 @@ function sync_exchange_rate(frm, source_field, target_field) {
 	exchange_rate_syncing.add(frm);
 	const value = Number(frm.doc[source_field]);
 	const reciprocal = Number.isFinite(value) && value !== 0 ? 1 / value : null;
-	return frm.set_value(target_field, reciprocal).finally(() => exchange_rate_syncing.delete(frm));
+	return frm
+		.set_value(target_field, reciprocal)
+		.finally(() => exchange_rate_syncing.delete(frm));
 }

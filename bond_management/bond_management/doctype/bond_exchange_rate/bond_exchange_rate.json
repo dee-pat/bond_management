@@ -8,7 +8,6 @@
  "doctype": "DocType",
  "engine": "InnoDB",
  "field_order": [
-  "portfolio_name",
   "rate_date",
   "column_break_exchange_rate",
   "from_currency",
@@ -19,14 +18,6 @@
   "statement"
  ],
  "fields": [
-  {
-   "fieldname": "portfolio_name",
-   "fieldtype": "Link",
-   "in_list_view": 1,
-   "label": "Portfolio",
-   "options": "Bond Portfolio",
-   "reqd": 1
-  },
   {
    "fieldname": "rate_date",
    "fieldtype": "Date",

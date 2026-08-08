@@ -46,23 +46,21 @@ def ensure_bond_query_indexes():
     duplicate_exchange_rates = frappe.qb.get_query(
         "Bond Exchange Rate",
         fields=[
-            "portfolio_name",
             "rate_date",
             "from_currency",
             "to_currency",
             {"COUNT": "name", "as": "rate_count"},
         ],
-        group_by="portfolio_name, rate_date, from_currency, to_currency",
+        group_by="rate_date, from_currency, to_currency",
         ignore_permissions=True,
     ).run(as_dict=True)
     duplicate_exchange_rates = [row for row in duplicate_exchange_rates if row.rate_count > 1]
     if duplicate_exchange_rates:
         duplicates = ", ".join(
-            f"{row.portfolio_name}/{row.rate_date}/{row.from_currency}/{row.to_currency}"
-            for row in duplicate_exchange_rates[:10]
+            f"{row.rate_date}/{row.from_currency}/{row.to_currency}" for row in duplicate_exchange_rates[:10]
         )
         frappe.throw(
-            "Cannot enforce one Bond Exchange Rate per portfolio/date/currency pair because "
+            "Cannot enforce one Bond Exchange Rate per date/currency pair because "
             f"duplicates exist: {duplicates}. Merge or remove the duplicate rows, then run migrate again."
         )
 
@@ -88,6 +86,6 @@ def ensure_bond_query_indexes():
     )
     frappe.db.add_unique(
         "Bond Exchange Rate",
-        ["portfolio_name", "rate_date", "from_currency", "to_currency"],
+        ["rate_date", "from_currency", "to_currency"],
         constraint_name=EXCHANGE_RATE_UNIQUE,
     )

@@ -146,7 +146,7 @@ class TestPortfolioPerformance(IntegrationTestCase):
         kes_bond = make_bond(currency="KES")
         make_transaction(usd_bond, portfolio)
         make_transaction(kes_bond, portfolio)
-        make_exchange_rate(portfolio, rate_date="2025-12-30", rate="0.01")
+        make_exchange_rate(rate="0.01")
         make_market_date(usd_bond, date="2025-12-30")
         make_market_date(kes_bond, date="2025-12-30")
 
@@ -191,7 +191,7 @@ class TestPortfolioPerformance(IntegrationTestCase):
         self.assertEqual(kes_purchase["amount"], -10.51)
 
     def test_non_usd_report_requires_a_rate_or_manual_fallback(self):
-        bond = make_bond(currency="KES")
+        bond = make_bond(currency="EUR")
         portfolio = make_portfolio()
         make_transaction(bond, portfolio)
         make_market_date(bond)
@@ -312,7 +312,7 @@ class TestPortfolioPerformance(IntegrationTestCase):
             accrued_interest_paid=0,
             commission=0,
         )
-        make_exchange_rate(portfolio, rate_date="2025-06-30", rate="0.01")
+        make_exchange_rate(rate="0.01")
         make_market_date(bond, date="2025-07-05")
 
         _, rows = execute({"portfolio": portfolio.name, "valuation_date": "2025-07-05"})

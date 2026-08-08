@@ -1,4 +1,4 @@
-"""Bootstrap permissions for portfolio-scoped exchange rates."""
+"""Bootstrap permissions for shared exchange rates."""
 
 import frappe
 

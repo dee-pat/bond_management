@@ -21,8 +21,6 @@ class BondExchangeRate(Document):
         self._sync_rate_values()
 
     def validate(self):
-        if not self.portfolio_name:
-            frappe.throw(_("Portfolio is required"))
         if not self.rate_date:
             frappe.throw(_("Rate Date is required"))
         if not isinstance(self.from_currency, str) or not self.from_currency:
@@ -46,21 +44,15 @@ class BondExchangeRate(Document):
             statement = frappe.db.get_value(
                 "Bond Statement",
                 self.statement,
-                ["portfolio_name", "statement_date"],
+                ["statement_date"],
                 as_dict=True,
             )
             if not statement:
                 frappe.throw(_("The linked Bond Statement does not exist"))
-            if (
-                statement.portfolio_name != self.portfolio_name
-                or getdate(statement.statement_date) != self.rate_date
-            ):
-                frappe.throw(
-                    _("Statement-derived exchange rates must match the statement portfolio and date")
-                )
+            if getdate(statement.statement_date) != self.rate_date:
+                frappe.throw(_("Statement-derived exchange rates must match the statement date"))
 
         filters = {
-            "portfolio_name": self.portfolio_name,
             "rate_date": self.rate_date,
             "from_currency": self.from_currency,
             "to_currency": self.to_currency,
@@ -77,8 +69,8 @@ class BondExchangeRate(Document):
         ).run(pluck=True)
         if existing:
             frappe.throw(
-                _("An exchange rate already exists for {0} on {1} in portfolio {2}").format(
-                    self.from_currency, self.rate_date, self.portfolio_name
+                _("An exchange rate already exists for {0} on {1}").format(
+                    self.from_currency, self.rate_date
                 ),
                 frappe.UniqueValidationError,
             )

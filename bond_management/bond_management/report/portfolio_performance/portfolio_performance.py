@@ -146,7 +146,6 @@ def get_xirr_cashflows(
             cashflows = convert_cashflows(
                 cashflows,
                 context.get("exchange_rates", {}),
-                portfolio=portfolio,
                 currency=currency,
                 rate_date=valuation_date if xirr_type == "future" else None,
             )
@@ -313,7 +312,6 @@ def get_data(portfolio, valuation_date, context=None):
             exchange_rates,
             currency,
             valuation_date,
-            portfolio=portfolio,
         )
 
         # ---------- MARKET DATA ----------
@@ -342,7 +340,6 @@ def get_data(portfolio, valuation_date, context=None):
         reporting_cashflows = convert_cashflows(
             cashflows,
             exchange_rates,
-            portfolio=portfolio,
             currency=currency,
         )
         combined_reporting_cashflow.extend(reporting_cashflows)
@@ -388,7 +385,6 @@ def get_data(portfolio, valuation_date, context=None):
         future_reporting_cashflows = convert_cashflows(
             future_cashflows,
             exchange_rates,
-            portfolio=portfolio,
             currency=currency,
             rate_date=valuation_date,
         )
