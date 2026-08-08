@@ -25,7 +25,6 @@ def sync_statement_exchange_rates(statement, exchange_rates) -> None:
 
     for parsed_rate in desired_rates.values():
         filters = {
-            "portfolio_name": statement.portfolio_name,
             "rate_date": statement.statement_date,
             "from_currency": parsed_rate.from_currency,
             "to_currency": parsed_rate.to_currency,

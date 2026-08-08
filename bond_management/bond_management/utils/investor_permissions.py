@@ -78,10 +78,6 @@ def statement_query_condition(user: str) -> str | None:
     return _portfolio_condition("Bond Statement", "portfolio_name", user)
 
 
-def exchange_rate_query_condition(user: str) -> str | None:
-    return _portfolio_condition("Bond Exchange Rate", "portfolio_name", user)
-
-
 def _has_portfolio_access(portfolio: str | None, user: str, ptype: str) -> bool | None:
     portfolios = _get_allowed_portfolios(user)
     if portfolios is None:
@@ -104,8 +100,4 @@ def has_transaction_permission(doc, user: str | None = None, ptype: str | None =
 
 
 def has_statement_permission(doc, user: str | None = None, ptype: str | None = None, **_kwargs):
-    return _has_portfolio_access(doc.portfolio_name, user, ptype)
-
-
-def has_exchange_rate_permission(doc, user: str | None = None, ptype: str | None = None, **_kwargs):
     return _has_portfolio_access(doc.portfolio_name, user, ptype)

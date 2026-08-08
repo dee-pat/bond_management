@@ -233,13 +233,11 @@ class TestBondStatement(IntegrationTestCase):
     def test_attachment_upserts_exchange_rates_and_preserves_manual_fallbacks(self):
         account_no = unique_name("FX-ACCOUNT")
         password = unique_name("FX-PASSWORD")
-        portfolio = make_portfolio(
+        make_portfolio(
             account_no=account_no,
             statement_pdf_password=password,
         )
         manual_rate = make_exchange_rate(
-            portfolio,
-            rate_date="2026-05-31",
             rate="0.00770000",
         )
         attachment = self._attach_pdf(
@@ -260,7 +258,6 @@ class TestBondStatement(IntegrationTestCase):
             "Bond Exchange Rate",
             fields=["rate", "source", "statement"],
             filters={
-                "portfolio_name": portfolio.name,
                 "rate_date": "2026-06-30",
                 "from_currency": "KES",
             },
@@ -278,7 +275,7 @@ class TestBondStatement(IntegrationTestCase):
     def test_replacing_attachment_removes_stale_statement_exchange_rates(self):
         account_no = unique_name("FX-REPLACE")
         password = unique_name("FX-PASSWORD")
-        portfolio = make_portfolio(
+        make_portfolio(
             account_no=account_no,
             statement_pdf_password=password,
         )
@@ -320,7 +317,6 @@ class TestBondStatement(IntegrationTestCase):
             frappe.db.exists(
                 "Bond Exchange Rate",
                 {
-                    "portfolio_name": portfolio.name,
                     "rate_date": "2026-06-30",
                     "from_currency": "KES",
                 },

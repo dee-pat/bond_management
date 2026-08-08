@@ -6,6 +6,9 @@ the two files conflict, this app-level file governs.
 
 ## Non-negotiable completion rules
 
+- Never install or update skills globally. App-specific skills must live under
+  `.agents/skills/` in this app.
+
 - Run every applicable verification gate before committing, pushing, or
   reporting completion.
 - A gate passes only when its command was executed for the current change and
@@ -204,6 +207,18 @@ differences in the final field.
 - On macOS in the local development environment, Chrome is installed at
   `/Applications/Google Chrome.app/Contents/MacOS/Google Chrome`; set
   `CHROME_BIN` to this path when `chrome` is not on `PATH`.
+- Cypress failure learnings: run the server explicitly for the tested site:
+  `bench --site test_site serve --port 8001 --noreload`. Running `bench serve`
+  without `--site` can serve a different site and produce misleading login
+  failures. Frappe's `run-ui-tests` command injects `CYPRESS_adminPassword`
+  from the selected site's config, so a shell password override may be
+  ignored. If login fails, verify the credential directly against `test_site`,
+  reset the local test Administrator with `bench --site test_site
+  set-admin-password`, and clear stale failed-login cache before retrying;
+  never write test credentials to the repository. Do not repeatedly rerun
+  Cypress while the account is locked. Once server and credentials are
+  correct, rerun the named spec first with `CYPRESS_SPEC`, then rerun the
+  complete UI gate and preserve the failure artifacts.
 - `CYPRESS_VERSION` in `scripts/cypress-runtime.sh` and the GitHub Actions
   cache key must be updated together when Frappe v16 changes its supported
   Cypress release. Do not override the version in CI or reuse a cache for a

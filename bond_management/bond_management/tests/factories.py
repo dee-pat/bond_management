@@ -1,3 +1,5 @@
+from datetime import date, timedelta
+
 import frappe
 
 
@@ -104,15 +106,16 @@ def make_market_date(bond, market_price=100, date="2025-12-30"):
 
 
 def make_exchange_rate(
-    portfolio,
     from_currency="KES",
     rate="0.00772499",
-    rate_date="2025-12-30",
+    rate_date=None,
     **overrides,
 ):
+    if rate_date is None:
+        rate_date = _next_exchange_rate_date(from_currency)
+
     values = {
         "doctype": "Bond Exchange Rate",
-        "portfolio_name": portfolio.name,
         "rate_date": rate_date,
         "from_currency": from_currency,
         "to_currency": "USD",
@@ -120,3 +123,13 @@ def make_exchange_rate(
     }
     values.update(overrides)
     return frappe.get_doc(values).insert()
+
+
+def _next_exchange_rate_date(from_currency):
+    rate_date = date(2025, 1, 1)
+    while frappe.db.exists(
+        "Bond Exchange Rate",
+        {"rate_date": rate_date, "from_currency": from_currency, "to_currency": "USD"},
+    ):
+        rate_date += timedelta(days=1)
+    return rate_date

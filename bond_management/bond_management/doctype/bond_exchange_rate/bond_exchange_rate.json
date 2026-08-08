@@ -8,24 +8,16 @@
  "doctype": "DocType",
  "engine": "InnoDB",
  "field_order": [
-  "portfolio_name",
   "rate_date",
-  "column_break_exchange_rate",
   "from_currency",
   "to_currency",
-  "rate",
   "source",
+  "column_break_exchange_rate",
+  "rate",
+  "reverse_rate",
   "statement"
  ],
  "fields": [
-  {
-   "fieldname": "portfolio_name",
-   "fieldtype": "Link",
-   "in_list_view": 1,
-   "label": "Portfolio",
-   "options": "Bond Portfolio",
-   "reqd": 1
-  },
   {
    "fieldname": "rate_date",
    "fieldtype": "Date",
@@ -56,7 +48,7 @@
    "reqd": 1
   },
   {
-   "description": "Target-currency units for one unit of the source currency. For example, KES / USD 0.00772499 is 0.00772499.",
+   "description": "Target-currency units for one unit of the source currency. Enter this or Reverse Rate. For example, KES / USD 0.00772499 is 0.00772499.",
    "fieldname": "rate",
    "fieldtype": "Float",
    "in_list_view": 1,
@@ -64,6 +56,15 @@
    "non_negative": 1,
    "precision": "12",
    "reqd": 1
+  },
+  {
+   "description": "Source-currency units for one unit of the target currency. For example, USD / KES 129.450 is the reverse of KES / USD 0.007725.",
+   "fieldname": "reverse_rate",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Reverse Rate",
+   "non_negative": 1,
+   "precision": "12"
   },
   {
    "default": "Manual",

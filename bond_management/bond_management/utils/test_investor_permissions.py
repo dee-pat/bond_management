@@ -234,7 +234,6 @@ class TestInvestorPermissions(IntegrationTestCase):
 
     def test_system_manager_can_manage_exchange_rates(self):
         ensure_exchange_rate_permissions()
-        portfolio = make_portfolio()
         email = f"{unique_name('system-manager').lower()}@example.com"
         frappe.get_doc(
             {
@@ -249,7 +248,7 @@ class TestInvestorPermissions(IntegrationTestCase):
         previous_user = frappe.session.user
         try:
             frappe.set_user(email)
-            exchange_rate = make_exchange_rate(portfolio)
+            exchange_rate = make_exchange_rate()
             exchange_rate.rate = "0.0078"
             exchange_rate.save()
             exchange_rate.delete()
