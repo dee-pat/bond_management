@@ -45,14 +45,14 @@ def format_exchange_rate_conflicts(conflicts) -> str:
     for rows in conflicts[:10]:
         key = rows[0]
         values = "; ".join(
-            _("{0} ({1}, rate {2})").format(row.name, row.portfolio_name, row.rate)
-            for row in rows
+            _("{0} ({1}, rate {2})").format(row.name, row.portfolio_name, row.rate) for row in rows
         )
-        details.append(_("{0} / {1} on {2}: {3}").format(key.from_currency, key.to_currency, key.rate_date, values))
+        details.append(
+            _("{0} / {1} on {2}: {3}").format(key.from_currency, key.to_currency, key.rate_date, values)
+        )
 
     suffix = "" if len(conflicts) <= 10 else _("; and {0} more conflict(s)").format(len(conflicts) - 10)
     return _(
         "Cannot remove Bond Exchange Rate portfolio scope because duplicate global keys exist: "
         "{0}{1}. Choose one row for each date/currency pair, then remove or correct the other rows and run migrate again."
     ).format(" | ".join(details), suffix)
-

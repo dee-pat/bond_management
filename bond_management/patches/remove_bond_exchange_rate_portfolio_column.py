@@ -25,4 +25,3 @@ def execute():
         frappe.throw(format_exchange_rate_conflicts(conflicts), frappe.ValidationError)
 
     frappe.db.sql_ddl("ALTER TABLE `tabBond Exchange Rate` DROP COLUMN `portfolio_name`")
-
