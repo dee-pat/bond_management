@@ -25,6 +25,9 @@ from bond_management.bond_management.utils.portfolio import (
     get_position,
     get_position_for_payment,
 )
+from bond_management.patches.backfill_transaction_amounts import (
+    execute as backfill_transaction_amounts,
+)
 from bond_management.patches.backfill_transaction_principal_values import (
     execute as backfill_transaction_principal_values,
 )
@@ -470,6 +473,7 @@ class TestBondTransaction(IntegrationTestCase):
         self.assertEqual(transaction.principal, 1050)
         self.assertEqual(transaction.commission_amount, 20)
         self.assertEqual(transaction.settlement_amount, 1051)
+        self.assertEqual(transaction.transaction_amount, 1031)
         self.assertNotEqual(
             transaction.settlement_amount,
             transaction.principal * transaction.price / 100
@@ -492,6 +496,7 @@ class TestBondTransaction(IntegrationTestCase):
         self.assertEqual(amounts["principal"], Decimal("300.0600"))
         self.assertEqual(amounts["commission_amount"], Decimal("0.0450"))
         self.assertEqual(amounts["settlement_amount"], Decimal("300.0650"))
+        self.assertEqual(amounts["transaction_amount"], Decimal("300.0200"))
 
     def test_value_endpoint_clears_amounts_without_an_isin(self):
         self.assertEqual(
@@ -507,9 +512,28 @@ class TestBondTransaction(IntegrationTestCase):
                 "principal": 0.0,
                 "commission_amount": 0.0,
                 "settlement_amount": 0.0,
+                "transaction_amount": 0.0,
                 "accrued_interest_calculated": 0.0,
             },
         )
+
+    def test_transaction_amount_backfill_is_idempotent(self):
+        transaction = make_transaction(make_bond(), make_portfolio())
+        frappe.db.set_value(
+            "Bond Transaction",
+            transaction.name,
+            "transaction_amount",
+            0,
+            update_modified=False,
+        )
+
+        backfill_transaction_amounts([transaction.name])
+        transaction.reload()
+        self.assertEqual(transaction.transaction_amount, 1031)
+
+        backfill_transaction_amounts([transaction.name])
+        transaction.reload()
+        self.assertEqual(transaction.transaction_amount, 1031)
 
     def test_value_endpoint_rejects_complex_string_inputs(self):
         with self.assertRaisesRegex(FrappeTypeError, "isin.*str"):

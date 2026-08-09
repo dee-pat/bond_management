@@ -15,6 +15,7 @@ const CALCULATED_AMOUNTS = {
 	principal: 20000,
 	commission_amount: 90,
 	settlement_amount: 44132.5,
+	transaction_amount: 44042.5,
 	accrued_interest_calculated: 24062.5,
 };
 
@@ -56,6 +57,19 @@ context("Bond Transaction PDF entry", () => {
 			expect(frm.doc.transaction_type).to.equal("Purchase");
 			expect(frm.doc.portfolio_name).to.equal("Dhanbai");
 			expect(frm.doc.quantity_face_value).to.equal(20000);
+			expect(frm.doc.transaction_amount).to.equal(44042.5);
+			expect(frm.get_field("transaction_amount").df.description).to.contain(
+				"Settlement Amount less Commission Amount"
+			);
+			const field_order = frm.fields.map((field) => field.df.fieldname);
+			const right_column_fields = field_order.slice(
+				field_order.indexOf("column_break_jo9c") + 1
+			);
+			expect(right_column_fields).to.include.members([
+				"commission_amount",
+				"settlement_amount",
+				"transaction_amount",
+			]);
 			expect(frm.get_field("price").df.read_only).to.equal(1);
 			expect(frm.get_field("transaction_reference").df.read_only).to.equal(1);
 

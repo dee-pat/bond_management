@@ -330,6 +330,7 @@ async function request_calculation(frm, state, allow_accrued_interest_default) {
 		principal: amounts.principal,
 		commission_amount: amounts.commission_amount,
 		settlement_amount: amounts.settlement_amount,
+		transaction_amount: amounts.transaction_amount,
 		accrued_interest_calculated: amounts.accrued_interest_calculated,
 	});
 

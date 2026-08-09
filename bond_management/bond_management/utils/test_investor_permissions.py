@@ -153,6 +153,7 @@ class TestInvestorPermissions(IntegrationTestCase):
             "Bond Portfolio",
             "Bond Statement",
             "Bond Transaction",
+            "Bond Exchange Rate",
         ]
         permissions = frappe.qb.get_query(
             "DocPerm",
@@ -175,12 +176,15 @@ class TestInvestorPermissions(IntegrationTestCase):
                         "write",
                         "create",
                         "delete",
-                        "submit",
-                        "cancel",
-                        "amend",
-                        "import",
                     )
                 )
+            )
+            self.assertFalse(permission.submit)
+            self.assertFalse(permission.cancel)
+            self.assertFalse(permission.amend)
+            self.assertEqual(
+                bool(permission.get("import")),
+                bool(frappe.get_meta(permission.parent).allow_import),
             )
 
     def test_manager_permissions_are_bootstrapped_on_fresh_install(self):

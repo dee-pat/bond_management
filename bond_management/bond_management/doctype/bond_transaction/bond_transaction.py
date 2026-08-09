@@ -79,7 +79,9 @@ def _calculate_amount_values(
     commission_amount = original_principal * to_decimal(commission) / Decimal("100")
     # The bank transaction price is commission-inclusive, so commission_amount is
     # informational and must not be added to settlement or XIRR cash flows again.
-    settlement_amount = principal + to_decimal(accrued_interest_paid)
+    commission_amount = quantize_money(commission_amount)
+    settlement_amount = quantize_money(principal + to_decimal(accrued_interest_paid))
+    transaction_amount = quantize_money(settlement_amount - commission_amount)
     accrued_interest_calculated = get_accrued_interest(
         isin=bond.name,
         settlement_date=settlement_date,
@@ -87,8 +89,9 @@ def _calculate_amount_values(
     )
     return {
         "principal": quantize_money(principal),
-        "commission_amount": quantize_money(commission_amount),
-        "settlement_amount": quantize_money(settlement_amount),
+        "commission_amount": commission_amount,
+        "settlement_amount": settlement_amount,
+        "transaction_amount": transaction_amount,
         "accrued_interest_calculated": quantize_money(accrued_interest_calculated),
     }
 
@@ -117,6 +120,7 @@ def get_calculated_amounts(
             "principal": Decimal("0"),
             "commission_amount": Decimal("0"),
             "settlement_amount": Decimal("0"),
+            "transaction_amount": Decimal("0"),
             "accrued_interest_calculated": Decimal("0"),
         }
 

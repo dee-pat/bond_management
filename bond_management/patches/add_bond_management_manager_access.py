@@ -17,9 +17,9 @@ FULL_PERMISSIONS = {
     "write": 1,
     "create": 1,
     "delete": 1,
-    "submit": 1,
-    "cancel": 1,
-    "amend": 1,
+    "submit": 0,
+    "cancel": 0,
+    "amend": 0,
     "print": 1,
     "email": 1,
     "share": 1,
@@ -42,13 +42,17 @@ def execute():
         ).insert(ignore_permissions=True)
 
     for doctype in BOND_DOCTYPES:
+        permissions = {
+            **FULL_PERMISSIONS,
+            "import": int(bool(frappe.get_meta(doctype).allow_import)),
+        }
         permission_name = frappe.db.get_value(
             "DocPerm",
             {"parent": doctype, "role": ROLE, "permlevel": 0},
             "name",
         )
         if permission_name:
-            frappe.db.set_value("DocPerm", permission_name, FULL_PERMISSIONS, update_modified=False)
+            frappe.db.set_value("DocPerm", permission_name, permissions, update_modified=False)
             continue
 
         frappe.get_doc(
@@ -59,6 +63,6 @@ def execute():
                 "parentfield": "permissions",
                 "role": ROLE,
                 "permlevel": 0,
-                **FULL_PERMISSIONS,
+                **permissions,
             }
         ).insert(ignore_permissions=True)
