@@ -94,6 +94,49 @@ context("Portfolio Performance", () => {
 			"Copied 1 cash flows"
 		);
 	});
+
+	it("hides duplicate USD columns for a USD-only portfolio", () => {
+		cy.intercept("GET", "**/api/method/frappe.client.validate_link_and_fetch*", {
+			statusCode: 200,
+			body: { message: { name: "TEST-PORTFOLIO" } },
+		});
+		cy.intercept("GET", "**/api/method/frappe.desk.query_report.run*", {
+			statusCode: 200,
+			body: {
+				message: {
+					columns: [
+						{
+							label: "ISIN",
+							fieldname: "isin",
+							fieldtype: "Data",
+							width: 160,
+						},
+						{
+							label: "Market Value",
+							fieldname: "market_value",
+							fieldtype: "Currency",
+							width: 135,
+						},
+						{
+							label: "XIRR",
+							fieldname: "xirr",
+							fieldtype: "Percent",
+							width: 80,
+						},
+					],
+					result: [{ isin: "TEST-BOND", market_value: 100, xirr: 12.5 }],
+					execution_time: 0.01,
+				},
+			},
+		}).as("usdOnlyReport");
+
+		cy.visit(
+			"/desk/query-report/Portfolio%20Performance?portfolio=TEST-PORTFOLIO&valuation_date=2025-12-31"
+		);
+		cy.wait("@usdOnlyReport");
+		cy.get(".dt-cell--header .dt-cell__content").should("not.contain", "Market Value (USD)");
+		cy.get(".dt-cell--header .dt-cell__content").should("not.contain", "XIRR (USD)");
+	});
 });
 
 function parse_request_body(body) {

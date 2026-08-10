@@ -109,6 +109,15 @@ class TestPortfolioPerformance(IntegrationTestCase):
         self.assertIsNone(total["currency"])
         self.assertEqual(total["reporting_currency"], "USD")
         self.assertEqual(total["proceeds_value_usd"], 8)
+        with patch(
+            "bond_management.bond_management.report.portfolio_performance.portfolio_performance.get_data",
+            return_value=(rows[:1], [], [], [], []),
+        ):
+            usd_only_columns, _ = execute({"portfolio": portfolio.name, "valuation_date": "2025-01-01"})
+        usd_only_fieldnames = {column["fieldname"] for column in usd_only_columns}
+        self.assertNotIn("market_value_usd", usd_only_fieldnames)
+        self.assertNotIn("xirr_usd", usd_only_fieldnames)
+
         total = make_total_row(rows[:1], [], [], [], [])
         self.assertEqual(total["currency"], "USD")
         self.assertEqual(total["proceeds_value"], 3)
@@ -153,6 +162,7 @@ class TestPortfolioPerformance(IntegrationTestCase):
         columns, rows = execute({"portfolio": portfolio.name, "valuation_date": "2025-12-31"})
 
         self.assertIn("market_value_usd", {column["fieldname"] for column in columns})
+        self.assertIn("xirr_usd", {column["fieldname"] for column in columns})
         bond_rows = {row["isin"]: row for row in rows if row["isin"] != "TOTAL"}
         self.assertEqual(bond_rows[kes_bond.name]["currency"], "KES")
         self.assertEqual(bond_rows[kes_bond.name]["reporting_currency"], "USD")

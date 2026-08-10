@@ -46,7 +46,6 @@ def execute(filters: dict | None = None):
         filters.get("portfolio"), filters.get("valuation_date")
     )
 
-    columns = get_columns()
     (
         data,
         combined_cashflow,
@@ -56,6 +55,7 @@ def execute(filters: dict | None = None):
     ) = get_data(portfolio, valuation_date)
 
     data = list(data)
+    columns = get_columns(has_non_reporting_currency(data))
     if data:
         data.append(
             make_total_row(
@@ -212,9 +212,9 @@ def calculate_future_xirr_from_cashflows(isin, valuation_date, cashflows, histor
 # ---------- COLUMNS ----------
 
 
-def get_columns() -> list[dict]:
-    """Return the native and reporting-currency report columns."""
-    return [
+def get_columns(include_reporting_currency_columns: bool = True) -> list[dict]:
+    """Return native columns and reporting columns when they add information."""
+    columns = [
         {
             "label": _("ISIN"),
             "fieldname": "isin",
@@ -259,29 +259,47 @@ def get_columns() -> list[dict]:
             "options": "currency",
             "width": 135,
         },
-        {
-            "label": _("Market Value (USD)"),
-            "fieldname": "market_value_usd",
-            "fieldtype": "Currency",
-            "options": "reporting_currency",
-            "width": 145,
-        },
-        {
-            "label": _("Gain Value"),
-            "fieldname": "gain_value",
-            "fieldtype": "Currency",
-            "options": "currency",
-            "width": 135,
-        },
-        {"label": _("XIRR"), "fieldname": "xirr", "fieldtype": "Percent", "width": 80},
-        {"label": _("XIRR (USD)"), "fieldname": "xirr_usd", "fieldtype": "Percent", "width": 95},
+    ]
+    if include_reporting_currency_columns:
+        columns.append(
+            {
+                "label": _("Market Value (USD)"),
+                "fieldname": "market_value_usd",
+                "fieldtype": "Currency",
+                "options": "reporting_currency",
+                "width": 145,
+            }
+        )
+    columns.extend(
+        [
+            {
+                "label": _("Gain Value"),
+                "fieldname": "gain_value",
+                "fieldtype": "Currency",
+                "options": "currency",
+                "width": 135,
+            },
+            {"label": _("XIRR"), "fieldname": "xirr", "fieldtype": "Percent", "width": 80},
+        ]
+    )
+    if include_reporting_currency_columns:
+        columns.append(
+            {"label": _("XIRR (USD)"), "fieldname": "xirr_usd", "fieldtype": "Percent", "width": 95}
+        )
+    columns.append(
         {
             "label": _("Future XIRR"),
             "fieldname": "future_xirr",
             "fieldtype": "Percent",
             "width": 105,
-        },
-    ]
+        }
+    )
+    return columns
+
+
+def has_non_reporting_currency(data) -> bool:
+    """Return whether the report contains a bond outside the reporting currency."""
+    return any(row.get("currency") and row.get("currency") != REPORTING_CURRENCY for row in data)
 
 
 # ---------- CORE DATA ----------
