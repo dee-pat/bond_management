@@ -1,7 +1,7 @@
 {
  "app": "bond_management",
  "charts": [],
- "content": "[{\"id\":\"bond-investor-header\",\"type\":\"header\",\"data\":{\"text\":\"Bond Investor\",\"level\":1}},{\"id\":\"bond-transactions-shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Bond Transactions\",\"col\":3}},{\"id\":\"bond-statements-shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Bond Statements\",\"col\":3}},{\"id\":\"bond-master-shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Bond Master\",\"col\":3}},{\"id\":\"bond-market-dates-shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Bond Market Dates\",\"col\":3}},{\"id\":\"bond-exchange-rates-shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Bond Exchange Rates\",\"col\":3}},{\"id\":\"portfolio-performance-shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Portfolio Performance\",\"col\":3}}]",
+ "content": "[{\"id\":\"bond-investor-header\",\"type\":\"header\",\"data\":{\"text\":\"Bond Investor\",\"level\":1}},{\"id\":\"bond-transactions-shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Bond Transactions\",\"col\":3}},{\"id\":\"bond-statements-shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Bond Statements\",\"col\":3}},{\"id\":\"bond-master-shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Bond Master\",\"col\":3}},{\"id\":\"bond-market-dates-shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Bond Market Dates\",\"col\":3}},{\"id\":\"bond-exchange-rates-shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Bond Exchange Rates\",\"col\":3}},{\"id\":\"portfolio-performance-shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Portfolio Performance\",\"col\":3}},{\"id\":\"bond-yield-comparison-shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Bond Yield Comparison\",\"col\":3}}]",
  "custom_blocks": [],
  "doctype": "Workspace",
  "for_user": "",
@@ -24,7 +24,8 @@
   {"color": "Grey", "doc_view": "List", "label": "Bond Master", "link_to": "Bond Master", "type": "DocType"},
   {"color": "Grey", "doc_view": "List", "label": "Bond Market Dates", "link_to": "Bond Market Date", "type": "DocType"},
   {"color": "Grey", "label": "Bond Exchange Rates", "link_to": "Bond Exchange Rate", "type": "DocType"},
-  {"color": "Grey", "label": "Portfolio Performance", "link_to": "Portfolio Performance", "type": "Report"}
+  {"color": "Grey", "label": "Portfolio Performance", "link_to": "Portfolio Performance", "type": "Report"},
+  {"color": "Grey", "label": "Bond Yield Comparison", "link_to": "Bond Yield Comparison", "type": "Report"}
  ],
  "title": "Bond Investor",
  "type": "Workspace"

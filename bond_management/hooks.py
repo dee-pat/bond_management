@@ -91,6 +91,7 @@ after_install = [
     "bond_management.patches.add_bond_query_indexes.ensure_bond_query_indexes",
     "bond_management.patches.add_bond_investor_read_only_access.execute",
     "bond_management.patches.add_bond_investor_report_permission.execute",
+    "bond_management.patches.add_bond_yield_comparison_report_permission.execute",
     "bond_management.patches.add_bond_management_manager_access.execute",
     "bond_management.patches.add_bond_management_report_permission.execute",
     "bond_management.patches.add_bond_exchange_rate_permissions.execute",
@@ -103,6 +104,7 @@ after_migrate = [
     "bond_management.patches.add_bond_query_indexes.reapply_bond_query_indexes",
     "bond_management.patches.add_bond_management_manager_access.execute",
     "bond_management.patches.add_bond_exchange_rate_permissions.execute",
+    "bond_management.patches.add_bond_yield_comparison_report_permission.execute",
 ]
 
 # Uninstallation

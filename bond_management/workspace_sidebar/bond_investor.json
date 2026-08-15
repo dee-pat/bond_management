@@ -58,6 +58,14 @@
    "link_to": "Portfolio Performance",
    "link_type": "Report",
    "type": "Link"
+  },
+  {
+   "icon": "chart-line",
+   "idx": 8,
+   "label": "Bond Yield Comparison",
+   "link_to": "Bond Yield Comparison",
+   "link_type": "Report",
+   "type": "Link"
   }
  ],
  "name": "Bond Investor",

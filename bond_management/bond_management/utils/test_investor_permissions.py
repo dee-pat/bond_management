@@ -20,6 +20,9 @@ from bond_management.patches.add_bond_exchange_rate_permissions import (
     execute as ensure_exchange_rate_permissions,
 )
 from bond_management.patches.add_bond_investor_read_only_access import execute as ensure_investor_access
+from bond_management.patches.add_bond_yield_comparison_report_permission import (
+    execute as ensure_yield_report_permission,
+)
 
 
 class TestInvestorPermissions(IntegrationTestCase):
@@ -263,6 +266,34 @@ class TestInvestorPermissions(IntegrationTestCase):
 
     def test_manager_can_run_portfolio_performance_report(self):
         report = frappe.get_doc("Report", "Portfolio Performance")
+        self.assertIn(investor_permissions.BOND_MANAGER_ROLE, {row.role for row in report.roles})
+
+    def test_yield_report_permission_is_bootstrapped_on_fresh_install(self):
+        self.assertIn(
+            "bond_management.patches.add_bond_yield_comparison_report_permission.execute",
+            app_hooks.after_install,
+        )
+        self.assertIn(
+            "bond_management.patches.add_bond_yield_comparison_report_permission.execute",
+            app_hooks.after_migrate,
+        )
+
+        ensure_yield_report_permission()
+        ensure_yield_report_permission()
+        permission = frappe.qb.get_query(
+            "DocPerm",
+            fields=["report"],
+            filters={
+                "parent": "Bond Market Date",
+                "role": investor_permissions.INVESTOR_ROLE,
+                "permlevel": 0,
+            },
+            ignore_permissions=True,
+        ).run(as_dict=True)
+
+        self.assertEqual(len(permission), 1)
+        self.assertTrue(permission[0].report)
+        report = frappe.get_doc("Report", "Bond Yield Comparison")
         self.assertIn(investor_permissions.BOND_MANAGER_ROLE, {row.role for row in report.roles})
 
     def test_direct_permission_check_allows_an_assigned_portfolio(self):

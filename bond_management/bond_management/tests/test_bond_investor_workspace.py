@@ -22,5 +22,6 @@ class TestBondInvestorWorkspace(TestCase):
                 "Bond Market Date",
                 "Bond Exchange Rate",
                 "Portfolio Performance",
+                "Bond Yield Comparison",
             },
         )
