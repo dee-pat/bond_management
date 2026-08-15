@@ -6,13 +6,13 @@ from dataclasses import dataclass, field
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 from io import BytesIO
-from pathlib import Path
 
 import frappe
 from frappe import _
 from pypdf import PdfReader
 from pypdf.errors import DependencyError, FileNotDecryptedError, PdfReadError, PdfStreamError
 
+from bond_management.bond_management.utils.private_attachment import read_private_pdf_attachment
 from bond_management.bond_management.utils.validation import optional_string
 
 MAX_STATEMENT_PDF_BYTES = 10 * 1024 * 1024
@@ -371,7 +371,14 @@ def get_statement_attachment_details(
 ) -> StatementAttachmentDetails:
     """Read an attached private PDF and resolve it to a visible portfolio."""
     portfolio_name_hint = optional_string(portfolio_name_hint, "Portfolio Name")
-    content, original_filename = _read_private_attachment(attachment)
+    content, original_filename = read_private_pdf_attachment(
+        attachment,
+        max_bytes=MAX_STATEMENT_PDF_BYTES,
+        missing_message=_("Attach a PDF statement before saving."),
+        extension_message=_("Bond Statement attachments must be PDF files."),
+        private_message=_("Bond Statement PDFs must be uploaded as private files."),
+        size_message=_("The statement PDF must be 10 MB or smaller."),
+    )
     credentials = _get_portfolio_credentials()
     bond_name_to_isin = _get_bond_name_to_isin()
 
@@ -467,38 +474,6 @@ def _parse_reader(
         market_prices=parse_statement_market_prices(all_text, bond_name_to_isin),
         exchange_rates=parse_statement_exchange_rates(all_text),
     )
-
-
-def _read_private_attachment(attachment: str) -> tuple[bytes, str]:
-    if not attachment:
-        frappe.throw(_("Attach a PDF statement before saving."))
-    if not attachment.lower().endswith(".pdf"):
-        frappe.throw(_("Bond Statement attachments must be PDF files."))
-
-    files = frappe.qb.get_query(
-        "File",
-        fields=["name"],
-        filters={"file_url": attachment},
-        order_by="creation desc",
-        limit=1,
-        ignore_permissions=False,
-    ).run(pluck=True)
-    if not files:
-        frappe.throw(_("The attached PDF was not found or you do not have permission to read it."))
-
-    file_doc = frappe.get_doc("File", files[0])
-    file_doc.check_permission("read")
-    if not file_doc.is_private:
-        frappe.throw(_("Bond Statement PDFs must be uploaded as private files."))
-
-    file_path = Path(file_doc.get_full_path()).resolve()
-    private_files_path = Path(frappe.get_site_path("private", "files")).resolve()
-    if not file_path.is_relative_to(private_files_path) or not file_path.is_file():
-        frappe.throw(_("The attached private PDF could not be found."))
-    if file_path.stat().st_size > MAX_STATEMENT_PDF_BYTES:
-        frappe.throw(_("The statement PDF must be 10 MB or smaller."))
-
-    return file_path.read_bytes(), file_doc.file_name
 
 
 def _get_filename_account_hint(filename: str) -> str | None:

@@ -1,6 +1,9 @@
 from datetime import date, timedelta
 
 import frappe
+from frappe.utils import getdate
+
+DEFAULT_MARKET_DATE_START = date(2025, 5, 31)
 
 
 def unique_name(prefix):
@@ -78,31 +81,39 @@ def make_transaction(bond, portfolio, *, insert=True, **overrides):
     return document.insert() if insert else document
 
 
-def make_market_date(bond, market_price=100, date="2025-12-30"):
-    existing = frappe.qb.get_query(
-        "Bond Market Date",
-        fields=["name"],
-        filters={"date": date},
-        limit=1,
-        ignore_permissions=False,
-    ).run(pluck=True)
-    if existing:
-        market_date = frappe.get_doc("Bond Market Date", existing[0])
-        market_date.append(
-            "bond_market_prices",
-            {"isin": bond.name, "market_price": market_price, "currency": bond.currency},
-        )
-        return market_date.save()
+def make_market_date(bond, market_price=100, date=None, *, market_date=None):
+    if market_date is not None:
+        if date is not None:
+            raise AssertionError("Pass either date or market_date, not both.")
+        return _append_market_price(market_date, bond, market_price)
+
+    market_date_value = getdate(date) if date is not None else _next_market_date()
 
     return frappe.get_doc(
         {
             "doctype": "Bond Market Date",
-            "date": date,
+            "date": market_date_value,
             "bond_market_prices": [
                 {"isin": bond.name, "market_price": market_price, "currency": bond.currency}
             ],
         }
     ).insert()
+
+
+def _append_market_price(market_date, bond, market_price):
+    market_date.append(
+        "bond_market_prices",
+        {"isin": bond.name, "market_price": market_price, "currency": bond.currency},
+    )
+    return market_date.save()
+
+
+def _next_market_date():
+    # Keep generated dates away from explicit year-end and repayment boundaries.
+    candidate = DEFAULT_MARKET_DATE_START
+    while frappe.db.exists("Bond Market Date", {"date": candidate}):
+        candidate -= timedelta(days=1)
+    return candidate
 
 
 def make_exchange_rate(

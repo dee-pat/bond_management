@@ -22,8 +22,9 @@ from bond_management.bond_management.utils.transaction_pdf import (
     TransactionAttachmentDetails,
     TransactionAttachmentRow,
     get_transaction_attachment_details,
+    transaction_attachment_row_values,
 )
-from bond_management.bond_management.utils.validation import optional_string
+from bond_management.bond_management.utils.validation import optional_string, required_string
 
 BOND_SNAPSHOT_FIELDS = (
     "bond_name",
@@ -178,7 +179,8 @@ class BondTransaction(Document):
             "write" if self.name and frappe.db.exists("Bond Transaction", self.name) else "create"
         )
         self.check_permission(permission_type)
-        details = self._get_transaction_attachment_details()
+        attachment = required_string(self.attachment, "Attachment")
+        details = get_transaction_attachment_details(attachment)
         return {
             "portfolio_name": details.portfolio_name,
             "account_no": details.account_no,
@@ -364,18 +366,7 @@ class BondTransaction(Document):
 
     @staticmethod
     def _attachment_row_values(row: TransactionAttachmentRow, portfolio_name: str | None = None) -> dict:
-        return {
-            "transaction_reference": row.transaction_reference,
-            "transaction_type": row.transaction_type,
-            "isin": row.isin,
-            "portfolio_name": portfolio_name or row.portfolio_name,
-            "trade_date": row.trade_date,
-            "settlement_date": row.settlement_date,
-            "quantity_face_value": row.quantity_face_value,
-            "price": row.price,
-            "accrued_interest_paid": row.accrued_interest_paid,
-            "commission": row.commission,
-        }
+        return transaction_attachment_row_values(row, portfolio_name)
 
     @classmethod
     def _serialize_attachment_row(cls, row: TransactionAttachmentRow) -> dict:

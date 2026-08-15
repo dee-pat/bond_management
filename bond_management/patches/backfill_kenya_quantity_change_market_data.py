@@ -1,9 +1,7 @@
 import frappe
 
-from bond_management.bond_management.doctype.bond_market_date.bond_market_date import (
-    _calculate_market_data,
-)
 from bond_management.bond_management.utils.accrual import is_quantity_change_bond
+from bond_management.bond_management.utils.market_data import calculate_market_data
 
 
 def execute(bond_names=None):
@@ -42,7 +40,7 @@ def execute(bond_names=None):
         if row.isin not in quantity_change_names:
             continue
 
-        values = _calculate_market_data(row.date, row.isin, row.market_price)
+        values = calculate_market_data(row.date, row.isin, row.market_price)
         values["weighted_avg_repayment_years"] = values["weighted_avg_repayment_years"] or 0
         frappe.db.set_value(
             "Bond Market Prices",

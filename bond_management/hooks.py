@@ -96,11 +96,11 @@ after_install = [
     "bond_management.patches.add_bond_exchange_rate_permissions.execute",
 ]
 
-# Frappe schema sync removes manual single-column unique indexes when the
-# DocField cannot declare `unique`. Re-apply the Bond Market Date database
-# invariant after every migration.
+# Frappe schema sync removes manual indexes when the DocField cannot declare
+# them. Re-apply the indexes after every migration without rescanning tables;
+# the registered patch and fresh-install hook perform duplicate validation.
 after_migrate = [
-    "bond_management.patches.add_bond_query_indexes.ensure_bond_query_indexes",
+    "bond_management.patches.add_bond_query_indexes.reapply_bond_query_indexes",
     "bond_management.patches.add_bond_management_manager_access.execute",
     "bond_management.patches.add_bond_exchange_rate_permissions.execute",
 ]

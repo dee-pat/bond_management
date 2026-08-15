@@ -1,6 +1,7 @@
 # Copyright (c) 2026, Deepak Patel and Contributors
 # See license.txt
 
+from datetime import timedelta
 from decimal import ROUND_HALF_UP, Decimal
 
 import frappe
@@ -41,7 +42,7 @@ class TestBondMarketDate(IntegrationTestCase):
         self.assertEqual(price_row.weighted_avg_repayment_years, Decimal(368) / Decimal(365))
         self.assertIsNotNone(price_row.future_xirr)
 
-        cashflows = get_cashflows(market_date.date, bond.name, "100")
+        cashflows = get_cashflows(market_date.date.isoformat(), bond.name, "100")
         self.assertGreater(len(cashflows), 2)
         self.assertEqual(cashflows[0]["type"], "market_price")
         self.assertEqual(cashflows[0]["amount"], -100)
@@ -192,15 +193,9 @@ class TestBondMarketDate(IntegrationTestCase):
                 }
             ).insert()
 
-        make_market_date(bond, date="2025-12-25")
+        market_date = make_market_date(bond, date="2025-12-25")
         with self.assertRaises(frappe.UniqueValidationError):
-            frappe.get_doc(
-                {
-                    "doctype": "Bond Market Date",
-                    "date": "2025-12-25",
-                    "bond_market_prices": [{"isin": make_bond().name, "market_price": 100}],
-                }
-            ).insert()
+            make_market_date(make_bond(), date=market_date.date)
 
     def test_database_indexes_enforce_market_dates_and_support_hot_queries(self):
         add_bond_query_indexes()
@@ -226,12 +221,12 @@ class TestBondMarketDate(IntegrationTestCase):
 
     def test_market_price_lookup_uses_latest_price_on_or_before_date(self):
         bond = make_bond()
-        make_market_date(bond, market_price=90, date="2025-06-29")
-        make_market_date(bond, market_price=100, date="2025-12-26")
+        early = make_market_date(bond, market_price=90, date="2025-06-29")
+        late = make_market_date(bond, market_price=100, date="2025-12-26")
 
-        self.assertIsNone(get_market_price(bond.name, "2025-06-28"))
-        self.assertEqual(get_market_price(bond.name, "2025-06-29"), 90)
-        self.assertEqual(get_market_price(bond.name, "2026-01-01"), 100)
+        self.assertIsNone(get_market_price(bond.name, early.date - timedelta(days=1)))
+        self.assertEqual(get_market_price(bond.name, early.date), 90)
+        self.assertEqual(get_market_price(bond.name, late.date + timedelta(days=1)), 100)
 
     def test_bank_quote_is_not_scaled_by_principal_factor_again(self):
         bond = make_bond(
@@ -245,7 +240,7 @@ class TestBondMarketDate(IntegrationTestCase):
         price_row = market_date.bond_market_prices[-1]
 
         self.assertEqual(price_row.principal_factor, 0.5)
-        self.assertEqual(get_cashflows(market_date.date, bond.name, 50)[0]["amount"], -50)
+        self.assertEqual(get_cashflows(market_date.date.isoformat(), bond.name, 50)[0]["amount"], -50)
 
     def test_kenya_market_data_backfill_is_idempotent(self):
         bond = make_bond(

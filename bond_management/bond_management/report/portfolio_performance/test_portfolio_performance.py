@@ -20,6 +20,7 @@ from bond_management.bond_management.tests.factories import (
     make_transaction,
 )
 from bond_management.bond_management.utils.performance import get_latest_market_rows
+from bond_management.bond_management.utils.portfolio import fetch_holdings
 from bond_management.bond_management.utils.xirr import create_future_cash_flows
 
 
@@ -156,8 +157,8 @@ class TestPortfolioPerformance(IntegrationTestCase):
         make_transaction(usd_bond, portfolio)
         make_transaction(kes_bond, portfolio)
         make_exchange_rate(rate="0.01")
-        make_market_date(usd_bond, date="2025-12-30")
-        make_market_date(kes_bond, date="2025-12-30")
+        market_date = make_market_date(usd_bond, date="2025-12-30")
+        make_market_date(kes_bond, market_date=market_date)
 
         columns, rows = execute({"portfolio": portfolio.name, "valuation_date": "2025-12-31"})
 
@@ -369,8 +370,13 @@ class TestPortfolioPerformance(IntegrationTestCase):
         bonds = [make_bond(), make_bond()]
         for bond in bonds:
             make_transaction(bond, portfolio)
-        for bond in bonds:
-            make_market_date(bond)
+        market_dates = [make_market_date(bond) for bond in bonds]
+
+        self.assertEqual(
+            [market_date.bond_market_prices[-1].isin for market_date in market_dates],
+            [bond.name for bond in bonds],
+        )
+        self.assertEqual(len({market_date.name for market_date in market_dates}), len(bonds))
 
         with patch(
             "bond_management.bond_management.utils.performance.frappe.qb.get_query",
@@ -380,6 +386,32 @@ class TestPortfolioPerformance(IntegrationTestCase):
 
         self.assertEqual(len(rows), 2)
         self.assertEqual(get_query.call_count, 5)
+
+    def test_fetch_holdings_batches_ledger_and_bond_queries(self):
+        portfolio = make_portfolio()
+        live_bond = make_bond()
+        matured_bond = make_bond(
+            issue_date="2025-01-01",
+            maturity_date="2025-12-30",
+            first_coupon_date="2025-06-30",
+            principal_schedule=[{"repayment_date": "2025-12-30", "principal_units": 100}],
+        )
+        make_transaction(live_bond, portfolio)
+        make_transaction(
+            matured_bond,
+            portfolio,
+            trade_date="2025-12-28",
+            settlement_date="2025-12-29",
+        )
+
+        with patch(
+            "bond_management.bond_management.utils.portfolio.frappe.qb.get_query",
+            wraps=frappe.qb.get_query,
+        ) as get_query:
+            holdings = fetch_holdings(portfolio.name, "2025-12-31")
+
+        self.assertEqual(get_query.call_count, 2)
+        self.assertEqual(holdings, [{"isin": live_bond.name, "quantity": 10, "currency": "USD"}])
 
     def test_market_history_query_returns_one_latest_row_per_bond(self):
         bond = make_bond()

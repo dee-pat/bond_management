@@ -12,7 +12,41 @@ def execute():
 
 
 def ensure_bond_query_indexes():
-    """Add indexes that enforce market dates and bound transaction locking."""
+    """Validate legacy duplicates, then install all Bond query indexes."""
+    _validate_duplicates()
+    reapply_bond_query_indexes()
+
+
+def reapply_bond_query_indexes():
+    """Install indexes without recurring full-table duplicate scans."""
+    frappe.db.add_index(
+        "Bond Transaction",
+        ["portfolio_name", "isin", "settlement_date"],
+        index_name=LEDGER_INDEX,
+    )
+    frappe.db.add_index(
+        "Bond Transaction",
+        ["portfolio_name", "settlement_date", "isin"],
+        index_name=REPORT_INDEX,
+    )
+    frappe.db.add_unique(
+        "Bond Market Date",
+        ["date"],
+        constraint_name=MARKET_DATE_UNIQUE,
+    )
+    frappe.db.add_unique(
+        "Bond Statement",
+        ["attachment"],
+        constraint_name=STATEMENT_ATTACHMENT_UNIQUE,
+    )
+    frappe.db.add_unique(
+        "Bond Exchange Rate",
+        ["rate_date", "from_currency", "to_currency"],
+        constraint_name=EXCHANGE_RATE_UNIQUE,
+    )
+
+
+def _validate_duplicates():
     duplicate_dates = frappe.qb.get_query(
         "Bond Market Date",
         fields=["date", {"COUNT": "name", "as": "snapshot_count"}],
@@ -63,29 +97,3 @@ def ensure_bond_query_indexes():
             "Cannot enforce one Bond Exchange Rate per date/currency pair because "
             f"duplicates exist: {duplicates}. Merge or remove the duplicate rows, then run migrate again."
         )
-
-    frappe.db.add_index(
-        "Bond Transaction",
-        ["portfolio_name", "isin", "settlement_date"],
-        index_name=LEDGER_INDEX,
-    )
-    frappe.db.add_index(
-        "Bond Transaction",
-        ["portfolio_name", "settlement_date", "isin"],
-        index_name=REPORT_INDEX,
-    )
-    frappe.db.add_unique(
-        "Bond Market Date",
-        ["date"],
-        constraint_name=MARKET_DATE_UNIQUE,
-    )
-    frappe.db.add_unique(
-        "Bond Statement",
-        ["attachment"],
-        constraint_name=STATEMENT_ATTACHMENT_UNIQUE,
-    )
-    frappe.db.add_unique(
-        "Bond Exchange Rate",
-        ["rate_date", "from_currency", "to_currency"],
-        constraint_name=EXCHANGE_RATE_UNIQUE,
-    )

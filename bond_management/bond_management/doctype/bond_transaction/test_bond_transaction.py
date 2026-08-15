@@ -37,6 +37,12 @@ from bond_management.patches.standardize_bond_transaction_attachment_names impor
 
 
 class TestBondTransaction(IntegrationTestCase):
+    def test_read_transaction_pdf_rejects_complex_attachment_values(self):
+        transaction = frappe.get_doc({"doctype": "Bond Transaction", "attachment": {}})
+
+        with self.assertRaisesRegex(ValidationError, "Attachment must be a string"):
+            transaction.read_transaction_pdf()
+
     def test_principal_backfill_is_price_adjusted_and_idempotent(self):
         bond = make_bond(face_value_per_unit=100)
         portfolio = make_portfolio()

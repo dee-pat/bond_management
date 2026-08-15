@@ -1,5 +1,10 @@
 import frappe
 
+from bond_management.bond_management.utils.transaction_pdf import (
+    get_transaction_attachment_details,
+    transaction_attachment_row_values,
+)
+
 SOURCE_REFERENCE = "U0792275"
 SECOND_REFERENCE = "U0792348"
 TARGET_PORTFOLIO = "Dhanbai"
@@ -13,17 +18,24 @@ def execute():
     if not source.attachment:
         return
 
-    details = source._get_transaction_attachment_details()
+    details = get_transaction_attachment_details(source.attachment)
     rows = {row.transaction_reference: row for row in details.transactions}
     if SOURCE_REFERENCE not in rows or SECOND_REFERENCE not in rows:
         return
 
     if source.portfolio_name != TARGET_PORTFOLIO or not source.attachment_portfolio_override:
-        source.portfolio_name = TARGET_PORTFOLIO
-        source.attachment_portfolio_override = 1
-        source.flags.transaction_attachment_details = details
-        source.flags.allow_attachment_portfolio_override = True
-        source.save()
+        # The patch owns this correction. Update only the two affected fields;
+        # invoking the private controller validation would recalculate unrelated
+        # legacy financial values.
+        frappe.db.set_value(
+            "Bond Transaction",
+            SOURCE_REFERENCE,
+            {
+                "portfolio_name": TARGET_PORTFOLIO,
+                "attachment_portfolio_override": 1,
+            },
+            update_modified=False,
+        )
 
     if frappe.db.exists("Bond Transaction", SECOND_REFERENCE):
         return
@@ -33,7 +45,7 @@ def execute():
         {
             "doctype": "Bond Transaction",
             "attachment": source.attachment,
-            **source._attachment_row_values(second_row),
+            **transaction_attachment_row_values(second_row),
         }
     )
     transaction.flags.transaction_attachment_details = details

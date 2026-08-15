@@ -127,13 +127,39 @@ def get_portfolio_bonds(portfolio_name):
 
 
 def fetch_holdings(portfolio_name, statement_date):
-    holdings = []
-    for isin in get_portfolio_bonds(portfolio_name):
-        quantity = get_position(isin, statement_date, portfolio_name)
-        if not quantity:
-            continue
+    statement_date = getdate(statement_date)
+    transactions = frappe.qb.get_query(
+        "Bond Transaction",
+        fields=["name", "isin", "transaction_type", "quantity_face_value", "settlement_date"],
+        filters={
+            "portfolio_name": portfolio_name,
+            "settlement_date": ["<=", statement_date],
+        },
+        ignore_permissions=False,
+    ).run(as_dict=True)
+    transactions_by_isin = {}
+    for transaction in transactions:
+        transactions_by_isin.setdefault(transaction.isin, []).append(transaction)
 
-        bond = frappe.get_doc("Bond Master", isin)
-        holdings.append({"isin": bond.name, "quantity": quantity, "currency": bond.currency})
+    if not transactions_by_isin:
+        return []
+
+    bonds = frappe.qb.get_query(
+        "Bond Master",
+        fields=["name", "currency", "maturity_date"],
+        filters={"name": ["in", list(transactions_by_isin)]},
+        ignore_permissions=False,
+    ).run(as_dict=True)
+
+    holdings = []
+    for bond in bonds:
+        if getdate(bond.maturity_date) <= statement_date:
+            continue
+        quantity = get_ledger_position_from_transactions(
+            transactions_by_isin.get(bond.name, ()),
+            statement_date,
+        )
+        if quantity:
+            holdings.append({"isin": bond.name, "quantity": quantity, "currency": bond.currency})
 
     return holdings

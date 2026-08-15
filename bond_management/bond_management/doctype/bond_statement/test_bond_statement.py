@@ -7,6 +7,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import frappe
+from frappe.exceptions import ValidationError
 from frappe.tests import IntegrationTestCase
 from pypdf import PdfReader
 
@@ -24,7 +25,9 @@ from bond_management.bond_management.utils.statement_quantity_reconciliation imp
     StatementQuantityComparison,
 )
 from bond_management.bond_management.utils.statement_quantity_report import (
+    REPORT_DELETE_METHOD,
     build_quantity_reconciliation_pdf,
+    delete_quantity_reconciliation_report_file,
 )
 from bond_management.patches.add_bond_query_indexes import STATEMENT_ATTACHMENT_UNIQUE
 from bond_management.patches.backfill_statement_reconciliation_statuses import (
@@ -229,6 +232,12 @@ class TestBondStatement(IntegrationTestCase):
                 self.assertEqual(attachment_files[0].attached_to_doctype, "Bond Statement")
                 self.assertEqual(attachment_files[0].attached_to_name, statement.name)
                 self.assertEqual(attachment_files[0].attached_to_field, "attachment")
+
+    def test_read_statement_pdf_rejects_complex_attachment_values(self):
+        statement = frappe.get_doc({"doctype": "Bond Statement", "attachment": []})
+
+        with self.assertRaisesRegex(ValidationError, "Attachment must be a string"):
+            statement.read_statement_pdf()
 
     def test_attachment_upserts_exchange_rates_and_preserves_manual_fallbacks(self):
         account_no = unique_name("FX-ACCOUNT")
@@ -662,7 +671,7 @@ class TestBondStatement(IntegrationTestCase):
         make_transaction(first_bond, portfolio)
         make_transaction(second_bond, portfolio)
         market_date = make_market_date(first_bond, market_price=90, date=statement_date)
-        make_market_date(unrelated_bond, market_price=88, date=statement_date)
+        make_market_date(unrelated_bond, market_price=88, market_date=market_date)
         attachment = self._attach_pdf(
             self._current_statement_text(
                 portfolio.account_no,
@@ -769,8 +778,51 @@ class TestBondStatement(IntegrationTestCase):
 
         update_msgprint.assert_called_once()
         self.assertEqual(update_msgprint.call_args.args[0][1], [bond.name, "10", "15", "-5"])
-        self.assertNotEqual(statement.quantity_reconciliation_report, first_report_url)
+        self.assertEqual(statement.quantity_reconciliation_report, first_report_url)
         self._read_reconciliation_report(statement.quantity_reconciliation_report, "test-password")
+
+        report_files = frappe.qb.get_query(
+            "File",
+            fields=["name"],
+            filters={
+                "attached_to_doctype": "Bond Statement",
+                "attached_to_name": statement.name,
+                "attached_to_field": "quantity_reconciliation_report",
+            },
+            ignore_permissions=True,
+        ).run(pluck=True)
+        self.assertEqual(len(report_files), 1)
+
+    def test_statement_delete_cleans_up_quantity_reconciliation_report(self):
+        portfolio = make_portfolio()
+        bond = self._make_long_dated_bond()
+        make_transaction(bond, portfolio, quantity_face_value=15)
+        attachment = self._attach_pdf(
+            self._current_statement_text(
+                portfolio.account_no,
+                statement_date="30/06/2039",
+                prices={bond.name: "101.250000"},
+            ),
+            "test-password",
+        )
+        statement = frappe.get_doc({"doctype": "Bond Statement", "attachment": attachment}).insert()
+        report_url = statement.quantity_reconciliation_report
+        report_name = frappe.db.get_value("File", {"file_url": report_url}, "name")
+
+        with patch(
+            "bond_management.bond_management.utils.statement_quantity_report.frappe.enqueue"
+        ) as enqueue:
+            statement.delete()
+
+        enqueue.assert_any_call(
+            REPORT_DELETE_METHOD,
+            queue="short",
+            enqueue_after_commit=True,
+            file_name=report_name,
+        )
+
+        delete_quantity_reconciliation_report_file(report_name)
+        self.assertIsNone(frappe.db.exists("File", report_name))
 
     def test_legacy_face_value_is_rescaled_by_face_value_per_unit(self):
         portfolio = make_portfolio()

@@ -40,10 +40,17 @@ def apply_withholding_tax(amount, bond_doc):
     return to_decimal(amount) * (PERCENT - withholding_tax) / PERCENT
 
 
-def calculate_future_xirr(isin, date, market_price):
-    future_cash_flows = create_future_cash_flows(isin, date, market_price)
+def calculate_future_xirr(
+    isin,
+    date,
+    market_price,
+    *,
+    bond_doc=None,
+    historical_guess=None,
+):
+    future_cash_flows = create_future_cash_flows(isin, date, market_price, bond_doc=bond_doc)
     consolidated_cash_flows = consolidate_cashflows(future_cash_flows)
-    guess = get_last_xirr_guess(isin, date)
+    guess = historical_guess if historical_guess is not None else get_last_xirr_guess(isin, date)
     if guess is None:
         guess = DEFAULT_XIRR_GUESS
     guess = max(min(guess, 1.0), -0.5)
@@ -76,19 +83,30 @@ def _to_pyxirr_cashflows(cash_flows):
 
 
 def get_last_xirr_guess(isin, date):
+    return get_last_xirr_guesses({isin}, date).get(isin)
+
+
+def get_last_xirr_guesses(isins, date):
+    isins = sorted(set(isins or ()))
+    if not isins or not date:
+        return {}
+
     results = frappe.qb.get_query(
         "Bond Market Date",
-        fields=["bond_market_prices.future_xirr"],
-        filters={"date": ["<=", date], "bond_market_prices.isin": isin},
+        fields=["bond_market_prices.isin", "bond_market_prices.future_xirr"],
+        filters={"date": ["<=", date], "bond_market_prices.isin": ["in", isins]},
         order_by="date desc, name desc",
         ignore_permissions=False,
     ).run(as_dict=True)
 
+    guesses = {}
     for result in results:
-        if result.get("future_xirr") is not None:
-            return float(to_decimal(result["future_xirr"]) / to_decimal(100))
+        isin = result.get("isin")
+        if isin in guesses or result.get("future_xirr") is None:
+            continue
+        guesses[isin] = float(to_decimal(result["future_xirr"]) / to_decimal(100))
 
-    return None
+    return guesses
 
 
 def consolidate_cashflows(cash_flows):

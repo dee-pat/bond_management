@@ -1,7 +1,8 @@
 from io import BytesIO
 
 import frappe
-from frappe.utils import escape_html, now_datetime
+from frappe.core.doctype.file.utils import get_content_hash
+from frappe.utils import escape_html, get_datetime
 from pypdf import PdfWriter
 from pypdf.generic import DecodedStreamObject, DictionaryObject, NameObject
 
@@ -11,30 +12,30 @@ from bond_management.bond_management.utils.statement_quantity_reconciliation imp
 )
 
 REPORT_FILENAME_PREFIX = "Bond-Quantity-Reconciliation-"
+REPORT_FIELD = "quantity_reconciliation_report"
+REPORT_DELETE_METHOD = (
+    "bond_management.bond_management.utils.statement_quantity_report."
+    "delete_quantity_reconciliation_report_file"
+)
 
 
 def attach_quantity_reconciliation_report(statement, comparisons, *, file_name=None) -> str:
-    """Create a private reconciliation PDF attached to a persisted Bond Statement."""
-    if file_name:
-        existing = frappe.qb.get_query(
-            "File",
-            fields=["file_url"],
-            filters={
-                "file_name": file_name,
-                "attached_to_doctype": "Bond Statement",
-                "attached_to_name": statement.name,
-                "attached_to_field": "quantity_reconciliation_report",
-            },
-            limit=1,
-            # The caller has already passed Bond Statement permission checks;
-            # this system-generated child File lookup is only an idempotency
-            # check for the report attached to that statement.
-            ignore_permissions=True,
-        ).run(pluck=True)
-        if existing:
-            return existing[0]
+    """Create or replace the private reconciliation PDF for a statement.
 
-    generated_at = now_datetime()
+    A statement owns one current report. Updating that File keeps the URL stable,
+    lets File's rollback hook restore its previous bytes, and avoids leaking a
+    private PDF on every unchanged save.
+    """
+    existing_reports = _get_report_files(statement.name)
+    if file_name:
+        existing = next(
+            (report for report in existing_reports if report.file_name == file_name),
+            None,
+        )
+        if existing:
+            return existing.file_url
+
+    generated_at = _stable_generated_at(statement)
     portfolio = frappe.get_doc("Bond Portfolio", statement.portfolio_name)
     portfolio.check_permission("read")
     password = portfolio.get_password("statement_pdf_password", raise_exception=False)
@@ -47,26 +48,119 @@ def attach_quantity_reconciliation_report(statement, comparisons, *, file_name=N
         statement_name=statement.name,
         portfolio_name=statement.portfolio_name,
         statement_date=str(statement.statement_date),
-        generated_at=generated_at.strftime("%Y-%m-%d %H:%M:%S"),
+        generated_at=generated_at,
         comparisons=tuple(comparisons),
         password=password,
     )
+
+    content_hash = get_content_hash(content)
+    matching_report = next(
+        (
+            report
+            for report in existing_reports
+            if report.content_hash == content_hash and _file_exists(report.name)
+        ),
+        None,
+    )
+    if matching_report and not file_name:
+        _schedule_obsolete_report_cleanup(existing_reports, matching_report.name)
+        return matching_report.file_url
+
+    if existing_reports and not file_name:
+        current_report = next(
+            (report for report in existing_reports if _file_exists(report.name)),
+            None,
+        )
+        if current_report:
+            file_doc = frappe.get_doc("File", current_report.name)
+            # Generated reports are a verified service-side artifact. Bypass
+            # user permissions only for this owned File update.
+            file_doc.save_file(
+                content=content,
+                ignore_existing_file_check=True,
+                overwrite=True,
+            )
+            file_doc.save(ignore_permissions=True)
+            _schedule_obsolete_report_cleanup(existing_reports, file_doc.name)
+            return file_doc.file_url
+
     file_doc = frappe.get_doc(
         {
             "doctype": "File",
-            "file_name": file_name
-            or (
-                f"{REPORT_FILENAME_PREFIX}{statement.name}-"
-                f"{generated_at.strftime('%Y%m%d-%H%M%S')}-{frappe.generate_hash(length=6)}.pdf"
-            ),
+            "file_name": file_name or f"{REPORT_FILENAME_PREFIX}{statement.name}.pdf",
             "attached_to_doctype": "Bond Statement",
             "attached_to_name": statement.name,
-            "attached_to_field": "quantity_reconciliation_report",
+            "attached_to_field": REPORT_FIELD,
             "content": content,
             "is_private": 1,
         }
     ).insert()
+    _schedule_obsolete_report_cleanup(existing_reports, file_doc.name)
     return file_doc.file_url
+
+
+def delete_quantity_reconciliation_reports(statement_name: str) -> None:
+    """Remove statement-owned report Files after the parent deletion commits."""
+    for report in _get_report_files(statement_name):
+        _schedule_file_deletion(report.name)
+
+
+def _get_report_files(statement_name: str) -> list:
+    return frappe.qb.get_query(
+        "File",
+        fields=["name", "file_name", "file_url", "content_hash"],
+        filters={
+            "attached_to_doctype": "Bond Statement",
+            "attached_to_name": statement_name,
+            "attached_to_field": REPORT_FIELD,
+        },
+        order_by="creation asc, name asc",
+        ignore_permissions=True,
+    ).run(as_dict=True)
+
+
+def _file_exists(file_name: str) -> bool:
+    try:
+        return frappe.get_doc("File", file_name).exists_on_disk()
+    except (frappe.DoesNotExistError, OSError):
+        return False
+
+
+def _stable_generated_at(statement) -> str:
+    if not statement.creation:
+        return "unknown"
+    return get_datetime(statement.creation).strftime("%Y-%m-%d %H:%M:%S")
+
+
+def _schedule_obsolete_report_cleanup(reports, keep_name: str) -> None:
+    for report in reports:
+        if report.name != keep_name:
+            _schedule_file_deletion(report.name)
+
+
+def _schedule_file_deletion(file_name: str) -> None:
+    # File deletion needs its own worker transaction. Running delete_doc in an
+    # after_commit callback starts uncommitted database work in the web process.
+    frappe.enqueue(
+        REPORT_DELETE_METHOD,
+        queue="short",
+        enqueue_after_commit=True,
+        file_name=file_name,
+    )
+
+
+def delete_quantity_reconciliation_report_file(file_name: str) -> None:
+    """Delete an obsolete generated report in a worker-owned transaction."""
+    try:
+        if frappe.db.exists("File", file_name):
+            # Scheduling happens only after the statement permission boundary.
+            frappe.delete_doc("File", file_name, ignore_permissions=True)
+    except Exception:
+        frappe.logger("bond_management").exception(
+            "Bond Statement report cleanup failed: file=%s",
+            file_name,
+        )
+        raise
 
 
 def build_quantity_reconciliation_pdf(

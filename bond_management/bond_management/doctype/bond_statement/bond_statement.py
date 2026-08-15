@@ -34,7 +34,9 @@ from bond_management.bond_management.utils.statement_quantity_reconciliation imp
 )
 from bond_management.bond_management.utils.statement_quantity_report import (
     attach_quantity_reconciliation_report,
+    delete_quantity_reconciliation_reports,
 )
+from bond_management.bond_management.utils.validation import required_string
 
 
 class BondStatement(Document):
@@ -119,11 +121,19 @@ class BondStatement(Document):
         if not details:
             return
 
-        sync_statement_exchange_rates(self, details.exchange_rates)
-        report_url = attach_quantity_reconciliation_report(
-            self,
-            self.flags.quantity_reconciliation_comparisons or (),
-            file_name=self.flags.quantity_reconciliation_report_file_name,
+        # Keep derived rows and the report synchronous with the statement save.
+        # Each operation is idempotent, so a failed save can be retried safely.
+        self._run_update_side_effect(
+            "exchange-rates",
+            lambda: sync_statement_exchange_rates(self, details.exchange_rates),
+        )
+        report_url = self._run_update_side_effect(
+            "quantity-reconciliation-report",
+            lambda: attach_quantity_reconciliation_report(
+                self,
+                self.flags.quantity_reconciliation_comparisons or (),
+                file_name=self.flags.quantity_reconciliation_report_file_name,
+            ),
         )
         self.db_set("quantity_reconciliation_report", report_url, update_modified=False)
         if not self.flags.suppress_quantity_reconciliation_message:
@@ -131,12 +141,25 @@ class BondStatement(Document):
 
     def on_trash(self):
         delete_statement_exchange_rates(self.name)
+        delete_quantity_reconciliation_reports(self.name)
+
+    def _run_update_side_effect(self, stage, callback):
+        try:
+            return callback()
+        except Exception:
+            frappe.logger("bond_management").exception(
+                "Bond Statement side effect failed: statement=%s stage=%s",
+                self.name,
+                stage,
+            )
+            raise
 
     @frappe.whitelist(methods=["POST"])
     def read_statement_pdf(self):
         """Preview the portfolio and date extracted from the current attachment."""
         self.check_permission("create" if self.is_new() else "write")
-        details = get_statement_attachment_details(self.attachment, self.portfolio_name)
+        attachment = required_string(self.attachment, "Attachment")
+        details = get_statement_attachment_details(attachment, self.portfolio_name)
         return {
             "portfolio_name": details.portfolio_name,
             "statement_date": details.statement_date,

@@ -4,7 +4,6 @@ from dataclasses import dataclass, field
 from datetime import date, datetime
 from decimal import ROUND_HALF_EVEN, Decimal, InvalidOperation
 from io import BytesIO
-from pathlib import Path
 
 import frappe
 from frappe import _
@@ -12,6 +11,7 @@ from pypdf import PdfReader
 from pypdf.errors import DependencyError, FileNotDecryptedError, PdfReadError, PdfStreamError
 
 from bond_management.bond_management.utils.financial import quantize_percent, to_decimal
+from bond_management.bond_management.utils.private_attachment import read_private_pdf_attachment
 from bond_management.bond_management.utils.statement_pdf import (
     normalize_account_number,
 )
@@ -88,6 +88,25 @@ class TransactionAttachmentDetails:
     portfolio_name: str
     account_no: str
     transactions: tuple[TransactionAttachmentRow, ...]
+
+
+def transaction_attachment_row_values(
+    row: TransactionAttachmentRow,
+    portfolio_name: str | None = None,
+) -> dict:
+    """Return controller-independent Bond Transaction field values for a parsed row."""
+    return {
+        "transaction_reference": row.transaction_reference,
+        "transaction_type": row.transaction_type,
+        "isin": row.isin,
+        "portfolio_name": portfolio_name or row.portfolio_name,
+        "trade_date": row.trade_date,
+        "settlement_date": row.settlement_date,
+        "quantity_face_value": row.quantity_face_value,
+        "price": row.price,
+        "accrued_interest_paid": row.accrued_interest_paid,
+        "commission": row.commission,
+    }
 
 
 def parse_transaction_pdf_text(text: str) -> ParsedTransactionPdf:
@@ -196,7 +215,14 @@ def extract_transaction_pdf(content: bytes, passwords: list[str]) -> ParsedTrans
 
 def get_transaction_attachment_details(attachment: str) -> TransactionAttachmentDetails:
     """Read a private confirmation PDF and resolve its account, bonds, and commission rates."""
-    content = _read_private_transaction_attachment(attachment)
+    content, _original_filename = read_private_pdf_attachment(
+        attachment,
+        max_bytes=MAX_TRANSACTION_PDF_BYTES,
+        missing_message=_("Attach a PDF transaction confirmation before using automatic entry."),
+        extension_message=_("Automatic Bond Transaction entry requires a PDF attachment."),
+        private_message=_("Bond Transaction PDFs must be uploaded as private files."),
+        size_message=_("The transaction PDF must be 10 MB or smaller."),
+    )
     credentials = _get_portfolio_credentials()
     try:
         parsed = extract_transaction_pdf(
@@ -323,37 +349,6 @@ def _extract_positioned_page_text(page) -> str:
     return "\n".join(
         " ".join(text for _x, text in sorted(fragments_for_row)) for _y, fragments_for_row in rows
     )
-
-
-def _read_private_transaction_attachment(attachment: str) -> bytes:
-    if not attachment:
-        frappe.throw(_("Attach a PDF transaction confirmation before using automatic entry."))
-    if not attachment.lower().endswith(".pdf"):
-        frappe.throw(_("Automatic Bond Transaction entry requires a PDF attachment."))
-
-    files = frappe.qb.get_query(
-        "File",
-        fields=["name"],
-        filters={"file_url": attachment},
-        order_by="creation desc",
-        limit=1,
-        ignore_permissions=False,
-    ).run(pluck=True)
-    if not files:
-        frappe.throw(_("The attached PDF was not found or you do not have permission to read it."))
-
-    file_doc = frappe.get_doc("File", files[0])
-    file_doc.check_permission("read")
-    if not file_doc.is_private:
-        frappe.throw(_("Bond Transaction PDFs must be uploaded as private files."))
-
-    file_path = Path(file_doc.get_full_path()).resolve()
-    private_files_path = Path(frappe.get_site_path("private", "files")).resolve()
-    if not file_path.is_relative_to(private_files_path) or not file_path.is_file():
-        frappe.throw(_("The attached private PDF could not be found."))
-    if file_path.stat().st_size > MAX_TRANSACTION_PDF_BYTES:
-        frappe.throw(_("The transaction PDF must be 10 MB or smaller."))
-    return file_path.read_bytes()
 
 
 def _get_portfolio_credentials() -> list[TransactionPortfolioPdfCredentials]:
