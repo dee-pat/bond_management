@@ -214,7 +214,7 @@ context("Bond Yield Comparison", () => {
 		cy.wait("@yieldReport");
 
 		cy.get('.page-form .multiselect-list[data-fieldname="bonds"]').should("not.exist");
-		cy.get('[data-bond-yield-selection] .bond-yield-checkbox')
+		cy.get("[data-bond-yield-selection] .bond-yield-checkbox")
 			.should("have.length", 3)
 			.each(($checkbox) => cy.wrap($checkbox).should("be.checked"));
 		cy.get("[data-bond-yield-select-all]").should("be.checked");
@@ -239,7 +239,9 @@ context("Bond Yield Comparison", () => {
 		cy.get(`[data-bond-yield-selection] input[data-bond-yield-isin="${KES_BOND}"]`)
 			.uncheck()
 			.should("not.be.checked");
-		cy.get("[data-bond-yield-select-all]").should("not.be.checked").and("have.prop", "indeterminate", true);
+		cy.get("[data-bond-yield-select-all]")
+			.should("not.be.checked")
+			.and("have.prop", "indeterminate", true);
 		cy.window().then((window) => {
 			const chart = window.frappe.query_report.chart;
 			expect(chart.data.datasets).to.have.length(2);
@@ -267,7 +269,7 @@ context("Bond Yield Comparison", () => {
 			expect(chart.colors[1]).to.equal(chart.colors[2]);
 			expect(chart.colors[1]).to.equal(usd_color);
 		});
-		cy.get('[data-bond-yield-selection] .bond-yield-selection-summary').should(
+		cy.get("[data-bond-yield-selection] .bond-yield-selection-summary").should(
 			"contain",
 			"3 of 3 bonds selected"
 		);
@@ -280,8 +282,10 @@ context("Bond Yield Comparison", () => {
 		cy.get(".report-wrapper").should("not.be.visible");
 
 		cy.get("[data-bond-yield-select-all]").uncheck();
-		cy.get('[data-bond-yield-selection] .bond-yield-checkbox:checked').should("not.exist");
-		cy.get("[data-bond-yield-select-all]").should("not.be.checked").and("have.prop", "indeterminate", false);
+		cy.get("[data-bond-yield-selection] .bond-yield-checkbox:checked").should("not.exist");
+		cy.get("[data-bond-yield-select-all]")
+			.should("not.be.checked")
+			.and("have.prop", "indeterminate", false);
 		cy.get(".chart-wrapper").should(
 			"contain",
 			"Select one or more bonds to display their stored Future XIRR."
@@ -314,8 +318,11 @@ context("Bond Yield Comparison", () => {
 		cy.get("[data-bond-yield-hover-tooltip]").should("be.visible");
 		cy.get("[data-bond-yield-hover-isin]").should("have.text", NO_OVERLAP_BOND);
 		cy.get("[data-bond-yield-hover-value]").should("contain", "8.75%");
-		cy.get("[data-bond-yield-hover-tooltip] [data-bond-yield-hover-isin]").should("have.length", 1);
-		cy.get('[data-bond-yield-selection] .bond-yield-checkbox')
+		cy.get("[data-bond-yield-hover-tooltip] [data-bond-yield-hover-isin]").should(
+			"have.length",
+			1
+		);
+		cy.get("[data-bond-yield-selection] .bond-yield-checkbox")
 			.should("have.length", 6)
 			.each(($checkbox) => cy.wrap($checkbox).should("be.checked"));
 		cy.window().then((window) => {
@@ -325,8 +332,9 @@ context("Bond Yield Comparison", () => {
 			expect(chart.data.datasets[0].values).to.not.include(0);
 			expect(chart.legendArea).to.be.undefined;
 		});
-		cy.get(`[data-bond-yield-selection] input[data-bond-yield-isin="${NO_OVERLAP_BOND}"]`)
-			.uncheck();
+		cy.get(
+			`[data-bond-yield-selection] input[data-bond-yield-isin="${NO_OVERLAP_BOND}"]`
+		).uncheck();
 		cy.get('.chart-wrapper [data-chart-mode="gap-aware"]').should("be.visible");
 		cy.window().then((window) => {
 			expect(window.frappe.query_report.chart.data.datasets).to.have.length(5);

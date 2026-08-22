@@ -130,8 +130,9 @@ function initialize_selected_bonds(report, model) {
 function get_selected_chart_model(report, model) {
 	const selected = report._bond_yield_selected_isins || new Set();
 	const datasets = model.datasets.filter((dataset) => selected.has(dataset.isin));
-	const shared_dates = model.dates.filter((date, index) =>
-		datasets.length && datasets.every((dataset) => dataset.values[index] !== null)
+	const shared_dates = model.dates.filter(
+		(date, index) =>
+			datasets.length && datasets.every((dataset) => dataset.values[index] !== null)
 	);
 	return { ...model, datasets, shared_dates };
 }
@@ -142,7 +143,10 @@ function render_bond_yield_chart(report, model) {
 		render_gap_aware_chart(report, selected_model);
 	} else {
 		report.chart_options = null;
-		show_no_chart_message(report, "Select one or more bonds to display their stored Future XIRR.");
+		show_no_chart_message(
+			report,
+			"Select one or more bonds to display their stored Future XIRR."
+		);
 	}
 }
 
@@ -221,7 +225,9 @@ function render_bond_selector(report, model) {
 			width: "10px",
 		});
 		bond_cell.append(color, document.createTextNode(dataset.isin));
-		$body.append($("<tr>").append(checkbox_cell, bond_cell, $("<td>").text(dataset.currency || "—")));
+		$body.append(
+			$("<tr>").append(checkbox_cell, bond_cell, $("<td>").text(dataset.currency || "—"))
+		);
 	});
 
 	report._bond_yield_selector = $section;
@@ -267,9 +273,14 @@ function copy_audit_data(report) {
 	const rows = report.raw_data?.result || [];
 	const lines = [
 		columns.map((column) => audit_cell(column.label)).join("\t"),
-		...rows.map((row) => columns.map((column) => audit_cell(row[column.fieldname])).join("\t")),
+		...rows.map((row) =>
+			columns.map((column) => audit_cell(row[column.fieldname])).join("\t")
+		),
 	];
-	frappe.utils.copy_to_clipboard(lines.join("\n"), "Audit data copied to clipboard. You can paste it into Excel.");
+	frappe.utils.copy_to_clipboard(
+		lines.join("\n"),
+		"Audit data copied to clipboard. You can paste it into Excel."
+	);
 }
 
 function audit_cell(value) {
@@ -320,22 +331,34 @@ function make_gap_chart_svg(model, geometry = get_gap_chart_geometry(model)) {
 	const { width, left, top, bottom, height, plot_width, range, x, y } = geometry;
 	const parts = [
 		`<svg viewBox="0 0 ${width} ${height}" width="100%" height="${height}" role="img" aria-label="Future XIRR comparison chart" data-chart-mode="gap-aware">`,
-		`<text x="${width / 2}" y="20" text-anchor="middle" class="chart-title">Future XIRR (%) by Year</text>`,
-		`<text x="18" y="${(top + bottom) / 2}" transform="rotate(-90 18 ${(top + bottom) / 2})" text-anchor="middle" class="chart-axis-title">Future XIRR (%)</text>`,
-		`<text x="${left + plot_width / 2}" y="${bottom + 48}" text-anchor="middle" class="chart-axis-title">Market date (year)</text>`,
+		`<text x="${
+			width / 2
+		}" y="20" text-anchor="middle" class="chart-title">Future XIRR (%) by Year</text>`,
+		`<text x="18" y="${(top + bottom) / 2}" transform="rotate(-90 18 ${
+			(top + bottom) / 2
+		})" text-anchor="middle" class="chart-axis-title">Future XIRR (%)</text>`,
+		`<text x="${left + plot_width / 2}" y="${
+			bottom + 48
+		}" text-anchor="middle" class="chart-axis-title">Market date (year)</text>`,
 	];
 
 	for (let index = 0; index < 5; index += 1) {
 		const value = range.max - ((range.max - range.min) * index) / 4;
 		const position = y(value);
 		parts.push(
-			`<line x1="${left}" x2="${left + plot_width}" y1="${position}" y2="${position}" class="chart-grid-line"/>`,
-			`<text x="${left - 10}" y="${position + 4}" text-anchor="end" class="chart-axis-label">${format_percent(value, 1)}</text>`
+			`<line x1="${left}" x2="${
+				left + plot_width
+			}" y1="${position}" y2="${position}" class="chart-grid-line"/>`,
+			`<text x="${left - 10}" y="${
+				position + 4
+			}" text-anchor="end" class="chart-axis-label">${format_percent(value, 1)}</text>`
 		);
 	}
 	parts.push(
 		`<line x1="${left}" x2="${left}" y1="${top}" y2="${bottom}" class="chart-axis-line"/>`,
-		`<line x1="${left}" x2="${left + plot_width}" y1="${bottom}" y2="${bottom}" class="chart-axis-line"/>`
+		`<line x1="${left}" x2="${
+			left + plot_width
+		}" y1="${bottom}" y2="${bottom}" class="chart-axis-line"/>`
 	);
 
 	const year_positions = new Map();
@@ -347,7 +370,9 @@ function make_gap_chart_svg(model, geometry = get_gap_chart_geometry(model)) {
 	});
 	year_positions.forEach((x, year) => {
 		parts.push(
-			`<text x="${x}" y="${bottom + 18}" text-anchor="middle" class="chart-axis-label">${year}</text>`
+			`<text x="${x}" y="${
+				bottom + 18
+			}" text-anchor="middle" class="chart-axis-label">${year}</text>`
 		);
 	});
 
@@ -372,9 +397,13 @@ function append_data_line(parts, points, color, name, dataset_index) {
 	if (points.length < 2) {
 		return;
 	}
-	const path = points.map((point, index) => `${index ? "L" : "M"} ${point.x} ${point.y}`).join(" ");
+	const path = points
+		.map((point, index) => `${index ? "L" : "M"} ${point.x} ${point.y}`)
+		.join(" ");
 	parts.push(
-		`<path d="${path}" fill="none" stroke="${color}" stroke-width="2" pointer-events="stroke" class="chart-data-line" data-bond-yield-dataset="${dataset_index}"><title>${escape_svg(name)}</title></path>`
+		`<path d="${path}" fill="none" stroke="${color}" stroke-width="2" pointer-events="stroke" class="chart-data-line" data-bond-yield-dataset="${dataset_index}"><title>${escape_svg(
+			name
+		)}</title></path>`
 	);
 }
 
@@ -392,7 +421,7 @@ function bind_chart_hover(report, model, geometry) {
 	tooltip.style.cssText =
 		"display:none;position:absolute;z-index:10;pointer-events:none;padding:6px 8px;border:1px solid var(--border-color);border-radius:4px;background:var(--card-bg);box-shadow:var(--card-shadow);font-size:12px;";
 	tooltip.innerHTML =
-		'<strong data-bond-yield-hover-isin></strong><br><span data-bond-yield-hover-value></span>';
+		"<strong data-bond-yield-hover-isin></strong><br><span data-bond-yield-hover-value></span>";
 	$chart[0].appendChild(tooltip);
 
 	$chart.find(".chart-data-line").each((_, line) => {
@@ -405,7 +434,9 @@ function bind_chart_hover(report, model, geometry) {
 			}
 
 			tooltip.querySelector("[data-bond-yield-hover-isin]").textContent = dataset.isin;
-			tooltip.querySelector("[data-bond-yield-hover-value]").textContent = `Future XIRR: ${format_percent(value, 2)}`;
+			tooltip.querySelector(
+				"[data-bond-yield-hover-value]"
+			).textContent = `Future XIRR: ${format_percent(value, 2)}`;
 			position_chart_tooltip(tooltip, event, $chart[0]);
 		});
 		line.addEventListener("mouseleave", () => {
