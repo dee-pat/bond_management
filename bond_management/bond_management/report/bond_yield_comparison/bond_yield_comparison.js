@@ -33,10 +33,7 @@ frappe.query_reports["Bond Yield Comparison"] = {
 		},
 	],
 
-	get_chart_data(columns, result) {
-		return make_frappe_chart_options(build_chart_model(result));
-	},
-
+	// The custom SVG renderer owns the chart container; do not configure a second Frappe chart.
 	after_refresh(report) {
 		remove_report_controls(report);
 		if (report.raw_data?.result?.length) {
@@ -54,7 +51,6 @@ function build_chart_model(result) {
 	const rows = result.filter((row) => row && Object.keys(row).length);
 	const dates = [...new Set(rows.map((row) => date_key(row.date)).filter(Boolean))].sort();
 	const bonds = [...new Set(rows.map((row) => row.isin).filter(Boolean))].sort();
-	const date_index = new Map(dates.map((date, index) => [date, index]));
 	const rows_by_bond_date = new Map(
 		rows.map((row) => [`${row.isin}::${date_key(row.date)}`, row])
 	);
@@ -74,46 +70,7 @@ function build_chart_model(result) {
 			color: currency_colors.get(currency),
 		};
 	});
-	const shared_dates = dates.filter((date, index) =>
-		datasets.every((dataset) => dataset.values[index] !== null)
-	);
-
-	return { dates, date_index, datasets, shared_dates };
-}
-
-function make_frappe_chart_options(model) {
-	const dates = model.shared_dates;
-	const datasets = model.datasets.map((dataset) => ({
-		...dataset,
-		values: dates.map((date) => dataset.values[model.date_index.get(date)]),
-	}));
-	if (!dates.length || !datasets.length) {
-		return;
-	}
-
-	return {
-		title: "Future XIRR (%) by Year",
-		data: {
-			labels: dates.map((date) => date.slice(0, 4)),
-			datasets,
-		},
-		type: "line",
-		colors: datasets.map((dataset) => dataset.color),
-		fieldtype: "Percent",
-		height: 360,
-		showLegend: 0,
-		lineOptions: { hideDots: 1, heatline: 0 },
-		axisOptions: {
-			shortenYAxisNumbers: 1,
-			xAxisMode: "tick",
-			xIsSeries: 1,
-			numberFormatter: (value) => `${Number(value).toFixed(1)}%`,
-		},
-		tooltipOptions: {
-			formatTooltipX: (value) => String(value),
-			formatTooltipY: (value) => `${Number(value).toFixed(2)}%`,
-		},
-	};
+	return { dates, datasets };
 }
 
 function initialize_selected_bonds(report, model) {
@@ -130,11 +87,7 @@ function initialize_selected_bonds(report, model) {
 function get_selected_chart_model(report, model) {
 	const selected = report._bond_yield_selected_isins || new Set();
 	const datasets = model.datasets.filter((dataset) => selected.has(dataset.isin));
-	const shared_dates = model.dates.filter(
-		(date, index) =>
-			datasets.length && datasets.every((dataset) => dataset.values[index] !== null)
-	);
-	return { ...model, datasets, shared_dates };
+	return { ...model, datasets };
 }
 
 function render_bond_yield_chart(report, model) {
