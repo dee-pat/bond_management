@@ -51,121 +51,81 @@ onMounted(() => void loadBonds());
 </script>
 
 <template>
-  <section
-    class="record-surface"
-    aria-labelledby="bond-list-title"
-  >
-    <div class="surface-heading">
-      <div>
-        <p class="surface-kicker">
-          Shared reference data
-        </p>
-        <h2 id="bond-list-title">
-          Bond catalog
-        </h2>
-      </div>
-    </div>
+	<section class="record-surface" aria-labelledby="bond-list-title">
+		<div class="surface-heading">
+			<div>
+				<p class="surface-kicker">Shared reference data</p>
+				<h2 id="bond-list-title">Bond catalog</h2>
+			</div>
+		</div>
 
-    <div
-      v-if="loading"
-      class="surface-state"
-      aria-live="polite"
-    >
-      Loading bonds…
-    </div>
+		<div v-if="loading" class="surface-state" aria-live="polite">Loading bonds…</div>
 
-    <div
-      v-else-if="error"
-      class="surface-state surface-state--error"
-      role="alert"
-    >
-      <p>{{ error }}</p>
-      <button
-        class="secondary-button"
-        type="button"
-        @click="loadBonds(pagination.start)"
-      >
-        Retry
-      </button>
-    </div>
+		<div v-else-if="error" class="surface-state surface-state--error" role="alert">
+			<p>{{ error }}</p>
+			<button class="secondary-button" type="button" @click="loadBonds(pagination.start)">
+				Retry
+			</button>
+		</div>
 
-    <div
-      v-else-if="bonds.length === 0"
-      class="surface-state"
-      data-testid="bonds-empty"
-    >
-      No bonds are available.
-    </div>
+		<div v-else-if="bonds.length === 0" class="surface-state" data-testid="bonds-empty">
+			No bonds are available.
+		</div>
 
-    <template v-else>
-      <div class="record-table-wrap">
-        <table class="record-table">
-          <thead>
-            <tr>
-              <th scope="col">
-                Bond Name
-              </th>
-              <th scope="col">
-                ISIN
-              </th>
-              <th scope="col">
-                Currency
-              </th>
-              <th scope="col">
-                Issue Date
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr
-              v-for="bond in bonds"
-              :key="bond.name"
-              data-testid="bond-row"
-            >
-              <td data-label="Bond Name">
-                <RouterLink
-                  :to="`/bonds/${encodeURIComponent(bond.name)}`"
-                  :aria-label="`View bond ${bond.name}`"
-                >
-                  {{ bond.bond_name }}
-                </RouterLink>
-              </td>
-              <td data-label="ISIN">
-                {{ bond.isin }}
-              </td>
-              <td data-label="Currency">
-                {{ bond.currency }}
-              </td>
-              <td data-label="Issue Date">
-                {{ formatDate(bond.issue_date) }}
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+		<template v-else>
+			<div class="record-table-wrap">
+				<table class="record-table">
+					<thead>
+						<tr>
+							<th scope="col">Bond Name</th>
+							<th scope="col">ISIN</th>
+							<th scope="col">Currency</th>
+							<th scope="col">Issue Date</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr v-for="bond in bonds" :key="bond.name" data-testid="bond-row">
+							<td data-label="Bond Name">
+								<RouterLink
+									:to="`/bonds/${encodeURIComponent(bond.name)}`"
+									:aria-label="`View bond ${bond.name}`"
+								>
+									{{ bond.bond_name }}
+								</RouterLink>
+							</td>
+							<td data-label="ISIN">
+								{{ bond.isin }}
+							</td>
+							<td data-label="Currency">
+								{{ bond.currency }}
+							</td>
+							<td data-label="Issue Date">
+								{{ formatDate(bond.issue_date) }}
+							</td>
+						</tr>
+					</tbody>
+				</table>
+			</div>
 
-      <div
-        class="pagination-controls"
-        aria-label="Bond pages"
-      >
-        <button
-          class="secondary-button"
-          type="button"
-          :disabled="pagination.start === 0"
-          @click="loadBonds(Math.max(0, pagination.start - pagination.page_length))"
-        >
-          Previous
-        </button>
-        <span>{{ pagination.start + 1 }}–{{ pagination.start + bonds.length }}</span>
-        <button
-          class="secondary-button"
-          type="button"
-          :disabled="!pagination.has_more"
-          @click="loadBonds(pagination.start + pagination.page_length)"
-        >
-          Next
-        </button>
-      </div>
-    </template>
-  </section>
+			<div class="pagination-controls" aria-label="Bond pages">
+				<button
+					class="secondary-button"
+					type="button"
+					:disabled="pagination.start === 0"
+					@click="loadBonds(Math.max(0, pagination.start - pagination.page_length))"
+				>
+					Previous
+				</button>
+				<span>{{ pagination.start + 1 }}–{{ pagination.start + bonds.length }}</span>
+				<button
+					class="secondary-button"
+					type="button"
+					:disabled="!pagination.has_more"
+					@click="loadBonds(pagination.start + pagination.page_length)"
+				>
+					Next
+				</button>
+			</div>
+		</template>
+	</section>
 </template>

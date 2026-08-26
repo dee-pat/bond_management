@@ -173,139 +173,100 @@ function sanitizedText(value: string): string {
 </script>
 
 <template>
-  <section
-    class="record-surface performance-surface"
-    aria-labelledby="performance-title"
-  >
-    <div class="surface-heading">
-      <div>
-        <p class="surface-kicker">
-          As-of portfolio view
-        </p>
-        <h2 id="performance-title">
-          Performance report
-        </h2>
-      </div>
-      <span class="read-only-badge">Read only</span>
-    </div>
+	<section class="record-surface performance-surface" aria-labelledby="performance-title">
+		<div class="surface-heading">
+			<div>
+				<p class="surface-kicker">As-of portfolio view</p>
+				<h2 id="performance-title">Performance report</h2>
+			</div>
+			<span class="read-only-badge">Read only</span>
+		</div>
 
-    <div
-      v-if="!hasAssignments"
-      class="surface-state"
-      data-testid="performance-no-assignments"
-    >
-      No portfolios are assigned to your account.
-    </div>
+		<div v-if="!hasAssignments" class="surface-state" data-testid="performance-no-assignments">
+			No portfolios are assigned to your account.
+		</div>
 
-    <template v-else>
-      <form
-        class="performance-filters"
-        data-testid="performance-filters"
-        @submit.prevent="runReport"
-      >
-        <div class="surface-filter">
-          <label for="performance-portfolio">Portfolio</label>
-          <select
-            id="performance-portfolio"
-            v-model="selectedPortfolio"
-            name="portfolio"
-            required
-          >
-            <option value="">
-              Select portfolio
-            </option>
-            <option
-              v-for="portfolio in bootstrap.portfolios"
-              :key="portfolio.name"
-              :value="portfolio.name"
-            >
-              {{ portfolio.label }}
-            </option>
-          </select>
-        </div>
+		<template v-else>
+			<form
+				class="performance-filters"
+				data-testid="performance-filters"
+				@submit.prevent="runReport"
+			>
+				<div class="surface-filter">
+					<label for="performance-portfolio">Portfolio</label>
+					<select
+						id="performance-portfolio"
+						v-model="selectedPortfolio"
+						name="portfolio"
+						required
+					>
+						<option value="">Select portfolio</option>
+						<option
+							v-for="portfolio in bootstrap.portfolios"
+							:key="portfolio.name"
+							:value="portfolio.name"
+						>
+							{{ portfolio.label }}
+						</option>
+					</select>
+				</div>
 
-        <div class="surface-filter">
-          <label for="performance-valuation-date">Valuation Date</label>
-          <input
-            id="performance-valuation-date"
-            v-model="valuationDate"
-            name="valuation_date"
-            type="date"
-            required
-          >
-        </div>
+				<div class="surface-filter">
+					<label for="performance-valuation-date">Valuation Date</label>
+					<input
+						id="performance-valuation-date"
+						v-model="valuationDate"
+						name="valuation_date"
+						type="date"
+						required
+					/>
+				</div>
 
-        <button
-          class="performance-run-button"
-          type="submit"
-          :disabled="!canRun"
-        >
-          Run
-        </button>
-      </form>
+				<button class="performance-run-button" type="submit" :disabled="!canRun">
+					Run
+				</button>
+			</form>
 
-      <div
-        v-if="loading"
-        class="surface-state"
-        aria-live="polite"
-      >
-        Loading portfolio performance…
-      </div>
+			<div v-if="loading" class="surface-state" aria-live="polite">
+				Loading portfolio performance…
+			</div>
 
-      <div
-        v-else-if="error"
-        class="surface-state surface-state--error"
-        role="alert"
-      >
-        <p>{{ error }}</p>
-        <button
-          class="secondary-button"
-          type="button"
-          @click="runReport"
-        >
-          Retry
-        </button>
-      </div>
+			<div v-else-if="error" class="surface-state surface-state--error" role="alert">
+				<p>{{ error }}</p>
+				<button class="secondary-button" type="button" @click="runReport">Retry</button>
+			</div>
 
-      <div
-        v-else-if="!hasRun"
-        class="surface-state"
-        data-testid="performance-initial"
-      >
-        Select a portfolio, then run the report.
-      </div>
+			<div v-else-if="!hasRun" class="surface-state" data-testid="performance-initial">
+				Select a portfolio, then run the report.
+			</div>
 
-      <div
-        v-else-if="report && report.rows.length === 0"
-        class="surface-state"
-        data-testid="performance-empty"
-      >
-        No portfolio performance was found for these filters.
-      </div>
+			<div
+				v-else-if="report && report.rows.length === 0"
+				class="surface-state"
+				data-testid="performance-empty"
+			>
+				No portfolio performance was found for these filters.
+			</div>
 
-      <template v-else-if="report">
-        <PortfolioPerformanceTable
-          :columns="report.columns"
-          :rows="report.rows"
-          :copying-key="copyingKey"
-          @copy="copyCashflows"
-        />
-        <p
-          v-if="copyingKey"
-          class="performance-copy-feedback"
-          aria-live="polite"
-        >
-          Copying cash flows…
-        </p>
-        <p
-          v-else-if="copyFeedback"
-          class="performance-copy-feedback"
-          :class="`performance-copy-feedback--${copyFeedback.kind}`"
-          :role="copyFeedback.kind === 'error' ? 'alert' : 'status'"
-        >
-          {{ copyFeedback.message }}
-        </p>
-      </template>
-    </template>
-  </section>
+			<template v-else-if="report">
+				<PortfolioPerformanceTable
+					:columns="report.columns"
+					:rows="report.rows"
+					:copying-key="copyingKey"
+					@copy="copyCashflows"
+				/>
+				<p v-if="copyingKey" class="performance-copy-feedback" aria-live="polite">
+					Copying cash flows…
+				</p>
+				<p
+					v-else-if="copyFeedback"
+					class="performance-copy-feedback"
+					:class="`performance-copy-feedback--${copyFeedback.kind}`"
+					:role="copyFeedback.kind === 'error' ? 'alert' : 'status'"
+				>
+					{{ copyFeedback.message }}
+				</p>
+			</template>
+		</template>
+	</section>
 </template>

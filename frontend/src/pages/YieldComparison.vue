@@ -223,7 +223,7 @@ function numericValue(value: unknown): number | null {
 					name="from_date"
 					type="date"
 					@input="datesEdited = true"
-				>
+				/>
 			</div>
 
 			<div class="surface-filter">
@@ -235,7 +235,7 @@ function numericValue(value: unknown): number | null {
 					name="to_date"
 					type="date"
 					@input="datesEdited = true"
-				>
+				/>
 			</div>
 
 			<button class="performance-run-button" type="submit" :disabled="!canRun">Run</button>

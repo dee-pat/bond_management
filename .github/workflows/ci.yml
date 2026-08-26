@@ -341,7 +341,7 @@ jobs:
         working-directory: ${{ runner.temp }}/bond-management-playwright-${{ github.run_id }}-${{ github.run_attempt }}
         run: apps/bond_management/scripts/verify.sh playwright
         env:
-          BASE_URL: http://test_site:8000
+          BASE_URL: http://localhost:8000
           CI: 'Yes'
 
       - name: Upload Playwright failure artifacts

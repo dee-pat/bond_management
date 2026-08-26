@@ -103,61 +103,58 @@ function actionFor(
 </script>
 
 <template>
-  <div class="performance-table-wrap">
-    <table
-      class="performance-table"
-      data-testid="performance-table"
-    >
-      <thead>
-        <tr>
-          <th
-            v-for="column in props.columns"
-            :key="column.fieldname"
-            scope="col"
-            :title="column.description ?? undefined"
-          >
-            {{ column.label }}
-          </th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr
-          v-for="row in props.rows"
-          :key="row.isin"
-          :class="{ 'performance-table__total': row.isin === 'TOTAL' }"
-          data-testid="performance-row"
-        >
-          <td
-            v-for="column in props.columns"
-            :key="column.fieldname"
-            :data-label="column.label"
-          >
-            <RouterLink
-              v-if="column.fieldname === 'isin' && row.isin !== 'TOTAL'"
-              :to="`/bonds/${encodeURIComponent(row.isin)}`"
-              :aria-label="`View bond ${row.isin}`"
-            >
-              {{ row.isin }}
-            </RouterLink>
-            <strong v-else-if="column.fieldname === 'isin' && row.isin === 'TOTAL'">
-              TOTAL
-            </strong>
-            <button
-              v-else-if="actionFor(row, column)"
-              class="performance-cashflow-button"
-              type="button"
-              :disabled="copyingKey !== null"
-              :aria-label="`Copy ${
-                actionFor(row, column)?.cashflow_currency
-              } cash flows for ${row.isin} ${column.label}`"
-              @click="emit('copy', actionFor(row, column)!)"
-            >
-              {{ formattedValue(row, column) }}
-            </button>
-            <span v-else>{{ formattedValue(row, column) }}</span>
-          </td>
-        </tr>
-      </tbody>
-    </table>
-  </div>
+	<div class="performance-table-wrap">
+		<table class="performance-table" data-testid="performance-table">
+			<thead>
+				<tr>
+					<th
+						v-for="column in props.columns"
+						:key="column.fieldname"
+						scope="col"
+						:title="column.description ?? undefined"
+					>
+						{{ column.label }}
+					</th>
+				</tr>
+			</thead>
+			<tbody>
+				<tr
+					v-for="row in props.rows"
+					:key="row.isin"
+					:class="{ 'performance-table__total': row.isin === 'TOTAL' }"
+					data-testid="performance-row"
+				>
+					<td
+						v-for="column in props.columns"
+						:key="column.fieldname"
+						:data-label="column.label"
+					>
+						<RouterLink
+							v-if="column.fieldname === 'isin' && row.isin !== 'TOTAL'"
+							:to="`/bonds/${encodeURIComponent(row.isin)}`"
+							:aria-label="`View bond ${row.isin}`"
+						>
+							{{ row.isin }}
+						</RouterLink>
+						<strong v-else-if="column.fieldname === 'isin' && row.isin === 'TOTAL'">
+							TOTAL
+						</strong>
+						<button
+							v-else-if="actionFor(row, column)"
+							class="performance-cashflow-button"
+							type="button"
+							:disabled="copyingKey !== null"
+							:aria-label="`Copy ${
+								actionFor(row, column)?.cashflow_currency
+							} cash flows for ${row.isin} ${column.label}`"
+							@click="emit('copy', actionFor(row, column)!)"
+						>
+							{{ formattedValue(row, column) }}
+						</button>
+						<span v-else>{{ formattedValue(row, column) }}</span>
+					</td>
+				</tr>
+			</tbody>
+		</table>
+	</div>
 </template>

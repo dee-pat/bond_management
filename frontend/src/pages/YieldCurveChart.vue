@@ -116,134 +116,109 @@ function pointLabel(point: YieldPoint): string {
 </script>
 
 <template>
-  <section class="yield-curve-section">
-    <h3>Yield Curve</h3>
-    <div
-      v-if="points.length === 0"
-      class="surface-state"
-      data-testid="yield-curve-empty"
-    >
-      No valid yield-curve data.
-    </div>
-    <div
-      v-else
-      class="yield-curve"
-      data-testid="yield-curve"
-    >
-      <div
-        class="yield-curve__legend"
-        aria-label="Yield curve currencies"
-        role="list"
-      >
-        <span
-          v-for="item in series"
-          :key="item.currency"
-          role="listitem"
-        >
-          <i
-            :style="{ backgroundColor: item.color }"
-            aria-hidden="true"
-          />
-          {{ item.currency }}
-        </span>
-      </div>
+	<section class="yield-curve-section">
+		<h3>Yield Curve</h3>
+		<div v-if="points.length === 0" class="surface-state" data-testid="yield-curve-empty">
+			No valid yield-curve data.
+		</div>
+		<div v-else class="yield-curve" data-testid="yield-curve">
+			<div class="yield-curve__legend" aria-label="Yield curve currencies" role="list">
+				<span v-for="item in series" :key="item.currency" role="listitem">
+					<i :style="{ backgroundColor: item.color }" aria-hidden="true" />
+					{{ item.currency }}
+				</span>
+			</div>
 
-      <svg
-        :viewBox="`0 0 ${width} ${height}`"
-        role="img"
-        aria-label="Yield curve by currency and weighted average principal repayment"
-      >
-        <title>Yield Curve</title>
+			<svg
+				:viewBox="`0 0 ${width} ${height}`"
+				role="img"
+				aria-label="Yield curve by currency and weighted average principal repayment"
+			>
+				<title>Yield Curve</title>
 
-        <g
-          v-for="index in tickIndexes"
-          :key="`tick-${index}`"
-        >
-          <line
-            :x1="margin.left"
-            :x2="margin.left + plotWidth"
-            :y1="yPosition(yTickValue(index))"
-            :y2="yPosition(yTickValue(index))"
-            class="yield-curve__gridline"
-          />
-          <text
-            :x="margin.left - 10"
-            :y="yPosition(yTickValue(index)) + 4"
-            text-anchor="end"
-          >
-            {{ formatPercent(yTickValue(index)) }}
-          </text>
-          <line
-            :x1="xPosition(xTickValue(index))"
-            :x2="xPosition(xTickValue(index))"
-            :y1="margin.top + plotHeight"
-            :y2="margin.top + plotHeight + 5"
-            class="yield-curve__axis"
-          />
-          <text
-            :x="xPosition(xTickValue(index))"
-            :y="margin.top + plotHeight + 20"
-            text-anchor="middle"
-          >
-            {{ formatNumber(xTickValue(index), 2) }}
-          </text>
-        </g>
+				<g v-for="index in tickIndexes" :key="`tick-${index}`">
+					<line
+						:x1="margin.left"
+						:x2="margin.left + plotWidth"
+						:y1="yPosition(yTickValue(index))"
+						:y2="yPosition(yTickValue(index))"
+						class="yield-curve__gridline"
+					/>
+					<text
+						:x="margin.left - 10"
+						:y="yPosition(yTickValue(index)) + 4"
+						text-anchor="end"
+					>
+						{{ formatPercent(yTickValue(index)) }}
+					</text>
+					<line
+						:x1="xPosition(xTickValue(index))"
+						:x2="xPosition(xTickValue(index))"
+						:y1="margin.top + plotHeight"
+						:y2="margin.top + plotHeight + 5"
+						class="yield-curve__axis"
+					/>
+					<text
+						:x="xPosition(xTickValue(index))"
+						:y="margin.top + plotHeight + 20"
+						text-anchor="middle"
+					>
+						{{ formatNumber(xTickValue(index), 2) }}
+					</text>
+				</g>
 
-        <line
-          :x1="margin.left"
-          :x2="margin.left"
-          :y1="margin.top"
-          :y2="margin.top + plotHeight"
-          class="yield-curve__axis"
-        />
-        <line
-          :x1="margin.left"
-          :x2="margin.left + plotWidth"
-          :y1="margin.top + plotHeight"
-          :y2="margin.top + plotHeight"
-          class="yield-curve__axis"
-        />
+				<line
+					:x1="margin.left"
+					:x2="margin.left"
+					:y1="margin.top"
+					:y2="margin.top + plotHeight"
+					class="yield-curve__axis"
+				/>
+				<line
+					:x1="margin.left"
+					:x2="margin.left + plotWidth"
+					:y1="margin.top + plotHeight"
+					:y2="margin.top + plotHeight"
+					class="yield-curve__axis"
+				/>
 
-        <g
-          v-for="item in series"
-          :key="`series-${item.currency}`"
-        >
-          <polyline
-            :points="linePoints(item.points)"
-            :stroke="item.color"
-            class="yield-curve__line"
-          />
-          <circle
-            v-for="point in item.points"
-            :key="`${point.isin}-${point.years}`"
-            :cx="xPosition(point.years)"
-            :cy="yPosition(point.yieldPercent)"
-            :fill="item.color"
-            :aria-label="pointLabel(point)"
-            class="yield-curve__point"
-            r="7"
-            tabindex="0"
-          >
-            <title>{{ pointLabel(point) }}</title>
-          </circle>
-        </g>
+				<g v-for="item in series" :key="`series-${item.currency}`">
+					<polyline
+						:points="linePoints(item.points)"
+						:stroke="item.color"
+						class="yield-curve__line"
+					/>
+					<circle
+						v-for="point in item.points"
+						:key="`${point.isin}-${point.years}`"
+						:cx="xPosition(point.years)"
+						:cy="yPosition(point.yieldPercent)"
+						:fill="item.color"
+						:aria-label="pointLabel(point)"
+						class="yield-curve__point"
+						r="7"
+						tabindex="0"
+					>
+						<title>{{ pointLabel(point) }}</title>
+					</circle>
+				</g>
 
-        <text
-          :x="margin.left + plotWidth / 2"
-          :y="height - 8"
-          class="yield-curve__axis-label"
-          text-anchor="middle"
-        >
-          Weighted average principal repayment years
-        </text>
-        <text
-          :transform="`translate(18 ${margin.top + plotHeight / 2}) rotate(-90)`"
-          class="yield-curve__axis-label"
-          text-anchor="middle"
-        >
-          Future XIRR (%)
-        </text>
-      </svg>
-    </div>
-  </section>
+				<text
+					:x="margin.left + plotWidth / 2"
+					:y="height - 8"
+					class="yield-curve__axis-label"
+					text-anchor="middle"
+				>
+					Weighted average principal repayment years
+				</text>
+				<text
+					:transform="`translate(18 ${margin.top + plotHeight / 2}) rotate(-90)`"
+					class="yield-curve__axis-label"
+					text-anchor="middle"
+				>
+					Future XIRR (%)
+				</text>
+			</svg>
+		</div>
+	</section>
 </template>

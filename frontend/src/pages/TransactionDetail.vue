@@ -107,65 +107,33 @@ onMounted(() => void loadTransaction());
 </script>
 
 <template>
-  <section
-    class="transaction-surface"
-    aria-labelledby="transaction-detail-title"
-  >
-    <RouterLink
-      class="back-link"
-      to="/transactions"
-    >
-      ← Back to transactions
-    </RouterLink>
+	<section class="transaction-surface" aria-labelledby="transaction-detail-title">
+		<RouterLink class="back-link" to="/transactions"> ← Back to transactions </RouterLink>
 
-    <div
-      v-if="loading"
-      class="surface-state"
-      aria-live="polite"
-    >
-      Loading transaction…
-    </div>
+		<div v-if="loading" class="surface-state" aria-live="polite">Loading transaction…</div>
 
-    <div
-      v-else-if="error"
-      class="surface-state surface-state--error"
-      role="alert"
-    >
-      <p>{{ error }}</p>
-      <button
-        class="secondary-button"
-        type="button"
-        @click="loadTransaction"
-      >
-        Retry
-      </button>
-    </div>
+		<div v-else-if="error" class="surface-state surface-state--error" role="alert">
+			<p>{{ error }}</p>
+			<button class="secondary-button" type="button" @click="loadTransaction">Retry</button>
+		</div>
 
-    <template v-else-if="transaction">
-      <div class="surface-heading">
-        <div>
-          <p class="surface-kicker">
-            Transaction reference
-          </p>
-          <h2 id="transaction-detail-title">
-            {{ transaction.transaction_reference }}
-          </h2>
-        </div>
-        <span class="read-only-badge">Read only</span>
-      </div>
+		<template v-else-if="transaction">
+			<div class="surface-heading">
+				<div>
+					<p class="surface-kicker">Transaction reference</p>
+					<h2 id="transaction-detail-title">
+						{{ transaction.transaction_reference }}
+					</h2>
+				</div>
+				<span class="read-only-badge">Read only</span>
+			</div>
 
-      <dl
-        class="transaction-detail-grid"
-        data-testid="transaction-detail"
-      >
-        <div
-          v-for="field in DETAIL_FIELDS"
-          :key="field.fieldname"
-        >
-          <dt>{{ field.label }}</dt>
-          <dd>{{ displayValue(field) }}</dd>
-        </div>
-      </dl>
-    </template>
-  </section>
+			<dl class="transaction-detail-grid" data-testid="transaction-detail">
+				<div v-for="field in DETAIL_FIELDS" :key="field.fieldname">
+					<dt>{{ field.label }}</dt>
+					<dd>{{ displayValue(field) }}</dd>
+				</div>
+			</dl>
+		</template>
+	</section>
 </template>

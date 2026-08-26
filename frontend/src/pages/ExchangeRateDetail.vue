@@ -80,65 +80,33 @@ onMounted(() => void loadExchangeRate());
 </script>
 
 <template>
-  <section
-    class="record-surface"
-    aria-labelledby="exchange-rate-detail-title"
-  >
-    <RouterLink
-      class="back-link"
-      to="/exchange-rates"
-    >
-      ← Back to exchange rates
-    </RouterLink>
+	<section class="record-surface" aria-labelledby="exchange-rate-detail-title">
+		<RouterLink class="back-link" to="/exchange-rates"> ← Back to exchange rates </RouterLink>
 
-    <div
-      v-if="loading"
-      class="surface-state"
-      aria-live="polite"
-    >
-      Loading exchange rate…
-    </div>
+		<div v-if="loading" class="surface-state" aria-live="polite">Loading exchange rate…</div>
 
-    <div
-      v-else-if="error"
-      class="surface-state surface-state--error"
-      role="alert"
-    >
-      <p>{{ error }}</p>
-      <button
-        class="secondary-button"
-        type="button"
-        @click="loadExchangeRate"
-      >
-        Retry
-      </button>
-    </div>
+		<div v-else-if="error" class="surface-state surface-state--error" role="alert">
+			<p>{{ error }}</p>
+			<button class="secondary-button" type="button" @click="loadExchangeRate">Retry</button>
+		</div>
 
-    <template v-else-if="exchangeRate">
-      <div class="surface-heading">
-        <div>
-          <p class="surface-kicker">
-            From currency
-          </p>
-          <h2 id="exchange-rate-detail-title">
-            {{ exchangeRate.from_currency }}
-          </h2>
-        </div>
-        <span class="read-only-badge">Read only</span>
-      </div>
+		<template v-else-if="exchangeRate">
+			<div class="surface-heading">
+				<div>
+					<p class="surface-kicker">From currency</p>
+					<h2 id="exchange-rate-detail-title">
+						{{ exchangeRate.from_currency }}
+					</h2>
+				</div>
+				<span class="read-only-badge">Read only</span>
+			</div>
 
-      <dl
-        class="record-detail-grid"
-        data-testid="exchange-rate-detail"
-      >
-        <div
-          v-for="field in DETAIL_FIELDS"
-          :key="field.fieldname"
-        >
-          <dt>{{ field.label }}</dt>
-          <dd>{{ displayValue(field) }}</dd>
-        </div>
-      </dl>
-    </template>
-  </section>
+			<dl class="record-detail-grid" data-testid="exchange-rate-detail">
+				<div v-for="field in DETAIL_FIELDS" :key="field.fieldname">
+					<dt>{{ field.label }}</dt>
+					<dd>{{ displayValue(field) }}</dd>
+				</div>
+			</dl>
+		</template>
+	</section>
 </template>

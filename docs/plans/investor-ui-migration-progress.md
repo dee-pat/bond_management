@@ -1188,6 +1188,20 @@ Add one entry after every slice. Preserve failed or unavailable gates; later suc
 - Blockers: None for this feedback slice. Phase 7 still requires named internal-team and pilot-investor acceptance, a real statement/reporting cycle and final pilot-site flag approval.
 - Unverified local/CI differences: Local browser verification used macOS/arm64, Chrome 151, Playwright Chromium and explicit `test_site` on `127.0.0.1:8001`. CI uses Ubuntu and serves `test_site` at `test_site:8000`; no runner or dependency changed.
 
+### 2026-08-26 — Pull request CI follow-up
+
+- Risk classification: Test formatting, frontend formatter ownership and Playwright origin configuration; no financial calculation, API projection, schema, permission, mutation or legacy route changed.
+- Required gates: Inspect the exact failed GitHub Actions logs; pre-commit and security scans; migration and complete server suite; frontend lint, typecheck and production build; complete Cypress and Playwright suites; shared `pre-push-ui`; GitHub Actions rerun on the pushed revision.
+- Commands executed:
+  - `gh run view 32968173294 --log-failed` and `gh run view 32968173299 --log-failed` — exits `0`; confirmed Ruff/Prettier rewrites, a root ESLint dependency-boundary failure and clipboard failures on the non-secure `test_site` browser origin.
+  - `FRAPPE_USER=... FRAPPE_PASSWORD=<ephemeral> BASE_URL=http://127.0.0.1:8001 CHROME_BIN="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" apps/bond_management/scripts/verify.sh pre-push-ui` — exit `0`.
+- Exit statuses: Every final local command above exited `0`.
+- Tests passed: Pre-commit and security scans; migration; 291 complete server tests; warning-free frontend lint, typecheck and production build; 13 complete Cypress tests; 24 complete Playwright tests, including both clipboard flows.
+- Tests failed: No local test failed. The preceding GitHub revision failed Server and Frappe Linter because committed files did not match Ruff/Prettier and the root ESLint hook entered the separately managed frontend without its dependencies; Playwright failed both clipboard flows because `http://test_site:8000` was not a secure browser context. The fixes use the repository formatters, keep frontend ESLint under its installed frontend toolchain and use the loopback `localhost` origin in CI.
+- Tests not run: GitHub Actions on the follow-up commit remains pending until push.
+- Blockers: None for pushing the CI follow-up.
+- Unverified local/CI differences: Local verification used macOS/arm64, Chrome 151, Playwright Chromium and explicit `test_site` on `127.0.0.1:8001`. The pushed GitHub run will verify Ubuntu, MariaDB 11.8, Redis Alpine and the CI-owned fresh bench/site with `localhost:8000`.
+
 ## Next slice: Phase 7
 
 Record named internal-team acceptance and one complete statement/reporting cycle

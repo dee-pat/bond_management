@@ -84,15 +84,19 @@ class TestBondInvestorWebsite(IntegrationTestCase):
 
     @staticmethod
     def _make_user(roles):
-        return frappe.get_doc(
-            {
-                "doctype": "User",
-                "email": f"{unique_name('investor-route').lower()}@example.com",
-                "first_name": "Investor Route Test",
-                "send_welcome_email": 0,
-                "roles": [{"role": role} for role in roles],
-            }
-        ).insert(ignore_permissions=True).name
+        return (
+            frappe.get_doc(
+                {
+                    "doctype": "User",
+                    "email": f"{unique_name('investor-route').lower()}@example.com",
+                    "first_name": "Investor Route Test",
+                    "send_welcome_email": 0,
+                    "roles": [{"role": role} for role in roles],
+                }
+            )
+            .insert(ignore_permissions=True)
+            .name
+        )
 
     @staticmethod
     @contextmanager

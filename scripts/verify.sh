@@ -221,7 +221,7 @@ run_playwright_tests() {
         exit 1
     fi
 
-    local base_url="${BASE_URL:-${PLAYWRIGHT_BASE_URL:-http://${TEST_SITE_NAME}:8000}}"
+    local base_url="${BASE_URL:-${PLAYWRIGHT_BASE_URL:-http://localhost:8000}}"
     BASE_URL="${base_url}" yarn test:e2e
 }
 
