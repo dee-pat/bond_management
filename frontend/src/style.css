@@ -1,0 +1,229 @@
+:root {
+	color: #1f2937;
+	background: #f8fafc;
+	font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+		sans-serif;
+	font-synthesis: none;
+	text-rendering: optimizeLegibility;
+}
+
+* {
+	box-sizing: border-box;
+}
+
+body {
+	min-width: 320px;
+	min-height: 100vh;
+	margin: 0;
+}
+
+button {
+	font: inherit;
+}
+
+.investor-shell {
+	display: grid;
+	grid-template-columns: minmax(14rem, 17rem) minmax(0, 1fr);
+	gap: 2rem;
+	min-height: 100vh;
+	padding: 2rem;
+}
+
+.investor-navigation {
+	align-self: start;
+	position: sticky;
+	top: 2rem;
+	padding: 1rem;
+	background: #0f172a;
+	border-radius: 1rem;
+	box-shadow: 0 1.5rem 4rem rgb(15 23 42 / 12%);
+}
+
+.investor-brand {
+	display: flex;
+	align-items: center;
+	gap: 0.75rem;
+	padding: 0.5rem 0.5rem 1rem;
+	color: #ffffff;
+}
+
+.investor-brand__mark {
+	display: grid;
+	flex: 0 0 2.5rem;
+	width: 2.5rem;
+	height: 2.5rem;
+	color: #1e3a8a;
+	background: #dbeafe;
+	border-radius: 0.75rem;
+	font-size: 0.75rem;
+	font-weight: 800;
+	place-items: center;
+}
+
+.investor-brand strong,
+.investor-brand span {
+	display: block;
+}
+
+.investor-brand span {
+	margin-top: 0.15rem;
+	color: #94a3b8;
+	font-size: 0.75rem;
+}
+
+.investor-navigation nav {
+	display: grid;
+	gap: 0.25rem;
+}
+
+.investor-navigation__link {
+	padding: 0.7rem 0.75rem;
+	color: #cbd5e1;
+	border-radius: 0.6rem;
+	font-size: 0.875rem;
+	font-weight: 600;
+	text-decoration: none;
+}
+
+.investor-navigation__link:hover,
+.investor-navigation__link.router-link-exact-active {
+	color: #ffffff;
+	background: #1e293b;
+}
+
+.investor-card {
+	align-self: center;
+	width: min(100%, 78rem);
+	margin: 0 auto;
+	padding: clamp(1.5rem, 5vw, 3.5rem);
+	background: #ffffff;
+	border: 1px solid #e2e8f0;
+	border-radius: 1rem;
+	box-shadow: 0 1.5rem 4rem rgb(15 23 42 / 8%);
+}
+
+.eyebrow {
+	margin: 0 0 0.5rem;
+	color: #2563eb;
+	font-size: 0.75rem;
+	font-weight: 700;
+	letter-spacing: 0.12em;
+	text-transform: uppercase;
+}
+
+h1 {
+	margin: 0;
+	color: #0f172a;
+	font-size: clamp(2rem, 7vw, 3.75rem);
+	line-height: 1.05;
+}
+
+.subtitle {
+	margin: 0.75rem 0 0;
+	color: #64748b;
+	font-size: 1.125rem;
+}
+
+.status-panel {
+	display: flex;
+	align-items: flex-start;
+	gap: 0.75rem;
+	margin-top: 2rem;
+	padding: 1rem;
+	color: #334155;
+	background: #f8fafc;
+	border: 1px solid #e2e8f0;
+	border-radius: 0.75rem;
+}
+
+.status-panel p {
+	margin: 0;
+}
+
+.status-panel--error {
+	display: block;
+	color: #991b1b;
+	background: #fef2f2;
+	border-color: #fecaca;
+}
+
+.status-panel--error button {
+	margin-top: 1rem;
+}
+
+.status-panel--success {
+	color: #166534;
+	background: #f0fdf4;
+	border-color: #bbf7d0;
+}
+
+.status-panel--success p {
+	margin-top: 0.25rem;
+	color: #3f6212;
+}
+
+.status-dot {
+	flex: 0 0 auto;
+	width: 0.65rem;
+	height: 0.65rem;
+	margin-top: 0.35rem;
+	background: #16a34a;
+	border-radius: 999px;
+}
+
+.status-dot--loading {
+	background: #2563eb;
+	animation: pulse 1.2s ease-in-out infinite;
+}
+
+.compatibility-note {
+	margin: 2rem 0 0;
+	color: #64748b;
+	font-size: 0.875rem;
+	line-height: 1.5;
+}
+
+.not-found-state {
+	margin-top: 2rem;
+	padding: 1rem;
+	color: #991b1b;
+	background: #fef2f2;
+	border: 1px dashed #fca5a5;
+	border-radius: 0.75rem;
+}
+
+.not-found-state p {
+	margin: 0.35rem 0 0;
+	color: #7f1d1d;
+}
+
+@keyframes pulse {
+	50% {
+		opacity: 0.35;
+	}
+}
+
+@media (max-width: 760px) {
+	.investor-shell {
+		grid-template-columns: minmax(0, 1fr);
+		gap: 1rem;
+		padding: 1rem;
+	}
+
+	.investor-navigation {
+		position: static;
+	}
+
+	.investor-navigation nav {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+
+	.investor-navigation__link {
+		min-width: 0;
+		overflow-wrap: anywhere;
+	}
+
+	.investor-card {
+		border-radius: 0.75rem;
+	}
+}

@@ -48,6 +48,12 @@ jspm_packages/
 .wnf-lang-status
 *debug.log
 cypress/screenshots/
+bond_management/public/frontend/
+bond_management/public/node_modules
+bond_management/www/bond-investor.html
+playwright-report/
+test-results/
+e2e/.auth/
 
 # Helix Editor
 .helix/

@@ -24,6 +24,13 @@ notes.
 - Custom Frappe apps only; do not assume ERPNext unless specified.
 - Financial domain: bonds, accruals, and schedules.
 
+## Active multi-phase work
+
+- Investor UI migration: before changing the Frappe UI SPA, Playwright setup,
+  investor APIs, investor redirects, or legacy investor workspace, read
+  `docs/specs/investor-ui-migration.md` and update
+  `docs/plans/investor-ui-migration-progress.md` for the current slice.
+
 ## Troubleshooting checklist
 
 - MySQLdb connection errors: check the MariaDB service and credentials.

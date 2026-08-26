@@ -18,6 +18,17 @@ const GAP_CHART_LAYOUT = {
 	top: 38,
 	bottom: 286,
 };
+const BOND_YIELD_COMPARISON_ROUTE = "Bond Yield Comparison";
+
+// Query Report reuses one page instance across report navigation.
+frappe.router.on("change", () => {
+	const route = frappe.get_route();
+	if (route?.[0] === "query-report" && route?.[1] === BOND_YIELD_COMPARISON_ROUTE) {
+		return;
+	}
+
+	remove_report_controls(frappe.query_report);
+});
 
 frappe.query_reports["Bond Yield Comparison"] = {
 	filters: [
@@ -241,10 +252,13 @@ function audit_cell(value) {
 }
 
 function remove_report_controls(report) {
-	report._bond_yield_selector?.remove();
-	report._bond_yield_audit?.remove();
-	report._bond_yield_selector = null;
-	report._bond_yield_audit = null;
+	report?._bond_yield_selector?.remove();
+	report?._bond_yield_audit?.remove();
+	report?.page?.wrapper?.find("[data-bond-yield-selection], [data-bond-yield-audit]").remove();
+	if (report) {
+		report._bond_yield_selector = null;
+		report._bond_yield_audit = null;
+	}
 }
 
 function show_no_chart_message(report, message) {
