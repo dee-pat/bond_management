@@ -30,7 +30,6 @@ TRANSACTION_LIST_FIELDS = (
     "trade_date",
     "quantity_face_value",
     "price",
-    "attachment",
 )
 TRANSACTION_DETAIL_FIELDS = (
     "transaction_type",

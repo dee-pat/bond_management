@@ -28,7 +28,6 @@ export interface TransactionListRow {
   trade_date: string;
   quantity_face_value: number;
   price: number;
-  attachment: string | null;
 }
 
 export interface TransactionPage {

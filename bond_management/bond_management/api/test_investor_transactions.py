@@ -73,7 +73,7 @@ class TestInvestorTransactions(IntegrationTestCase):
         self.assertEqual([row.name for row in response["data"]], [assigned.name])
         self.assertNotIn(other.name, {row.name for row in response["data"]})
         self.assertEqual(set(response["data"][0]), set(TRANSACTION_LIST_FIELDS))
-        self.assertEqual(response["data"][0].attachment, "/private/files/assigned-transaction.pdf")
+        self.assertNotIn("attachment", response["data"][0])
 
     def test_explicit_cross_portfolio_filter_is_denied(self):
         assigned_portfolio = make_portfolio()

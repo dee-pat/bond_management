@@ -187,7 +187,8 @@ app-owned list-view override, so the standard Desk list behavior applies.
   Maturity Date, Coupon frequency, Coupon Rate %, Face Value Per Unit, Issue
   Date, Day Count Convention, Commission Amount, Settlement Amount and
   Transaction Amount.
-- Attachment access: assigned investors may view/download the private PDF.
+- Attachment access: assigned investors may view/download the private PDF from
+  transaction detail only. List rows expose no attachment URL or file actions.
   Hidden PDF Portfolio Override, file metadata and every
   create/edit/delete/upload action remain omitted.
 - View states: initial loading; empty portfolio assignment; empty filtered
@@ -204,8 +205,8 @@ app-owned list-view override, so the standard Desk list behavior applies.
   capped at `50`. No arbitrary filter, field or sort input is accepted.
 - Response: `{ data, pagination }`, where every row contains only `name`,
   `settlement_date`, `transaction_type`, `portfolio_name`, `isin`, `trade_date`,
-  `quantity_face_value`, `price` and `attachment`; pagination contains `start`, `page_length`
-  and `has_more`.
+  `quantity_face_value` and `price`; pagination contains `start`, `page_length`
+  and `has_more`. List rows omit attachment URLs.
 - Permission behavior: an investor without assignments receives an empty page;
   an omitted portfolio searches all readable assigned portfolios; an explicit
   unreadable portfolio is rejected before the query. Managers and Administrator

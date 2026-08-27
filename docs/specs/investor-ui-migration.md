@@ -133,7 +133,7 @@ Place cross-document investor queries in `bond_management.bond_management.api.in
 - enforce existing portfolio query and document permissions;
 - allow-list filters, sort fields, page size and returned fields;
 - use existing financial/report services rather than duplicating calculations;
-- expose only permission-scoped statement and transaction file URLs needed for view/download actions;
+- expose permission-scoped statement and transaction file URLs only from document detail views;
 - return deterministic, serializable view models with boundary tests.
 
 Initial endpoint seams:

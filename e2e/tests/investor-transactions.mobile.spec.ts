@@ -11,6 +11,16 @@ test("browses an assigned transaction without mobile overflow", async ({
     hasText: TRANSACTION_REFERENCE,
   });
   await expect(row).toBeVisible();
+  await expect(
+    row.getByRole("link", {
+      name: `View transaction ${TRANSACTION_REFERENCE} PDF`,
+    })
+  ).toHaveCount(0);
+  await expect(
+    row.getByRole("link", {
+      name: `Download transaction ${TRANSACTION_REFERENCE} PDF`,
+    })
+  ).toHaveCount(0);
   await row
     .getByRole("link", {
       name: `View transaction ${TRANSACTION_REFERENCE}`,

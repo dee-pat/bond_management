@@ -11,7 +11,7 @@ test("browses the assigned transaction list and read-only detail", async ({
   await expect(
     page.getByRole("heading", { name: "Bond Transactions" })
   ).toBeVisible();
-  await expect(page.getByRole("columnheader")).toHaveCount(8);
+  await expect(page.getByRole("columnheader")).toHaveCount(7);
   await expect(
     page.getByRole("columnheader", { name: "Transaction Type" })
   ).toBeVisible();
@@ -28,17 +28,19 @@ test("browses the assigned transaction list and read-only detail", async ({
   await expect(row).toContainText("Purchase");
   await expect(row).toContainText(BOND_ISIN);
   await expect(row).toContainText("105.000000");
-  const viewPdf = row.getByRole("link", {
-    name: `View transaction ${TRANSACTION_REFERENCE} PDF`,
-  });
-  const downloadPdf = row.getByRole("link", {
-    name: `Download transaction ${TRANSACTION_REFERENCE} PDF`,
-  });
-  await expect(viewPdf).toHaveAttribute("href", /\/private\/files\/.+\.pdf$/);
-  await expect(viewPdf).toHaveAttribute("target", "_blank");
-  const downloadPromise = page.waitForEvent("download");
-  await downloadPdf.click();
-  expect((await downloadPromise).suggestedFilename()).toMatch(/\.pdf$/);
+  await expect(
+    page.getByRole("columnheader", { name: "PDF Attachment" })
+  ).toHaveCount(0);
+  await expect(
+    row.getByRole("link", {
+      name: `View transaction ${TRANSACTION_REFERENCE} PDF`,
+    })
+  ).toHaveCount(0);
+  await expect(
+    row.getByRole("link", {
+      name: `Download transaction ${TRANSACTION_REFERENCE} PDF`,
+    })
+  ).toHaveCount(0);
 
   await row
     .getByRole("link", {
