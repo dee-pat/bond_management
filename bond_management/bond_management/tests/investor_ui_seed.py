@@ -259,6 +259,9 @@ def _ensure_statement(portfolio_name: str):
                 "doctype": "Bond Statement",
                 "portfolio_name": portfolio_name,
                 "statement_date": TEST_STATEMENT_DATE,
+                "attachment": (
+                    f"/private/files/{frappe.generate_hash(length=10)}-{TEST_STATEMENT_ATTACHMENT}"
+                ),
             }
         )
     )

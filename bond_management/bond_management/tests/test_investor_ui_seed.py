@@ -19,6 +19,7 @@ from bond_management.bond_management.tests.investor_ui_seed import (
     TEST_YIELD_FROM_DATE,
     TEST_YIELD_MIDDLE_DATE,
     TEST_YIELD_TO_DATE,
+    _ensure_statement,
     seed_investor_ui_browser_test_data,
     seed_investor_ui_test_data,
 )
@@ -59,6 +60,21 @@ class TestInvestorUITestSeed(IntegrationTestCase):
             password="caller-provided-password",
         )
         self.assertEqual(result, seed_fixture.return_value)
+
+    def test_statement_seed_handles_a_fresh_portfolio(self):
+        suffix = frappe.generate_hash(length=8)
+        portfolio = frappe.get_doc(
+            {
+                "doctype": "Bond Portfolio",
+                "portfolio_name": f"UI Fresh Statement {suffix}",
+                "account_no": f"UI-FRESH-{suffix}",
+            }
+        ).insert(ignore_permissions=True)
+
+        statement = _ensure_statement(portfolio.name)
+
+        self.assertTrue(frappe.db.exists("Bond Statement", statement.name))
+        self.assertTrue(statement.attachment)
 
     def test_seed_is_idempotent_and_assigns_the_fixture_portfolio(self):
         first = seed_investor_ui_test_data()
