@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from "vue";
 import { RouterLink, useRoute } from "vue-router";
 
+import PdfAttachmentActions from "../components/PdfAttachmentActions.vue";
 import { fetchTransaction, InvestorApiError, redirectToLogin } from "../lib/api";
 import { formatDate, formatMoney, formatNumber, formatPercent } from "../lib/format";
 import type { TransactionDetail } from "../types";
@@ -134,6 +135,15 @@ onMounted(() => void loadTransaction());
 					<dd>{{ displayValue(field) }}</dd>
 				</div>
 			</dl>
+
+			<section class="pdf-attachment-section" aria-labelledby="transaction-pdf-title">
+				<h3 id="transaction-pdf-title">PDF Attachment</h3>
+				<PdfAttachmentActions
+					:attachment="transaction.attachment"
+					:document-label="`transaction ${transaction.transaction_reference}`"
+					file-label="PDF"
+				/>
+			</section>
 		</template>
 	</section>
 </template>

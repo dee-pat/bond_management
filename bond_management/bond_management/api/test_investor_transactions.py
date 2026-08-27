@@ -58,6 +58,13 @@ class TestInvestorTransactions(IntegrationTestCase):
         other_portfolio = make_portfolio()
         assigned = make_transaction(bond, assigned_portfolio)
         other = make_transaction(bond, other_portfolio)
+        frappe.db.set_value(
+            "Bond Transaction",
+            assigned.name,
+            "attachment",
+            "/private/files/assigned-transaction.pdf",
+            update_modified=False,
+        )
         investor = self._make_investor(assigned_portfolio.name)
 
         with self._as_user(investor):
@@ -66,7 +73,7 @@ class TestInvestorTransactions(IntegrationTestCase):
         self.assertEqual([row.name for row in response["data"]], [assigned.name])
         self.assertNotIn(other.name, {row.name for row in response["data"]})
         self.assertEqual(set(response["data"][0]), set(TRANSACTION_LIST_FIELDS))
-        self.assertNotIn("attachment", response["data"][0])
+        self.assertEqual(response["data"][0].attachment, "/private/files/assigned-transaction.pdf")
 
     def test_explicit_cross_portfolio_filter_is_denied(self):
         assigned_portfolio = make_portfolio()
@@ -77,7 +84,7 @@ class TestInvestorTransactions(IntegrationTestCase):
             with self.assertRaisesRegex(frappe.PermissionError, "not permitted"):
                 get_transactions(portfolio=other_portfolio.name)
 
-    def test_detail_contains_exact_visible_projection_without_attachment(self):
+    def test_detail_contains_exact_visible_projection_with_attachment(self):
         bond = make_bond()
         portfolio = make_portfolio()
         transaction = make_transaction(bond, portfolio)
@@ -96,9 +103,8 @@ class TestInvestorTransactions(IntegrationTestCase):
         detail = response["transaction"]
         self.assertEqual(set(detail), set(TRANSACTION_DETAIL_FIELDS))
         self.assertEqual(detail.transaction_reference, transaction.name)
-        self.assertNotIn("attachment", detail)
+        self.assertEqual(detail.attachment, "/private/files/investor-secret.pdf")
         self.assertNotIn("attachment_portfolio_override", detail)
-        self.assertNotIn("/private/files/", str(response))
 
     def test_unreadable_and_unknown_detail_have_the_same_failure(self):
         bond = make_bond()

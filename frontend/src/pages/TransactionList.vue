@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from "vue";
 import { RouterLink } from "vue-router";
 
+import PdfAttachmentActions from "../components/PdfAttachmentActions.vue";
 import { fetchTransactions, InvestorApiError, redirectToLogin } from "../lib/api";
 import { formatDate, formatNumber } from "../lib/format";
 import type { InvestorBootstrap, TransactionListRow, TransactionPage } from "../types";
@@ -123,6 +124,7 @@ onMounted(() => void loadTransactions());
 							<th scope="col">Trade Date</th>
 							<th scope="col">Quantity/ Face Value</th>
 							<th scope="col">Price</th>
+							<th scope="col">PDF Attachment</th>
 						</tr>
 					</thead>
 					<tbody>
@@ -157,6 +159,13 @@ onMounted(() => void loadTransactions());
 							</td>
 							<td data-label="Price">
 								{{ formatNumber(transaction.price, 6) }}
+							</td>
+							<td data-label="PDF Attachment">
+								<PdfAttachmentActions
+									:attachment="transaction.attachment"
+									:document-label="`transaction ${transaction.name}`"
+									file-label="PDF"
+								/>
 							</td>
 						</tr>
 					</tbody>

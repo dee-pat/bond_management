@@ -173,6 +173,44 @@
 	font-weight: 700;
 }
 
+.pdf-attachment-section {
+	margin-top: 1.5rem;
+}
+
+.pdf-attachment-section h3 {
+	margin: 0 0 0.75rem;
+	color: #0f172a;
+	font-size: 1rem;
+}
+
+.pdf-attachment-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.5rem;
+}
+
+.pdf-attachment-link {
+	display: inline-flex;
+	align-items: center;
+	min-height: 2.25rem;
+	padding: 0.45rem 0.75rem;
+	color: #1d4ed8;
+	background: #ffffff;
+	border: 1px solid #bfdbfe;
+	border-radius: 0.5rem;
+	font-weight: 700;
+	text-decoration: none;
+}
+
+.pdf-attachment-link:hover {
+	background: #eff6ff;
+}
+
+.pdf-attachment-empty {
+	color: #64748b;
+	font-size: 0.875rem;
+}
+
 .transaction-detail-grid,
 .record-detail-grid {
 	display: grid;

@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from "vue";
 import { RouterLink, useRoute } from "vue-router";
 
+import PdfAttachmentActions from "../components/PdfAttachmentActions.vue";
 import { fetchStatement, InvestorApiError, redirectToLogin } from "../lib/api";
 import { formatDate, formatNumber } from "../lib/format";
 import type { StatementDetail } from "../types";
@@ -89,6 +90,24 @@ onMounted(() => void loadStatement());
 					<dd>{{ statement.reconciliation_status || "—" }}</dd>
 				</div>
 			</dl>
+
+			<section class="pdf-attachment-section" aria-labelledby="statement-pdf-title">
+				<h3 id="statement-pdf-title">PDF Attachment</h3>
+				<PdfAttachmentActions
+					:attachment="statement.attachment"
+					:document-label="`statement dated ${formatDate(statement.statement_date)}`"
+					file-label="PDF"
+				/>
+			</section>
+
+			<section class="pdf-attachment-section" aria-labelledby="reconciliation-report-title">
+				<h3 id="reconciliation-report-title">Quantity Reconciliation Report</h3>
+				<PdfAttachmentActions
+					:attachment="statement.quantity_reconciliation_report"
+					:document-label="`statement dated ${formatDate(statement.statement_date)}`"
+					file-label="reconciliation report"
+				/>
+			</section>
 
 			<div class="holding-section">
 				<h3>Bond Statement Details</h3>

@@ -2,9 +2,11 @@
 
 import os
 from decimal import Decimal
+from io import BytesIO
 
 import frappe
 from frappe import _
+from pypdf import PdfWriter
 
 from bond_management.bond_management.utils.investor_permissions import INVESTOR_ROLE
 
@@ -22,6 +24,9 @@ TEST_EXCHANGE_RATE_VALUE = Decimal("1.25")
 TEST_MARKET_DATE = "2025-01-02"
 TEST_TRANSACTION_REFERENCE = "UI-TEST-TRANSACTION-001"
 TEST_STATEMENT_DATE = "2025-12-31"
+TEST_TRANSACTION_ATTACHMENT = "ui-test-transaction.pdf"
+TEST_STATEMENT_ATTACHMENT = "ui-test-statement.pdf"
+TEST_RECONCILIATION_REPORT = "ui-test-reconciliation-report.pdf"
 
 
 def seed_investor_ui_browser_test_data() -> dict[str, str]:
@@ -55,6 +60,13 @@ def seed_investor_ui_test_data(
     exchange_rate = _ensure_exchange_rate()
     transaction = _ensure_transaction(bond.name, portfolio.name)
     statement = _ensure_statement(portfolio.name)
+    _ensure_pdf_attachment(transaction, TEST_TRANSACTION_ATTACHMENT)
+    _ensure_pdf_attachment(statement, TEST_STATEMENT_ATTACHMENT)
+    _ensure_pdf_attachment(
+        statement,
+        TEST_RECONCILIATION_REPORT,
+        fieldname="quantity_reconciliation_report",
+    )
     user = _ensure_user(email, password)
     _ensure_user_permission(email, portfolio.name)
 
@@ -247,7 +259,6 @@ def _ensure_statement(portfolio_name: str):
                 "doctype": "Bond Statement",
                 "portfolio_name": portfolio_name,
                 "statement_date": TEST_STATEMENT_DATE,
-                "attachment": "/private/files/ui-test-statement.pdf",
             }
         )
     )
@@ -266,6 +277,47 @@ def _ensure_statement(portfolio_name: str):
     )
     statement.reconciliation_status = "Matched"
     return statement
+
+
+def _ensure_pdf_attachment(document, filename: str, *, fieldname: str = "attachment") -> str:
+    file_name = frappe.db.exists(
+        "File",
+        {
+            "attached_to_doctype": document.doctype,
+            "attached_to_name": document.name,
+            "attached_to_field": fieldname,
+            "is_private": 1,
+        },
+    )
+    if file_name:
+        file_doc = frappe.get_doc("File", file_name)
+    else:
+        content = _build_fixture_pdf(f"{document.doctype} {document.name} {fieldname}")
+        file_doc = frappe.get_doc(
+            {
+                "doctype": "File",
+                "file_name": filename,
+                "content": content,
+                "is_private": 1,
+                "attached_to_doctype": document.doctype,
+                "attached_to_name": document.name,
+                "attached_to_field": fieldname,
+            }
+        ).insert(ignore_permissions=True)
+
+    if document.get(fieldname) != file_doc.file_url:
+        document.db_set(fieldname, file_doc.file_url, update_modified=False)
+        document.set(fieldname, file_doc.file_url)
+    return file_doc.file_url
+
+
+def _build_fixture_pdf(label: str) -> bytes:
+    output = BytesIO()
+    writer = PdfWriter()
+    writer.add_blank_page(width=72, height=72)
+    writer.add_metadata({"/Subject": f"Investor UI fixture: {label}"})
+    writer.write(output)
+    return output.getvalue()
 
 
 def _ensure_user(email: str, password: str | None):

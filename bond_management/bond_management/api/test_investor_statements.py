@@ -64,8 +64,11 @@ class TestInvestorStatements(IntegrationTestCase):
         frappe.db.set_value(
             "Bond Statement",
             assigned.name,
-            "reconciliation_status",
-            "Matched",
+            {
+                "reconciliation_status": "Matched",
+                "attachment": "/private/files/assigned-statement.pdf",
+                "quantity_reconciliation_report": "/private/files/assigned-reconciliation.pdf",
+            },
             update_modified=False,
         )
         investor = self._make_investor(assigned_portfolio.name)
@@ -77,6 +80,7 @@ class TestInvestorStatements(IntegrationTestCase):
         self.assertNotIn(other.name, {row.name for row in response["data"]})
         self.assertEqual(set(response["data"][0]), set(STATEMENT_LIST_FIELDS))
         self.assertNotIn("attachment", response["data"][0])
+        self.assertNotIn("quantity_reconciliation_report", response["data"][0])
 
     def test_explicit_cross_portfolio_filter_is_denied(self):
         assigned_portfolio = make_portfolio()
@@ -87,7 +91,7 @@ class TestInvestorStatements(IntegrationTestCase):
             with self.assertRaisesRegex(frappe.PermissionError, "not permitted"):
                 get_statements(portfolio=other_portfolio.name)
 
-    def test_detail_contains_exact_visible_projection_without_attachments(self):
+    def test_detail_contains_exact_visible_projection_with_pdf_attachment(self):
         bond = make_bond()
         portfolio = make_portfolio()
         market_date = make_market_date(bond, market_price=101)
@@ -120,9 +124,11 @@ class TestInvestorStatements(IntegrationTestCase):
         detail = response["statement"]
         self.assertEqual(set(detail), set(STATEMENT_DETAIL_FIELDS))
         self.assertEqual(detail.portfolio_name, portfolio.name)
-        self.assertNotIn("attachment", detail)
-        self.assertNotIn("quantity_reconciliation_report", detail)
-        self.assertNotIn("/private/files/", str(response))
+        self.assertEqual(detail.attachment, "/private/files/investor-statement-secret.pdf")
+        self.assertEqual(
+            detail.quantity_reconciliation_report,
+            "/private/files/investor-reconciliation-secret.pdf",
+        )
         self.assertTrue(detail.bond_statement_details)
         self.assertEqual(
             set(detail.bond_statement_details[0]),

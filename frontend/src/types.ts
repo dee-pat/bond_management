@@ -28,6 +28,7 @@ export interface TransactionListRow {
   trade_date: string;
   quantity_face_value: number;
   price: number;
+  attachment: string | null;
 }
 
 export interface TransactionPage {
@@ -64,6 +65,7 @@ export interface TransactionDetail {
   commission_amount: number;
   settlement_amount: number;
   transaction_amount: number;
+  attachment: string | null;
 }
 
 export interface TransactionDetailResponse {
@@ -101,6 +103,8 @@ export interface StatementDetail {
   statement_date: string;
   market_price_posting: string | null;
   reconciliation_status: ReconciliationStatus | null;
+  attachment: string | null;
+  quantity_reconciliation_report: string | null;
   bond_statement_details: StatementHolding[];
 }
 

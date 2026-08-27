@@ -151,7 +151,7 @@ bootstrap through read-only transaction list and detail routes.
 
 - [x] Record the Bond Transaction Desk parity inventory before implementation.
 - [x] Record the explicit list/detail API and permission contracts.
-- [x] Add permission-scoped list/detail APIs with attachment-free projections.
+- [x] Add permission-scoped list/detail APIs with allow-listed attachment projections.
 - [x] Add responsive list/detail routes with loading, empty, failed and retry states.
 - [x] Add deterministic transaction browser fixtures and desktop/mobile Playwright flows.
 - [x] Run focused and complete server, frontend, Playwright and shared UI gates.
@@ -162,7 +162,7 @@ This slice will add two allow-listed GET methods to the existing investor API,
 one paginated transaction list route, and one read-only detail route. It will
 reuse the existing portfolio User Permission and DocType permission hooks, and
 will deny an unreadable or unknown direct record with the same permission
-failure. It will not add transaction mutations, attachments, generic client
+failure. It will not add transaction mutations, uploads, generic client
 filters, new calculations, schema, permissions, hooks or dependencies.
 
 ### Bond Transaction Desk parity inventory
@@ -187,8 +187,9 @@ app-owned list-view override, so the standard Desk list behavior applies.
   Maturity Date, Coupon frequency, Coupon Rate %, Face Value Per Unit, Issue
   Date, Day Count Convention, Commission Amount, Settlement Amount and
   Transaction Amount.
-- Explicit omissions: Attachment, the hidden PDF Portfolio Override, document
-  metadata, and every create/edit/delete/upload action.
+- Attachment access: assigned investors may view/download the private PDF.
+  Hidden PDF Portfolio Override, file metadata and every
+  create/edit/delete/upload action remain omitted.
 - View states: initial loading; empty portfolio assignment; empty filtered
   result; failed request with Retry; paginated results; read-only detail;
   unreadable/missing detail; and expired-session redirect preserving the full
@@ -203,7 +204,7 @@ app-owned list-view override, so the standard Desk list behavior applies.
   capped at `50`. No arbitrary filter, field or sort input is accepted.
 - Response: `{ data, pagination }`, where every row contains only `name`,
   `settlement_date`, `transaction_type`, `portfolio_name`, `isin`, `trade_date`,
-  `quantity_face_value` and `price`; pagination contains `start`, `page_length`
+  `quantity_face_value`, `price` and `attachment`; pagination contains `start`, `page_length`
   and `has_more`.
 - Permission behavior: an investor without assignments receives an empty page;
   an omitted portfolio searches all readable assigned portfolios; an explicit
@@ -213,8 +214,8 @@ app-owned list-view override, so the standard Desk list behavior applies.
 `GET bond_management.bond_management.api.investor.get_transaction`
 
 - Input: required non-empty `name` string.
-- Response: `{ transaction }`, containing exactly the 24 visible detail fields
-  listed above and no attachment or private-file value.
+- Response: `{ transaction }`, containing the visible detail fields listed above
+  plus the permission-scoped private PDF URL.
 - Permission behavior: the query uses normal read permissions. An unreadable or
   unknown name returns the same permission failure, preventing record-existence
   disclosure across portfolios.
@@ -248,8 +249,8 @@ This slice will add two allow-listed GET methods to the existing investor API,
 one paginated statement list route, and one read-only detail route. It will
 reuse the existing portfolio User Permission and Bond Statement permission
 hooks, and will deny an unreadable or unknown direct record with the same
-permission failure. It will not add statement mutations, attachment or report
-downloads, PDF data, financial calculations, schema, permissions, hooks or
+permission failure. It will not add statement mutations, uploads, PDF parsing,
+financial calculations, schema, permissions, hooks or
 dependencies.
 
 ### Bond Statement Desk parity inventory
@@ -272,9 +273,9 @@ app-owned list formatter.
   Statement Date, Market Price Posting, Reconciliation Status and Bond
   Statement Details. Each visible holding row contains ISIN, Quantity,
   Principal Factor, Market Price and Currency.
-- Explicit omissions: Attachment, Quantity Reconciliation Report, private-file
-  names and URLs, document metadata, and every create/edit/delete/upload or
-  download action.
+- Attachment access: assigned investors may view/download the statement PDF and
+  Quantity Reconciliation Report from statement detail. File metadata and every
+  create/edit/delete/upload action remain omitted.
 - View states: initial loading; empty portfolio assignment; empty filtered
   result; failed request with Retry; paginated results; read-only detail;
   unreadable/missing detail; and expired-session redirect preserving the full
@@ -299,8 +300,8 @@ app-owned list formatter.
 `GET bond_management.bond_management.api.investor.get_statement`
 
 - Input: required non-empty `name` string.
-- Response: `{ statement }`, containing exactly the four visible parent fields
-  plus `bond_statement_details`; each child row contains exactly the five
+- Response: `{ statement }`, containing visible parent fields, statement PDF
+  URL and reconciliation-report URL plus `bond_statement_details`; each child row contains the five
   visible holding fields listed above.
 - Permission behavior: the parent query uses normal read permissions. An
   unreadable or unknown name returns the same permission failure, preventing
@@ -314,7 +315,7 @@ assigned portfolio, filters by that portfolio and Matched status, and opens its
 detail route. Desktop checks the configured list headers, status and holding
 projection; Pixel 7 checks the same statement and detail route without
 horizontal viewport overflow. Server tests own the cross-portfolio denial
-matrix and exact response and attachment-omission projections.
+matrix and exact allow-listed file projections.
 
 ## Completed slice: Phase 4b — Bond Master
 

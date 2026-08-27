@@ -30,6 +30,7 @@ TRANSACTION_LIST_FIELDS = (
     "trade_date",
     "quantity_face_value",
     "price",
+    "attachment",
 )
 TRANSACTION_DETAIL_FIELDS = (
     "transaction_type",
@@ -56,6 +57,7 @@ TRANSACTION_DETAIL_FIELDS = (
     "commission_amount",
     "settlement_amount",
     "transaction_amount",
+    "attachment",
 )
 STATEMENT_LIST_FIELDS = (
     "name",
@@ -68,6 +70,8 @@ STATEMENT_DETAIL_FIELDS = (
     "statement_date",
     "market_price_posting",
     "reconciliation_status",
+    "attachment",
+    "quantity_reconciliation_report",
     "bond_statement_details",
 )
 STATEMENT_HOLDING_FIELDS = (
@@ -218,7 +222,7 @@ def get_transactions(
 
 @frappe.whitelist(methods=["GET"])
 def get_transaction(name: str) -> dict:
-    """Return one permission-scoped transaction without attachment data."""
+    """Return one permission-scoped transaction, including its private PDF URL."""
     require_investor_ui_access()
     name = required_string(name, "Transaction")
 
@@ -288,7 +292,7 @@ def get_statements(
 
 @frappe.whitelist(methods=["GET"])
 def get_statement(name: str) -> dict:
-    """Return one permission-scoped statement without attachment data."""
+    """Return one permission-scoped statement with its PDF and report URLs."""
     require_investor_ui_access()
     name = required_string(name, "Statement")
 

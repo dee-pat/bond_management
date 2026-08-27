@@ -107,6 +107,10 @@ class TestInvestorUITestSeed(IntegrationTestCase):
         self.assertIsNotNone(market_price[2])
         self.assertIsNotNone(market_price[3])
         self.assertEqual(first["transaction"], TEST_TRANSACTION_REFERENCE)
+        self._assert_private_attachment(
+            "Bond Transaction",
+            first["transaction"],
+        )
         self.assertEqual(
             frappe.db.get_value(
                 "Bond Statement",
@@ -120,6 +124,15 @@ class TestInvestorUITestSeed(IntegrationTestCase):
                 "Bond Statement Details",
                 {"parent": first["statement"], "isin": TEST_BOND_ISIN},
             )
+        )
+        self._assert_private_attachment(
+            "Bond Statement",
+            first["statement"],
+        )
+        self._assert_private_attachment(
+            "Bond Statement",
+            first["statement"],
+            fieldname="quantity_reconciliation_report",
         )
         self.assertEqual(
             frappe.db.get_value(
@@ -194,6 +207,29 @@ class TestInvestorUITestSeed(IntegrationTestCase):
                     "allow": "Bond Portfolio",
                     "for_value": TEST_PORTFOLIO_NAME,
                     "apply_to_all_doctypes": 1,
+                },
+            )
+        )
+
+    def _assert_private_attachment(
+        self,
+        doctype: str,
+        name: str,
+        *,
+        fieldname: str = "attachment",
+    ):
+        attachment = frappe.db.get_value(doctype, name, fieldname)
+        self.assertTrue(attachment.startswith("/private/files/"))
+        self.assertTrue(attachment.endswith(".pdf"))
+        self.assertTrue(
+            frappe.db.exists(
+                "File",
+                {
+                    "file_url": attachment,
+                    "is_private": 1,
+                    "attached_to_doctype": doctype,
+                    "attached_to_name": name,
+                    "attached_to_field": fieldname,
                 },
             )
         )

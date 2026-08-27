@@ -28,8 +28,16 @@ test("browses the assigned statement list and read-only detail", async ({
   });
   await expect(row).toContainText("Matched");
   await expect(row).toContainText("31 Dec 2025");
+  const statementLink = row.getByRole("link", { name: /^View statement BS-[^ ]+$/ });
+  const statementName = (await statementLink.getAttribute("aria-label"))?.replace(
+    "View statement ",
+    ""
+  );
+  expect(statementName).toBeTruthy();
+  await expect(row.getByText("Download PDF")).toHaveCount(0);
+  await expect(row.getByText("Download reconciliation report")).toHaveCount(0);
 
-  await row.getByRole("link", { name: /^View statement BS-/ }).click();
+  await statementLink.click();
 
   await expect(page).toHaveURL(/\/bond-investor\/statements\/BS-\d+$/);
   await expect(
@@ -43,9 +51,18 @@ test("browses the assigned statement list and read-only detail", async ({
   await expect(holdings).toContainText("1.000000");
   await expect(holdings).toContainText("USD");
   await expect(page.getByText("Read only")).toBeVisible();
-  const shell = page.getByTestId("investor-shell");
-  await expect(shell).not.toContainText("Attachment");
-  await expect(shell).not.toContainText("Download");
+  await expect(page.getByRole("heading", { name: "PDF Attachment" })).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: "View statement dated 31 Dec 2025 PDF" })
+  ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Quantity Reconciliation Report" })
+  ).toBeVisible();
+  await expect(
+    page.getByRole("link", {
+      name: "Download statement dated 31 Dec 2025 reconciliation report",
+    })
+  ).toBeVisible();
 
   await page.reload();
   await expect(page).toHaveURL(/\/bond-investor\/statements\/BS-\d+$/);

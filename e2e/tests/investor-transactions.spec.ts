@@ -11,7 +11,7 @@ test("browses the assigned transaction list and read-only detail", async ({
   await expect(
     page.getByRole("heading", { name: "Bond Transactions" })
   ).toBeVisible();
-  await expect(page.getByRole("columnheader")).toHaveCount(7);
+  await expect(page.getByRole("columnheader")).toHaveCount(8);
   await expect(
     page.getByRole("columnheader", { name: "Transaction Type" })
   ).toBeVisible();
@@ -28,9 +28,23 @@ test("browses the assigned transaction list and read-only detail", async ({
   await expect(row).toContainText("Purchase");
   await expect(row).toContainText(BOND_ISIN);
   await expect(row).toContainText("105.000000");
+  const viewPdf = row.getByRole("link", {
+    name: `View transaction ${TRANSACTION_REFERENCE} PDF`,
+  });
+  const downloadPdf = row.getByRole("link", {
+    name: `Download transaction ${TRANSACTION_REFERENCE} PDF`,
+  });
+  await expect(viewPdf).toHaveAttribute("href", /\/private\/files\/.+\.pdf$/);
+  await expect(viewPdf).toHaveAttribute("target", "_blank");
+  const downloadPromise = page.waitForEvent("download");
+  await downloadPdf.click();
+  expect((await downloadPromise).suggestedFilename()).toMatch(/\.pdf$/);
 
   await row
-    .getByRole("link", { name: `View transaction ${TRANSACTION_REFERENCE}` })
+    .getByRole("link", {
+      name: `View transaction ${TRANSACTION_REFERENCE}`,
+      exact: true,
+    })
     .click();
 
   await expect(page).toHaveURL(
@@ -43,7 +57,16 @@ test("browses the assigned transaction list and read-only detail", async ({
   await expect(detail).toContainText("Settlement Amount");
   await expect(detail).toContainText(/USD.*1,051\.00/);
   await expect(detail).toContainText("30E/360");
-  await expect(detail).not.toContainText("Attachment");
+  await expect(
+    page.getByRole("link", {
+      name: `View transaction ${TRANSACTION_REFERENCE} PDF`,
+    })
+  ).toBeVisible();
+  await expect(
+    page.getByRole("link", {
+      name: `Download transaction ${TRANSACTION_REFERENCE} PDF`,
+    })
+  ).toBeVisible();
   await expect(page.getByText("Read only")).toBeVisible();
   const shell = page.getByTestId("investor-shell");
   await expect(shell).not.toContainText("Create");

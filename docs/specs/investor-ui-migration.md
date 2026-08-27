@@ -34,7 +34,7 @@ Before implementing a surface, record its investor-visible fields, filters, sort
 ### Excluded
 
 - Creating, editing, deleting, submitting, cancelling or uploading any record.
-- Statement and transaction attachments, including names, URLs, metadata, PDF parsing and downloads.
+- Statement and transaction attachment uploads, PDF parsing and file metadata administration.
 - Internal reconciliation, posting, accrual, market-data maintenance and attachment workflows.
 - New financial calculations, changed rounding, changed cash-flow rules or redesigned report semantics.
 - Replacing internal Desk screens.
@@ -133,7 +133,7 @@ Place cross-document investor queries in `bond_management.bond_management.api.in
 - enforce existing portfolio query and document permissions;
 - allow-list filters, sort fields, page size and returned fields;
 - use existing financial/report services rather than duplicating calculations;
-- omit all attachment fields and private-file references;
+- expose only permission-scoped statement and transaction file URLs needed for view/download actions;
 - return deterministic, serializable view models with boundary tests.
 
 Initial endpoint seams:
@@ -142,7 +142,7 @@ Initial endpoint seams:
 | ----------------------- | ------------------------------------------------------------------------------------ |
 | Bootstrap               | Allowed portfolio choices and non-financial shell options for the current user.      |
 | Transactions            | Paginated list and one read-only detail, scoped to an allowed portfolio.             |
-| Statements              | Paginated list and one read-only detail with attachment data omitted.                |
+| Statements              | Paginated list and read-only detail with document-only PDF and report downloads.     |
 | Bond reference data     | Bond Master, Market Date and Exchange Rate list/detail projections needed by the UI. |
 | Portfolio performance   | Existing report output projected into a stable table/chart view model.               |
 | Yield comparison        | Existing report output projected into a stable comparison view model.                |
@@ -162,7 +162,7 @@ Server tests must prove:
 | Investor requesting another portfolio or record directly | Permission failure without existence leakage.          |
 | Manager or Administrator                                 | Data allowed by their existing normal permissions.     |
 
-The tests must also prove that arbitrary filter fields, excessive page sizes and attachment fields cannot cross the API boundary.
+The tests must also prove that arbitrary filter fields, excessive page sizes and unapproved file metadata cannot cross the API boundary.
 
 ## UI behaviour
 
@@ -236,13 +236,13 @@ Complete when disabled, unauthorized, investor and manager route behaviours have
 
 ### Phase 3 — Transaction tracer bullet
 
-Deliver one complete vertical slice: allowed portfolio bootstrap, transaction list, transaction detail, explicit APIs, server permission tests and Playwright desktop/mobile flows. Omit attachment fields and mutation controls.
+Deliver one complete vertical slice: allowed portfolio bootstrap, transaction list, transaction detail, explicit APIs, server permission tests and Playwright desktop/mobile flows. Omit mutation controls.
 
 Complete when an investor can browse only assigned transactions, direct cross-portfolio access is denied server-side, and visible fields match the recorded Desk parity inventory.
 
 ### Phase 4 — Remaining read-only records
 
-Add statements, bond master, market dates and exchange rates in small screen-sized slices. Each slice includes its API projection, permission tests, responsive UI and one Playwright smoke flow. Statement APIs and views omit attachment data.
+Add statements, bond master, market dates and exchange rates in small screen-sized slices. Each slice includes its API projection, permission tests, responsive UI and one Playwright smoke flow. Statement detail exposes only its PDF and reconciliation-report URLs.
 
 Complete when every record surface has a closed parity inventory and green server and Playwright tests.
 
@@ -254,7 +254,7 @@ Complete when filters and representative output match Desk on desktop and mobile
 
 ### Phase 6 — Parity and hardening
 
-Close the full surface matrix; test loading, empty, error, retry, stale-session and deep-link refresh behaviour; complete accessibility and responsive checks; verify no investor response contains attachment data.
+Close the full surface matrix; test loading, empty, error, retry, stale-session and deep-link refresh behaviour; complete accessibility and responsive checks; verify investor responses contain no unapproved file metadata.
 
 Complete when all parity rows are accepted and all local/fresh-site server, Cypress and Playwright gates pass.
 

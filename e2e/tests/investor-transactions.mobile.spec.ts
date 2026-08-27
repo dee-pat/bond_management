@@ -12,7 +12,10 @@ test("browses an assigned transaction without mobile overflow", async ({
   });
   await expect(row).toBeVisible();
   await row
-    .getByRole("link", { name: `View transaction ${TRANSACTION_REFERENCE}` })
+    .getByRole("link", {
+      name: `View transaction ${TRANSACTION_REFERENCE}`,
+      exact: true,
+    })
     .click();
 
   await expect(
@@ -21,6 +24,11 @@ test("browses an assigned transaction without mobile overflow", async ({
   await expect(page.getByTestId("transaction-detail")).toContainText(
     "Settlement Amount"
   );
+  await expect(
+    page.getByRole("link", {
+      name: `Download transaction ${TRANSACTION_REFERENCE} PDF`,
+    })
+  ).toBeVisible();
 
   const fitsViewport = await page.evaluate(
     () => document.documentElement.scrollWidth <= window.innerWidth
