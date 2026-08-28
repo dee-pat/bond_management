@@ -13,7 +13,7 @@ withDefaults(
 	{
 		loading: false,
 		pageLengthOptions: () => [20, 50],
-	},
+	}
 );
 
 const emit = defineEmits<{

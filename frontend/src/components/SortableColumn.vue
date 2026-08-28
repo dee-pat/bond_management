@@ -10,7 +10,7 @@ const props = withDefaults(
 		sortOrder: SortOrder;
 		disabled?: boolean;
 	}>(),
-	{ disabled: false },
+	{ disabled: false }
 );
 
 const emit = defineEmits<{
