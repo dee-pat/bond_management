@@ -19,9 +19,6 @@ the two files conflict, this app-level file governs.
 - Verification becomes stale after relevant edits to code, tests, fixtures,
   metadata, dependencies, runtime scripts, or CI configuration; rerun the
   applicable gate.
-- When GitHub Actions fails, inspect the actual traceback and reproduce the
-  failing test locally in isolation and in the full relevant suite before
-  changing the implementation or assertion.
 
 ## App baseline and structure
 
@@ -118,9 +115,6 @@ the two files conflict, this app-level file governs.
   controller validation for a useful error and a database unique index as the
   final integrity guarantee. Install manual indexes idempotently, ensure fresh
   app installation creates them too, and test both paths.
-- Permission patches should update or create only the `DocPerm` rows they own.
-  Do not save a parent `DocType` merely to change permissions, because that can
-  validate or rewrite unrelated metadata during migration.
 - Frappe marks an app's registered patches complete before `after_install` runs.
   Any permission, index, or other invariant that must exist on a fresh install
   must therefore also be bootstrapped by an idempotent `after_install` hook;
@@ -235,13 +229,6 @@ differences in the final field.
   never reuse a fixed `/home/runner/frappe-bench` path or overwrite an existing
   bench. GitHub's `runner` context is unavailable in `jobs.<job_id>.env`; use it
   in step-level fields or the runner's `$RUNNER_TEMP` variable instead.
-- If a required command cannot run because a service, browser, dependency,
-  site, or credential is unavailable, do not substitute an unrelated check.
-  Report the exact command, blocking condition, and verification that remains
-  outstanding.
-- When GitHub Actions fails, inspect the exact traceback and reproduce the
-  failing test both in isolation and in the full suite. Do not guess at a fix
-  or weaken an assertion merely to make CI pass.
 - The server CI job runs the shared lint and full server gate once. The UI CI
   job runs only the headless Cypress gate against its fresh site; do not make
   the UI job repeat the full server suite unless the failure requires it.
@@ -250,9 +237,6 @@ differences in the final field.
   the exact command when escalating a runtime failure.
 - Do not commit, push, or report a change as complete while a required check is
   failing or unavailable. State exactly which checks ran and their results.
-- For a multi-phase feature, record the intended slice and verification steps
-  before implementation; for a small bug fix, a focused issue note and
-  regression test are sufficient.
 
 ## References
 
