@@ -56,6 +56,9 @@ screens; detail views retain their record-specific heading.
   lists to latest first and omit date-cell filters.
 - [x] Replace the custom Previous/Next pagination treatment with a compact
   Desk-style list footer while preserving the allow-listed API pagination.
+- [x] Match Desk scrolling on desktop: keep the navbar, sidebar and sidebar
+  footer stationary, scroll only the main content column, and keep list
+  pagination anchored to its bottom edge; retain document scrolling on mobile.
 - [x] Keep the shell breadcrumb as the single title on list and report screens;
   retain record identifiers as headings on detail views.
 - [x] Add focused desktop/mobile presentation assertions and run the complete

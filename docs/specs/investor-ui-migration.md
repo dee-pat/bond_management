@@ -178,6 +178,10 @@ same normal Frappe permissions.
 - Session-expiry handling that returns the user to login and preserves the intended SPA route.
 - Visible read-only presentation: no disabled mutation controls that imply unsupported operations.
 - Responsive layouts verified on desktop Chromium and a Pixel 7-sized viewport.
+- On desktop, scrolling follows the Desk shell model: the navbar, workspace
+  navigation and navigation footer remain fixed while the main content column
+  scrolls; list pagination remains anchored to the bottom of that content
+  column. Mobile uses normal document scrolling.
 - Breadcrumbs use one compact, non-wrapping line with an accessible home icon,
   slash separators and the current hierarchy, such as
   `Home / Bond Investor / Bond Transactions`, and ellipsize long context labels.

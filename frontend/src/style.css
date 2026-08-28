@@ -26,19 +26,27 @@
 	box-sizing: border-box;
 }
 
+html,
+body,
+#app {
+	height: 100%;
+	min-height: 100%;
+}
+
 html {
 	background: var(--desk-bg);
+	overflow: hidden;
 }
 
 body {
 	min-width: 320px;
-	min-height: 100vh;
+	min-height: 100%;
 	margin: 0;
 	background: var(--desk-bg);
 	color: var(--desk-text);
 	font-size: 14px;
+	overflow: hidden;
 }
-
 button,
 input,
 select {
@@ -59,17 +67,19 @@ select {
 .investor-shell {
 	display: flex;
 	flex-direction: column;
+	height: 100vh;
 	min-height: 100vh;
 	background: var(--desk-bg);
+	overflow: hidden;
 }
 
 .investor-navbar {
-	position: sticky;
-	top: 0;
+	position: relative;
 	z-index: 10;
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
+	flex: 0 0 48px;
 	min-height: 48px;
 	gap: 1rem;
 	padding: 0 20px;
@@ -213,7 +223,10 @@ select {
 .investor-layout {
 	display: flex;
 	align-items: stretch;
-	min-height: calc(100vh - 48px);
+	flex: 1 1 auto;
+	height: calc(100vh - 48px);
+	min-height: 0;
+	overflow: hidden;
 }
 
 .investor-navigation {
@@ -221,9 +234,12 @@ select {
 	flex: 0 0 220px;
 	flex-direction: column;
 	width: 220px;
+	height: 100%;
+	min-height: 0;
 	padding: 12px 8px 10px;
 	background: var(--desk-surface);
 	border-right: 1px solid var(--desk-border);
+	overflow: hidden;
 }
 
 .investor-navigation__heading {
@@ -244,7 +260,12 @@ select {
 
 .investor-navigation nav {
 	display: grid;
+	flex: 1 1 auto;
+	align-content: start;
 	gap: 2px;
+	min-height: 0;
+	overflow-y: auto;
+	scrollbar-gutter: stable;
 }
 
 .investor-navigation__link {
@@ -301,6 +322,10 @@ select {
 	color: var(--desk-muted);
 	font-size: 11px;
 	line-height: 1.4;
+	position: sticky;
+	bottom: 0;
+	z-index: 1;
+	background: var(--desk-surface);
 }
 
 .investor-navigation__footer .frappe-ui {
@@ -308,17 +333,27 @@ select {
 }
 
 .investor-card {
+	display: flex;
+	flex-direction: column;
 	min-width: 0;
 	flex: 1 1 auto;
+	min-height: 0;
 	margin: 0;
 	padding: 0;
 	background: var(--desk-bg);
 	border: 0;
 	border-radius: 0;
 	box-shadow: none;
+	overflow-x: hidden;
+	overflow-y: auto;
+	scrollbar-gutter: stable;
 }
 
 .investor-page-header {
+	position: sticky;
+	top: 0;
+	z-index: 5;
+	flex: 0 0 auto;
 	padding: 15px 24px 14px;
 	background: var(--desk-bg);
 	border-bottom: 1px solid var(--desk-border);
@@ -450,7 +485,18 @@ h1 {
 }
 
 @media (max-width: 760px) {
+	html,
+	body,
+	#app {
+		height: auto;
+		min-height: 100%;
+		overflow-x: hidden;
+		overflow-y: auto;
+	}
+
 	.investor-navbar {
+		position: sticky;
+		top: 0;
 		padding: 0 12px;
 	}
 
@@ -475,14 +521,19 @@ h1 {
 
 	.investor-layout {
 		display: block;
+		height: auto;
 		min-height: 0;
+		overflow: visible;
 	}
 
 	.investor-navigation {
+		height: auto;
+		min-height: 0;
 		width: 100%;
 		padding: 8px 10px;
 		border-right: 0;
 		border-bottom: 1px solid var(--desk-border);
+		overflow: visible;
 	}
 
 	.investor-navigation__heading,
@@ -491,8 +542,10 @@ h1 {
 	}
 
 	.investor-navigation nav {
+		flex: none;
 		grid-template-columns: repeat(2, minmax(0, 1fr));
 		gap: 2px 5px;
+		overflow: visible;
 	}
 
 	.investor-navigation__link {
@@ -500,11 +553,18 @@ h1 {
 	}
 
 	.investor-page-header {
+		position: sticky;
+		top: 48px;
 		padding: 13px 16px 12px;
 	}
 
 	.investor-page-content {
 		padding: 16px 16px 36px;
+	}
+
+	.investor-card {
+		min-height: 0;
+		overflow: visible;
 	}
 
 	.status-panel {
