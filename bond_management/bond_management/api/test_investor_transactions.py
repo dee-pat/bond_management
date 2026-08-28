@@ -140,8 +140,8 @@ class TestInvestorTransactions(IntegrationTestCase):
     def test_pagination_is_bounded_and_reports_more_rows(self):
         bond = make_bond()
         portfolio = make_portfolio()
-        older = make_transaction(bond, portfolio)
-        newer = make_transaction(bond, portfolio)
+        newer = make_transaction(bond, portfolio, settlement_date="2025-12-31")
+        older = make_transaction(bond, portfolio, settlement_date="2025-12-30")
         investor = self._make_investor(portfolio.name)
 
         with self._as_user(investor):
@@ -163,6 +163,32 @@ class TestInvestorTransactions(IntegrationTestCase):
             {"start": 0, "page_length": 1, "has_more": True},
         )
         self.assertEqual(maximum_page["pagination"]["page_length"], 50)
+
+    def test_visible_columns_can_sort_and_filter_with_server_controls(self):
+        bond = make_bond()
+        portfolio = make_portfolio()
+        older = make_transaction(bond, portfolio, settlement_date="2025-12-30")
+        newer = make_transaction(bond, portfolio, settlement_date="2025-12-31")
+        investor = self._make_investor(portfolio.name)
+
+        with self._as_user(investor):
+            ascending = get_transactions(
+                sort_by="settlement_date",
+                sort_order="asc",
+            )
+            filtered = get_transactions(
+                filter_field="isin",
+                filter_value=bond.name,
+            )
+            with self.assertRaisesRegex(frappe.ValidationError, "not supported"):
+                get_transactions(sort_by="attachment", sort_order="asc")
+            with self.assertRaisesRegex(frappe.ValidationError, "must be asc or desc"):
+                get_transactions(sort_by="isin", sort_order="sideways")
+            with self.assertRaisesRegex(frappe.ValidationError, "Filter field"):
+                get_transactions(filter_field="settlement_date", filter_value="2025-12-31")
+
+        self.assertEqual([row.name for row in ascending["data"]], [older.name, newer.name])
+        self.assertEqual({row.name for row in filtered["data"]}, {older.name, newer.name})
 
     def test_arbitrary_filters_are_not_accepted(self):
         investor = self._make_user([INVESTOR_ROLE])

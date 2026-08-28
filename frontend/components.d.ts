@@ -11,8 +11,11 @@ export {}
 /* prettier-ignore */
 declare module 'vue' {
   export interface GlobalComponents {
+    ListFilterBar: typeof import('./src/components/ListFilterBar.vue')['default']
+    ListPagination: typeof import('./src/components/ListPagination.vue')['default']
     PdfAttachmentActions: typeof import('./src/components/PdfAttachmentActions.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
+    SortableColumn: typeof import('./src/components/SortableColumn.vue')['default']
   }
 }

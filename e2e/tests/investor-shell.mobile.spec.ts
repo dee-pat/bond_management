@@ -8,9 +8,7 @@ test("renders the investor shell within the Pixel 7 viewport", async ({
   await expect(
     page.getByRole("heading", { name: "Bond Investor" })
   ).toBeVisible();
-  await expect(page.getByTestId("bootstrap-status")).toContainText(
-    "Connected as"
-  );
+  await expect(page.getByTestId("bootstrap-status")).toHaveCount(0);
 
   const navigation = page.getByRole("navigation", {
     name: "Investor navigation",

@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 const TRANSACTION_REFERENCE = "UI-TEST-TRANSACTION-001";
+const BOND_ISIN = "UI-TEST-BOND-001";
 
 test("browses an assigned transaction without mobile overflow", async ({
   page,
@@ -8,9 +9,10 @@ test("browses an assigned transaction without mobile overflow", async ({
   await page.goto("/bond-investor/transactions");
 
   const row = page.getByTestId("transaction-row").filter({
-    hasText: TRANSACTION_REFERENCE,
+    hasText: BOND_ISIN,
   });
   await expect(row).toBeVisible();
+  await expect(row).not.toContainText(TRANSACTION_REFERENCE);
   await expect(
     row.getByRole("link", {
       name: `View transaction ${TRANSACTION_REFERENCE} PDF`,

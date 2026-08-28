@@ -126,6 +126,55 @@ EXCHANGE_RATE_LIST_FIELDS = (
     "rate",
     "reverse_rate",
 )
+
+
+def _build_sort_options(fields: tuple[str, ...]) -> dict[str, dict[str, str]]:
+    return {
+        field: {
+            "asc": f"{field} asc, name asc",
+            "desc": f"{field} desc, name desc",
+        }
+        for field in fields
+    }
+
+
+TRANSACTION_SORT_OPTIONS = _build_sort_options(
+    (
+        "settlement_date",
+        "transaction_type",
+        "portfolio_name",
+        "isin",
+        "trade_date",
+        "quantity_face_value",
+        "price",
+    )
+)
+STATEMENT_SORT_OPTIONS = _build_sort_options(("statement_date", "portfolio_name", "reconciliation_status"))
+BOND_SORT_OPTIONS = _build_sort_options(("bond_name", "isin", "currency", "issue_date"))
+MARKET_DATE_SORT_OPTIONS = _build_sort_options(("date",))
+EXCHANGE_RATE_SORT_OPTIONS = _build_sort_options(
+    ("rate_date", "from_currency", "to_currency", "rate", "reverse_rate")
+)
+
+TRANSACTION_FILTER_FIELDS = {
+    "transaction_type": "transaction_type",
+    "isin": "isin",
+    "quantity_face_value": "quantity_face_value",
+    "price": "price",
+}
+STATEMENT_FILTER_FIELDS = {}
+BOND_FILTER_FIELDS = {
+    "bond_name": "bond_name",
+    "isin": "isin",
+    "currency": "currency",
+}
+MARKET_DATE_FILTER_FIELDS = {}
+EXCHANGE_RATE_FILTER_FIELDS = {
+    "from_currency": "from_currency",
+    "to_currency": "to_currency",
+    "rate": "rate",
+    "reverse_rate": "reverse_rate",
+}
 EXCHANGE_RATE_DETAIL_FIELDS = (
     "rate_date",
     "from_currency",
@@ -180,11 +229,24 @@ def get_transactions(
     portfolio: str | None = None,
     start: int | str | None = None,
     page_length: int | str | None = None,
+    sort_by: str | None = None,
+    sort_order: str | None = None,
+    filter_field: str | None = None,
+    filter_value: str | None = None,
 ) -> dict:
     """Return one permission-scoped page of the Desk transaction projection."""
     require_investor_ui_access()
 
     portfolio = optional_string(portfolio, "Portfolio")
+    order_by, click_filters = _list_controls(
+        sort_by,
+        sort_order,
+        filter_field,
+        filter_value,
+        sort_options=TRANSACTION_SORT_OPTIONS,
+        filter_fields=TRANSACTION_FILTER_FIELDS,
+        default_order="settlement_date desc, name desc",
+    )
     start_value = _integer_argument(start, "Start", default=0, minimum=0)
     page_length_value = _integer_argument(
         page_length,
@@ -197,12 +259,13 @@ def get_transactions(
     if portfolio:
         _require_readable_portfolio(portfolio)
         filters["portfolio_name"] = portfolio
+    filters.update(click_filters)
 
     rows = frappe.qb.get_query(
         "Bond Transaction",
         fields=list(TRANSACTION_LIST_FIELDS),
         filters=filters,
-        order_by="creation desc, name desc",
+        order_by=order_by,
         offset=start_value,
         limit=page_length_value + 1,
         ignore_permissions=False,
@@ -244,12 +307,25 @@ def get_statements(
     reconciliation_status: str | None = None,
     start: int | str | None = None,
     page_length: int | str | None = None,
+    sort_by: str | None = None,
+    sort_order: str | None = None,
+    filter_field: str | None = None,
+    filter_value: str | None = None,
 ) -> dict:
     """Return one permission-scoped page of the Desk statement projection."""
     require_investor_ui_access()
 
     portfolio = optional_string(portfolio, "Portfolio")
     reconciliation_status = optional_string(reconciliation_status, "Reconciliation status")
+    order_by, click_filters = _list_controls(
+        sort_by,
+        sort_order,
+        filter_field,
+        filter_value,
+        sort_options=STATEMENT_SORT_OPTIONS,
+        filter_fields=STATEMENT_FILTER_FIELDS,
+        default_order="statement_date desc, name desc",
+    )
     if reconciliation_status and reconciliation_status not in STATEMENT_RECONCILIATION_STATUSES:
         frappe.throw(_("Reconciliation status must be Matched or Mismatched."))
 
@@ -267,12 +343,13 @@ def get_statements(
         filters["portfolio_name"] = portfolio
     if reconciliation_status:
         filters["reconciliation_status"] = reconciliation_status
+    filters.update(click_filters)
 
     rows = frappe.qb.get_query(
         "Bond Statement",
         fields=list(STATEMENT_LIST_FIELDS),
         filters=filters,
-        order_by="creation desc, name desc",
+        order_by=order_by,
         offset=start_value,
         limit=page_length_value + 1,
         ignore_permissions=False,
@@ -318,9 +395,22 @@ def get_statement(name: str) -> dict:
 def get_bonds(
     start: int | str | None = None,
     page_length: int | str | None = None,
+    sort_by: str | None = None,
+    sort_order: str | None = None,
+    filter_field: str | None = None,
+    filter_value: str | None = None,
 ) -> dict:
     """Return one permission-scoped page of the Desk Bond Master projection."""
     require_investor_ui_access()
+    order_by, filters = _list_controls(
+        sort_by,
+        sort_order,
+        filter_field,
+        filter_value,
+        sort_options=BOND_SORT_OPTIONS,
+        filter_fields=BOND_FILTER_FIELDS,
+        default_order="issue_date desc, name desc",
+    )
 
     start_value = _integer_argument(start, "Start", default=0, minimum=0)
     page_length_value = _integer_argument(
@@ -333,7 +423,8 @@ def get_bonds(
     rows = frappe.qb.get_query(
         "Bond Master",
         fields=list(BOND_LIST_FIELDS),
-        order_by="creation desc, name desc",
+        filters=filters,
+        order_by=order_by,
         offset=start_value,
         limit=page_length_value + 1,
         ignore_permissions=False,
@@ -381,9 +472,22 @@ def get_bond(name: str) -> dict:
 def get_market_dates(
     start: int | str | None = None,
     page_length: int | str | None = None,
+    sort_by: str | None = None,
+    sort_order: str | None = None,
+    filter_field: str | None = None,
+    filter_value: str | None = None,
 ) -> dict:
     """Return one permission-scoped page of Bond Market Date history."""
     require_investor_ui_access()
+    order_by, filters = _list_controls(
+        sort_by,
+        sort_order,
+        filter_field,
+        filter_value,
+        sort_options=MARKET_DATE_SORT_OPTIONS,
+        filter_fields=MARKET_DATE_FILTER_FIELDS,
+        default_order="date desc, name desc",
+    )
 
     start_value = _integer_argument(start, "Start", default=0, minimum=0)
     page_length_value = _integer_argument(
@@ -396,7 +500,8 @@ def get_market_dates(
     rows = frappe.qb.get_query(
         "Bond Market Date",
         fields=list(MARKET_DATE_LIST_FIELDS),
-        order_by="creation desc, name desc",
+        filters=filters,
+        order_by=order_by,
         offset=start_value,
         limit=page_length_value + 1,
         ignore_permissions=False,
@@ -441,9 +546,22 @@ def get_market_date(name: str) -> dict:
 def get_exchange_rates(
     start: int | str | None = None,
     page_length: int | str | None = None,
+    sort_by: str | None = None,
+    sort_order: str | None = None,
+    filter_field: str | None = None,
+    filter_value: str | None = None,
 ) -> dict:
     """Return one permission-scoped page of Bond Exchange Rate history."""
     require_investor_ui_access()
+    order_by, filters = _list_controls(
+        sort_by,
+        sort_order,
+        filter_field,
+        filter_value,
+        sort_options=EXCHANGE_RATE_SORT_OPTIONS,
+        filter_fields=EXCHANGE_RATE_FILTER_FIELDS,
+        default_order="rate_date desc, name desc",
+    )
 
     start_value = _integer_argument(start, "Start", default=0, minimum=0)
     page_length_value = _integer_argument(
@@ -456,7 +574,8 @@ def get_exchange_rates(
     rows = frappe.qb.get_query(
         "Bond Exchange Rate",
         fields=list(EXCHANGE_RATE_LIST_FIELDS),
-        order_by="rate_date desc, name desc",
+        filters=filters,
+        order_by=order_by,
         offset=start_value,
         limit=page_length_value + 1,
         ignore_permissions=False,
@@ -518,6 +637,41 @@ def _require_readable_portfolio(portfolio: str) -> None:
     ).run(pluck=True)
     if not readable:
         frappe.throw(_("You are not permitted to read this portfolio."), frappe.PermissionError)
+
+
+def _list_controls(
+    sort_by: str | None,
+    sort_order: str | None,
+    filter_field: str | None,
+    filter_value: str | None,
+    *,
+    sort_options: dict[str, dict[str, str]],
+    filter_fields: dict[str, str],
+    default_order: str,
+) -> tuple[str, dict[str, str]]:
+    sort_by = optional_string(sort_by, "Sort by")
+    sort_order = optional_string(sort_order, "Sort order")
+    filter_field = optional_string(filter_field, "Filter field")
+    filter_value = optional_string(filter_value, "Filter value")
+
+    if sort_by is None and sort_order is not None:
+        frappe.throw(_("Sort order requires Sort by."), frappe.ValidationError)
+    if sort_by is not None and sort_by not in sort_options:
+        frappe.throw(_("Sort by is not supported for this list."), frappe.ValidationError)
+    if sort_by is not None and sort_order not in {"asc", "desc"}:
+        frappe.throw(_("Sort order must be asc or desc."), frappe.ValidationError)
+
+    if (filter_field is None) != (filter_value is None):
+        frappe.throw(
+            _("Filter field and Filter value must be provided together."),
+            frappe.ValidationError,
+        )
+    if filter_field is not None and filter_field not in filter_fields:
+        frappe.throw(_("Filter field is not supported for this list."), frappe.ValidationError)
+
+    order_by = default_order if sort_by is None else sort_options[sort_by][sort_order]
+    filters = {} if filter_field is None else {filter_fields[filter_field]: filter_value}
+    return order_by, filters
 
 
 def _integer_argument(

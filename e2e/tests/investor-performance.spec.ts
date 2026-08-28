@@ -26,6 +26,9 @@ test("runs USD portfolio performance and copies sanitized cash flows", async ({
   await expect(
     page.getByRole("heading", { name: "Portfolio Performance" })
   ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Performance report" }),
+  ).toHaveCount(0);
   await expect(page.getByTestId("performance-initial")).toBeVisible();
   await expect(page.getByLabel("Valuation Date")).not.toHaveValue("");
 

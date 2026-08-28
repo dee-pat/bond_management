@@ -109,8 +109,8 @@ class TestInvestorMarketDates(IntegrationTestCase):
                 self.assertTrue(market_dates.issubset({row.name for row in response["data"]}))
 
     def test_pagination_is_allow_listed_and_bounded(self):
-        older = make_market_date(make_bond())
-        newer = make_market_date(make_bond())
+        newer = make_market_date(make_bond(), date="2099-06-02")
+        older = make_market_date(make_bond(), date="2099-06-01")
         investor = self._make_user([INVESTOR_ROLE])
 
         with self._as_user(investor):
@@ -134,6 +134,21 @@ class TestInvestorMarketDates(IntegrationTestCase):
             {"start": 0, "page_length": 1, "has_more": True},
         )
         self.assertEqual(maximum_page["pagination"]["page_length"], 50)
+
+    def test_visible_columns_can_sort_and_filter_with_server_controls(self):
+        older = make_market_date(make_bond(), date="2030-01-01")
+        newer = make_market_date(make_bond(), date="2030-01-02")
+        investor = self._make_user([INVESTOR_ROLE])
+
+        with self._as_user(investor):
+            ascending = get_market_dates(sort_by="date", sort_order="asc")
+            with self.assertRaisesRegex(frappe.ValidationError, "not supported"):
+                get_market_dates(sort_by="bond_market_prices", sort_order="asc")
+            with self.assertRaisesRegex(frappe.ValidationError, "Filter field"):
+                get_market_dates(filter_field="date", filter_value="2030-01-01")
+
+        names = [row.name for row in ascending["data"]]
+        self.assertLess(names.index(older.name), names.index(newer.name))
 
     @staticmethod
     def _make_user(roles):

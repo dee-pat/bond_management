@@ -109,8 +109,18 @@ class TestInvestorBonds(IntegrationTestCase):
                 self.assertTrue(bonds.issubset({row.name for row in response["data"]}))
 
     def test_pagination_is_allow_listed_and_bounded(self):
-        older = make_bond()
-        newer = make_bond()
+        newer = make_bond(
+            issue_date="2099-01-01",
+            first_coupon_date="2099-07-01",
+            maturity_date="2101-01-01",
+            principal_schedule=[{"repayment_date": "2101-01-01", "principal_units": 100}],
+        )
+        older = make_bond(
+            issue_date="2098-01-01",
+            first_coupon_date="2098-07-01",
+            maturity_date="2100-01-01",
+            principal_schedule=[{"repayment_date": "2100-01-01", "principal_units": 100}],
+        )
         investor = self._make_user([INVESTOR_ROLE])
 
         with self._as_user(investor):
@@ -134,6 +144,23 @@ class TestInvestorBonds(IntegrationTestCase):
             {"start": 0, "page_length": 1, "has_more": True},
         )
         self.assertEqual(maximum_page["pagination"]["page_length"], 50)
+
+    def test_visible_columns_can_sort_and_filter_with_server_controls(self):
+        first = make_bond(bond_name="A-" + unique_name("TEST-BOND"))
+        second = make_bond(bond_name="Z-" + unique_name("TEST-BOND"))
+        investor = self._make_user([INVESTOR_ROLE])
+
+        with self._as_user(investor):
+            ascending = get_bonds(sort_by="bond_name", sort_order="asc")
+            filtered = get_bonds(filter_field="isin", filter_value=first.isin)
+            with self.assertRaisesRegex(frappe.ValidationError, "not supported"):
+                get_bonds(sort_by="principal_schedule", sort_order="asc")
+            with self.assertRaisesRegex(frappe.ValidationError, "Filter field"):
+                get_bonds(filter_field="issue_date", filter_value="2099-01-01")
+
+        names = [row.name for row in ascending["data"]]
+        self.assertLess(names.index(first.name), names.index(second.name))
+        self.assertEqual([row.name for row in filtered["data"]], [first.name])
 
     @staticmethod
     def _make_user(roles):

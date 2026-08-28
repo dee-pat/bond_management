@@ -1,3 +1,11 @@
+export type SortOrder = "asc" | "desc";
+
+export interface ActiveListFilter {
+  field: string;
+  label: string;
+  value: string;
+}
+
 export interface InvestorUser {
   name: string;
   full_name: string;

@@ -203,16 +203,8 @@ function numericValue(value: unknown): number | null {
 <template>
 	<section
 		class="record-surface yield-comparison-surface"
-		aria-labelledby="yield-comparison-title"
+		aria-label="Bond yield comparison report"
 	>
-		<div class="surface-heading">
-			<div>
-				<p class="surface-kicker">Persisted market history</p>
-				<h2 id="yield-comparison-title">Yield comparison</h2>
-			</div>
-			<span class="read-only-badge">Read only</span>
-		</div>
-
 		<form class="yield-comparison-filters" @submit.prevent="runReport">
 			<div class="surface-filter">
 				<label for="yield-comparison-from-date">From Date</label>

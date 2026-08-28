@@ -163,8 +163,8 @@ class TestInvestorStatements(IntegrationTestCase):
 
     def test_filters_and_pagination_are_allow_listed_and_bounded(self):
         portfolio = make_portfolio()
-        older = make_statement(portfolio, statement_date="2025-11-30")
         newer = make_statement(portfolio, statement_date="2025-12-31")
+        older = make_statement(portfolio, statement_date="2025-11-30")
         investor = self._make_investor(portfolio.name)
 
         with self._as_user(investor):
@@ -190,6 +190,21 @@ class TestInvestorStatements(IntegrationTestCase):
             {"start": 0, "page_length": 1, "has_more": True},
         )
         self.assertEqual(maximum_page["pagination"]["page_length"], 50)
+
+    def test_visible_columns_can_sort_and_filter_with_server_controls(self):
+        portfolio = make_portfolio()
+        older = make_statement(portfolio, statement_date="2025-11-30")
+        newer = make_statement(portfolio, statement_date="2025-12-31")
+        investor = self._make_investor(portfolio.name)
+
+        with self._as_user(investor):
+            ascending = get_statements(sort_by="statement_date", sort_order="asc")
+            with self.assertRaisesRegex(frappe.ValidationError, "not supported"):
+                get_statements(sort_by="attachment", sort_order="asc")
+            with self.assertRaisesRegex(frappe.ValidationError, "Filter field"):
+                get_statements(filter_field="statement_date", filter_value="2025-12-31")
+
+        self.assertEqual([row.name for row in ascending["data"]], [older.name, newer.name])
 
     def _make_investor(self, portfolio_name):
         investor = self._make_user([INVESTOR_ROLE])

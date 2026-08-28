@@ -14,7 +14,7 @@ test("announces client navigation with route titles and heading focus", async ({
   await expect(page).toHaveTitle("Bond Investor");
   await expect(homeHeading).toBeFocused();
   await expect(page.getByTestId("investor-shell")).not.toContainText(
-    "subsequent migration slices"
+    "subsequent migration slices",
   );
 
   await page
@@ -28,7 +28,9 @@ test("announces client navigation with route titles and heading focus", async ({
   await expect(page).toHaveTitle("Bond Transactions · Bond Investor");
   await expect(transactionHeading).toBeFocused();
   await expect(
-    page.getByRole("link", { name: "Bond Transactions" })
+    page
+      .getByRole("navigation", { name: "Investor navigation" })
+      .getByRole("link", { name: "Bond Transactions" }),
   ).toHaveAttribute("aria-current", "page");
 });
 
@@ -62,12 +64,12 @@ test("shows loading, failure, retry, and empty transaction states", async ({
 
   releaseFirstRequest.resolve();
   await expect(page.getByRole("alert")).toContainText(
-    "Transactions could not be loaded"
+    "Transactions could not be loaded",
   );
   await page.getByRole("button", { name: "Retry" }).click();
 
   await expect(page.getByTestId("transactions-empty")).toContainText(
-    "No transactions match"
+    "No transactions match",
   );
   expect(attempts).toBe(2);
 });
@@ -91,7 +93,7 @@ test("keeps a newer yield result when an older request finishes last", async ({
       }
 
       await fulfillJson(route, yieldResponse("LATEST-BOND"));
-    }
+    },
   );
 
   await page.goto("/bond-investor/yield-comparison");
@@ -105,15 +107,15 @@ test("keeps a newer yield result when an older request finishes last", async ({
   await page.getByLabel("From Date").fill("2095-01-02");
   await page.getByRole("button", { name: "Run", exact: true }).click();
   await expect(page.getByTestId("yield-comparison-selector")).toContainText(
-    "LATEST-BOND"
+    "LATEST-BOND",
   );
 
   releaseFirstRequest.resolve();
   await expect(page.getByTestId("yield-comparison-selector")).toContainText(
-    "LATEST-BOND"
+    "LATEST-BOND",
   );
   await expect(page.getByTestId("yield-comparison-selector")).not.toContainText(
-    "STALE-BOND"
+    "STALE-BOND",
   );
 });
 
@@ -126,26 +128,28 @@ test.describe("mid-session expiry", () => {
     await expect(page.getByTestId("transaction-row").first()).toBeVisible();
 
     const csrfToken = await page.evaluate(
-      () => (window as typeof window & { csrf_token?: string }).csrf_token
+      () => (window as typeof window & { csrf_token?: string }).csrf_token,
     );
     const logout = await page.request.post(
       "/api/method/frappe.handler.logout",
       {
         headers: { "X-Frappe-CSRF-Token": csrfToken ?? "" },
-      }
+      },
     );
     expect(logout.ok()).toBeTruthy();
 
     const expiredResponse = page.waitForResponse((response) =>
-      response.url().includes("investor.get_transactions")
+      response.url().includes("investor.get_transactions"),
     );
-    await page.getByLabel("Portfolio Name").selectOption({
-      label: "UI Test Portfolio",
-    });
+    await page
+      .getByRole("combobox", { name: "Portfolio Name", exact: true })
+      .selectOption({
+        label: "UI Test Portfolio",
+      });
     expect((await expiredResponse).status()).toBe(403);
 
     await expect(page).toHaveURL(
-      /\/login\?redirect-to=%2Fbond-investor%2Ftransactions$/
+      /\/login\?redirect-to=%2Fbond-investor%2Ftransactions$/,
     );
   });
 });
@@ -159,7 +163,7 @@ test("keeps an authenticated record denial on its detail route", async ({
 
   await expect(page).toHaveURL(new RegExp(`${path}$`));
   await expect(page.getByRole("alert")).toContainText(
-    "unavailable or you do not have permission"
+    "unavailable or you do not have permission",
   );
 });
 
@@ -215,7 +219,7 @@ function column(
   fieldname: string,
   label: string,
   fieldtype: string,
-  precision: number | null = null
+  precision: number | null = null,
 ): object {
   return {
     fieldname,

@@ -8,6 +8,7 @@ import type {
   MarketDatePage,
   StatementDetailResponse,
   StatementPage,
+  SortOrder,
   TransactionDetailResponse,
   TransactionPage,
 } from "../types";
@@ -41,16 +42,24 @@ export async function fetchTransactions(options: {
   portfolio?: string;
   start?: number;
   pageLength?: number;
+  sortBy?: string;
+  sortOrder?: SortOrder;
+  filterField?: string;
+  filterValue?: string;
 }): Promise<TransactionPage> {
   return requestInvestorApi<TransactionPage>("get_transactions", {
     portfolio: options.portfolio,
     start: options.start,
     page_length: options.pageLength,
+    sort_by: options.sortBy,
+    sort_order: options.sortOrder,
+    filter_field: options.filterField,
+    filter_value: options.filterValue,
   });
 }
 
 export async function fetchTransaction(
-  name: string
+  name: string,
 ): Promise<TransactionDetailResponse> {
   return requestInvestorApi<TransactionDetailResponse>("get_transaction", {
     name,
@@ -62,17 +71,25 @@ export async function fetchStatements(options: {
   reconciliationStatus?: string;
   start?: number;
   pageLength?: number;
+  sortBy?: string;
+  sortOrder?: SortOrder;
+  filterField?: string;
+  filterValue?: string;
 }): Promise<StatementPage> {
   return requestInvestorApi<StatementPage>("get_statements", {
     portfolio: options.portfolio,
     reconciliation_status: options.reconciliationStatus,
     start: options.start,
     page_length: options.pageLength,
+    sort_by: options.sortBy,
+    sort_order: options.sortOrder,
+    filter_field: options.filterField,
+    filter_value: options.filterValue,
   });
 }
 
 export async function fetchStatement(
-  name: string
+  name: string,
 ): Promise<StatementDetailResponse> {
   return requestInvestorApi<StatementDetailResponse>("get_statement", {
     name,
@@ -82,10 +99,18 @@ export async function fetchStatement(
 export async function fetchBonds(options: {
   start?: number;
   pageLength?: number;
+  sortBy?: string;
+  sortOrder?: SortOrder;
+  filterField?: string;
+  filterValue?: string;
 }): Promise<BondPage> {
   return requestInvestorApi<BondPage>("get_bonds", {
     start: options.start,
     page_length: options.pageLength,
+    sort_by: options.sortBy,
+    sort_order: options.sortOrder,
+    filter_field: options.filterField,
+    filter_value: options.filterValue,
   });
 }
 
@@ -96,15 +121,23 @@ export async function fetchBond(name: string): Promise<BondDetailResponse> {
 export async function fetchMarketDates(options: {
   start?: number;
   pageLength?: number;
+  sortBy?: string;
+  sortOrder?: SortOrder;
+  filterField?: string;
+  filterValue?: string;
 }): Promise<MarketDatePage> {
   return requestInvestorApi<MarketDatePage>("get_market_dates", {
     start: options.start,
     page_length: options.pageLength,
+    sort_by: options.sortBy,
+    sort_order: options.sortOrder,
+    filter_field: options.filterField,
+    filter_value: options.filterValue,
   });
 }
 
 export async function fetchMarketDate(
-  name: string
+  name: string,
 ): Promise<MarketDateDetailResponse> {
   return requestInvestorApi<MarketDateDetailResponse>("get_market_date", {
     name,
@@ -114,15 +147,23 @@ export async function fetchMarketDate(
 export async function fetchExchangeRates(options: {
   start?: number;
   pageLength?: number;
+  sortBy?: string;
+  sortOrder?: SortOrder;
+  filterField?: string;
+  filterValue?: string;
 }): Promise<ExchangeRatePage> {
   return requestInvestorApi<ExchangeRatePage>("get_exchange_rates", {
     start: options.start,
     page_length: options.pageLength,
+    sort_by: options.sortBy,
+    sort_order: options.sortOrder,
+    filter_field: options.filterField,
+    filter_value: options.filterValue,
   });
 }
 
 export async function fetchExchangeRate(
-  name: string
+  name: string,
 ): Promise<ExchangeRateDetailResponse> {
   return requestInvestorApi<ExchangeRateDetailResponse>("get_exchange_rate", {
     name,
@@ -138,7 +179,7 @@ export async function fetchPortfolioPerformance(options: {
     {
       portfolio: options.portfolio,
       valuation_date: options.valuationDate,
-    }
+    },
   );
 }
 
@@ -157,7 +198,7 @@ export async function fetchPortfolioPerformanceCashflows(options: {
       isin: options.isin,
       xirr_type: options.xirrType,
       cashflow_currency: options.cashflowCurrency,
-    }
+    },
   );
 }
 
@@ -170,13 +211,13 @@ export async function fetchBondYieldComparison(options: {
     {
       from_date: options.fromDate,
       to_date: options.toDate,
-    }
+    },
   );
 }
 
 export async function fetchYieldComparisonDefaults(): Promise<YieldComparisonDefaultsResponse> {
   return requestInvestorApi<YieldComparisonDefaultsResponse>(
-    "get_yield_comparison_defaults"
+    "get_yield_comparison_defaults",
   );
 }
 
@@ -187,7 +228,7 @@ export function redirectToLogin(): void {
 
 async function requestInvestorApi<T>(
   method: string,
-  parameters: Record<string, string | number | undefined> = {}
+  parameters: Record<string, string | number | undefined> = {},
 ): Promise<T> {
   const url = new URL(`${INVESTOR_API_URL}.${method}`, window.location.origin);
   Object.entries(parameters).forEach(([key, value]) => {

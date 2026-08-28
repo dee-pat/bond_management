@@ -2,37 +2,49 @@
 	display: flex;
 	flex-wrap: wrap;
 	justify-content: flex-end;
-	gap: 0.75rem;
+	gap: 10px;
 }
 
 .status-badge {
-	display: inline-block;
-	padding: 0.25rem 0.5rem;
-	color: #475569;
-	background: #e2e8f0;
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	min-height: 20px;
+	padding: 3px 8px;
+	color: #68737d;
+	background: #f1f3f5;
 	border-radius: 999px;
-	font-size: 0.75rem;
-	font-weight: 700;
+	font-size: 11px;
+	font-weight: 500;
+}
+
+.status-badge::before {
+	width: 6px;
+	height: 6px;
+	background: currentColor;
+	border-radius: 50%;
+	content: "";
 }
 
 .status-badge--matched {
-	color: #166534;
-	background: #dcfce7;
+	color: #218739;
+	background: #eaf6ec;
 }
 
 .status-badge--mismatched {
-	color: #991b1b;
-	background: #fee2e2;
+	color: #c23636;
+	background: #fceeee;
 }
 
 .holding-section {
-	margin-top: 1.5rem;
+	margin-top: 20px;
 }
 
 .holding-section h3 {
-	margin: 0 0 0.75rem;
-	color: #0f172a;
-	font-size: 1rem;
+	margin: 0 0 10px;
+	color: var(--desk-text);
+	font-size: 14px;
+	font-weight: 600;
 }
 
 @media (max-width: 760px) {

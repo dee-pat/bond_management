@@ -173,15 +173,7 @@ function sanitizedText(value: string): string {
 </script>
 
 <template>
-	<section class="record-surface performance-surface" aria-labelledby="performance-title">
-		<div class="surface-heading">
-			<div>
-				<p class="surface-kicker">As-of portfolio view</p>
-				<h2 id="performance-title">Performance report</h2>
-			</div>
-			<span class="read-only-badge">Read only</span>
-		</div>
-
+	<section class="record-surface performance-surface" aria-label="Portfolio performance report">
 		<div v-if="!hasAssignments" class="surface-state" data-testid="performance-no-assignments">
 			No portfolios are assigned to your account.
 		</div>

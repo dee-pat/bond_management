@@ -21,6 +21,9 @@ test("compares persisted yields, selects series, and copies sanitized audit data
   await expect(
     page.getByRole("heading", { name: "Bond Yield Comparison" })
   ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Yield comparison", exact: true }),
+  ).toHaveCount(0);
   await expect(page.getByTestId("yield-comparison-initial")).toBeVisible();
   await expect(page.getByLabel("From Date")).toHaveValue(
     defaults.message.filters.from_date ?? ""

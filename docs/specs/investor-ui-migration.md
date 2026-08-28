@@ -1,7 +1,7 @@
 # Investor UI Migration
 
 Status: Approved for phased implementation
-Last updated: 2026-08-22
+Last updated: 2026-08-28
 Progress: [investor-ui-migration-progress.md](../plans/investor-ui-migration-progress.md)
 
 ## Outcome
@@ -162,7 +162,11 @@ Server tests must prove:
 | Investor requesting another portfolio or record directly | Permission failure without existence leakage.          |
 | Manager or Administrator                                 | Data allowed by their existing normal permissions.     |
 
-The tests must also prove that arbitrary filter fields, excessive page sizes and unapproved file metadata cannot cross the API boundary.
+The tests must also prove that arbitrary filter fields, unsupported sort keys,
+excessive page sizes and unapproved file metadata cannot cross the API
+boundary. Visible-column sorting and exact clicked-value filters are allowed
+only through each endpoint's fixed field allowlist and remain subject to the
+same normal Frappe permissions.
 
 ## UI behaviour
 
@@ -174,6 +178,30 @@ The tests must also prove that arbitrary filter fields, excessive page sizes and
 - Session-expiry handling that returns the user to login and preserves the intended SPA route.
 - Visible read-only presentation: no disabled mutation controls that imply unsupported operations.
 - Responsive layouts verified on desktop Chromium and a Pixel 7-sized viewport.
+- Breadcrumbs use one compact, non-wrapping line with an accessible home icon,
+  slash separators and the current hierarchy, such as
+  `Home / Bond Investor / Bond Transactions`, and ellipsize long context labels.
+- Normal list and report screens omit connection and assigned-portfolio status
+  summaries; the authenticated account remains available in the shell header.
+- The Desk-style breadcrumb is the single screen title for list and report
+  routes, using the current hierarchy without a duplicate title row; detail
+  surfaces retain their record identifier as the content heading.
+
+### Desk-style list controls
+
+- Record-list headers expose every visible column as an accessible sort control;
+  clicking a title requests that column from the server and toggles ascending
+  or descending order with a deterministic name tie-breaker.
+- Visible cell values expose exact filters where the surface supports them.
+  Date cells intentionally do not expose filter actions. The API accepts only
+  endpoint-specific non-date visible-field keys and one exact clicked-value
+  filter alongside the existing assignment/status filters; it does not expose
+  an unrestricted arbitrary-field filter builder.
+- Lists with a business date default to descending date order (latest first),
+  with a deterministic name tie-breaker.
+- List footers follow Desk's compact list treatment: they show the number of
+  records currently loaded, allow the supported page sizes and load the next
+  server page without client-side pagination of financial records.
 
 ### Reports
 

@@ -1,6 +1,6 @@
 # Investor UI Migration Progress
 
-Last updated: 2026-08-26
+Last updated: 2026-08-28
 Specification: [investor-ui-migration.md](../specs/investor-ui-migration.md)
 Current phase: Phase 7 — Pilot
 Overall status: Phase 7 in progress; pilot acceptance pending
@@ -28,6 +28,55 @@ This file records execution state and evidence. Product, architecture and accept
 | 7     | Pilot                                | In progress | Acceptance cycle and rollback evidence tracked below.                      |
 | 8     | Cutover                              | Pending     | —                                                                          |
 | 9     | Legacy investor workspace retirement | Pending     | Separate release.                                                          |
+
+## In-progress slice: Desk-aligned investor presentation
+
+Objective: make the read-only investor application visually familiar to Desk
+users while retaining Frappe UI, the existing routes and the current API/data
+contracts. Align the shared shell, list/detail surfaces, status treatments,
+server-backed list controls and pagination with Desk's compact light workspace,
+page headers, single-line hierarchical breadcrumbs with a home icon and slash
+separators, tables and list footer conventions. This slice does not
+change financial calculations, permissions, mutations or report semantics;
+sort and clicked-value filter inputs remain endpoint-specific and
+permission-scoped. Lists with dates default to their business date in
+descending order. Date cells remain display/detail links rather than filter
+controls, and normal list/report screens omit the connection and assignment
+status strip. The shell breadcrumb is the single title on list and report
+screens; detail views retain their record-specific heading.
+
+### Planned work
+
+- [x] Replace the portal-style shell with a Desk-aligned navbar, workspace
+  sidebar, breadcrumb/page header and compact account/session treatment.
+- [x] Normalize shared list, detail, filter, status and report styling around
+  Frappe UI tokens and Desk-like spacing, borders and typography.
+- [x] Add server-backed sorting for every visible list column and exact
+  clicked-value filters through endpoint-specific allowlists; default dated
+  lists to latest first and omit date-cell filters.
+- [x] Replace the custom Previous/Next pagination treatment with a compact
+  Desk-style list footer while preserving the allow-listed API pagination.
+- [x] Keep the shell breadcrumb as the single title on list and report screens;
+  retain record identifiers as headings on detail views.
+- [x] Add focused desktop/mobile presentation assertions and run the complete
+  frontend and investor UI gates.
+
+### Acceptance criteria
+
+- Existing investor routes, read-only boundaries, contracted fields and test
+  IDs remain stable; transaction and statement record numbers remain internal
+  route keys and are not rendered in list rows.
+- Desktop and Pixel 7 views have no horizontal overflow; navigation remains
+  usable at both viewport sizes.
+- List headers sort every visible column through the server, clicked values
+  expose exact filter chips, and unsupported fields cannot cross the API
+  boundary or bypass permissions.
+- Dated lists default to the latest business date first. Date cells do not
+  expose row filter actions, and list/report screens do not show the connected
+  user or assigned-portfolio status strip. List and report content surfaces do
+  not repeat the shell page title.
+- Pagination exposes the loaded record count, supported rows-per-page choices
+  and Desk-style Load More behavior without client-side financial pagination.
 
 ## Completed slice: Phase 1
 
@@ -170,15 +219,16 @@ filters, new calculations, schema, permissions, hooks or dependencies.
 Evidence source: the standard `Bond Transaction` DocType metadata. There is no
 app-owned list-view override, so the standard Desk list behavior applies.
 
-- Row title: Settlement Date, with Transaction Reference retained as the stable
-  record identifier and detail route key.
+- Row title: Settlement Date. Transaction Reference remains the stable internal
+  record identifier and detail route key, but is not rendered in list rows.
 - List fields, in metadata order: Transaction Type, Portfolio Name, ISIN, Trade
   Date, Quantity/ Face Value and Price.
 - Standard filter: Portfolio Name. The SPA presents `All assigned portfolios`
-  plus only the portfolio choices returned by bootstrap; it does not expose
-  Desk's generic arbitrary-field filter builder.
-- Default sorting: Creation descending. The API adds Name descending as a
-  deterministic tie-breaker without changing the visible order contract.
+  plus only the portfolio choices returned by bootstrap. Visible non-date row
+  values also expose exact clicked-value filters through the endpoint allowlist;
+  the SPA does not expose Desk's unrestricted arbitrary-field filter builder.
+- Default sorting: Settlement Date descending. The API adds Name descending as
+  a deterministic tie-breaker. Date cells do not expose filter actions.
 - Page length: 20 by default, with an allow-listed maximum of 50.
 - Detail fields, in form order after layout fields are removed: Transaction
   Type, Portfolio Name, ISIN, Bond Name, Account Number, Transaction Reference,
@@ -202,7 +252,9 @@ app-owned list-view override, so the standard Desk list behavior applies.
 
 - Inputs: optional `portfolio` string; optional non-negative `start` integer
   defaulting to `0`; optional `page_length` integer defaulting to `20` and
-  capped at `50`. No arbitrary filter, field or sort input is accepted.
+  capped at `50`; optional allow-listed visible `sort_by`/`sort_order`; and an
+  optional allow-listed exact `filter_field`/`filter_value` pair. Arbitrary
+  fields, date filter fields, sort keys and filter operators are not accepted.
 - Response: `{ data, pagination }`, where every row contains only `name`,
   `settlement_date`, `transaction_type`, `portfolio_name`, `isin`, `trade_date`,
   `quantity_face_value` and `price`; pagination contains `start`, `page_length`
@@ -259,16 +311,18 @@ dependencies.
 Evidence source: the standard `Bond Statement` DocType metadata and its
 app-owned list formatter.
 
-- Row title: Statement Date, with the generated statement name retained as the
-  stable record identifier and detail route key.
+- Row title: Statement Date. The generated statement name remains the stable
+  internal record identifier and detail route key, but is not rendered in list
+  rows.
 - List fields, in metadata order: Portfolio Name and Reconciliation Status.
   The SPA retains the list formatter's status meaning with a visible status
   badge rather than reproducing Desk markup.
 - Standard filters: Reconciliation Status. The SPA also presents Portfolio Name
   as an assignment-aware filter, consistent with the transaction surface; its
-  choices remain limited to bootstrap portfolios.
-- Default sorting: Creation descending. The API adds Name descending as a
-  deterministic tie-breaker without changing the visible order contract.
+  choices remain limited to bootstrap portfolios. Visible row values expose
+  exact non-date clicked-value filters through the endpoint allowlist.
+- Default sorting: Statement Date descending. The API adds Name descending as a
+  deterministic tie-breaker. Date cells do not expose filter actions.
 - Page length: 20 by default, with the shared allow-listed maximum of 50.
 - Detail fields, in form order after layout fields are removed: Portfolio Name,
   Statement Date, Market Price Posting, Reconciliation Status and Bond
@@ -288,8 +342,10 @@ app-owned list formatter.
 
 - Inputs: optional `portfolio` string; optional `reconciliation_status` in
   `Matched` or `Mismatched`; optional non-negative `start` integer defaulting to
-  `0`; optional `page_length` integer defaulting to `20` and capped at `50`.
-  No arbitrary filter, field or sort input is accepted.
+  `0`; optional `page_length` integer defaulting to `20` and capped at `50`;
+  optional allow-listed visible `sort_by`/`sort_order`; and no additional
+  date-cell filter field. Arbitrary fields, sort keys and filter operators are
+  not accepted.
 - Response: `{ data, pagination }`, where every row contains only `name`,
   `statement_date`, `portfolio_name` and `reconciliation_status`; pagination
   contains `start`, `page_length` and `has_more`.
@@ -350,10 +406,12 @@ schedule metadata. There is no app-owned list-view override.
 
 - Row title: ISIN, which is also the stable document name and detail route key.
 - List fields, in metadata order: Bond Name, ISIN, Currency and Issue Date.
-- Standard filters: none configured. The SPA does not expose Desk's generic
-  arbitrary-field filter builder.
-- Default sorting: Creation descending. The API adds Name descending as a
-  deterministic tie-breaker without changing the visible order contract.
+- Standard filters: none configured. The SPA adds exact non-date clicked-value
+  filters for visible values through the endpoint allowlist, but does not
+  expose Desk's unrestricted arbitrary-field filter builder.
+- Default sorting: Issue Date descending. The API adds Name descending as a
+  deterministic tie-breaker. The issue-date cells do not expose filter
+  actions.
 - Page length: 20 by default, with the shared allow-listed maximum of 50.
 - Detail fields, in form order after layout fields are removed: Bond Name,
   ISIN, Issue Date, First Coupon Date, Face Value Per Unit, Coupon Frequency,
@@ -373,8 +431,10 @@ schedule metadata. There is no app-owned list-view override.
 `GET bond_management.bond_management.api.investor.get_bonds`
 
 - Inputs: optional non-negative `start` integer defaulting to `0`; optional
-  `page_length` integer defaulting to `20` and capped at `50`. No arbitrary
-  filter, field or sort input is accepted.
+  `page_length` integer defaulting to `20` and capped at `50`; optional
+  allow-listed visible `sort_by`/`sort_order`; and optional non-date
+  allow-listed exact `filter_field`/`filter_value` pairs. Arbitrary fields,
+  date filters, sort keys and filter operators are not accepted.
 - Response: `{ data, pagination }`, where every row contains only `name`,
   `bond_name`, `isin`, `currency` and `issue_date`; pagination contains
   `start`, `page_length` and `has_more`.
@@ -440,10 +500,12 @@ app-owned list-view override.
 - Row title: Date, with the generated market-date name retained as the stable
   record identifier and detail route key.
 - List fields: Date. No additional fields are marked for the standard Desk list.
-- Standard filters: none configured. The SPA does not expose Desk's generic
-  arbitrary-field filter builder.
-- Default sorting: Creation descending. The API adds Name descending as a
-  deterministic tie-breaker without changing the visible order contract.
+- Standard filters: none configured. The date cell is a display/detail link,
+  not a filter control; there are no other visible values to filter. The API
+  does not expose a date filter field or Desk's unrestricted arbitrary-field
+  filter builder.
+- Default sorting: Date descending. The API adds Name descending as a
+  deterministic tie-breaker.
 - Page length: 20 by default, with the shared allow-listed maximum of 50.
 - Detail fields, in form order after layout fields are removed: Date, Bond
   Market Prices and Yield Curve.
@@ -468,8 +530,10 @@ app-owned list-view override.
 `GET bond_management.bond_management.api.investor.get_market_dates`
 
 - Inputs: optional non-negative `start` integer defaulting to `0`; optional
-  `page_length` integer defaulting to `20` and capped at `50`. No arbitrary
-  filter, field or sort input is accepted.
+  `page_length` integer defaulting to `20` and capped at `50`; optional
+  allow-listed visible `sort_by`/`sort_order`; and no date-cell filter field.
+  Arbitrary fields, date filters, sort keys and filter operators are not
+  accepted.
 - Response: `{ data, pagination }`, where every row contains only `name` and
   `date`; pagination contains `start`, `page_length` and `has_more`.
 - Permission behavior: the query uses normal Bond Market Date read permissions.
@@ -532,12 +596,15 @@ calculations, schema, permissions, hooks or dependencies.
 Evidence source: the standard `Bond Exchange Rate` DocType metadata and its
 app-owned Desk form script. There is no app-owned list-view override.
 
-- Row title: From Currency, with the generated exchange-rate name retained as
-  the stable record identifier and detail route key.
+- Row title: From Currency. The generated exchange-rate name remains the stable
+  internal record identifier and detail route key, but is not rendered in list
+  rows.
 - List fields, in metadata order: Rate Date, From Currency, To Currency, Rate
   and Reverse Rate.
-- Standard filters: none configured. The SPA does not expose Desk's generic
-  arbitrary-field filter builder.
+- Standard filters: none configured. The Rate Date cell is display-only and
+  does not expose a filter control. Other visible values expose exact
+  non-date clicked-value filters through the endpoint allowlist, but the SPA
+  does not expose Desk's unrestricted arbitrary-field filter builder.
 - Default sorting: Rate Date descending. The API adds Name descending as a
   deterministic tie-breaker without changing the visible order contract.
 - Page length: 20 by default, with the shared allow-listed maximum of 50.
@@ -561,8 +628,10 @@ app-owned Desk form script. There is no app-owned list-view override.
 `GET bond_management.bond_management.api.investor.get_exchange_rates`
 
 - Inputs: optional non-negative `start` integer defaulting to `0`; optional
-  `page_length` integer defaulting to `20` and capped at `50`. No arbitrary
-  filter, field or sort input is accepted.
+  `page_length` integer defaulting to `20` and capped at `50`; optional
+  allow-listed visible `sort_by`/`sort_order`; and an optional non-date
+  allow-listed exact `filter_field`/`filter_value` pair. Arbitrary fields,
+  date filters, sort keys and filter operators are not accepted.
 - Response: `{ data, pagination }`, where every row contains only `name`,
   `rate_date`, `from_currency`, `to_currency`, `rate` and `reverse_rate`;
   pagination contains `start`, `page_length` and `has_more`.

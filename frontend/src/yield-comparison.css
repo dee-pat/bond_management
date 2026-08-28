@@ -2,44 +2,47 @@
 	display: grid;
 	grid-template-columns: repeat(2, minmax(0, 18rem)) auto;
 	align-items: end;
-	gap: 1rem;
-	margin-bottom: 1rem;
+	gap: 10px;
+	margin-bottom: 16px;
 }
 
 .yield-comparison-filters input {
 	width: 100%;
-	min-height: 2.5rem;
-	padding: 0.5rem 0.65rem;
-	color: #0f172a;
-	background: #ffffff;
-	border: 1px solid #cbd5e1;
-	border-radius: 0.5rem;
+	min-height: 32px;
+	padding: 5px 9px;
+	color: var(--desk-text);
+	background: var(--desk-surface);
+	border: 1px solid var(--desk-border-dark);
+	border-radius: 4px;
 	font: inherit;
+	font-size: 13px;
 }
 
 .yield-comparison-date-error {
-	margin: -0.25rem 0 1rem;
-	color: #991b1b;
-	font-size: 0.8rem;
+	margin: -4px 0 16px;
+	color: #c23636;
+	font-size: 12px;
 }
 
 .yield-comparison-selector {
-	margin: 0 0 1rem;
-	padding: 1rem;
-	border: 1px solid #e2e8f0;
-	border-radius: 0.75rem;
+	margin: 0 0 16px;
+	padding: 12px;
+	background: var(--desk-surface);
+	border: 1px solid var(--desk-border);
+	border-radius: 5px;
 }
 
 .yield-comparison-selector legend {
-	padding: 0 0.35rem;
-	color: #0f172a;
-	font-weight: 700;
+	padding: 0 5px;
+	color: var(--desk-text);
+	font-size: 13px;
+	font-weight: 600;
 }
 
 .yield-comparison-selector > span {
-	margin-left: 1rem;
-	color: #64748b;
-	font-size: 0.8rem;
+	margin-left: 16px;
+	color: var(--desk-muted);
+	font-size: 12px;
 }
 
 .yield-comparison-selector label {
@@ -55,54 +58,56 @@
 .yield-comparison-selector__bonds {
 	display: grid;
 	grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
-	gap: 0.5rem;
+	gap: 6px;
 	margin-top: 0.85rem;
 }
 
 .yield-comparison-selector__bonds label {
 	min-width: 0;
-	padding: 0.65rem;
-	background: #f8fafc;
-	border-radius: 0.5rem;
+	padding: 8px;
+	background: #f7f8fa;
+	border: 1px solid transparent;
+	border-radius: 4px;
 }
 
 .yield-comparison-selector__bonds strong {
 	min-width: 0;
 	overflow-wrap: anywhere;
-	color: #334155;
-	font-size: 0.8rem;
+	color: #4c5761;
+	font-size: 12px;
 }
 
 .yield-comparison-selector__bonds small {
 	margin-left: auto;
-	color: #64748b;
+	color: var(--desk-muted);
 }
 
 .yield-comparison-chart {
-	padding: 1rem;
-	border: 1px solid #e2e8f0;
-	border-radius: 0.75rem;
+	padding: 12px;
+	background: var(--desk-surface);
+	border: 1px solid var(--desk-border);
+	border-radius: 5px;
 	overflow: hidden;
 }
 
 .yield-comparison-chart__legend {
 	display: flex;
 	flex-wrap: wrap;
-	gap: 0.5rem 1rem;
-	margin-bottom: 0.5rem;
-	color: #475569;
-	font-size: 0.75rem;
+	gap: 6px 16px;
+	margin-bottom: 8px;
+	color: var(--desk-muted);
+	font-size: 11px;
 }
 
 .yield-comparison-chart__legend span {
 	display: inline-flex;
 	align-items: center;
-	gap: 0.35rem;
+	gap: 5px;
 }
 
 .yield-comparison-chart__legend i {
-	width: 0.65rem;
-	height: 0.65rem;
+	width: 7px;
+	height: 7px;
 	border-radius: 999px;
 }
 
@@ -126,17 +131,17 @@
 }
 
 .yield-comparison-chart text {
-	fill: #475569;
-	font-size: 0.7rem;
+	fill: var(--desk-muted);
+	font-size: 11px;
 }
 
 .yield-comparison-chart__gridline {
-	stroke: #e2e8f0;
+	stroke: var(--desk-border);
 	stroke-width: 1;
 }
 
 .yield-comparison-chart__axis {
-	stroke: #64748b;
+	stroke: #8a9299;
 	stroke-width: 1;
 }
 
@@ -152,13 +157,13 @@
 }
 
 .yield-comparison-audit {
-	margin-top: 1rem;
+	margin-top: 16px;
 }
 
 .yield-comparison-audit > p {
-	margin: 0.5rem 0 0;
-	color: #64748b;
-	font-size: 0.8rem;
+	margin: 8px 0 0;
+	color: var(--desk-muted);
+	font-size: 12px;
 }
 
 @media (max-width: 760px) {

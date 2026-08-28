@@ -132,8 +132,8 @@ class TestInvestorExchangeRates(IntegrationTestCase):
                 self.assertTrue(exchange_rates.issubset({row.name for row in response["data"]}))
 
     def test_pagination_is_allow_listed_bounded_and_sorted_by_rate_date(self):
-        older = make_exchange_rate(from_currency="EUR")
-        newer = make_exchange_rate(from_currency="EUR")
+        newer = make_exchange_rate(from_currency="EUR", rate_date="2025-01-02")
+        older = make_exchange_rate(from_currency="EUR", rate_date="2025-01-01")
         investor = self._make_user([INVESTOR_ROLE])
         self._assign_user_permission(investor, "Bond Exchange Rate", older.name)
         self._assign_user_permission(investor, "Bond Exchange Rate", newer.name)
@@ -159,6 +159,26 @@ class TestInvestorExchangeRates(IntegrationTestCase):
             {"start": 0, "page_length": 1, "has_more": True},
         )
         self.assertEqual(maximum_page["pagination"]["page_length"], 50)
+
+    def test_visible_columns_can_sort_and_filter_with_server_controls(self):
+        older = make_exchange_rate(from_currency="CHF", rate_date="2030-01-01")
+        newer = make_exchange_rate(from_currency="CHF", rate_date="2030-01-02")
+        investor = self._make_user([INVESTOR_ROLE])
+
+        with self._as_user(investor):
+            ascending = get_exchange_rates(sort_by="rate_date", sort_order="asc")
+            filtered = get_exchange_rates(
+                filter_field="from_currency",
+                filter_value="CHF",
+            )
+            with self.assertRaisesRegex(frappe.ValidationError, "not supported"):
+                get_exchange_rates(sort_by="statement", sort_order="asc")
+            with self.assertRaisesRegex(frappe.ValidationError, "Filter field"):
+                get_exchange_rates(filter_field="rate_date", filter_value="2025-01-02")
+
+        names = [row.name for row in ascending["data"]]
+        self.assertLess(names.index(older.name), names.index(newer.name))
+        self.assertEqual({row.name for row in filtered["data"]}, {older.name, newer.name})
 
     @staticmethod
     def _make_statement_exchange_rate(portfolio):

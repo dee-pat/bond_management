@@ -11,6 +11,9 @@ test("browses shared exchange rates and persisted reciprocal values", async ({
   await expect(
     page.getByRole("heading", { name: "Bond Exchange Rates" })
   ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Exchange rate history" }),
+  ).toHaveCount(0);
   await expect(page.getByRole("columnheader")).toHaveCount(5);
   for (const header of [
     "Rate Date",
@@ -23,6 +26,12 @@ test("browses shared exchange rates and persisted reciprocal values", async ({
       page.getByRole("columnheader", { name: header, exact: true })
     ).toBeVisible();
   }
+  await expect(
+    page.getByRole("columnheader", { name: "Rate Date", exact: true }),
+  ).toHaveAttribute("aria-sort", "descending");
+  await expect(
+    page.getByRole("button", { name: /Filter .*Date/ }),
+  ).toHaveCount(0);
 
   const row = page
     .getByTestId("exchange-rate-row")

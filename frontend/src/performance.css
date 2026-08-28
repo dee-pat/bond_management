@@ -2,70 +2,74 @@
 	display: grid;
 	grid-template-columns: repeat(2, minmax(0, 18rem)) auto;
 	align-items: end;
-	gap: 1rem;
-	margin-bottom: 1rem;
+	gap: 10px;
+	margin-bottom: 16px;
 }
 
 .performance-filters input {
 	width: 100%;
-	min-height: 2.5rem;
-	padding: 0.5rem 0.65rem;
-	color: #0f172a;
-	background: #ffffff;
-	border: 1px solid #cbd5e1;
-	border-radius: 0.5rem;
+	min-height: 32px;
+	padding: 5px 9px;
+	color: var(--desk-text);
+	background: var(--desk-surface);
+	border: 1px solid var(--desk-border-dark);
+	border-radius: 4px;
 	font: inherit;
+	font-size: 13px;
 }
 
 .performance-run-button {
-	min-height: 2.5rem;
-	padding: 0.5rem 1rem;
+	min-height: 32px;
+	padding: 5px 12px;
 	color: #ffffff;
-	background: #1d4ed8;
-	border: 1px solid #1d4ed8;
-	border-radius: 0.5rem;
+	background: var(--desk-link);
+	border: 1px solid var(--desk-link);
+	border-radius: 4px;
 	cursor: pointer;
-	font-weight: 700;
+	font-size: 12px;
+	font-weight: 500;
 }
 
 .performance-run-button:disabled {
-	color: #94a3b8;
-	background: #e2e8f0;
-	border-color: #e2e8f0;
+	color: #9aa1a8;
+	background: #f7f8fa;
+	border-color: var(--desk-border);
 	cursor: not-allowed;
 }
 
 .performance-table-wrap {
 	max-width: 100%;
 	overflow-x: auto;
-	border: 1px solid #e2e8f0;
-	border-radius: 0.75rem;
+	background: var(--desk-surface);
+	border: 1px solid var(--desk-border);
+	border-radius: 5px;
 }
 
 .performance-table {
 	width: 100%;
 	border-collapse: collapse;
-	font-size: 0.8rem;
+	font-size: 13px;
 }
 
 .performance-table th,
 .performance-table td {
-	padding: 0.75rem;
+	padding: 9px 12px;
 	text-align: right;
 	white-space: nowrap;
 }
 
 .performance-table th {
-	color: #475569;
-	background: #f8fafc;
-	font-size: 0.68rem;
-	letter-spacing: 0.04em;
+	color: #68737d;
+	background: #f7f8fa;
+	font-size: 11px;
+	font-weight: 600;
+	letter-spacing: 0.025em;
 	text-transform: uppercase;
 }
 
 .performance-table td {
-	color: #334155;
-	border-top: 1px solid #e2e8f0;
+	color: #4c5761;
+	border-top: 1px solid var(--desk-border);
 	font-variant-numeric: tabular-nums;
 }
 
@@ -78,8 +82,8 @@
 
 .performance-table a,
 .performance-cashflow-button {
-	color: #1d4ed8;
-	font-weight: 700;
+	color: var(--desk-link);
+	font-weight: 500;
 }
 
 .performance-table a {
@@ -105,28 +109,28 @@
 }
 
 .performance-table__total td {
-	color: #0f172a;
-	background: #f8fafc;
-	border-top-color: #94a3b8;
-	font-weight: 700;
+	color: var(--desk-text);
+	background: #f7f8fa;
+	border-top-color: var(--desk-border-dark);
+	font-weight: 600;
 }
 
 .performance-copy-feedback {
-	margin: 0.75rem 0 0;
-	color: #475569;
-	font-size: 0.8rem;
+	margin: 10px 0 0;
+	color: var(--desk-muted);
+	font-size: 12px;
 }
 
 .performance-copy-feedback--success {
-	color: #166534;
+	color: #218739;
 }
 
 .performance-copy-feedback--empty {
-	color: #9a3412;
+	color: #b45309;
 }
 
 .performance-copy-feedback--error {
-	color: #991b1b;
+	color: #c23636;
 }
 
 @media (max-width: 760px) {

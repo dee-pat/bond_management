@@ -11,8 +11,16 @@ test("browses market history, persisted prices, and yield curve", async ({
   await expect(
     page.getByRole("heading", { name: "Bond Market Dates" })
   ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Market dates", exact: true }),
+  ).toHaveCount(0);
   await expect(page.getByRole("columnheader")).toHaveCount(1);
-  await expect(page.getByRole("columnheader", { name: "Date" })).toBeVisible();
+  const dateHeader = page.getByRole("columnheader", { name: "Date" });
+  await expect(dateHeader).toBeVisible();
+  await expect(dateHeader).toHaveAttribute("aria-sort", "descending");
+  await expect(
+    page.getByRole("button", { name: /Filter .*Date/ }),
+  ).toHaveCount(0);
 
   const row = page.getByTestId("market-date-row").filter({
     hasText: MARKET_DATE,
