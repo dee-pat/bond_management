@@ -1276,6 +1276,24 @@ Add one entry after every slice. Preserve failed or unavailable gates; later suc
 - Blockers: None for pushing the CI follow-up.
 - Unverified local/CI differences: Local verification used macOS/arm64, Chrome 151, Playwright Chromium and explicit `test_site` on `127.0.0.1:8001`. The manually dispatched GitHub runs will verify Ubuntu, MariaDB 11.8, Redis Alpine and the CI-owned fresh bench/site with `localhost:8000`.
 
+### 2026-08-29 — Phase 7 investor route bootstrap defect
+
+- Risk classification: Authenticated website-entry boot context; fixed an import-time assumption in the CSRF token lookup. No financial calculation, API projection, permission, schema, dependency or legacy-route behavior changed.
+- Required gates: Focused website-route regression; frontend lint/typecheck/build; mandatory `pre-push` lint/security/migration/full-server gate; complete authenticated Playwright suite against an explicit `test_site` server.
+- Commands executed:
+  - `bench --site test_site run-tests --module bond_management.www.test_bond_investor` — exit `0`; all 6 focused website tests passed, including the regression with `frappe.sessions` absent from the top-level module.
+  - `yarn --cwd frontend lint && yarn --cwd frontend typecheck && yarn --cwd frontend build` — exit `0`; lint reported 4 non-blocking Vue closing-bracket warnings, while typecheck and the production build passed.
+  - `bench --site dev.local execute "frappe.get_attr('bond_management.bond_management.api.investor.get_bootstrap') is not None"` and the test-mode website-context check — exits `0`.
+  - `apps/bond_management/scripts/verify.sh pre-push` — final exit `0`; pre-commit, blocking/advisory security scans, migration and all 297 server tests passed.
+  - `FRAPPE_USER=... FRAPPE_PASSWORD=<ephemeral> BASE_URL=http://127.0.0.1:8001 apps/bond_management/scripts/verify.sh playwright` — exit `0`; all 25 authenticated desktop/mobile Playwright tests passed.
+  - Header-only `curl` checks to `http://127.0.0.1:8000/bond-investor` — exit `0`; unauthenticated access retained the expected `302` login redirect and generated assets returned `200`.
+- Exit statuses: Final required commands exited `0`; one initial `pre-push` attempt exited `1` after Ruff formatted the regression test, then the rerun passed.
+- Tests passed: 6 focused website tests; 297 complete server tests; frontend typecheck/build; 25 complete authenticated Playwright tests.
+- Tests failed: The original fresh-process route render reproduced `AttributeError: module 'frappe' has no attribute 'sessions'`; the explicit import fixes it. A non-HTTP `bench execute` context initially lacked `session_obj`; the request-equivalent test-mode check passed.
+- Tests not run: GitHub Actions itself; `pre-push-ui`/Cypress were not run because this slice changed only Python website boot context and regression coverage.
+- Blockers: None.
+- Unverified local/CI differences: Local verification used macOS/arm64 and an explicit local `test_site` server at `127.0.0.1:8001`; CI uses its own Ubuntu/fresh-site/browser setup. The interactive in-app browser backend was unavailable, but the project Playwright suite passed.
+
 ## Next slice: Phase 7
 
 Record named internal-team acceptance and one complete statement/reporting cycle

@@ -38,11 +38,14 @@ class TestBondInvestorWebsite(IntegrationTestCase):
         )
         self.assertEqual(redirect.exception.http_status_code, 302)
 
-    def test_enabled_site_embeds_only_minimum_support_context(self):
+    def test_enabled_site_bootstraps_without_top_level_sessions_module(self):
         previous_user = frappe.session.user
         try:
             frappe.set_user("Administrator")
-            with patch.dict(frappe.conf, {FEATURE_FLAG: 1}):
+            with (
+                patch.dict(frappe.conf, {FEATURE_FLAG: 1}),
+                patch.object(frappe, "sessions", None, create=True),
+            ):
                 context = bond_investor.get_context(frappe._dict())
         finally:
             frappe.set_user(previous_user)

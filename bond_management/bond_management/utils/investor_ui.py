@@ -2,6 +2,7 @@
 
 import frappe
 from frappe import _
+from frappe.sessions import get_csrf_token
 from frappe.utils import cint, get_fullname
 
 from bond_management.bond_management.utils.investor_permissions import (
@@ -39,7 +40,7 @@ def get_investor_boot_context() -> dict:
     is_support_user = user == "Administrator" or BOND_MANAGER_ROLE in roles
 
     return {
-        "csrf_token": frappe.sessions.get_csrf_token(),
+        "csrf_token": get_csrf_token(),
         "bond_investor": {
             "feature_enabled": True,
             "user": {
