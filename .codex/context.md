@@ -1,28 +1,8 @@
 # Codex project context
 
-Shared Frappe v16 implementation and quality rules live in the parent bench
-`../../AGENTS.md`; bond-management-specific rules live in this app's
-`AGENTS.md`. Use this file for local environment context and troubleshooting
-notes.
-
-## Environment
-
-- Frappe Framework v16
-- Python 3.14
-- Node 24
-- MariaDB 11.8 or 12.3
-- Redis 6 or newer
-
-## Local bench sites
-
-- `dev.local`: interactive development site.
-- `test_site`: automated server and UI test site. The repository-wide usage
-  and safety rules for this site are defined in `AGENTS.md`.
-
-## Project focus
-
-- Custom Frappe apps only; do not assume ERPNext unless specified.
-- Financial domain: bonds, accruals, and schedules.
+Shared bench-wide rules live in `../../AGENTS.md`; bond-management-specific
+architecture, invariants, environment, sites, and verification policy live in
+`AGENTS.md`. Use this file only for active work and troubleshooting notes.
 
 ## Troubleshooting checklist
 
@@ -41,9 +21,5 @@ notes.
 
 ## Reference commands
 
-See `.codex/commands.md` for common bench, service, build, and backup commands.
-
-## Repository rules
-
-See `AGENTS.md` for the mandatory Frappe API, architecture, testing, and
-JavaScript rules.
+See `.codex/commands.md` for bond-management verification and runtime
+diagnostic commands.
