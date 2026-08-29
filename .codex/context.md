@@ -4,6 +4,13 @@ Shared bench-wide rules live in `../../AGENTS.md`; bond-management-specific
 architecture, invariants, environment, sites, and verification policy live in
 `AGENTS.md`. Use this file only for active work and troubleshooting notes.
 
+## Active multi-phase work
+
+- Investor UI migration: before changing the Frappe UI SPA, Playwright setup,
+  investor APIs, investor redirects, or legacy investor workspace, read
+  `docs/specs/investor-ui-migration.md` and update
+  `docs/plans/investor-ui-migration-progress.md` for the current slice.
+
 ## Troubleshooting checklist
 
 - MySQLdb connection errors: check the MariaDB service and credentials.

@@ -57,6 +57,7 @@ repos:
             (?x)^(
                 bond_management/public/dist/.*|
                 cypress/.*|
+                frontend/.*|
                 .*node_modules.*|
                 .*boilerplate.*|
                 bond_management/templates/includes/.*|

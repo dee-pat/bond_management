@@ -1,0 +1,95 @@
+.market-date-detail {
+	grid-template-columns: minmax(0, 1fr);
+}
+
+.market-price-section,
+.yield-curve-section {
+	margin-top: 20px;
+}
+
+.market-price-section h3,
+.yield-curve-section h3 {
+	margin: 0 0 10px;
+	color: var(--desk-text);
+	font-size: 14px;
+	font-weight: 600;
+}
+
+.yield-curve {
+	padding: 12px;
+	background: var(--desk-surface);
+	border: 1px solid var(--desk-border);
+	border-radius: 5px;
+	overflow: hidden;
+}
+
+.yield-curve__legend {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px 16px;
+	margin-bottom: 8px;
+	color: var(--desk-muted);
+	font-size: 11px;
+}
+
+.yield-curve__legend span {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+}
+
+.yield-curve__legend i {
+	width: 7px;
+	height: 7px;
+	border-radius: 999px;
+}
+
+.yield-curve svg {
+	display: block;
+	width: 100%;
+	height: auto;
+	max-height: 21.25rem;
+}
+
+.yield-curve text {
+	fill: var(--desk-muted);
+	font-size: 11px;
+}
+
+.yield-curve__gridline {
+	stroke: var(--desk-border);
+	stroke-width: 1;
+}
+
+.yield-curve__axis {
+	stroke: #8a9299;
+	stroke-width: 1;
+}
+
+.yield-curve__line {
+	fill: none;
+	stroke-linecap: round;
+	stroke-linejoin: round;
+	stroke-width: 2.5;
+}
+
+.yield-curve__point {
+	stroke: var(--desk-surface);
+	stroke-width: 1.5;
+}
+
+.yield-curve__point:focus {
+	outline: none;
+	stroke: var(--desk-text);
+	stroke-width: 3;
+}
+
+.yield-curve__axis-label {
+	font-weight: 700;
+}
+
+@media (max-width: 760px) {
+	.yield-curve {
+		padding: 8px;
+	}
+}

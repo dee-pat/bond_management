@@ -24,7 +24,7 @@ if [[ -n "${CYPRESS_INSTALL_BINARY:-}" ]]; then
 fi
 
 usage() {
-    echo "Usage: scripts/verify.sh [lint|server|ui|pre-push|pre-push-ui]" >&2
+    echo "Usage: scripts/verify.sh [lint|server|frontend|ui|playwright|pre-push|pre-push-ui]" >&2
 }
 
 prepare_test_site() {
@@ -166,6 +166,15 @@ run_server_tests() {
     bench --site "${TEST_SITE_NAME}" run-tests --app bond_management
 }
 
+run_frontend_checks() {
+    cd "${APP_ROOT}"
+    yarn lint
+    yarn typecheck
+
+    cd "${BENCH_ROOT}"
+    bench build --app bond_management
+}
+
 run_ui_tests() {
     "${APP_ROOT}/scripts/cypress-runtime.sh" prepare
 
@@ -191,6 +200,31 @@ run_ui_tests() {
     bench --site "${TEST_SITE_NAME}" run-ui-tests bond_management "${cypress_args[@]}"
 }
 
+prepare_playwright_site() {
+    prepare_test_site
+    bench --site "${TEST_SITE_NAME}" set-config bond_investor_spa_enabled 1
+    bench --site "${TEST_SITE_NAME}" execute \
+        bond_management.bond_management.tests.investor_ui_seed.seed_investor_ui_browser_test_data
+}
+
+run_playwright_tests() {
+    if [[ -z "${FRAPPE_USER:-}" ]] || [[ -z "${FRAPPE_PASSWORD:-}" ]]; then
+        echo "FRAPPE_USER and FRAPPE_PASSWORD are required for investor browser tests." >&2
+        exit 1
+    fi
+
+    prepare_playwright_site
+
+    cd "${APP_ROOT}"
+    if [[ ! -x "${APP_ROOT}/node_modules/.bin/playwright" ]]; then
+        echo "Playwright is unavailable; install the app's root Node dependencies first." >&2
+        exit 1
+    fi
+
+    local base_url="${BASE_URL:-${PLAYWRIGHT_BASE_URL:-http://localhost:8000}}"
+    BASE_URL="${base_url}" yarn test:e2e
+}
+
 case "${MODE}" in
     lint)
         run_lint
@@ -198,8 +232,14 @@ case "${MODE}" in
     server)
         run_server_tests
         ;;
+    frontend)
+        run_frontend_checks
+        ;;
     ui)
         run_ui_tests
+        ;;
+    playwright)
+        run_playwright_tests
         ;;
     pre-push)
         run_lint
@@ -208,7 +248,9 @@ case "${MODE}" in
     pre-push-ui)
         run_lint
         run_server_tests
+        run_frontend_checks
         run_ui_tests
+        run_playwright_tests
         ;;
     *)
         usage

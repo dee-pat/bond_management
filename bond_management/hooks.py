@@ -20,6 +20,13 @@ add_to_apps_screen = [
     }
 ]
 
+# The SPA keeps its own website entry while the existing investor Workspace
+# remains the pilot fallback. Nested client-side routes resolve to the same
+# generated entry.
+website_route_rules = [
+    {"from_route": "/bond-investor/<path:app_path>", "to_route": "bond-investor"},
+]
+
 # Includes in <head>
 # ------------------
 

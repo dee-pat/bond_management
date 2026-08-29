@@ -1,0 +1,22 @@
+{
+  "compilerOptions": {
+    "allowJs": false,
+    "baseUrl": ".",
+    "esModuleInterop": true,
+    "isolatedModules": true,
+    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "noEmit": true,
+    "paths": {
+      "frappe-ui": ["src/shims/frappe-ui.ts"],
+      "frappe-ui/style.css": ["src/shims/frappe-ui-style.d.ts"]
+    },
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "target": "ES2020",
+    "types": ["vite/client"]
+  },
+  "include": ["env.d.ts", "src/**/*.ts", "src/**/*.vue", "src/**/*.d.ts"]
+}

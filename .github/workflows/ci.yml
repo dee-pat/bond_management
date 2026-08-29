@@ -6,6 +6,7 @@ on:
       - main
       - version-16
   pull_request:
+  workflow_dispatch:
 
 concurrency:
   group: version-16-bond_management-${{ github.event.number }}
@@ -225,3 +226,133 @@ jobs:
             ${{ runner.temp }}/bond-management-bench-${{ github.run_id }}-${{ github.run_attempt }}/apps/bond_management/cypress/screenshots
             ${{ runner.temp }}/cypress-diagnostics.txt
             ${{ runner.temp }}/bench-web.log
+
+  playwright-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    name: UI (Playwright)
+
+    services:
+      redis-cache:
+        image: redis:alpine
+        ports:
+          - 13000:6379
+      redis-queue:
+        image: redis:alpine
+        ports:
+          - 11000:6379
+      mariadb:
+        image: mariadb:11.8
+        env:
+          MYSQL_ROOT_PASSWORD: root
+        ports:
+          - 3306:3306
+        options: --health-cmd="mariadb-admin ping" --health-interval=5s --health-timeout=2s --health-retries=3
+
+    steps:
+      - name: Clone
+        uses: actions/checkout@v6
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.14'
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          check-latest: true
+
+      - name: Prepare investor test credentials
+        run: |
+          investor_test_password="$(openssl rand -hex 24)"
+          echo "::add-mask::${investor_test_password}"
+          echo "FRAPPE_USER=bond-investor-ui@example.com" >> "$GITHUB_ENV"
+          echo "FRAPPE_PASSWORD=${investor_test_password}" >> "$GITHUB_ENV"
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-playwright-pip-${{ hashFiles('**/*requirements.txt', '**/pyproject.toml', '**/setup.py', '**/setup.cfg') }}
+          restore-keys: |
+            ${{ runner.os }}-playwright-pip-
+            ${{ runner.os }}-pip-
+
+      - name: Get yarn cache directory path
+        id: yarn-cache-dir-path
+        run: 'echo "dir=$(yarn cache dir)" >> $GITHUB_OUTPUT'
+
+      - name: Cache yarn
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.yarn-cache-dir-path.outputs.dir }}
+          key: ${{ runner.os }}-playwright-yarn-${{ hashFiles('**/yarn.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-yarn-
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-${{ runner.arch }}-playwright-1.57.0
+
+      - name: Install MariaDB Client
+        run: |
+          sudo apt update
+          sudo apt-get install mariadb-client
+
+      - name: Setup Bench
+        run: |
+          pip install frappe-bench
+          BENCH_ROOT="$RUNNER_TEMP/bond-management-playwright-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          test ! -e "$BENCH_ROOT"
+          bench init --frappe-branch version-16 --skip-redis-config-generation --skip-assets --python "$(which python)" "$BENCH_ROOT"
+          test -f "$BENCH_ROOT/sites/common_site_config.json"
+
+      - name: Install App and Build Assets
+        working-directory: ${{ runner.temp }}/bond-management-playwright-${{ github.run_id }}-${{ github.run_attempt }}
+        run: |
+          test -f sites/common_site_config.json
+          bench get-app bond_management "file://$GITHUB_WORKSPACE"
+          bench setup requirements --dev
+          bench new-site --db-root-password root --admin-password admin test_site
+          bench --site test_site set-config allow_tests true
+          bench --site test_site set-config host_name "http://test_site:8000"
+          bench --site test_site set-config bond_investor_spa_enabled true
+          bench --site test_site install-app bond_management
+          apps/bond_management/scripts/verify.sh frontend
+          bench --site test_site execute bond_management.bond_management.tests.investor_ui_seed.seed_investor_ui_browser_test_data
+        env:
+          CI: 'Yes'
+
+      - name: Install Playwright browser
+        working-directory: ${{ runner.temp }}/bond-management-playwright-${{ github.run_id }}-${{ github.run_attempt }}/apps/bond_management
+        run: yarn playwright install --with-deps chromium
+
+      - name: Start Web Server
+        working-directory: ${{ runner.temp }}/bond-management-playwright-${{ github.run_id }}-${{ github.run_attempt }}
+        run: |
+          echo "127.0.0.1 test_site" | sudo tee -a /etc/hosts
+          nohup bench --site test_site serve --port 8000 --noreload > "$RUNNER_TEMP/playwright-bench-web.log" 2>&1 &
+          curl --noproxy '*' --fail --silent --show-error --retry 30 --retry-connrefused --retry-delay 2 http://test_site:8000/api/method/ping
+
+      - name: Run Playwright
+        working-directory: ${{ runner.temp }}/bond-management-playwright-${{ github.run_id }}-${{ github.run_attempt }}
+        run: apps/bond_management/scripts/verify.sh playwright
+        env:
+          BASE_URL: http://localhost:8000
+          CI: 'Yes'
+
+      - name: Upload Playwright failure artifacts
+        if: failure()
+        uses: actions/upload-artifact@v6
+        with:
+          name: playwright-failure-artifacts
+          if-no-files-found: ignore
+          path: |
+            ${{ runner.temp }}/bond-management-playwright-${{ github.run_id }}-${{ github.run_attempt }}/apps/bond_management/playwright-report
+            ${{ runner.temp }}/bond-management-playwright-${{ github.run_id }}-${{ github.run_attempt }}/apps/bond_management/test-results
+            ${{ runner.temp }}/bond-management-playwright-${{ github.run_id }}-${{ github.run_attempt }}/apps/bond_management/blob-report
+            ${{ runner.temp }}/playwright-bench-web.log

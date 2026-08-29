@@ -1,0 +1,186 @@
+.yield-comparison-filters {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 18rem)) auto;
+	align-items: end;
+	gap: 10px;
+	margin-bottom: 16px;
+}
+
+.yield-comparison-filters input {
+	width: 100%;
+	min-height: 32px;
+	padding: 5px 9px;
+	color: var(--desk-text);
+	background: var(--desk-surface);
+	border: 1px solid var(--desk-border-dark);
+	border-radius: 4px;
+	font: inherit;
+	font-size: 13px;
+}
+
+.yield-comparison-date-error {
+	margin: -4px 0 16px;
+	color: #c23636;
+	font-size: 12px;
+}
+
+.yield-comparison-selector {
+	margin: 0 0 16px;
+	padding: 12px;
+	background: var(--desk-surface);
+	border: 1px solid var(--desk-border);
+	border-radius: 5px;
+}
+
+.yield-comparison-selector legend {
+	padding: 0 5px;
+	color: var(--desk-text);
+	font-size: 13px;
+	font-weight: 600;
+}
+
+.yield-comparison-selector > span {
+	margin-left: 16px;
+	color: var(--desk-muted);
+	font-size: 12px;
+}
+
+.yield-comparison-selector label {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.5rem;
+}
+
+.yield-comparison-selector__all {
+	font-weight: 700;
+}
+
+.yield-comparison-selector__bonds {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+	gap: 6px;
+	margin-top: 0.85rem;
+}
+
+.yield-comparison-selector__bonds label {
+	min-width: 0;
+	padding: 8px;
+	background: #f7f8fa;
+	border: 1px solid transparent;
+	border-radius: 4px;
+}
+
+.yield-comparison-selector__bonds strong {
+	min-width: 0;
+	overflow-wrap: anywhere;
+	color: #4c5761;
+	font-size: 12px;
+}
+
+.yield-comparison-selector__bonds small {
+	margin-left: auto;
+	color: var(--desk-muted);
+}
+
+.yield-comparison-chart {
+	padding: 12px;
+	background: var(--desk-surface);
+	border: 1px solid var(--desk-border);
+	border-radius: 5px;
+	overflow: hidden;
+}
+
+.yield-comparison-chart__legend {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px 16px;
+	margin-bottom: 8px;
+	color: var(--desk-muted);
+	font-size: 11px;
+}
+
+.yield-comparison-chart__legend span {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+}
+
+.yield-comparison-chart__legend i {
+	width: 7px;
+	height: 7px;
+	border-radius: 999px;
+}
+
+.yield-comparison-chart svg {
+	display: block;
+	width: 100%;
+	height: auto;
+	max-height: 22.5rem;
+}
+
+.yield-comparison-chart__description {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	padding: 0;
+	margin: -1px;
+	overflow: hidden;
+	clip: rect(0, 0, 0, 0);
+	white-space: nowrap;
+	border: 0;
+}
+
+.yield-comparison-chart text {
+	fill: var(--desk-muted);
+	font-size: 11px;
+}
+
+.yield-comparison-chart__gridline {
+	stroke: var(--desk-border);
+	stroke-width: 1;
+}
+
+.yield-comparison-chart__axis {
+	stroke: #8a9299;
+	stroke-width: 1;
+}
+
+.yield-comparison-chart__line {
+	fill: none;
+	stroke-linecap: round;
+	stroke-linejoin: round;
+	stroke-width: 2.5;
+}
+
+.yield-comparison-chart__axis-label {
+	font-weight: 700;
+}
+
+.yield-comparison-audit {
+	margin-top: 16px;
+}
+
+.yield-comparison-audit > p {
+	margin: 8px 0 0;
+	color: var(--desk-muted);
+	font-size: 12px;
+}
+
+@media (max-width: 760px) {
+	.yield-comparison-filters {
+		grid-template-columns: minmax(0, 1fr);
+	}
+
+	.yield-comparison-filters button {
+		width: 100%;
+	}
+
+	.yield-comparison-selector > span {
+		display: block;
+		margin: 0.5rem 0 0;
+	}
+
+	.yield-comparison-chart {
+		padding: 0.5rem;
+	}
+}
