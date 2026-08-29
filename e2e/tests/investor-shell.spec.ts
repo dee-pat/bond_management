@@ -61,6 +61,7 @@ test("keeps Desk shell chrome outside the main scroll region", async ({
   await expect(
     page.getByRole("heading", { name: "Bond Transactions" })
   ).toBeVisible();
+  await expect(page.getByTestId("desk-pagination")).toBeVisible();
 
   const scrollLayout = await page.evaluate(() => {
     const shell = document.querySelector<HTMLElement>(".investor-shell");
