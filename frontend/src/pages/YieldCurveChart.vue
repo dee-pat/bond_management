@@ -36,6 +36,8 @@ const points = computed<YieldPoint[]>(() =>
 				!row.isin ||
 				!row.currency ||
 				!row.weighted_avg_repayment_date ||
+				row.future_xirr === null ||
+				row.future_xirr === undefined ||
 				!Number.isFinite(years) ||
 				years <= 0 ||
 				!Number.isFinite(yieldPercent)

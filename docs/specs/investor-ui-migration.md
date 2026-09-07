@@ -210,7 +210,7 @@ same normal Frappe permissions.
 ### Reports
 
 - Preserve the existing report filters, columns, currencies, percentages, dates and chart meaning.
-- Bond Yield Comparison defaults From Date to the oldest permission-readable persisted yield date and To Date to the current site date. Its chart uses persisted market dates for horizontal positions, shows one x-axis label per year and renders line series without point markers.
+- Bond Yield Comparison defaults From Date to the oldest permission-readable persisted yield date and To Date to the current site date. Its chart uses persisted market dates for horizontal positions and shows one x-axis label per year. Connected segments render as lines without point markers; an isolated value uses a visible, keyboard-focusable marker so single-date results and values around gaps remain readable without connecting missing data.
 - Preserve server-provided precision and financial conventions.
 - Assert visible table labels, values and series names. Avoid tests tied to SVG geometry or internal chart-library objects.
 - Keep clipboard/export actions out of scope unless they are confirmed as investor-visible parity before the report phase starts.

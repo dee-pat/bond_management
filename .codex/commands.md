@@ -1,54 +1,43 @@
-Common commands:
+# Local bench commands
 
-# Start dev server
-bench start
+Run these commands from the bench directory. For general bench CLI usage,
+app/site creation, and installation, use the `frappe-app-dev` skill's
+`references/bench-operations.md` and the relevant setup workflow.
 
-# Create app
-bench new-app app_name
+## Interactive development
 
-# Create site
-bench new-site dev.local
+Use `dev.local` for interactive work; automated test-site rules live in
+[AGENTS.md](../AGENTS.md).
 
-# Install app
-bench --site dev.local install-app app_name
-
-# Migrate
+```sh
 bench --site dev.local migrate
+bench --site dev.local backup --with-files
+```
 
-# Build assets
-bench build
+## Local service recovery
 
-# Clear cache
-bench --site dev.local clear-cache
+Start MariaDB when it is unavailable:
 
-# Restart
-bench restart
+```sh
+brew services start mariadb
+```
 
-# Stop only this bench's processes after a broken state; inspect the PIDs first.
+Inspect this bench's processes before recovering a broken state:
+
+```sh
 pgrep -af "${PWD}/apps/frappe|${PWD}/Procfile"
 bench restart
+```
 
-# Start mariadb if not running
-brew services start mariadb
+## Individual verification stages
 
-# Backup
-bench --site dev.local backup --with-files
+Before verification or CI/Cypress diagnosis, read
+[verification.md](../docs/verification.md) for mandatory gates, evidence,
+startup diagnostics, and recovery order. The `ui` stage requires an already
+prepared test site.
 
-# Shared verification (lint, migrate test_site, full server suite)
-apps/bond_management/scripts/verify.sh pre-push
-
-# Shared verification including the complete headless UI suite
-apps/bond_management/scripts/verify.sh pre-push-ui
-
-# Individual verification stages (`ui` expects an already prepared test site)
+```sh
 apps/bond_management/scripts/verify.sh lint
 apps/bond_management/scripts/verify.sh server
 apps/bond_management/scripts/verify.sh ui
-
-# Run one Cypress spec while diagnosing a UI failure
-CYPRESS_SPEC="cypress/integration/portfolio_performance.js" \
-    apps/bond_management/scripts/verify.sh ui
-
-# Cypress runtime diagnostics or repair (uses the bench-local cache)
-apps/bond_management/scripts/cypress-runtime.sh diagnose
-apps/bond_management/scripts/cypress-runtime.sh prepare
+```

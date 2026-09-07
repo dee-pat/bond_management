@@ -192,6 +192,10 @@ run_ui_tests() {
     # containing spaces (such as the macOS application bundle) are preserved.
     export CHROME_BIN="${chrome_binary}"
 
+    # The headless command-log UI can trigger a runner-frame ResizeObserver loop.
+    # Keep application errors fatal; disable only Cypress's log rendering.
+    export CYPRESS_NO_COMMAND_LOG="${CYPRESS_NO_COMMAND_LOG:-1}"
+
     local -a cypress_args=(--headless --browser chrome)
     if [[ -n "${CYPRESS_SPEC:-}" ]]; then
         cypress_args+=(--spec "${CYPRESS_SPEC}")

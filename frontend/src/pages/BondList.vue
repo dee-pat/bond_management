@@ -28,9 +28,15 @@ async function loadBonds(
 	append = false,
 	pageLength = pagination.value.page_length
 ): Promise<void> {
+	if (append && (loading.value || !pagination.value.has_more)) return;
+
 	const requestId = ++latestRequest;
 	loading.value = true;
 	error.value = null;
+	if (!append) {
+		bonds.value = [];
+		pagination.value = { start: 0, page_length: pageLength, has_more: false };
+	}
 
 	try {
 		const response = await fetchBonds({

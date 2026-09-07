@@ -247,13 +247,28 @@ const accessibleDescription = computed(() => points.value.map(pointLabel).join("
 			</g>
 
 			<g v-for="item in series" :key="item.isin">
-				<polyline
+				<template
 					v-for="(segment, index) in item.segments"
 					:key="`${item.isin}-segment-${index}`"
-					:points="linePoints(segment)"
-					:stroke="item.color"
-					class="yield-comparison-chart__line"
-				/>
+				>
+					<polyline
+						v-if="segment.length > 1"
+						:points="linePoints(segment)"
+						:stroke="item.color"
+						class="yield-comparison-chart__line"
+					/>
+					<circle
+						v-else
+						:cx="xPosition(segment[0].dateIndex)"
+						:cy="yPosition(segment[0].value)"
+						:fill="item.color"
+						:aria-label="pointLabel(segment[0])"
+						r="4"
+						tabindex="0"
+					>
+						<title>{{ pointLabel(segment[0]) }}</title>
+					</circle>
+				</template>
 			</g>
 
 			<text

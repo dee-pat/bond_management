@@ -13,17 +13,6 @@ notes.
 - MariaDB 11.8 or 12.3
 - Redis 6 or newer
 
-## Local bench sites
-
-- `dev.local`: interactive development site.
-- `test_site`: automated server and UI test site. The repository-wide usage
-  and safety rules for this site are defined in `AGENTS.md`.
-
-## Project focus
-
-- Custom Frappe apps only; do not assume ERPNext unless specified.
-- Financial domain: bonds, accruals, and schedules.
-
 ## Active multi-phase work
 
 - Investor UI migration: before changing the Frappe UI SPA, Playwright setup,
@@ -40,17 +29,11 @@ notes.
   applicable migration.
 - JavaScript field updates: check form triggers and `frm.refresh_field`.
 - Bench build failures: check the Node and Yarn versions.
-- Cypress startup failures: run
-  `apps/bond_management/scripts/cypress-runtime.sh diagnose`; the UI gate uses
-  a bench-local Cypress cache and repairs a missing or stale binary. If a
-  macOS Electron process aborts after verification, confirm the installed
-  Cypress version supports the host macOS release before replacing test code.
+- For Cypress startup/login failures or CI bootstrap issues, read
+  [verification.md](../docs/verification.md) for runtime diagnostics, recovery,
+  and the required rerun sequence.
 
 ## Reference commands
 
-See `.codex/commands.md` for common bench, service, build, and backup commands.
-
-## Repository rules
-
-See `AGENTS.md` for the mandatory Frappe API, architecture, testing, and
-JavaScript rules.
+See [commands.md](commands.md) for local development, service recovery, and
+individual verification commands.

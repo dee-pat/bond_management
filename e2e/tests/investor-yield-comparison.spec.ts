@@ -64,7 +64,12 @@ test("compares persisted yields, selects series, and copies sanitized audit data
       `02 Jan 2095, ${PRIMARY_BOND}, USD, Market Price 102.500, Future XIRR 7.250%`
     )
   );
-  await expect(chart.locator("circle")).toHaveCount(0);
+  await expect(
+    chart.getByLabel(
+      `01 Jan 2095, ${GAP_BOND}, KES, Market Price 99.250, Future XIRR 9.125%`,
+      { exact: true },
+    ),
+  ).toBeVisible();
   await expect(chart.getByTestId("yield-comparison-year-tick")).toHaveText([
     "2095",
   ]);

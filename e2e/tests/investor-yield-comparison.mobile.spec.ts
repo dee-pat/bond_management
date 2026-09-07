@@ -47,7 +47,12 @@ test("compares persisted bond yields without mobile overflow", async ({
       `03 Jan 2095, ${GAP_BOND}, KES, Market Price 100.750, Future XIRR 9.625%`
     )
   );
-  await expect(chart.locator("circle")).toHaveCount(0);
+  await expect(
+    chart.getByLabel(
+      `03 Jan 2095, ${GAP_BOND}, KES, Market Price 100.750, Future XIRR 9.625%`,
+      { exact: true },
+    ),
+  ).toBeVisible();
   await expect(chart.getByTestId("yield-comparison-year-tick")).toHaveText([
     "2095",
   ]);

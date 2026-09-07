@@ -1294,6 +1294,65 @@ Add one entry after every slice. Preserve failed or unavailable gates; later suc
 - Blockers: None.
 - Unverified local/CI differences: Local verification used macOS/arm64 and an explicit local `test_site` server at `127.0.0.1:8001`; CI uses its own Ubuntu/fresh-site/browser setup. The interactive in-app browser backend was unavailable, but the project Playwright suite passed.
 
+### 2026-09-07 — PR #3 review corrections (verified)
+
+- Scope: exclude unavailable yields without hiding genuine zero yields; clear
+  list rows/pagination when replacing a query; display isolated yield values
+  without connecting gaps. Apply pagination recovery to all five record lists.
+- Regression coverage: focused Playwright scenarios for missing versus zero
+  yields, failed portfolio-switch recovery, and a single-date chart; retain
+  desktop/mobile smoke assertions for isolated values around a gap.
+- No API, financial calculation, permission, dependency, or schema changes.
+- Risk classification: medium; investor chart rendering and filtered-list
+  recovery. Required gates: focused regressions, `pre-push`, `pre-push-ui`.
+- Commands executed from the bench: `apps/bond_management/scripts/verify.sh
+  pre-push` exited `0`; `CYPRESS_SPEC=cypress/integration/bond_yield_comparison.js
+  apps/bond_management/scripts/verify.sh ui` exited `1` on the initial run and
+  both retries; `apps/bond_management/scripts/verify.sh pre-push-ui` exited `1`;
+  `apps/bond_management/scripts/verify.sh playwright` exited `0`.
+- Tests passed: all 297 server tests, pre-commit, Semgrep scans and both rule
+  tests, frontend lint/typecheck/build, 12 of 13 Cypress tests, and all 28
+  Playwright tests. The three new regressions failed before the fixes; the
+  focused post-fix run passed all six tests including authentication and the
+  existing desktop/mobile yield-comparison coverage.
+- Initial failure: the unchanged Desk spec's report-navigation test failed
+  with `ResizeObserver loop completed with undelivered notifications.` under
+  Cypress 13.17.0 / Chrome 152, both in isolation and in full-suite ordering.
+  Assertions were not suppressed. The runner-display correction below resolves
+  the full UI gate.
+- Tests not run: GitHub Actions; fresh installation (no schema, hook,
+  dependency, patch, or installation changes).
+- Evidence: `/tmp/bond-pr3-fixes/` contains before/after regression logs,
+  `pre-push.log`, `pre-push-ui.log`, `playwright-full.log`, focused Cypress
+  logs, and preserved failure screenshots/video.
+- Unverified local/CI differences: local macOS/arm64, existing `test_site`,
+  explicit server at `127.0.0.1:8001`; CI uses Ubuntu and a fresh site. Setting
+  `CHROME_BIN` to the installed Playwright browser still selected Chrome 152
+  through Frappe's named-browser runner. Test-site two-factor authentication was
+  temporarily disabled for browser login and restored to its original enabled
+  setting after verification; `dev.local` was not changed.
+
+#### Cypress runner-display correction
+
+- Diagnosis: the failure URL points to Cypress's runner frame. The unchanged
+  three-test spec passed with `CYPRESS_NO_COMMAND_LOG=1`, isolating the problem
+  to Cypress's command-log display. The headless verification script now defaults
+  to that documented setting; no test, assertion, or exception handler changed.
+- Risk: low, test-runner presentation only. Screenshots/videos omit the Cypress
+  command log; terminal results and application-error checks remain enabled.
+- Final commands: `CYPRESS_SPEC=cypress/integration/bond_yield_comparison.js
+  apps/bond_management/scripts/verify.sh ui` and
+  `apps/bond_management/scripts/verify.sh pre-push-ui` both exited `0` with the
+  updated script. The full gate passed lint, Semgrep, all 297 server tests,
+  frontend typecheck/build, all 13 Cypress tests, and all 28 Playwright tests.
+- Final evidence: `/tmp/bond-pr3-fixes/cypress-no-command-log.log`,
+  `cypress-focused-final.log`, and `pre-push-ui-final.log`. Earlier failure
+  artifacts remain preserved. Blockers: none. GitHub Actions itself was not run;
+  local/CI platform differences above remain unverified.
+- Restored and read back test-site `enable_two_factor_auth=1` after the final
+  browser run. No application behavior or third-party framework files changed
+  during this runner correction.
+
 ## Next slice: Phase 7
 
 Record named internal-team acceptance and one complete statement/reporting cycle
