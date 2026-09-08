@@ -322,6 +322,7 @@ jobs:
           bench --site test_site set-config host_name "http://test_site:8000"
           bench --site test_site set-config bond_investor_spa_enabled true
           bench --site test_site install-app bond_management
+          bench build
           apps/bond_management/scripts/verify.sh frontend
           bench --site test_site execute bond_management.bond_management.tests.investor_ui_seed.seed_investor_ui_browser_test_data
         env:
