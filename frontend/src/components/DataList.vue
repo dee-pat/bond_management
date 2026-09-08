@@ -1,11 +1,5 @@
 <script setup lang="ts" generic="T">
-import {
-	List,
-	ListCell,
-	ListHeader,
-	ListRow,
-	ListRows,
-} from "frappe-ui/list";
+import { List, ListCell, ListHeader, ListRow, ListRows } from "frappe-ui/list";
 
 defineProps<{
 	items: T[];
