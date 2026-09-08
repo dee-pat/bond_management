@@ -1,6 +1,6 @@
 # Investor UI Migration Progress
 
-Last updated: 2026-08-28
+Last updated: 2026-09-08
 Specification: [investor-ui-migration.md](../specs/investor-ui-migration.md)
 Current phase: Phase 7 — Pilot
 Overall status: Phase 7 in progress; pilot acceptance pending
@@ -48,21 +48,21 @@ screens; detail views retain their record-specific heading.
 ### Planned work
 
 - [x] Replace the portal-style shell with a Desk-aligned navbar, workspace
-  sidebar, breadcrumb/page header and compact account/session treatment.
+      sidebar, breadcrumb/page header and compact account/session treatment.
 - [x] Normalize shared list, detail, filter, status and report styling around
-  Frappe UI tokens and Desk-like spacing, borders and typography.
+      Frappe UI tokens and Desk-like spacing, borders and typography.
 - [x] Add server-backed sorting for every visible list column and exact
-  clicked-value filters through endpoint-specific allowlists; default dated
-  lists to latest first and omit date-cell filters.
+      clicked-value filters through endpoint-specific allowlists; default dated
+      lists to latest first and omit date-cell filters.
 - [x] Replace the custom Previous/Next pagination treatment with a compact
-  Desk-style list footer while preserving the allow-listed API pagination.
+      Desk-style list footer while preserving the allow-listed API pagination.
 - [x] Match Desk scrolling on desktop: keep the navbar, sidebar and sidebar
-  footer stationary, scroll only the main content column, and keep list
-  pagination anchored to its bottom edge; retain document scrolling on mobile.
+      footer stationary, scroll only the main content column, and keep list
+      pagination anchored to its bottom edge; retain document scrolling on mobile.
 - [x] Keep the shell breadcrumb as the single title on list and report screens;
-  retain record identifiers as headings on detail views.
+      retain record identifiers as headings on detail views.
 - [x] Add focused desktop/mobile presentation assertions and run the complete
-  frontend and investor UI gates.
+      frontend and investor UI gates.
 
 ### Acceptance criteria
 
@@ -920,12 +920,14 @@ test fixtures.
 ## In-progress slice: Phase 7 — Pilot
 
 Objective: validate the completed read-only SPA with real pilot workflows while
-retaining the legacy investor Workspace as the active login and Apps fallback.
+retaining the legacy investor Workspace as the Apps fallback. Investor login
+now targets the Vue homepage when the site flag is enabled.
 
 ### Planned work
 
 - [x] Record the pilot acceptance and rollback evidence contract before pilot operations.
 - [x] Verify pilot feedback change: line-only Yield Comparison chart, yearly x-axis labels and permission-scoped default date range.
+- [x] Default investor login to `/bond-investor` with the feature-gated Desk fallback and add a Desk-to-Vue header link.
 - [ ] Record internal-team acceptance, participants, date and reviewed surfaces.
 - [ ] Complete one full statement/reporting cycle with pilot investors and record the date, participants and defects found.
 - [ ] Resolve every high-severity pilot defect and link its verification evidence.
@@ -944,8 +946,8 @@ values, credentials or private attachment metadata in this repository.
 Rollback rehearsal will use the canonical `test_site`: capture the initial flag
 state, disable the flag, verify `/bond-investor` temporarily redirects to the
 unchanged `/desk/bond-investor` fallback, restore the approved pilot state and
-verify the SPA route again. No financial data, schema, login redirect, Apps route
-or legacy Workspace changes are part of this slice.
+verify the SPA route again. This slice does not change financial data, schema,
+the legacy Workspace or the Apps screen route.
 
 ### Pilot acceptance record
 
@@ -1306,8 +1308,8 @@ Add one entry after every slice. Preserve failed or unavailable gates; later suc
 - Risk classification: medium; investor chart rendering and filtered-list
   recovery. Required gates: focused regressions, `pre-push`, `pre-push-ui`.
 - Commands executed from the bench: `apps/bond_management/scripts/verify.sh
-  pre-push` exited `0`; `CYPRESS_SPEC=cypress/integration/bond_yield_comparison.js
-  apps/bond_management/scripts/verify.sh ui` exited `1` on the initial run and
+pre-push` exited `0`; `CYPRESS_SPEC=cypress/integration/bond_yield_comparison.js
+apps/bond_management/scripts/verify.sh ui` exited `1` on the initial run and
   both retries; `apps/bond_management/scripts/verify.sh pre-push-ui` exited `1`;
   `apps/bond_management/scripts/verify.sh playwright` exited `0`.
 - Tests passed: all 297 server tests, pre-commit, Semgrep scans and both rule
@@ -1341,7 +1343,7 @@ Add one entry after every slice. Preserve failed or unavailable gates; later suc
 - Risk: low, test-runner presentation only. Screenshots/videos omit the Cypress
   command log; terminal results and application-error checks remain enabled.
 - Final commands: `CYPRESS_SPEC=cypress/integration/bond_yield_comparison.js
-  apps/bond_management/scripts/verify.sh ui` and
+apps/bond_management/scripts/verify.sh ui` and
   `apps/bond_management/scripts/verify.sh pre-push-ui` both exited `0` with the
   updated script. The full gate passed lint, Semgrep, all 297 server tests,
   frontend typecheck/build, all 13 Cypress tests, and all 28 Playwright tests.
@@ -1352,6 +1354,29 @@ Add one entry after every slice. Preserve failed or unavailable gates; later suc
 - Restored and read back test-site `enable_two_factor_auth=1` after the final
   browser run. No application behavior or third-party framework files changed
   during this runner correction.
+
+### 2026-09-08 — Phase 7 default Vue landing and Desk bridge
+
+- Risk classification: Medium; changes affect investor session landing,
+  shared Desk navigation JavaScript and the Vue/Desk boundary. No financial
+  calculation, API projection, permission boundary, schema, dependency or
+  mutation changed.
+- Required gates: targeted investor permission test; focused Cypress and
+  Playwright regressions; frontend lint, typecheck and build; complete server,
+  Cypress and Playwright suites through `pre-push-ui`; formatting and syntax
+  checks.
+- Commands executed:
+  - `bench --site test_site run-tests --module bond_management.bond_management.utils.test_investor_permissions` — final exit `0`; 16 tests passed.
+  - `CYPRESS_SPEC=cypress/integration/investor_navigation.js CHROME_BIN="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" apps/bond_management/scripts/verify.sh ui` — final exit `0`; the focused Desk link test passed. The first attempt exited `1` because the explicit `test_site` server was not running; the server was started with `bench --site test_site serve --port 8001 --noreload` before the rerun.
+  - `FRAPPE_USER=<ephemeral> FRAPPE_PASSWORD=<ephemeral> BASE_URL=http://127.0.0.1:8001 yarn test:e2e e2e/tests/investor-shell.spec.ts --project=chromium` — final exit `0`; 6 tests passed. The first sandboxed Chromium launch exited `1` before tests because macOS Mach-port access was denied; the escalated rerun passed.
+  - `FRAPPE_USER=<ephemeral> FRAPPE_PASSWORD=<ephemeral> BASE_URL=http://127.0.0.1:8001 CHROME_BIN="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" apps/bond_management/scripts/verify.sh pre-push-ui` — exit `0`; all required gates passed.
+  - `node --check bond_management/public/js/investor_desk_redirect.js`, scoped Prettier checks and `git diff --check` — exit `0`.
+- Exit statuses: Final required commands exited `0`.
+- Tests passed: pre-commit and blocking/advisory Semgrep scans; migration; 264 complete server tests; frontend lint/typecheck/build; 14 Cypress tests; 29 Playwright desktop/mobile tests; targeted 16-test permission module and focused browser regressions.
+- Tests failed: The first Cypress run had no available test server; an intermediate Cypress assertion targeted the old `.desktop-navbar` instead of the Workspace `.page-head`; the first Playwright launch was blocked by sandboxed macOS browser permissions. Each was corrected or rerun without weakening assertions.
+- Tests not run: GitHub Actions itself; a fresh-site check was not required because no schema, dependency, installation hook registration or manual index changed.
+- Blockers: None.
+- Unverified local/CI differences: Local verification used macOS/arm64, Chrome 152, the existing `test_site` and an explicit server at `127.0.0.1:8001`; CI uses Ubuntu, its own browser and fresh-site setup. The existing four non-blocking frontend Vue lint warnings remain unchanged.
 
 ## Next slice: Phase 7
 

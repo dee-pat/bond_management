@@ -12,7 +12,9 @@ test("renders the authenticated investor compatibility shell", async ({
     page.getByRole("heading", { name: "Bond Investor" })
   ).toBeVisible();
   const homeBreadcrumbs = page.getByRole("navigation", { name: "Breadcrumb" });
-  await expect(homeBreadcrumbs.getByRole("link", { name: "Home" })).toBeVisible();
+  await expect(
+    homeBreadcrumbs.getByRole("link", { name: "Home" })
+  ).toBeVisible();
   await expect(homeBreadcrumbs.getByText("/", { exact: true })).toHaveCount(1);
   await expect(
     homeBreadcrumbs.getByText("Bond Investor", { exact: true })
@@ -26,6 +28,22 @@ test("renders the authenticated investor compatibility shell", async ({
   await expect(page.getByTestId("investor-shell")).not.toContainText("Create");
 });
 
+test("uses the Vue homepage by default and links back from Desk", async ({
+  page,
+}) => {
+  await page.goto("/desk");
+
+  await expect(page).toHaveURL(/\/bond-investor\/?$/);
+  await expect(
+    page.getByRole("heading", { name: "Bond Investor" })
+  ).toBeVisible();
+
+  await page.goto("/desk/bond-investor");
+  await expect(
+    page.getByRole("link", { name: "Open Investor App" })
+  ).toHaveAttribute("href", "/bond-investor");
+});
+
 test("keeps a nested investor route stable across refresh", async ({
   page,
 }) => {
@@ -35,7 +53,9 @@ test("keeps a nested investor route stable across refresh", async ({
     page.getByRole("heading", { name: "Bond Transactions" })
   ).toBeVisible();
   const breadcrumbs = page.getByRole("navigation", { name: "Breadcrumb" });
-  await expect(breadcrumbs.getByText("Bond Investor", { exact: true })).toBeVisible();
+  await expect(
+    breadcrumbs.getByText("Bond Investor", { exact: true })
+  ).toBeVisible();
   await expect(
     breadcrumbs.getByText("Bond Transactions", { exact: true })
   ).toBeVisible();
@@ -113,7 +133,10 @@ test("keeps Desk shell chrome outside the main scroll region", async ({
     spacer.style.height = "100vh";
     spacer.style.flex = "0 0 auto";
     content.append(spacer);
-    content.scrollTop = Math.min(120, content.scrollHeight - content.clientHeight);
+    content.scrollTop = Math.min(
+      120,
+      content.scrollHeight - content.clientHeight
+    );
     const contentScrollTop = content.scrollTop;
     const afterScroll = chromePositions();
     const documentScrollTop = document.scrollingElement?.scrollTop ?? 0;

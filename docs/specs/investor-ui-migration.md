@@ -42,19 +42,19 @@ Before implementing a surface, record its investor-visible fields, filters, sort
 
 ## Settled decisions
 
-| Area           | Decision                                                                                                                                |
-| -------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| Delivery       | Incremental migration inside the existing `bond_management` app.                                                                        |
-| Frontend       | Vue 3, TypeScript, Frappe UI and Vite under `frontend/`.                                                                                |
-| Route          | `/bond-investor`, with nested routes served by a website catch-all rule.                                                                |
-| Rollout        | Site-level `bond_investor_spa_enabled` flag. During pilot, login and the Apps screen continue to open `/desk/bond-investor`.            |
-| Authentication | Existing same-origin Frappe session; no separate identity system or token store.                                                        |
-| Authorization  | Existing investor role and portfolio `User Permission` boundary, enforced again by explicit server APIs.                                |
-| Data access    | Explicit read-only investor endpoints with allow-listed inputs and outputs. Generic DocType REST is not the production screen contract. |
-| Calculations   | Existing server services and reports remain authoritative. The client formats and presents returned values only.                        |
-| Testing        | Playwright for the SPA; Cypress for Desk; server tests own finance and permission matrices.                                             |
-| Design         | Functional parity first, with a clean responsive shell but no product redesign.                                                         |
-| Retirement     | Cutover and legacy workspace removal are separate releases.                                                                             |
+| Area           | Decision                                                                                                                                                     |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Delivery       | Incremental migration inside the existing `bond_management` app.                                                                                             |
+| Frontend       | Vue 3, TypeScript, Frappe UI and Vite under `frontend/`.                                                                                                     |
+| Route          | `/bond-investor`, with nested routes served by a website catch-all rule.                                                                                     |
+| Rollout        | Site-level `bond_investor_spa_enabled` flag. Investor login opens `/bond-investor`; the Apps screen keeps `/desk/bond-investor` as the coexistence fallback. |
+| Authentication | Existing same-origin Frappe session; no separate identity system or token store.                                                                             |
+| Authorization  | Existing investor role and portfolio `User Permission` boundary, enforced again by explicit server APIs.                                                     |
+| Data access    | Explicit read-only investor endpoints with allow-listed inputs and outputs. Generic DocType REST is not the production screen contract.                      |
+| Calculations   | Existing server services and reports remain authoritative. The client formats and presents returned values only.                                             |
+| Testing        | Playwright for the SPA; Cypress for Desk; server tests own finance and permission matrices.                                                                  |
+| Design         | Functional parity first, with a clean responsive shell but no product redesign.                                                                              |
+| Retirement     | Cutover and legacy workspace removal are separate releases.                                                                                                  |
 
 ## Architecture
 
@@ -105,12 +105,12 @@ The compatibility phase may adjust generated-output locations to match the teste
 1. `bond_investor_spa_enabled` is false by default.
 2. A disabled site sends `/bond-investor` back to `/desk/bond-investor` without exposing SPA APIs.
 3. An enabled site serves the SPA only to an authenticated investor, manager or Administrator.
-4. The current investor login redirect and Apps screen route stay `/desk/bond-investor` during pilot.
-5. Pilot users receive the direct `/bond-investor` link. The old workspace remains their fallback.
+4. Investor login opens `/bond-investor`; the Apps screen route stays `/desk/bond-investor` during coexistence.
+5. When the flag is disabled, `/bond-investor` falls back to the old Workspace. Pilot users can therefore use the default login route or the direct link.
 
 ### Cutover behaviour
 
-After pilot acceptance, change the investor login redirect and Apps screen route to `/bond-investor`. Keep `/desk/bond-investor` available for rollback until the separate retirement phase completes.
+After pilot acceptance, change the Apps screen route to `/bond-investor`. Keep `/desk/bond-investor` available for rollback until the separate retirement phase completes.
 
 ### Boot context
 
@@ -263,7 +263,7 @@ Complete when the scaffold works on `test_site`, `bench build --app bond_managem
 
 ### Phase 2 — Coexistence shell
 
-Add the feature-gated `/bond-investor` route, nested-route fallback, role gate, navigation, session-expiry handling and common loading/error states. Keep login and Apps screen redirects unchanged.
+Add the feature-gated `/bond-investor` route, nested-route fallback, role gate, navigation, session-expiry handling and common loading/error states. Keep the legacy Apps screen route during coexistence; investor login may target the Vue route because the disabled-site fallback preserves rollback.
 
 Complete when disabled, unauthorized, investor and manager route behaviours have server tests and Playwright coverage.
 
@@ -293,13 +293,13 @@ Complete when all parity rows are accepted and all local/fresh-site server, Cypr
 
 ### Phase 7 — Pilot
 
-Enable the site flag while retaining old redirects. Give pilot investors the direct link, collect defects and run both UI suites. Complete one full statement/reporting cycle with the pilot group.
+Enable the site flag while retaining the legacy Apps screen route. Default investor login to the Vue route, collect defects and run both UI suites. Complete one full statement/reporting cycle with the pilot group.
 
 Complete with internal-team acceptance, pilot acceptance, no open high-severity defects and a recorded rollback rehearsal.
 
 ### Phase 8 — Cutover
 
-Change investor login and Apps screen routes to `/bond-investor`. Keep the old workspace reachable as a rollback path and keep all Desk/Cypress coverage.
+Change the Apps screen route to `/bond-investor`. Keep the old workspace reachable as a rollback path and keep all Desk/Cypress coverage.
 
 Complete after production verification and an agreed observation period with no rollback condition triggered.
 
@@ -326,8 +326,8 @@ Phase 1 must extend the shared verification script so `pre-push-ui` means all ac
 
 ## Rollback
 
-- Pilot rollback: disable `bond_investor_spa_enabled`; users continue on the unchanged Desk route.
-- Cutover rollback: restore login and Apps screen routes to `/desk/bond-investor`; the workspace remains installed.
+- Pilot rollback: disable `bond_investor_spa_enabled`; the `/bond-investor` login target temporarily redirects to the unchanged Desk route.
+- Cutover rollback: restore the Apps screen route to `/desk/bond-investor`; the workspace remains installed.
 - API rollback: explicit endpoints are additive until retirement and do not change existing DocType or report contracts.
 - Data rollback: no migration phase changes investor financial data, so rollback requires no data transformation.
 

@@ -302,10 +302,10 @@ class TestInvestorPermissions(IntegrationTestCase):
                 investor_permissions._has_portfolio_access("Nanda", "investor@example.com", "read")
             )
 
-    def test_investor_login_redirects_to_the_investor_workspace(self):
+    def test_investor_login_redirects_to_the_vue_homepage(self):
         with patch.object(frappe, "get_roles", return_value=[investor_permissions.INVESTOR_ROLE]):
             frappe.local.response = {"redirect_to": "/desk"}
             investor_permissions.redirect_investor_to_workspace(SimpleNamespace(user="investor@example.com"))
 
-            self.assertEqual(frappe.local.response["home_page"], "/desk/bond-investor")
+            self.assertEqual(frappe.local.response["home_page"], "/bond-investor")
             self.assertNotIn("redirect_to", frappe.local.response)

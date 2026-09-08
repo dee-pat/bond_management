@@ -20,11 +20,11 @@ def has_investor_desk_access() -> bool:
 
 
 def redirect_investor_to_workspace(login_manager) -> None:
-    """Start investor sessions at their restricted Workspace, not generic Desk."""
+    """Start investor sessions at the Vue application, with Desk as its fallback."""
     if INVESTOR_ROLE not in frappe.get_roles(login_manager.user):
         return
 
-    frappe.local.response["home_page"] = "/desk/bond-investor"
+    frappe.local.response["home_page"] = "/bond-investor"
     frappe.local.response.pop("redirect_to", None)
 
 

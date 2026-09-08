@@ -21,8 +21,8 @@ add_to_apps_screen = [
 ]
 
 # The SPA keeps its own website entry while the existing investor Workspace
-# remains the pilot fallback. Nested client-side routes resolve to the same
-# generated entry.
+# remains the feature-flagged fallback. Nested client-side routes resolve to
+# the same generated entry.
 website_route_rules = [
     {"from_route": "/bond-investor/<path:app_path>", "to_route": "bond-investor"},
 ]
@@ -280,8 +280,8 @@ on_session_creation = [
 
 # Investor logouts from Desk include ``redirect-to=/desk`` in the login URL.
 # Frappe's login client gives that URL precedence over the server-provided
-# home_page, so redirect the resulting generic Desk route to the restricted
-# investor Workspace after boot.
+# home_page, so redirect the resulting generic Desk route to the Vue app after
+# boot. The app itself falls back to the restricted Workspace when disabled.
 app_include_js = "/assets/bond_management/js/investor_desk_redirect.js"
 
 # Automatically update python controller files with type annotations for this app.
