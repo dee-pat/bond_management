@@ -1,5 +1,7 @@
 import { expect, test } from "@playwright/test";
 
+import { selectFrappeOption } from "../support/controls";
+
 const BOND_ISIN = "UI-TEST-BOND-001";
 const PORTFOLIO = "UI Test Portfolio";
 const VALUATION_DATE = "2025-12-31";
@@ -32,7 +34,7 @@ test("runs USD portfolio performance and copies sanitized cash flows", async ({
   await expect(page.getByTestId("performance-initial")).toBeVisible();
   await expect(page.getByLabel("Valuation Date")).not.toHaveValue("");
 
-  await page.getByLabel("Portfolio", { exact: true }).selectOption(PORTFOLIO);
+	await selectFrappeOption(page, "Portfolio (required)", PORTFOLIO);
   await page.getByLabel("Valuation Date").fill(VALUATION_DATE);
   await page.getByRole("button", { name: "Run", exact: true }).click();
 

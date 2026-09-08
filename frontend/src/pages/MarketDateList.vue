@@ -1,11 +1,14 @@
 <script setup lang="ts">
 import { onMounted, ref } from "vue";
 import { RouterLink } from "vue-router";
+import { Button } from "frappe-ui";
+import { ListCell } from "frappe-ui/list";
 
+import DataList from "../components/DataList.vue";
 import ListFilterBar from "../components/ListFilterBar.vue";
 import ListPagination from "../components/ListPagination.vue";
 import SortableColumn from "../components/SortableColumn.vue";
-import { fetchMarketDates, InvestorApiError, redirectToLogin } from "../lib/api";
+import { InvestorApiError, redirectToLogin, useInvestorApi } from "../lib/api";
 import { toFilterValue } from "../lib/list";
 import { formatDate } from "../lib/format";
 import type { ActiveListFilter, MarketDateListRow, MarketDatePage, SortOrder } from "../types";
@@ -21,6 +24,7 @@ const pagination = ref<MarketDatePage["pagination"]>({
 });
 const loading = ref(true);
 const error = ref<string | null>(null);
+const api = useInvestorApi();
 let latestRequest = 0;
 
 async function loadMarketDates(
@@ -39,7 +43,7 @@ async function loadMarketDates(
 	}
 
 	try {
-		const response = await fetchMarketDates({
+		const response = await api.fetchMarketDates({
 			start,
 			pageLength,
 			sortBy: sortBy.value || undefined,
@@ -114,7 +118,7 @@ onMounted(() => void loadMarketDates());
 			role="alert"
 		>
 			<p>{{ error }}</p>
-			<button class="secondary-button" type="button" @click="retryMarketDates">Retry</button>
+			<Button label="Retry" variant="outline" @click="retryMarketDates" />
 		</div>
 
 		<div
@@ -128,43 +132,36 @@ onMounted(() => void loadMarketDates());
 		<template v-else>
 			<div v-if="error" class="surface-state surface-state--error" role="alert">
 				<p>{{ error }}</p>
-				<button class="secondary-button" type="button" @click="retryMarketDates">
-					Retry
-				</button>
+				<Button label="Retry" variant="outline" @click="retryMarketDates" />
 			</div>
 
-			<div class="record-table-wrap">
-				<table class="record-table">
-					<thead>
-						<tr>
-							<SortableColumn
-								label="Date"
-								field="date"
-								:sort-by="sortBy"
-								:sort-order="sortOrder"
-								:disabled="loading"
-								@sort="changeSort"
-							/>
-						</tr>
-					</thead>
-					<tbody>
-						<tr
-							v-for="marketDate in marketDates"
-							:key="marketDate.name"
-							data-testid="market-date-row"
+			<DataList
+				:items="marketDates"
+				:columns="['minmax(12rem,1fr)']"
+				row-key="name"
+				row-test-id="market-date-row"
+			>
+				<template #header>
+					<SortableColumn
+						label="Date"
+						field="date"
+						:sort-by="sortBy"
+						:sort-order="sortOrder"
+						:disabled="loading"
+						@sort="changeSort"
+					/>
+				</template>
+				<template #row="{ item: marketDate }">
+					<ListCell data-label="Date">
+						<RouterLink
+							:to="`/market-dates/${encodeURIComponent(marketDate.name)}`"
+							:aria-label="`View market date ${marketDate.name}`"
 						>
-							<td data-label="Date">
-								<RouterLink
-									:to="`/market-dates/${encodeURIComponent(marketDate.name)}`"
-									:aria-label="`View market date ${marketDate.name}`"
-								>
-									{{ formatDate(marketDate.date) }}
-								</RouterLink>
-							</td>
-						</tr>
-					</tbody>
-				</table>
-			</div>
+							{{ formatDate(marketDate.date) }}
+						</RouterLink>
+					</ListCell>
+				</template>
+			</DataList>
 
 			<ListPagination
 				:has-more="pagination.has_more"

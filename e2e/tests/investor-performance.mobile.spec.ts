@@ -1,5 +1,7 @@
 import { expect, test } from "@playwright/test";
 
+import { selectFrappeOption } from "../support/controls";
+
 const BOND_ISIN = "UI-TEST-BOND-001";
 const PORTFOLIO = "UI Test Portfolio";
 const VALUATION_DATE = "2025-12-31";
@@ -8,7 +10,7 @@ test("runs portfolio performance without mobile overflow", async ({ page }) => {
   await page.goto("/bond-investor/performance");
 
   await expect(page.getByTestId("performance-initial")).toBeVisible();
-  await page.getByLabel("Portfolio", { exact: true }).selectOption(PORTFOLIO);
+	await selectFrappeOption(page, "Portfolio (required)", PORTFOLIO);
   await page.getByLabel("Valuation Date").fill(VALUATION_DATE);
   await page.getByRole("button", { name: "Run", exact: true }).click();
 

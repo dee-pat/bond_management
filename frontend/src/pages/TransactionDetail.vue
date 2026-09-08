@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
 import { RouterLink, useRoute } from "vue-router";
+import { Button } from "frappe-ui";
 
 import PdfAttachmentActions from "../components/PdfAttachmentActions.vue";
-import { fetchTransaction, InvestorApiError, redirectToLogin } from "../lib/api";
+import { InvestorApiError, redirectToLogin, useInvestorApi } from "../lib/api";
 import { formatDate, formatMoney, formatNumber, formatPercent } from "../lib/format";
 import type { TransactionDetail } from "../types";
 
@@ -49,6 +50,7 @@ const transaction = ref<TransactionDetail | null>(null);
 const loading = ref(true);
 const error = ref<string | null>(null);
 const transactionName = computed(() => String(route.params.transactionName ?? ""));
+const api = useInvestorApi();
 let latestRequest = 0;
 
 async function loadTransaction(): Promise<void> {
@@ -57,7 +59,7 @@ async function loadTransaction(): Promise<void> {
 	error.value = null;
 
 	try {
-		const response = await fetchTransaction(transactionName.value);
+		const response = await api.fetchTransaction(transactionName.value);
 		if (requestId === latestRequest) {
 			transaction.value = response.transaction;
 		}
@@ -115,7 +117,7 @@ onMounted(() => void loadTransaction());
 
 		<div v-else-if="error" class="surface-state surface-state--error" role="alert">
 			<p>{{ error }}</p>
-			<button class="secondary-button" type="button" @click="loadTransaction">Retry</button>
+			<Button label="Retry" variant="outline" @click="loadTransaction" />
 		</div>
 
 		<template v-else-if="transaction">

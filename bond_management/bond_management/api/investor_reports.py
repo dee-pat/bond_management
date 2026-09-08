@@ -18,7 +18,10 @@ from bond_management.bond_management.report.portfolio_performance.portfolio_perf
 from bond_management.bond_management.report.portfolio_performance.portfolio_performance import (
     get_xirr_cashflows,
 )
-from bond_management.bond_management.utils.investor_ui import require_investor_ui_access
+from bond_management.bond_management.utils.investor_ui import (
+    require_investor_ui_access,
+    set_investor_api_data,
+)
 from bond_management.bond_management.utils.validation import optional_string, required_string
 
 PORTFOLIO_PERFORMANCE_REPORT = "Portfolio Performance"
@@ -91,14 +94,16 @@ def get_portfolio_performance(portfolio: str, valuation_date: str) -> dict:
     filters = _authorized_filters(portfolio, valuation_date)
     columns, rows = execute_portfolio_performance(filters)
 
-    return {
-        "report": {
-            "filters": filters,
-            "columns": _project_columns(columns),
-            "rows": [_project_fields(row, PORTFOLIO_PERFORMANCE_ROW_FIELDS) for row in rows],
-            "chart": None,
+    return set_investor_api_data(
+        {
+            "report": {
+                "filters": filters,
+                "columns": _project_columns(columns),
+                "rows": [_project_fields(row, PORTFOLIO_PERFORMANCE_ROW_FIELDS) for row in rows],
+                "chart": None,
+            }
         }
-    }
+    )
 
 
 @frappe.whitelist(methods=["GET"])
@@ -119,7 +124,9 @@ def get_portfolio_performance_cashflows(
         xirr_type,
         cashflow_currency,
     )
-    return {"cashflows": [_project_fields(row, PORTFOLIO_CASHFLOW_FIELDS) for row in cashflows]}
+    return set_investor_api_data(
+        {"cashflows": [_project_fields(row, PORTFOLIO_CASHFLOW_FIELDS) for row in cashflows]}
+    )
 
 
 @frappe.whitelist(methods=["GET"])
@@ -133,14 +140,16 @@ def get_bond_yield_comparison(
 
     filters = _yield_comparison_filters(from_date, to_date)
     columns, rows = execute_bond_yield_comparison(filters)
-    return {
-        "report": {
-            "filters": filters,
-            "columns": [_project_yield_column(column) for column in columns],
-            "rows": [_project_fields(row, BOND_YIELD_COMPARISON_FIELDS) for row in rows],
-            "chart": dict(YIELD_COMPARISON_CHART),
+    return set_investor_api_data(
+        {
+            "report": {
+                "filters": filters,
+                "columns": [_project_yield_column(column) for column in columns],
+                "rows": [_project_fields(row, BOND_YIELD_COMPARISON_FIELDS) for row in rows],
+                "chart": dict(YIELD_COMPARISON_CHART),
+            }
         }
-    }
+    )
 
 
 @frappe.whitelist(methods=["GET"])
@@ -149,12 +158,14 @@ def get_yield_comparison_defaults() -> dict:
     require_investor_ui_access()
     get_report_doc(BOND_YIELD_COMPARISON_REPORT)
 
-    return {
-        "filters": {
-            "from_date": _oldest_readable_yield_date(),
-            "to_date": today(),
+    return set_investor_api_data(
+        {
+            "filters": {
+                "from_date": _oldest_readable_yield_date(),
+                "to_date": today(),
+            }
         }
-    }
+    )
 
 
 def _authorized_filters(portfolio, valuation_date) -> dict:

@@ -1,6 +1,36 @@
 :root {
-	color: #1f272e;
-	background: #f7f8fa;
+	/* Keep custom layout rules on the same semantic palette as frappe-ui. */
+	--desk-bg: var(--surface-gray-1);
+	--desk-surface: var(--surface-base);
+	--desk-border: var(--outline-gray-1);
+	--desk-border-dark: var(--outline-gray-2);
+	--desk-text: var(--ink-gray-8);
+	--desk-muted: var(--ink-gray-5);
+	--desk-link: var(--ink-blue-7);
+	--desk-hover: var(--surface-gray-3);
+	--desk-danger: var(--ink-red-7);
+	--desk-error-surface: var(--surface-red-1);
+	--desk-error-border: var(--outline-red-1);
+	--desk-link-surface: var(--surface-blue-1);
+	--desk-link-border: var(--outline-blue-1);
+	--desk-table-header: var(--surface-gray-2);
+	--desk-table-hover: var(--surface-gray-1);
+	--desk-table-text: var(--ink-gray-7);
+	--desk-quiet-text: var(--ink-gray-4);
+	--desk-success: var(--ink-green-7);
+	--desk-success-surface: var(--surface-green-1);
+	--desk-warning: var(--ink-amber-7);
+	--desk-on-accent: var(--ink-base);
+	--desk-chart-blue: var(--ink-blue-7);
+	--desk-chart-pink: var(--ink-pink-7);
+	--desk-chart-green: var(--ink-green-7);
+	--desk-chart-amber: var(--ink-amber-7);
+	--desk-chart-violet: var(--ink-violet-7);
+	--desk-chart-red: var(--ink-red-7);
+	--desk-chart-teal: var(--ink-cyan-7);
+	--desk-chart-orange: var(--ink-amber-8);
+	color: var(--desk-text);
+	background: var(--desk-bg);
 	font-family:
 		Inter,
 		ui-sans-serif,
@@ -11,15 +41,6 @@
 		sans-serif;
 	font-synthesis: none;
 	text-rendering: optimizeLegibility;
-	--desk-bg: #f7f8fa;
-	--desk-surface: #ffffff;
-	--desk-border: #e2e5e9;
-	--desk-border-dark: #d1d8dd;
-	--desk-text: #1f272e;
-	--desk-muted: #6b7280;
-	--desk-link: #2490ef;
-	--desk-hover: #f3f3f3;
-	--desk-danger: #d63939;
 }
 
 * {
@@ -113,9 +134,9 @@ select {
 	flex: 0 0 28px;
 	width: 28px;
 	height: 28px;
-	color: #2490ef;
-	background: #e8f3fc;
-	border: 1px solid #c8e4fa;
+	color: var(--desk-link);
+	background: var(--desk-link-surface);
+	border: 1px solid var(--desk-link-border);
 	border-radius: 5px;
 	font-size: 10px;
 	font-weight: 700;
@@ -145,8 +166,8 @@ select {
 	min-height: 30px;
 	gap: 8px;
 	padding: 0 9px;
-	color: #8a9299;
-	background: #f7f8fa;
+	color: var(--desk-quiet-text);
+	background: var(--desk-bg);
 	border: 1px solid var(--desk-border);
 	border-radius: 5px;
 	font-size: 12px;
@@ -160,8 +181,8 @@ select {
 .investor-navbar__search kbd {
 	margin-left: auto;
 	padding: 1px 5px;
-	color: #8a9299;
-	background: #ffffff;
+	color: var(--desk-quiet-text);
+	background: var(--desk-surface);
 	border: 1px solid var(--desk-border);
 	border-radius: 3px;
 	font-size: 10px;
@@ -275,7 +296,7 @@ select {
 	min-height: 32px;
 	gap: 9px;
 	padding: 6px 10px;
-	color: #5e6872;
+	color: var(--desk-table-text);
 	border-radius: 6px;
 	font-size: 13px;
 	font-weight: 450;
@@ -290,8 +311,8 @@ select {
 
 .investor-navigation__link--active {
 	color: var(--desk-text);
-	background: #f0f1f2;
-	box-shadow: 0 1px 2px rgb(31 39 46 / 7%);
+	background: var(--desk-table-header);
+	box-shadow: 0 1px 2px color-mix(in srgb, var(--ink-gray-8) 7%, transparent);
 	font-weight: 600;
 }
 
@@ -299,7 +320,7 @@ select {
 	flex: 0 0 15px;
 	width: 15px;
 	height: 15px;
-	color: #8a9299;
+	color: var(--desk-quiet-text);
 }
 
 .investor-navigation__link--active .investor-navigation__icon {
@@ -398,7 +419,7 @@ select {
 
 .investor-breadcrumbs__separator {
 	flex: 0 0 auto;
-	color: #9aa1a8;
+	color: var(--desk-quiet-text);
 }
 
 .investor-breadcrumbs__current {
@@ -427,7 +448,7 @@ h1 {
 	gap: 9px;
 	margin: 16px 24px 0;
 	padding: 8px 11px;
-	color: #5e6872;
+	color: var(--desk-table-text);
 	background: var(--desk-surface);
 	border: 1px solid var(--desk-border);
 	border-radius: 5px;
@@ -439,7 +460,7 @@ h1 {
 }
 
 .status-panel--error {
-	color: #8f2d2d;
+	color: var(--desk-danger);
 	border-left: 3px solid var(--desk-danger);
 }
 
@@ -463,15 +484,15 @@ h1 {
 .not-found-state {
 	margin: 0;
 	padding: 18px;
-	color: #8f2d2d;
+	color: var(--desk-danger);
 	background: var(--desk-surface);
-	border: 1px dashed #e2a2a2;
+	border: 1px dashed var(--desk-error-border);
 	border-radius: 5px;
 }
 
 .not-found-state p {
 	margin: 4px 0 0;
-	color: #8f2d2d;
+	color: var(--desk-danger);
 }
 
 @media (max-width: 900px) {

@@ -3,7 +3,7 @@ import { computed, onMounted, ref } from "vue";
 import { Avatar, Badge, Button, Icon } from "frappe-ui";
 import { RouterLink, useRoute } from "vue-router";
 
-import { fetchBootstrap, InvestorApiError, redirectToLogin } from "../lib/api";
+import { InvestorApiError, redirectToLogin, useInvestorApi } from "../lib/api";
 import { INVESTOR_NAVIGATION } from "../navigation";
 import type { InvestorBootstrap } from "../types";
 import BondDetail from "./BondDetail.vue";
@@ -32,6 +32,7 @@ const pageHeading = ref<HTMLHeadingElement | null>(null);
 const bootstrap = ref<InvestorBootstrap | null>(null);
 const error = ref<string | null>(null);
 const mobileNavigationOpen = ref(false);
+const api = useInvestorApi();
 const currentItem = computed(() => INVESTOR_NAVIGATION.find((item) => item.name === route.name));
 const isHome = computed(() => currentItem.value?.name === "home");
 const isTransactionList = computed(() => route.name === "transactions");
@@ -91,7 +92,7 @@ async function loadBootstrap(): Promise<void> {
 	error.value = null;
 
 	try {
-		bootstrap.value = await fetchBootstrap();
+		bootstrap.value = await api.fetchBootstrap();
 	} catch (caughtError) {
 		if (caughtError instanceof InvestorApiError && caughtError.status === 401) {
 			redirectToLogin();
@@ -119,7 +120,7 @@ onMounted(() => {
 					class="investor-mobile-menu-button"
 					:aria-expanded="mobileNavigationOpen"
 					aria-label="Toggle investor navigation"
-					icon="menu"
+					icon="lucide-menu"
 					variant="ghost"
 					@click="mobileNavigationOpen = !mobileNavigationOpen"
 				/>
@@ -136,7 +137,7 @@ onMounted(() => {
 			</div>
 
 			<div class="investor-navbar__search" aria-label="Search">
-				<Icon name="search" aria-hidden="true" />
+				<Icon name="lucide-search" aria-hidden="true" />
 				<span>Search or jump to…</span>
 				<kbd>⌘ K</kbd>
 			</div>
@@ -144,7 +145,7 @@ onMounted(() => {
 			<div class="investor-navbar__right">
 				<a class="investor-navbar__desk-link" href="/desk/bond-investor">
 					Open Desk
-					<Icon name="external-link" aria-hidden="true" />
+					<Icon name="lucide-external-link" aria-hidden="true" />
 				</a>
 				<div v-if="bootstrap" class="investor-account">
 					<Avatar :label="bootstrap.user.full_name" size="sm" theme="blue" />
@@ -206,7 +207,7 @@ onMounted(() => {
 							aria-label="Home"
 							title="Home"
 						>
-							<Icon name="home" aria-hidden="true" />
+							<Icon name="lucide-house" aria-hidden="true" />
 						</RouterLink>
 						<span class="investor-breadcrumbs__separator" aria-hidden="true">/</span>
 						<template v-if="isHome">

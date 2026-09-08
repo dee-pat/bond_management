@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from "vue";
+import { ListHeaderCellSort } from "frappe-ui/list";
 import type { SortOrder } from "../types";
 
 const props = withDefaults(
@@ -22,10 +23,7 @@ const nextOrder = computed<SortOrder>(() => {
 	if (!isActive.value) return "asc";
 	return props.sortOrder === "asc" ? "desc" : "asc";
 });
-const ariaSort = computed(() => {
-	if (!isActive.value) return "none";
-	return props.sortOrder === "asc" ? "ascending" : "descending";
-});
+const direction = computed<SortOrder | null>(() => (isActive.value ? props.sortOrder : null));
 
 function sortColumn(): void {
 	if (!props.disabled) emit("sort", props.field, nextOrder.value);
@@ -33,19 +31,16 @@ function sortColumn(): void {
 </script>
 
 <template>
-	<th scope="col" :aria-label="label" :aria-sort="ariaSort" :data-sort-field="field">
-		<button
-			class="list-column-button"
-			:class="{ 'list-column-button--active': isActive }"
-			type="button"
-			:disabled="disabled"
-			:title="`Sort by ${label} ${nextOrder === 'asc' ? 'ascending' : 'descending'}`"
-			@click="sortColumn"
-		>
-			<span>{{ label }}</span>
-			<span class="list-column-button__indicator" aria-hidden="true">
-				{{ isActive ? (sortOrder === "asc" ? "↑" : "↓") : "↕" }}
-			</span>
-		</button>
-	</th>
+	<ListHeaderCellSort
+		:direction="direction"
+		:class="{
+			'list-column-button--active': isActive,
+			'pointer-events-none opacity-50': disabled,
+		}"
+		:aria-label="label"
+		:data-sort-field="field"
+		@click="sortColumn"
+	>
+		{{ label }}
+	</ListHeaderCellSort>
 </template>

@@ -1,8 +1,11 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
 import { RouterLink, useRoute } from "vue-router";
+import { Button } from "frappe-ui";
+import { ListCell, ListHeaderCell } from "frappe-ui/list";
 
-import { fetchMarketDate, InvestorApiError, redirectToLogin } from "../lib/api";
+import DataList from "../components/DataList.vue";
+import { InvestorApiError, redirectToLogin, useInvestorApi } from "../lib/api";
 import { formatDate, formatNumber, formatPercent } from "../lib/format";
 import type { MarketDateDetail } from "../types";
 import YieldCurveChart from "./YieldCurveChart.vue";
@@ -12,6 +15,7 @@ const marketDate = ref<MarketDateDetail | null>(null);
 const loading = ref(true);
 const error = ref<string | null>(null);
 const marketDateName = computed(() => String(route.params.marketDateName ?? ""));
+const api = useInvestorApi();
 let latestRequest = 0;
 
 async function loadMarketDate(): Promise<void> {
@@ -20,7 +24,7 @@ async function loadMarketDate(): Promise<void> {
 	error.value = null;
 
 	try {
-		const response = await fetchMarketDate(marketDateName.value);
+		const response = await api.fetchMarketDate(marketDateName.value);
 		if (requestId === latestRequest) {
 			marketDate.value = response.market_date;
 		}
@@ -62,7 +66,7 @@ onMounted(() => void loadMarketDate());
 
 		<div v-else-if="error" class="surface-state surface-state--error" role="alert">
 			<p>{{ error }}</p>
-			<button class="secondary-button" type="button" @click="loadMarketDate">Retry</button>
+			<Button label="Retry" variant="outline" @click="loadMarketDate" />
 		</div>
 
 		<template v-else-if="marketDate">
@@ -88,45 +92,56 @@ onMounted(() => void loadMarketDate());
 				<div v-if="marketDate.bond_market_prices.length === 0" class="surface-state">
 					This market date has no bond market prices.
 				</div>
-				<div v-else class="record-table-wrap">
-					<table class="record-table" data-testid="market-prices">
-						<thead>
-							<tr>
-								<th scope="col">ISIN</th>
-								<th scope="col">Principal Factor</th>
-								<th scope="col">Market Price</th>
-								<th scope="col">Currency</th>
-								<th scope="col">Future XIRR</th>
-								<th scope="col">Weighted Average Principal Repayment Date</th>
-								<th scope="col">Maturity Date</th>
-							</tr>
-						</thead>
-						<tbody>
-							<tr v-for="row in marketDate.bond_market_prices" :key="row.isin">
-								<td data-label="ISIN">
-									{{ row.isin }}
-								</td>
-								<td data-label="Principal Factor">
-									{{ formatNumber(row.principal_factor, 6) }}
-								</td>
-								<td data-label="Market Price">
-									{{ formatNumber(row.market_price, 6) }}
-								</td>
-								<td data-label="Currency">
-									{{ row.currency }}
-								</td>
-								<td data-label="Future XIRR">
-									{{ formatOptionalPercent(row.future_xirr) }}
-								</td>
-								<td data-label="Weighted Average Principal Repayment Date">
-									{{ formatOptionalDate(row.weighted_avg_repayment_date) }}
-								</td>
-								<td data-label="Maturity Date">
-									{{ formatDate(row.maturity_date) }}
-								</td>
-							</tr>
-						</tbody>
-					</table>
+				<div v-else>
+					<DataList
+						:items="marketDate.bond_market_prices"
+						:columns="[
+							'minmax(9rem,1fr)',
+							'minmax(11rem,1fr)',
+							'minmax(11rem,1fr)',
+							'minmax(8rem,1fr)',
+							'minmax(10rem,1fr)',
+							'minmax(17rem,1.5fr)',
+							'minmax(11rem,1fr)',
+						]"
+						row-key="isin"
+						data-testid="market-prices"
+					>
+						<template #header>
+							<ListHeaderCell>ISIN</ListHeaderCell>
+							<ListHeaderCell>Principal Factor</ListHeaderCell>
+							<ListHeaderCell>Market Price</ListHeaderCell>
+							<ListHeaderCell>Currency</ListHeaderCell>
+							<ListHeaderCell>Future XIRR</ListHeaderCell>
+							<ListHeaderCell>
+								Weighted Average Principal Repayment Date
+							</ListHeaderCell>
+							<ListHeaderCell>Maturity Date</ListHeaderCell>
+						</template>
+						<template #row="{ item: row }">
+							<ListCell data-label="ISIN">
+								{{ row.isin }}
+							</ListCell>
+							<ListCell data-label="Principal Factor">
+								{{ formatNumber(row.principal_factor, 6) }}
+							</ListCell>
+							<ListCell data-label="Market Price">
+								{{ formatNumber(row.market_price, 6) }}
+							</ListCell>
+							<ListCell data-label="Currency">
+								{{ row.currency }}
+							</ListCell>
+							<ListCell data-label="Future XIRR">
+								{{ formatOptionalPercent(row.future_xirr) }}
+							</ListCell>
+							<ListCell data-label="Weighted Average Principal Repayment Date">
+								{{ formatOptionalDate(row.weighted_avg_repayment_date) }}
+							</ListCell>
+							<ListCell data-label="Maturity Date">
+								{{ formatDate(row.maturity_date) }}
+							</ListCell>
+						</template>
+					</DataList>
 				</div>
 			</section>
 

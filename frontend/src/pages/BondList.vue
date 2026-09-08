@@ -1,11 +1,14 @@
 <script setup lang="ts">
 import { onMounted, ref } from "vue";
 import { RouterLink } from "vue-router";
+import { Button } from "frappe-ui";
+import { ListCell } from "frappe-ui/list";
 
+import DataList from "../components/DataList.vue";
 import ListFilterBar from "../components/ListFilterBar.vue";
 import ListPagination from "../components/ListPagination.vue";
 import SortableColumn from "../components/SortableColumn.vue";
-import { fetchBonds, InvestorApiError, redirectToLogin } from "../lib/api";
+import { InvestorApiError, redirectToLogin, useInvestorApi } from "../lib/api";
 import { toFilterValue } from "../lib/list";
 import { formatDate } from "../lib/format";
 import type { ActiveListFilter, BondListRow, BondPage, SortOrder } from "../types";
@@ -21,6 +24,7 @@ const pagination = ref<BondPage["pagination"]>({
 });
 const loading = ref(true);
 const error = ref<string | null>(null);
+const api = useInvestorApi();
 let latestRequest = 0;
 
 async function loadBonds(
@@ -39,7 +43,7 @@ async function loadBonds(
 	}
 
 	try {
-		const response = await fetchBonds({
+		const response = await api.fetchBonds({
 			start,
 			pageLength,
 			sortBy: sortBy.value || undefined,
@@ -114,7 +118,7 @@ onMounted(() => void loadBonds());
 			role="alert"
 		>
 			<p>{{ error }}</p>
-			<button class="secondary-button" type="button" @click="retryBonds">Retry</button>
+			<Button label="Retry" variant="outline" @click="retryBonds" />
 		</div>
 
 		<div v-else-if="bonds.length === 0" class="surface-state" data-testid="bonds-empty">
@@ -124,84 +128,85 @@ onMounted(() => void loadBonds());
 		<template v-else>
 			<div v-if="error" class="surface-state surface-state--error" role="alert">
 				<p>{{ error }}</p>
-				<button class="secondary-button" type="button" @click="retryBonds">Retry</button>
+				<Button label="Retry" variant="outline" @click="retryBonds" />
 			</div>
 
-			<div class="record-table-wrap">
-				<table class="record-table">
-					<thead>
-						<tr>
-							<SortableColumn
-								label="Bond Name"
-								field="bond_name"
-								:sort-by="sortBy"
-								:sort-order="sortOrder"
-								:disabled="loading"
-								@sort="changeSort"
-							/>
-							<SortableColumn
-								label="ISIN"
-								field="isin"
-								:sort-by="sortBy"
-								:sort-order="sortOrder"
-								:disabled="loading"
-								@sort="changeSort"
-							/>
-							<SortableColumn
-								label="Currency"
-								field="currency"
-								:sort-by="sortBy"
-								:sort-order="sortOrder"
-								:disabled="loading"
-								@sort="changeSort"
-							/>
-							<SortableColumn
-								label="Issue Date"
-								field="issue_date"
-								:sort-by="sortBy"
-								:sort-order="sortOrder"
-								:disabled="loading"
-								@sort="changeSort"
-							/>
-						</tr>
-					</thead>
-					<tbody>
-						<tr v-for="bond in bonds" :key="bond.name" data-testid="bond-row">
-							<td data-label="Bond Name">
-								<RouterLink
-									:to="`/bonds/${encodeURIComponent(bond.name)}`"
-									:aria-label="`View bond ${bond.name}`"
-								>
-									{{ bond.bond_name }}
-								</RouterLink>
-							</td>
-							<td data-label="ISIN">
-								<button
-									class="list-filter-button"
-									type="button"
-									:aria-label="`Filter ISIN by ${bond.isin}`"
-									@click="applyFilter('isin', 'ISIN', bond.isin)"
-								>
-									{{ bond.isin }}
-								</button>
-							</td>
-							<td data-label="Currency">
-								<button
-									class="list-filter-button"
-									type="button"
-									:aria-label="`Filter Currency by ${bond.currency}`"
-									@click="applyFilter('currency', 'Currency', bond.currency)"
-								>
-									{{ bond.currency }}
-								</button>
-							</td>
-							<td data-label="Issue Date">
-								<span>{{ formatDate(bond.issue_date) }}</span>
-							</td>
-						</tr>
-					</tbody>
-				</table>
-			</div>
+			<DataList
+				:items="bonds"
+				:columns="['minmax(12rem,1.4fr)', 'minmax(9rem,1fr)', '8rem', '9rem']"
+				row-key="name"
+				row-test-id="bond-row"
+			>
+				<template #header>
+					<SortableColumn
+						label="Bond Name"
+						field="bond_name"
+						:sort-by="sortBy"
+						:sort-order="sortOrder"
+						:disabled="loading"
+						@sort="changeSort"
+					/>
+					<SortableColumn
+						label="ISIN"
+						field="isin"
+						:sort-by="sortBy"
+						:sort-order="sortOrder"
+						:disabled="loading"
+						@sort="changeSort"
+					/>
+					<SortableColumn
+						label="Currency"
+						field="currency"
+						:sort-by="sortBy"
+						:sort-order="sortOrder"
+						:disabled="loading"
+						@sort="changeSort"
+					/>
+					<SortableColumn
+						label="Issue Date"
+						field="issue_date"
+						:sort-by="sortBy"
+						:sort-order="sortOrder"
+						:disabled="loading"
+						@sort="changeSort"
+					/>
+				</template>
+				<template #row="{ item: bond }">
+					<ListCell data-label="Bond Name">
+						<RouterLink
+							:to="`/bonds/${encodeURIComponent(bond.name)}`"
+							:aria-label="`View bond ${bond.name}`"
+						>
+							{{ bond.bond_name }}
+						</RouterLink>
+					</ListCell>
+					<ListCell data-label="ISIN">
+						<Button
+							class="list-filter-button"
+							variant="ghost"
+							size="sm"
+							:label="`Filter ISIN by ${bond.isin}`"
+							@click="applyFilter('isin', 'ISIN', bond.isin)"
+						>
+							{{ bond.isin }}
+						</Button>
+					</ListCell>
+					<ListCell data-label="Currency">
+						<Button
+							class="list-filter-button"
+							variant="ghost"
+							size="sm"
+							:label="`Filter Currency by ${bond.currency}`"
+							@click="applyFilter('currency', 'Currency', bond.currency)"
+						>
+							{{ bond.currency }}
+						</Button>
+					</ListCell>
+					<ListCell data-label="Issue Date">
+						<span>{{ formatDate(bond.issue_date) }}</span>
+					</ListCell>
+				</template>
+			</DataList>
 
 			<ListPagination
 				:has-more="pagination.has_more"

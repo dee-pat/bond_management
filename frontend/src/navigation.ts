@@ -6,47 +6,47 @@ export interface InvestorNavigationItem {
 }
 
 export const INVESTOR_NAVIGATION: InvestorNavigationItem[] = [
-  { name: "home", label: "Home", path: "/", icon: "home" },
+	{ name: "home", label: "Home", path: "/", icon: "lucide-house" },
   {
     name: "transactions",
     label: "Bond Transactions",
     path: "/transactions",
-    icon: "activity",
+		icon: "lucide-activity",
   },
   {
     name: "statements",
     label: "Bond Statements",
     path: "/statements",
-    icon: "file-text",
+		icon: "lucide-file-text",
   },
   {
     name: "bonds",
     label: "Bond Master",
     path: "/bonds",
-    icon: "book-open",
+		icon: "lucide-book-open",
   },
   {
     name: "market-dates",
     label: "Bond Market Dates",
     path: "/market-dates",
-    icon: "calendar",
+		icon: "lucide-calendar-days",
   },
   {
     name: "exchange-rates",
     label: "Bond Exchange Rates",
     path: "/exchange-rates",
-    icon: "refresh-cw",
+		icon: "lucide-refresh-cw",
   },
   {
     name: "performance",
     label: "Portfolio Performance",
     path: "/performance",
-    icon: "bar-chart-2",
+		icon: "lucide-chart-bar",
   },
   {
     name: "yield-comparison",
     label: "Bond Yield Comparison",
     path: "/yield-comparison",
-    icon: "trending-up",
+		icon: "lucide-trending-up",
   },
 ];

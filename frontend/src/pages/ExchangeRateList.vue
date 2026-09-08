@@ -1,11 +1,14 @@
 <script setup lang="ts">
 import { onMounted, ref } from "vue";
 import { RouterLink } from "vue-router";
+import { Button } from "frappe-ui";
+import { ListCell } from "frappe-ui/list";
 
+import DataList from "../components/DataList.vue";
 import ListFilterBar from "../components/ListFilterBar.vue";
 import ListPagination from "../components/ListPagination.vue";
 import SortableColumn from "../components/SortableColumn.vue";
-import { fetchExchangeRates, InvestorApiError, redirectToLogin } from "../lib/api";
+import { InvestorApiError, redirectToLogin, useInvestorApi } from "../lib/api";
 import { toFilterValue } from "../lib/list";
 import { formatDate, formatNumber } from "../lib/format";
 import type { ActiveListFilter, ExchangeRateListRow, ExchangeRatePage, SortOrder } from "../types";
@@ -21,6 +24,7 @@ const pagination = ref<ExchangeRatePage["pagination"]>({
 });
 const loading = ref(true);
 const error = ref<string | null>(null);
+const api = useInvestorApi();
 let latestRequest = 0;
 
 async function loadExchangeRates(
@@ -39,7 +43,7 @@ async function loadExchangeRates(
 	}
 
 	try {
-		const response = await fetchExchangeRates({
+		const response = await api.fetchExchangeRates({
 			start,
 			pageLength,
 			sortBy: sortBy.value || undefined,
@@ -114,9 +118,7 @@ onMounted(() => void loadExchangeRates());
 			role="alert"
 		>
 			<p>{{ error }}</p>
-			<button class="secondary-button" type="button" @click="retryExchangeRates">
-				Retry
-			</button>
+			<Button label="Retry" variant="outline" @click="retryExchangeRates" />
 		</div>
 
 		<div
@@ -130,136 +132,133 @@ onMounted(() => void loadExchangeRates());
 		<template v-else>
 			<div v-if="error" class="surface-state surface-state--error" role="alert">
 				<p>{{ error }}</p>
-				<button class="secondary-button" type="button" @click="retryExchangeRates">
-					Retry
-				</button>
+				<Button label="Retry" variant="outline" @click="retryExchangeRates" />
 			</div>
 
-			<div class="record-table-wrap">
-				<table class="record-table">
-					<thead>
-						<tr>
-							<SortableColumn
-								label="Rate Date"
-								field="rate_date"
-								:sort-by="sortBy"
-								:sort-order="sortOrder"
-								:disabled="loading"
-								@sort="changeSort"
-							/>
-							<SortableColumn
-								label="From Currency"
-								field="from_currency"
-								:sort-by="sortBy"
-								:sort-order="sortOrder"
-								:disabled="loading"
-								@sort="changeSort"
-							/>
-							<SortableColumn
-								label="To Currency"
-								field="to_currency"
-								:sort-by="sortBy"
-								:sort-order="sortOrder"
-								:disabled="loading"
-								@sort="changeSort"
-							/>
-							<SortableColumn
-								label="Rate"
-								field="rate"
-								:sort-by="sortBy"
-								:sort-order="sortOrder"
-								:disabled="loading"
-								@sort="changeSort"
-							/>
-							<SortableColumn
-								label="Reverse Rate"
-								field="reverse_rate"
-								:sort-by="sortBy"
-								:sort-order="sortOrder"
-								:disabled="loading"
-								@sort="changeSort"
-							/>
-						</tr>
-					</thead>
-					<tbody>
-						<tr
-							v-for="exchangeRate in exchangeRates"
-							:key="exchangeRate.name"
-							data-testid="exchange-rate-row"
+			<DataList
+				:items="exchangeRates"
+				:columns="[
+					'minmax(9rem,1fr)',
+					'minmax(10rem,1fr)',
+					'minmax(9rem,1fr)',
+					'minmax(10rem,1fr)',
+					'minmax(10rem,1fr)',
+				]"
+				row-key="name"
+				row-test-id="exchange-rate-row"
+			>
+				<template #header>
+					<SortableColumn
+						label="Rate Date"
+						field="rate_date"
+						:sort-by="sortBy"
+						:sort-order="sortOrder"
+						:disabled="loading"
+						@sort="changeSort"
+					/>
+					<SortableColumn
+						label="From Currency"
+						field="from_currency"
+						:sort-by="sortBy"
+						:sort-order="sortOrder"
+						:disabled="loading"
+						@sort="changeSort"
+					/>
+					<SortableColumn
+						label="To Currency"
+						field="to_currency"
+						:sort-by="sortBy"
+						:sort-order="sortOrder"
+						:disabled="loading"
+						@sort="changeSort"
+					/>
+					<SortableColumn
+						label="Rate"
+						field="rate"
+						:sort-by="sortBy"
+						:sort-order="sortOrder"
+						:disabled="loading"
+						@sort="changeSort"
+					/>
+					<SortableColumn
+						label="Reverse Rate"
+						field="reverse_rate"
+						:sort-by="sortBy"
+						:sort-order="sortOrder"
+						:disabled="loading"
+						@sort="changeSort"
+					/>
+				</template>
+				<template #row="{ item: exchangeRate }">
+					<ListCell data-label="Rate Date">
+						<span>{{ formatDate(exchangeRate.rate_date) }}</span>
+					</ListCell>
+					<ListCell data-label="From Currency">
+						<RouterLink
+							:to="`/exchange-rates/${encodeURIComponent(exchangeRate.name)}`"
+							:aria-label="`View exchange rate ${exchangeRate.name}`"
 						>
-							<td data-label="Rate Date">
-								<span>{{ formatDate(exchangeRate.rate_date) }}</span>
-							</td>
-							<td data-label="From Currency">
-								<RouterLink
-									:to="`/exchange-rates/${encodeURIComponent(
-										exchangeRate.name
-									)}`"
-									:aria-label="`View exchange rate ${exchangeRate.name}`"
-								>
-									{{ exchangeRate.from_currency }}
-								</RouterLink>
-								<button
-									class="list-filter-action"
-									type="button"
-									:aria-label="`Filter From Currency by ${exchangeRate.from_currency}`"
-									@click="
-										applyFilter(
-											'from_currency',
-											'From Currency',
-											exchangeRate.from_currency
-										)
-									"
-								>
-									Filter
-								</button>
-							</td>
-							<td data-label="To Currency">
-								<button
-									class="list-filter-button"
-									type="button"
-									:aria-label="`Filter To Currency by ${exchangeRate.to_currency}`"
-									@click="
-										applyFilter(
-											'to_currency',
-											'To Currency',
-											exchangeRate.to_currency
-										)
-									"
-								>
-									{{ exchangeRate.to_currency }}
-								</button>
-							</td>
-							<td data-label="Rate">
-								<button
-									class="list-filter-button"
-									type="button"
-									:aria-label="`Filter Rate by ${exchangeRate.rate}`"
-									@click="applyFilter('rate', 'Rate', exchangeRate.rate)"
-								>
-									{{ formatNumber(exchangeRate.rate, 12) }}
-								</button>
-							</td>
-							<td data-label="Reverse Rate">
-								<button
-									class="list-filter-button"
-									type="button"
-									:aria-label="`Filter Reverse Rate by ${exchangeRate.reverse_rate}`"
-									@click="
-										applyFilter(
-											'reverse_rate',
-											'Reverse Rate',
-											exchangeRate.reverse_rate
-										)
-									"
-								>
-									{{ formatNumber(exchangeRate.reverse_rate, 12) }}
-								</button>
-							</td>
-						</tr>
-					</tbody>
-				</table>
-			</div>
+							{{ exchangeRate.from_currency }}
+						</RouterLink>
+						<Button
+							class="list-filter-action"
+							variant="ghost"
+							size="sm"
+							:label="`Filter From Currency by ${exchangeRate.from_currency}`"
+							@click="
+								applyFilter(
+									'from_currency',
+									'From Currency',
+									exchangeRate.from_currency
+								)
+							"
+						>
+							Filter
+						</Button>
+					</ListCell>
+					<ListCell data-label="To Currency">
+						<Button
+							class="list-filter-button"
+							variant="ghost"
+							size="sm"
+							:label="`Filter To Currency by ${exchangeRate.to_currency}`"
+							@click="
+								applyFilter('to_currency', 'To Currency', exchangeRate.to_currency)
+							"
+						>
+							{{ exchangeRate.to_currency }}
+						</Button>
+					</ListCell>
+					<ListCell data-label="Rate">
+						<Button
+							class="list-filter-button"
+							variant="ghost"
+							size="sm"
+							:label="`Filter Rate by ${exchangeRate.rate}`"
+							@click="applyFilter('rate', 'Rate', exchangeRate.rate)"
+						>
+							{{ formatNumber(exchangeRate.rate, 12) }}
+						</Button>
+					</ListCell>
+					<ListCell data-label="Reverse Rate">
+						<Button
+							class="list-filter-button"
+							variant="ghost"
+							size="sm"
+							:label="`Filter Reverse Rate by ${exchangeRate.reverse_rate}`"
+							@click="
+								applyFilter(
+									'reverse_rate',
+									'Reverse Rate',
+									exchangeRate.reverse_rate
+								)
+							"
+						>
+							{{ formatNumber(exchangeRate.reverse_rate, 12) }}
+						</Button>
+					</ListCell>
+				</template>
+			</DataList>
 
 			<ListPagination
 				:has-more="pagination.has_more"

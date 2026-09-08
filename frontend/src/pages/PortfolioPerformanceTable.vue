@@ -1,6 +1,10 @@
 <script setup lang="ts">
+import { computed } from "vue";
+import { Button } from "frappe-ui";
+import { ListCell, ListHeaderCell } from "frappe-ui/list";
 import { RouterLink } from "vue-router";
 
+import DataList from "../components/DataList.vue";
 import type {
 	PerformanceCashflowSelection,
 	PerformanceColumn,
@@ -16,6 +20,14 @@ const props = defineProps<{
 const emit = defineEmits<{
 	copy: [selection: PerformanceCashflowSelection];
 }>();
+
+const listColumns = computed(() =>
+	props.columns.map((column) =>
+		column.fieldname === "isin" || column.fieldname === "currency"
+			? "minmax(10rem,1.2fr)"
+			: "minmax(10rem,1fr)"
+	)
+);
 
 function valueFor(row: PerformanceRow, column: PerformanceColumn): string | number | null {
 	return row[column.fieldname];
@@ -103,58 +115,64 @@ function actionFor(
 </script>
 
 <template>
-	<div class="performance-table-wrap">
-		<table class="performance-table" data-testid="performance-table">
-			<thead>
-				<tr>
-					<th
-						v-for="column in props.columns"
-						:key="column.fieldname"
-						scope="col"
-						:title="column.description ?? undefined"
-					>
-						{{ column.label }}
-					</th>
-				</tr>
-			</thead>
-			<tbody>
-				<tr
-					v-for="row in props.rows"
-					:key="row.isin"
-					:class="{ 'performance-table__total': row.isin === 'TOTAL' }"
-					data-testid="performance-row"
+	<DataList
+		:items="props.rows"
+		:columns="listColumns"
+		row-key="isin"
+		row-test-id="performance-row"
+		data-testid="performance-table"
+		class="performance-table-wrap"
+	>
+		<template #header>
+			<ListHeaderCell
+				v-for="column in props.columns"
+				:key="column.fieldname"
+				:class="{
+					'justify-end': column.fieldname !== 'isin' && column.fieldname !== 'currency',
+				}"
+				:title="column.description ?? undefined"
+			>
+				{{ column.label }}
+			</ListHeaderCell>
+		</template>
+		<template #row="{ item: row }">
+			<ListCell
+				v-for="column in props.columns"
+				:key="column.fieldname"
+				:data-label="column.label"
+				:class="[
+					{
+						'justify-end':
+							column.fieldname !== 'isin' && column.fieldname !== 'currency',
+					},
+					{ 'performance-table__total': row.isin === 'TOTAL' },
+				]"
+			>
+				<RouterLink
+					v-if="column.fieldname === 'isin' && row.isin !== 'TOTAL'"
+					:to="`/bonds/${encodeURIComponent(row.isin)}`"
+					:aria-label="`View bond ${row.isin}`"
 				>
-					<td
-						v-for="column in props.columns"
-						:key="column.fieldname"
-						:data-label="column.label"
-					>
-						<RouterLink
-							v-if="column.fieldname === 'isin' && row.isin !== 'TOTAL'"
-							:to="`/bonds/${encodeURIComponent(row.isin)}`"
-							:aria-label="`View bond ${row.isin}`"
-						>
-							{{ row.isin }}
-						</RouterLink>
-						<strong v-else-if="column.fieldname === 'isin' && row.isin === 'TOTAL'">
-							TOTAL
-						</strong>
-						<button
-							v-else-if="actionFor(row, column)"
-							class="performance-cashflow-button"
-							type="button"
-							:disabled="copyingKey !== null"
-							:aria-label="`Copy ${
-								actionFor(row, column)?.cashflow_currency
-							} cash flows for ${row.isin} ${column.label}`"
-							@click="emit('copy', actionFor(row, column)!)"
-						>
-							{{ formattedValue(row, column) }}
-						</button>
-						<span v-else>{{ formattedValue(row, column) }}</span>
-					</td>
-				</tr>
-			</tbody>
-		</table>
-	</div>
+					{{ row.isin }}
+				</RouterLink>
+				<strong v-else-if="column.fieldname === 'isin' && row.isin === 'TOTAL'">
+					TOTAL
+				</strong>
+				<Button
+					v-else-if="actionFor(row, column)"
+					class="performance-cashflow-button"
+					variant="ghost"
+					size="sm"
+					:disabled="copyingKey !== null"
+					:label="`Copy ${actionFor(row, column)?.cashflow_currency} cash flows for ${
+						row.isin
+					} ${column.label}`"
+					@click="emit('copy', actionFor(row, column)!)"
+				>
+					{{ formattedValue(row, column) }}
+				</Button>
+				<span v-else>{{ formattedValue(row, column) }}</span>
+			</ListCell>
+		</template>
+	</DataList>
 </template>

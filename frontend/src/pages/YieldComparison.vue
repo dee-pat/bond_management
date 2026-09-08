@@ -1,12 +1,8 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, nextTick, onMounted, ref, watch } from "vue";
+import { Button, FormControl } from "frappe-ui";
 
-import {
-	fetchBondYieldComparison,
-	fetchYieldComparisonDefaults,
-	InvestorApiError,
-	redirectToLogin,
-} from "../lib/api";
+import { InvestorApiError, redirectToLogin, useInvestorApi } from "../lib/api";
 import type { BondYieldComparisonReport, YieldComparisonFieldname } from "../report-types";
 import BondYieldComparisonChart from "./BondYieldComparisonChart.vue";
 import YieldComparisonControls from "./YieldComparisonControls.vue";
@@ -23,10 +19,11 @@ const hasRun = ref(false);
 const error = ref<string | null>(null);
 const copying = ref(false);
 const copyFeedback = ref<{ kind: "error" | "success"; message: string } | null>(null);
+const api = useInvestorApi();
 const dateRangeInvalid = computed(() =>
 	Boolean(fromDate.value && toDate.value && fromDate.value > toDate.value)
 );
-const canRun = computed(() => !defaultsLoading.value && !loading.value && !dateRangeInvalid.value);
+const canRun = computed(() => !defaultsLoading.value);
 const bonds = computed(() => {
 	const currencies = new Map<string, string>();
 	report.value?.rows.forEach((row) => {
@@ -56,7 +53,7 @@ async function loadDefaultDates(): Promise<void> {
 	defaultsError.value = false;
 
 	try {
-		const response = await fetchYieldComparisonDefaults();
+		const response = await api.fetchYieldComparisonDefaults();
 		if (!datesEdited.value) {
 			fromDate.value = response.filters.from_date ?? "";
 			toDate.value = response.filters.to_date;
@@ -73,7 +70,14 @@ async function loadDefaultDates(): Promise<void> {
 }
 
 async function runReport(): Promise<void> {
+	// DatePicker commits typed text on blur. Waiting for that update prevents a
+	// disabled-state deadlock when a user replaces an initially valid date
+	// range by typing into both fields before pressing Run.
+	await nextTick();
 	if (!canRun.value) {
+		return;
+	}
+	if (dateRangeInvalid.value) {
 		return;
 	}
 
@@ -87,7 +91,7 @@ async function runReport(): Promise<void> {
 	resetCopyState();
 
 	try {
-		const response = await fetchBondYieldComparison({
+		const response = await api.fetchBondYieldComparison({
 			fromDate: fromDate.value || undefined,
 			toDate: toDate.value || undefined,
 		});
@@ -206,31 +210,34 @@ function numericValue(value: unknown): number | null {
 		aria-label="Bond yield comparison report"
 	>
 		<form class="yield-comparison-filters" @submit.prevent="runReport">
-			<div class="surface-filter">
-				<label for="yield-comparison-from-date">From Date</label>
-				<input
-					id="yield-comparison-from-date"
-					v-model="fromDate"
-					:disabled="defaultsLoading"
-					name="from_date"
-					type="date"
-					@input="datesEdited = true"
-				/>
-			</div>
+			<FormControl
+				id="yield-comparison-from-date"
+				v-model="fromDate"
+				class="surface-filter"
+				label="From Date"
+				type="date"
+				:disabled="defaultsLoading"
+				@update:model-value="datesEdited = true"
+			/>
 
-			<div class="surface-filter">
-				<label for="yield-comparison-to-date">To Date</label>
-				<input
-					id="yield-comparison-to-date"
-					v-model="toDate"
-					:disabled="defaultsLoading"
-					name="to_date"
-					type="date"
-					@input="datesEdited = true"
-				/>
-			</div>
+			<FormControl
+				id="yield-comparison-to-date"
+				v-model="toDate"
+				class="surface-filter"
+				label="To Date"
+				type="date"
+				:disabled="defaultsLoading"
+				@update:model-value="datesEdited = true"
+			/>
 
-			<button class="performance-run-button" type="submit" :disabled="!canRun">Run</button>
+			<Button
+				class="performance-run-button"
+				label="Run"
+				theme="blue"
+				variant="solid"
+				type="submit"
+				:disabled="!canRun"
+			/>
 		</form>
 
 		<p v-if="dateRangeInvalid" class="yield-comparison-date-error" role="alert">
@@ -243,7 +250,7 @@ function numericValue(value: unknown): number | null {
 
 		<div v-else-if="defaultsError" class="surface-state surface-state--error" role="alert">
 			<p>Default date range could not be loaded. Please retry.</p>
-			<button class="secondary-button" type="button" @click="loadDefaultDates">Retry</button>
+			<Button label="Retry" variant="outline" @click="loadDefaultDates" />
 		</div>
 
 		<div v-else-if="loading" class="surface-state" aria-live="polite">
@@ -252,7 +259,7 @@ function numericValue(value: unknown): number | null {
 
 		<div v-else-if="error" class="surface-state surface-state--error" role="alert">
 			<p>{{ error }}</p>
-			<button class="secondary-button" type="button" @click="runReport">Retry</button>
+			<Button label="Retry" variant="outline" @click="runReport" />
 		</div>
 
 		<div v-else-if="!hasRun" class="surface-state" data-testid="yield-comparison-initial">

@@ -31,15 +31,22 @@ const props = defineProps<{
 	futureXirrPrecision: number;
 }>();
 const currencyColors: Record<string, string> = {
-	USD: "#5e64ff",
-	KES: "#28a745",
-	EUR: "#ff5858",
-	GBP: "#f39c12",
-	JPY: "#8e44ad",
-	ZAR: "#00a6a6",
-	CHF: "#d35400",
+	USD: "var(--desk-chart-blue)",
+	KES: "var(--desk-chart-green)",
+	EUR: "var(--desk-chart-red)",
+	GBP: "var(--desk-chart-amber)",
+	JPY: "var(--desk-chart-violet)",
+	ZAR: "var(--desk-chart-teal)",
+	CHF: "var(--desk-chart-orange)",
 };
-const fallbackColors = ["#2563eb", "#db2777", "#059669", "#d97706", "#7c3aed", "#dc2626"];
+const fallbackColors = [
+	"var(--desk-chart-blue)",
+	"var(--desk-chart-pink)",
+	"var(--desk-chart-green)",
+	"var(--desk-chart-amber)",
+	"var(--desk-chart-violet)",
+	"var(--desk-chart-red)",
+];
 const width = 900;
 const height = 360;
 const margin = { top: 24, right: 24, bottom: 70, left: 72 };

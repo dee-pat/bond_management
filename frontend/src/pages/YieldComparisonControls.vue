@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from "vue";
+import { Button, Checkbox } from "frappe-ui";
 
 interface BondChoice {
 	isin: string;
@@ -29,40 +30,38 @@ const someSelected = computed(
 <template>
 	<fieldset class="yield-comparison-selector" data-testid="yield-comparison-selector">
 		<legend>Bonds to compare</legend>
-		<label class="yield-comparison-selector__all">
-			<input
-				:checked="allSelected"
-				:indeterminate.prop="someSelected"
-				type="checkbox"
-				@change="emit('toggleAll', ($event.currentTarget as HTMLInputElement).checked)"
-			/>
-			Select all bonds
-		</label>
+		<Checkbox
+			:model-value="allSelected"
+			:indeterminate="someSelected"
+			class="yield-comparison-selector__all"
+			label="Select all bonds"
+			@update:model-value="emit('toggleAll', $event)"
+		/>
 		<span>{{ selected.size }} of {{ bonds.length }} bonds selected</span>
 		<div class="yield-comparison-selector__bonds">
-			<label v-for="bond in bonds" :key="bond.isin">
-				<input
-					:checked="selected.has(bond.isin)"
-					:aria-label="`Select ${bond.isin}`"
-					type="checkbox"
-					@change="
-						emit(
-							'toggleBond',
-							bond.isin,
-							($event.currentTarget as HTMLInputElement).checked
-						)
-					"
-				/>
-				<strong>{{ bond.isin }}</strong>
-				<small>{{ bond.currency || "—" }}</small>
-			</label>
+			<Checkbox
+				v-for="bond in bonds"
+				:key="bond.isin"
+				:model-value="selected.has(bond.isin)"
+				class="yield-comparison-selector__bond"
+				@update:model-value="emit('toggleBond', bond.isin, $event)"
+			>
+				<template #label>
+					<span class="sr-only">Select {{ bond.isin }}</span>
+					<strong>{{ bond.isin }}</strong>
+					<small>{{ bond.currency || "—" }}</small>
+				</template>
+			</Checkbox>
 		</div>
 	</fieldset>
 
 	<section class="yield-comparison-audit">
-		<button class="secondary-button" type="button" :disabled="copying" @click="emit('copy')">
-			{{ copying ? "Copying audit data…" : "Copy audit data to Excel" }}
-		</button>
+		<Button
+			:label="copying ? 'Copying audit data…' : 'Copy audit data to Excel'"
+			:disabled="copying"
+			variant="outline"
+			@click="emit('copy')"
+		/>
 		<p>Copies Date, ISIN, CCY, Market Price and stored Future XIRR.</p>
 		<p
 			v-if="copyFeedback"

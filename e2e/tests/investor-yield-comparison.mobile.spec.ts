@@ -27,8 +27,12 @@ test("compares persisted bond yields without mobile overflow", async ({
 
   const selector = page.getByTestId("yield-comparison-selector");
   await expect(selector).toContainText("2 of 2 bonds selected");
-  await expect(selector.getByLabel(`Select ${PRIMARY_BOND}`)).toBeChecked();
-  await expect(selector.getByLabel(`Select ${GAP_BOND}`)).toBeChecked();
+	await expect(
+		selector.getByRole("checkbox", { name: new RegExp(`Select ${PRIMARY_BOND}`) })
+	).toBeChecked();
+	await expect(
+		selector.getByRole("checkbox", { name: new RegExp(`Select ${GAP_BOND}`) })
+	).toBeChecked();
 
   const chart = page.getByTestId("yield-comparison-chart");
   const image = chart.getByRole("img", {

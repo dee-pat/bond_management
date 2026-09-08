@@ -1,9 +1,12 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
 import { RouterLink, useRoute } from "vue-router";
+import { Button } from "frappe-ui";
+import { ListCell, ListHeaderCell } from "frappe-ui/list";
 
+import DataList from "../components/DataList.vue";
 import PdfAttachmentActions from "../components/PdfAttachmentActions.vue";
-import { fetchStatement, InvestorApiError, redirectToLogin } from "../lib/api";
+import { InvestorApiError, redirectToLogin, useInvestorApi } from "../lib/api";
 import { formatDate, formatNumber } from "../lib/format";
 import type { StatementDetail } from "../types";
 
@@ -12,6 +15,7 @@ const statement = ref<StatementDetail | null>(null);
 const loading = ref(true);
 const error = ref<string | null>(null);
 const statementName = computed(() => String(route.params.statementName ?? ""));
+const api = useInvestorApi();
 let latestRequest = 0;
 
 function formatMarketPrice(value: number | null): string {
@@ -24,7 +28,7 @@ async function loadStatement(): Promise<void> {
 	error.value = null;
 
 	try {
-		const response = await fetchStatement(statementName.value);
+		const response = await api.fetchStatement(statementName.value);
 		if (requestId === latestRequest) {
 			statement.value = response.statement;
 		}
@@ -58,7 +62,7 @@ onMounted(() => void loadStatement());
 
 		<div v-else-if="error" class="surface-state surface-state--error" role="alert">
 			<p>{{ error }}</p>
-			<button class="secondary-button" type="button" @click="loadStatement">Retry</button>
+			<Button label="Retry" variant="outline" @click="loadStatement" />
 		</div>
 
 		<template v-else-if="statement">
@@ -114,40 +118,44 @@ onMounted(() => void loadStatement());
 				<div v-if="statement.bond_statement_details.length === 0" class="surface-state">
 					This statement has no bond holdings.
 				</div>
-				<div v-else class="record-table-wrap">
-					<table class="record-table" data-testid="statement-holdings">
-						<thead>
-							<tr>
-								<th scope="col">ISIN</th>
-								<th scope="col">Quantity</th>
-								<th scope="col">Principal Factor</th>
-								<th scope="col">Market Price</th>
-								<th scope="col">Currency</th>
-							</tr>
-						</thead>
-						<tbody>
-							<tr
-								v-for="holding in statement.bond_statement_details"
-								:key="holding.isin"
-							>
-								<td data-label="ISIN">
-									{{ holding.isin }}
-								</td>
-								<td data-label="Quantity">
-									{{ formatNumber(holding.quantity) }}
-								</td>
-								<td data-label="Principal Factor">
-									{{ formatNumber(holding.principal_factor, 6) }}
-								</td>
-								<td data-label="Market Price">
-									{{ formatMarketPrice(holding.market_price) }}
-								</td>
-								<td data-label="Currency">
-									{{ holding.currency }}
-								</td>
-							</tr>
-						</tbody>
-					</table>
+				<div v-else>
+					<DataList
+						:items="statement.bond_statement_details"
+						:columns="[
+							'minmax(10rem,1fr)',
+							'minmax(10rem,1fr)',
+							'minmax(12rem,1fr)',
+							'minmax(12rem,1fr)',
+							'minmax(8rem,1fr)',
+						]"
+						row-key="isin"
+						data-testid="statement-holdings"
+					>
+						<template #header>
+							<ListHeaderCell>ISIN</ListHeaderCell>
+							<ListHeaderCell>Quantity</ListHeaderCell>
+							<ListHeaderCell>Principal Factor</ListHeaderCell>
+							<ListHeaderCell>Market Price</ListHeaderCell>
+							<ListHeaderCell>Currency</ListHeaderCell>
+						</template>
+						<template #row="{ item: holding }">
+							<ListCell data-label="ISIN">
+								{{ holding.isin }}
+							</ListCell>
+							<ListCell data-label="Quantity">
+								{{ formatNumber(holding.quantity) }}
+							</ListCell>
+							<ListCell data-label="Principal Factor">
+								{{ formatNumber(holding.principal_factor, 6) }}
+							</ListCell>
+							<ListCell data-label="Market Price">
+								{{ formatMarketPrice(holding.market_price) }}
+							</ListCell>
+							<ListCell data-label="Currency">
+								{{ holding.currency }}
+							</ListCell>
+						</template>
+					</DataList>
 				</div>
 			</div>
 		</template>

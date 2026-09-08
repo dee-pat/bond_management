@@ -1,5 +1,7 @@
 import { expect, test } from "@playwright/test";
 
+import { selectFrappeOption } from "../support/controls";
+
 const TRANSACTION_REFERENCE = "UI-TEST-TRANSACTION-001";
 const BOND_ISIN = "UI-TEST-BOND-001";
 
@@ -26,11 +28,7 @@ test("browses the assigned transaction list and read-only detail", async ({
     0,
   );
 
-  await page
-    .getByRole("combobox", { name: "Portfolio Name", exact: true })
-    .selectOption({
-      label: "UI Test Portfolio",
-    });
+	await selectFrappeOption(page, "Portfolio Name", "UI Test Portfolio");
   const row = page.getByTestId("transaction-row").filter({
     hasText: BOND_ISIN,
   });

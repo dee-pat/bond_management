@@ -39,8 +39,12 @@ test("compares persisted yields, selects series, and copies sanitized audit data
   const selector = page.getByTestId("yield-comparison-selector");
   await expect(selector.getByLabel("Select all bonds")).toBeChecked();
   await expect(selector).toContainText("2 of 2 bonds selected");
-  await expect(selector.getByLabel(`Select ${PRIMARY_BOND}`)).toBeChecked();
-  await expect(selector.getByLabel(`Select ${GAP_BOND}`)).toBeChecked();
+	await expect(
+		selector.getByRole("checkbox", { name: new RegExp(`Select ${PRIMARY_BOND}`) })
+	).toBeChecked();
+	await expect(
+		selector.getByRole("checkbox", { name: new RegExp(`Select ${GAP_BOND}`) })
+	).toBeChecked();
 
   const chart = page.getByTestId("yield-comparison-chart");
   const image = chart.getByRole("img", {
@@ -74,12 +78,16 @@ test("compares persisted yields, selects series, and copies sanitized audit data
     "2095",
   ]);
 
-  await selector.getByLabel(`Select ${GAP_BOND}`).uncheck();
+	await selector
+		.getByRole("checkbox", { name: new RegExp(`Select ${GAP_BOND}`) })
+		.uncheck();
   await expect(selector).toContainText("1 of 2 bonds selected");
   await expect(
     chart.getByRole("listitem").filter({ hasText: GAP_BOND })
   ).toHaveCount(0);
-  await selector.getByLabel(`Select ${GAP_BOND}`).check();
+	await selector
+		.getByRole("checkbox", { name: new RegExp(`Select ${GAP_BOND}`) })
+		.check();
 
   await page.getByRole("button", { name: "Copy audit data to Excel" }).click();
   await expect(page.getByRole("status")).toHaveText("Copied 5 audit rows.");

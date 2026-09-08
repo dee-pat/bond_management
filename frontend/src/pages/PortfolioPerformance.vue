@@ -1,12 +1,8 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
+import { Button, FormControl } from "frappe-ui";
 
-import {
-	fetchPortfolioPerformance,
-	fetchPortfolioPerformanceCashflows,
-	InvestorApiError,
-	redirectToLogin,
-} from "../lib/api";
+import { InvestorApiError, redirectToLogin, useInvestorApi } from "../lib/api";
 import type {
 	PerformanceCashflow,
 	PerformanceCashflowSelection,
@@ -16,6 +12,7 @@ import type { InvestorBootstrap } from "../types";
 import PortfolioPerformanceTable from "./PortfolioPerformanceTable.vue";
 
 const props = defineProps<{ bootstrap: InvestorBootstrap }>();
+const api = useInvestorApi();
 
 const selectedPortfolio = ref("");
 const valuationDate = ref(currentDate());
@@ -26,6 +23,13 @@ const error = ref<string | null>(null);
 const copyingKey = ref<string | null>(null);
 const copyFeedback = ref<{ kind: "empty" | "error" | "success"; message: string } | null>(null);
 const hasAssignments = computed(() => props.bootstrap.portfolios.length > 0);
+const portfolioOptions = computed(() => [
+	{ label: "Select portfolio", value: "" },
+	...props.bootstrap.portfolios.map((portfolio) => ({
+		label: portfolio.label,
+		value: portfolio.name,
+	})),
+]);
 const canRun = computed(
 	() =>
 		hasAssignments.value &&
@@ -52,7 +56,7 @@ async function runReport(): Promise<void> {
 	resetCopyState();
 
 	try {
-		const response = await fetchPortfolioPerformance({
+		const response = await api.fetchPortfolioPerformance({
 			portfolio: selectedPortfolio.value,
 			valuationDate: valuationDate.value,
 		});
@@ -86,7 +90,7 @@ async function copyCashflows(selection: PerformanceCashflowSelection): Promise<v
 	copyFeedback.value = null;
 
 	try {
-		const response = await fetchPortfolioPerformanceCashflows({
+		const response = await api.fetchPortfolioPerformanceCashflows({
 			portfolio: filters.portfolio,
 			valuationDate: filters.valuation_date,
 			isin: selection.isin,
@@ -184,39 +188,33 @@ function sanitizedText(value: string): string {
 				data-testid="performance-filters"
 				@submit.prevent="runReport"
 			>
-				<div class="surface-filter">
-					<label for="performance-portfolio">Portfolio</label>
-					<select
-						id="performance-portfolio"
-						v-model="selectedPortfolio"
-						name="portfolio"
-						required
-					>
-						<option value="">Select portfolio</option>
-						<option
-							v-for="portfolio in bootstrap.portfolios"
-							:key="portfolio.name"
-							:value="portfolio.name"
-						>
-							{{ portfolio.label }}
-						</option>
-					</select>
-				</div>
+				<FormControl
+					id="performance-portfolio"
+					v-model="selectedPortfolio"
+					class="surface-filter"
+					label="Portfolio"
+					type="select"
+					:options="portfolioOptions"
+					required
+				/>
 
-				<div class="surface-filter">
-					<label for="performance-valuation-date">Valuation Date</label>
-					<input
-						id="performance-valuation-date"
-						v-model="valuationDate"
-						name="valuation_date"
-						type="date"
-						required
-					/>
-				</div>
+				<FormControl
+					id="performance-valuation-date"
+					v-model="valuationDate"
+					class="surface-filter"
+					label="Valuation Date"
+					type="date"
+					required
+				/>
 
-				<button class="performance-run-button" type="submit" :disabled="!canRun">
-					Run
-				</button>
+				<Button
+					class="performance-run-button"
+					label="Run"
+					theme="blue"
+					variant="solid"
+					type="submit"
+					:disabled="!canRun"
+				/>
 			</form>
 
 			<div v-if="loading" class="surface-state" aria-live="polite">
@@ -225,7 +223,7 @@ function sanitizedText(value: string): string {
 
 			<div v-else-if="error" class="surface-state surface-state--error" role="alert">
 				<p>{{ error }}</p>
-				<button class="secondary-button" type="button" @click="runReport">Retry</button>
+				<Button label="Retry" variant="outline" @click="runReport" />
 			</div>
 
 			<div v-else-if="!hasRun" class="surface-state" data-testid="performance-initial">

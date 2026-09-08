@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
 import { RouterLink, useRoute } from "vue-router";
+import { Button } from "frappe-ui";
 
-import { fetchExchangeRate, InvestorApiError, redirectToLogin } from "../lib/api";
+import { InvestorApiError, redirectToLogin, useInvestorApi } from "../lib/api";
 import { formatDate, formatNumber } from "../lib/format";
 import type { ExchangeRateDetail } from "../types";
 
@@ -27,6 +28,7 @@ const exchangeRate = ref<ExchangeRateDetail | null>(null);
 const loading = ref(true);
 const error = ref<string | null>(null);
 const exchangeRateName = computed(() => String(route.params.exchangeRateName ?? ""));
+const api = useInvestorApi();
 let latestRequest = 0;
 
 async function loadExchangeRate(): Promise<void> {
@@ -35,7 +37,7 @@ async function loadExchangeRate(): Promise<void> {
 	error.value = null;
 
 	try {
-		const response = await fetchExchangeRate(exchangeRateName.value);
+		const response = await api.fetchExchangeRate(exchangeRateName.value);
 		if (requestId === latestRequest) {
 			exchangeRate.value = response.exchange_rate;
 		}
@@ -87,7 +89,7 @@ onMounted(() => void loadExchangeRate());
 
 		<div v-else-if="error" class="surface-state surface-state--error" role="alert">
 			<p>{{ error }}</p>
-			<button class="secondary-button" type="button" @click="loadExchangeRate">Retry</button>
+			<Button label="Retry" variant="outline" @click="loadExchangeRate" />
 		</div>
 
 		<template v-else-if="exchangeRate">

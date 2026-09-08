@@ -1,5 +1,7 @@
 import { expect, test } from "@playwright/test";
 
+import { selectFrappeOption } from "../support/controls";
+
 const PORTFOLIO_NAME = "UI Test Portfolio";
 const BOND_ISIN = "UI-TEST-BOND-001";
 
@@ -27,14 +29,8 @@ test("browses the assigned statement list and read-only detail", async ({
     0,
   );
 
-  await page
-    .getByRole("combobox", { name: "Portfolio Name", exact: true })
-    .selectOption({
-      label: PORTFOLIO_NAME,
-    });
-  await page
-    .getByRole("combobox", { name: "Reconciliation Status", exact: true })
-    .selectOption("Matched");
+	await selectFrappeOption(page, "Portfolio Name", PORTFOLIO_NAME);
+	await selectFrappeOption(page, "Reconciliation Status", "Matched");
   const row = page.getByTestId("statement-row").filter({
     hasText: PORTFOLIO_NAME,
   });

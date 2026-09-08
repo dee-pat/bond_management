@@ -19,7 +19,14 @@ interface YieldSeries {
 }
 
 const props = defineProps<{ rows: MarketPriceRow[] }>();
-const colors = ["#2563eb", "#db2777", "#059669", "#d97706", "#7c3aed", "#dc2626"];
+const colors = [
+	"var(--desk-chart-blue)",
+	"var(--desk-chart-pink)",
+	"var(--desk-chart-green)",
+	"var(--desk-chart-amber)",
+	"var(--desk-chart-violet)",
+	"var(--desk-chart-red)",
+];
 const width = 900;
 const height = 340;
 const margin = { top: 24, right: 24, bottom: 58, left: 72 };

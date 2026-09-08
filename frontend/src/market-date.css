@@ -62,7 +62,7 @@
 }
 
 .yield-curve__axis {
-	stroke: #8a9299;
+	stroke: var(--desk-quiet-text);
 	stroke-width: 1;
 }
 

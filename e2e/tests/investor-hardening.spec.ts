@@ -1,6 +1,7 @@
 import { expect, test, type Route } from "@playwright/test";
 
 import { authenticateInvestor } from "../support/auth";
+import { selectFrappeOption } from "../support/controls";
 
 const INVESTOR_API =
   "**/api/method/bond_management.bond_management.api.investor";
@@ -50,11 +51,13 @@ test("shows loading, failure, retry, and empty transaction states", async ({
       return;
     }
 
+    const transactionPage = {
+      data: [],
+      pagination: { start: 0, page_length: 20, has_more: false },
+    };
     await fulfillJson(route, {
-      message: {
-        data: [],
-        pagination: { start: 0, page_length: 20, has_more: false },
-      },
+      message: transactionPage,
+      data: transactionPage,
     });
   });
 
@@ -141,11 +144,7 @@ test.describe("mid-session expiry", () => {
     const expiredResponse = page.waitForResponse((response) =>
       response.url().includes("investor.get_transactions"),
     );
-    await page
-      .getByRole("combobox", { name: "Portfolio Name", exact: true })
-      .selectOption({
-        label: "UI Test Portfolio",
-      });
+	await selectFrappeOption(page, "Portfolio Name", "UI Test Portfolio");
     expect((await expiredResponse).status()).toBe(403);
 
     await expect(page).toHaveURL(
@@ -184,34 +183,34 @@ async function fulfillJson(route: Route, payload: unknown): Promise<void> {
 }
 
 function yieldResponse(isin: string): object {
-  return {
-    message: {
-      report: {
-        filters: { from_date: "2095-01-02", to_date: "2095-01-03" },
-        columns: [
-          column("date", "Date", "Date"),
-          column("isin", "ISIN", "Link"),
-          column("currency", "CCY", "Data"),
-          column("market_price", "Market Price", "Float", 3),
-          column("future_xirr", "Future XIRR", "Percent", 3),
-        ],
-        rows: [
-          {
-            date: "2095-01-02",
-            isin,
-            currency: "USD",
-            market_price: 102.5,
-            future_xirr: 7.25,
-          },
-        ],
-        chart: {
-          x_field: "date",
-          value_field: "future_xirr",
-          series_field: "isin",
-          gap_policy: "preserve",
-        },
+  const report = {
+    filters: { from_date: "2095-01-02", to_date: "2095-01-03" },
+    columns: [
+      column("date", "Date", "Date"),
+      column("isin", "ISIN", "Link"),
+      column("currency", "CCY", "Data"),
+      column("market_price", "Market Price", "Float", 3),
+      column("future_xirr", "Future XIRR", "Percent", 3),
+    ],
+    rows: [
+      {
+        date: "2095-01-02",
+        isin,
+        currency: "USD",
+        market_price: 102.5,
+        future_xirr: 7.25,
       },
+    ],
+    chart: {
+      x_field: "date",
+      value_field: "future_xirr",
+      series_field: "isin",
+      gap_policy: "preserve",
     },
+  };
+  return {
+    message: { report },
+    data: { report },
   };
 }
 

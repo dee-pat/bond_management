@@ -16,7 +16,10 @@ from bond_management.bond_management.utils.investor_permissions import (
     INVESTOR_ROLE,
     _get_allowed_portfolios,
 )
-from bond_management.bond_management.utils.investor_ui import require_investor_ui_access
+from bond_management.bond_management.utils.investor_ui import (
+    require_investor_ui_access,
+    set_investor_api_data,
+)
 from bond_management.bond_management.utils.validation import optional_string, required_string
 
 DEFAULT_PAGE_LENGTH = 20
@@ -212,16 +215,18 @@ def get_bootstrap() -> dict:
         ).run(as_dict=True)
         portfolio_choices = [{"name": row.name, "label": row.portfolio_name} for row in portfolio_rows]
 
-    return {
-        "feature_enabled": True,
-        "user": {
-            "name": user,
-            "full_name": get_fullname(user),
-        },
-        "is_investor": INVESTOR_ROLE in roles,
-        "is_support": user == "Administrator" or BOND_MANAGER_ROLE in roles,
-        "portfolios": portfolio_choices,
-    }
+    return set_investor_api_data(
+        {
+            "feature_enabled": True,
+            "user": {
+                "name": user,
+                "full_name": get_fullname(user),
+            },
+            "is_investor": INVESTOR_ROLE in roles,
+            "is_support": user == "Administrator" or BOND_MANAGER_ROLE in roles,
+            "portfolios": portfolio_choices,
+        }
+    )
 
 
 @frappe.whitelist(methods=["GET"])
@@ -272,14 +277,16 @@ def get_transactions(
     ).run(as_dict=True)
     has_more = len(rows) > page_length_value
 
-    return {
-        "data": rows[:page_length_value],
-        "pagination": {
-            "start": start_value,
-            "page_length": page_length_value,
-            "has_more": has_more,
-        },
-    }
+    return set_investor_api_data(
+        {
+            "data": rows[:page_length_value],
+            "pagination": {
+                "start": start_value,
+                "page_length": page_length_value,
+                "has_more": has_more,
+            },
+        }
+    )
 
 
 @frappe.whitelist(methods=["GET"])
@@ -298,7 +305,7 @@ def get_transaction(name: str) -> dict:
     if not rows:
         frappe.throw(_("You are not permitted to read this transaction."), frappe.PermissionError)
 
-    return {"transaction": rows[0]}
+    return set_investor_api_data({"transaction": rows[0]})
 
 
 @frappe.whitelist(methods=["GET"])
@@ -356,14 +363,16 @@ def get_statements(
     ).run(as_dict=True)
     has_more = len(rows) > page_length_value
 
-    return {
-        "data": rows[:page_length_value],
-        "pagination": {
-            "start": start_value,
-            "page_length": page_length_value,
-            "has_more": has_more,
-        },
-    }
+    return set_investor_api_data(
+        {
+            "data": rows[:page_length_value],
+            "pagination": {
+                "start": start_value,
+                "page_length": page_length_value,
+                "has_more": has_more,
+            },
+        }
+    )
 
 
 @frappe.whitelist(methods=["GET"])
@@ -388,7 +397,7 @@ def get_statement(name: str) -> dict:
         {field: row.get(field) for field in STATEMENT_HOLDING_FIELDS}
         for row in document.bond_statement_details
     ]
-    return {"statement": statement}
+    return set_investor_api_data({"statement": statement})
 
 
 @frappe.whitelist(methods=["GET"])
@@ -431,14 +440,16 @@ def get_bonds(
     ).run(as_dict=True)
     has_more = len(rows) > page_length_value
 
-    return {
-        "data": rows[:page_length_value],
-        "pagination": {
-            "start": start_value,
-            "page_length": page_length_value,
-            "has_more": has_more,
-        },
-    }
+    return set_investor_api_data(
+        {
+            "data": rows[:page_length_value],
+            "pagination": {
+                "start": start_value,
+                "page_length": page_length_value,
+                "has_more": has_more,
+            },
+        }
+    )
 
 
 @frappe.whitelist(methods=["GET"])
@@ -465,7 +476,7 @@ def get_bond(name: str) -> dict:
     bond["coupon_schedule"] = [
         {field: row.get(field) for field in BOND_COUPON_FIELDS} for row in document.coupon_schedule
     ]
-    return {"bond": bond}
+    return set_investor_api_data({"bond": bond})
 
 
 @frappe.whitelist(methods=["GET"])
@@ -508,14 +519,16 @@ def get_market_dates(
     ).run(as_dict=True)
     has_more = len(rows) > page_length_value
 
-    return {
-        "data": rows[:page_length_value],
-        "pagination": {
-            "start": start_value,
-            "page_length": page_length_value,
-            "has_more": has_more,
-        },
-    }
+    return set_investor_api_data(
+        {
+            "data": rows[:page_length_value],
+            "pagination": {
+                "start": start_value,
+                "page_length": page_length_value,
+                "has_more": has_more,
+            },
+        }
+    )
 
 
 @frappe.whitelist(methods=["GET"])
@@ -539,7 +552,7 @@ def get_market_date(name: str) -> dict:
     market_date["bond_market_prices"] = [
         {field: row.get(field) for field in MARKET_PRICE_FIELDS} for row in document.bond_market_prices
     ]
-    return {"market_date": market_date}
+    return set_investor_api_data({"market_date": market_date})
 
 
 @frappe.whitelist(methods=["GET"])
@@ -582,14 +595,16 @@ def get_exchange_rates(
     ).run(as_dict=True)
     has_more = len(rows) > page_length_value
 
-    return {
-        "data": rows[:page_length_value],
-        "pagination": {
-            "start": start_value,
-            "page_length": page_length_value,
-            "has_more": has_more,
-        },
-    }
+    return set_investor_api_data(
+        {
+            "data": rows[:page_length_value],
+            "pagination": {
+                "start": start_value,
+                "page_length": page_length_value,
+                "has_more": has_more,
+            },
+        }
+    )
 
 
 @frappe.whitelist(methods=["GET"])
@@ -610,7 +625,7 @@ def get_exchange_rate(name: str) -> dict:
 
     exchange_rate = rows[0]
     exchange_rate.statement = _visible_statement_reference(exchange_rate.statement)
-    return {"exchange_rate": exchange_rate}
+    return set_investor_api_data({"exchange_rate": exchange_rate})
 
 
 def _visible_statement_reference(statement: str | None) -> str | None:

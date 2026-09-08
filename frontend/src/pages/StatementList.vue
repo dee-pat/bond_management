@@ -1,11 +1,14 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
 import { RouterLink } from "vue-router";
+import { Button, Select } from "frappe-ui";
+import { ListCell } from "frappe-ui/list";
 
+import DataList from "../components/DataList.vue";
 import ListFilterBar from "../components/ListFilterBar.vue";
 import ListPagination from "../components/ListPagination.vue";
 import SortableColumn from "../components/SortableColumn.vue";
-import { fetchStatements, InvestorApiError, redirectToLogin } from "../lib/api";
+import { InvestorApiError, redirectToLogin, useInvestorApi } from "../lib/api";
 import { toFilterValue } from "../lib/list";
 import { formatDate } from "../lib/format";
 import type {
@@ -17,6 +20,7 @@ import type {
 } from "../types";
 
 const props = defineProps<{ bootstrap: InvestorBootstrap }>();
+const api = useInvestorApi();
 const selectedPortfolio = ref("");
 const selectedStatus = ref("");
 const activeFilter = ref<ActiveListFilter | null>(null);
@@ -33,6 +37,18 @@ const error = ref<string | null>(null);
 let latestRequest = 0;
 
 const hasAssignments = computed(() => props.bootstrap.portfolios.length > 0);
+const portfolioOptions = computed(() => [
+	{ label: "All assigned portfolios", value: "" },
+	...props.bootstrap.portfolios.map((portfolio) => ({
+		label: portfolio.label,
+		value: portfolio.name,
+	})),
+]);
+const statusOptions = [
+	{ label: "All statuses", value: "" },
+	{ label: "Matched", value: "Matched" },
+	{ label: "Mismatched", value: "Mismatched" },
+];
 const activeFilters = computed<ActiveListFilter[]>(() => {
 	const filters: ActiveListFilter[] = [];
 	if (selectedPortfolio.value) {
@@ -72,7 +88,7 @@ async function loadStatements(
 	}
 
 	try {
-		const response = await fetchStatements({
+		const response = await api.fetchStatements({
 			portfolio: selectedPortfolio.value || undefined,
 			reconciliationStatus: selectedStatus.value || undefined,
 			start,
@@ -150,38 +166,25 @@ onMounted(() => void loadStatements());
 	<section class="record-surface" aria-label="Bond statement list">
 		<div class="surface-heading surface-heading--filters">
 			<div class="surface-filters">
-				<label class="surface-filter" for="statement-portfolio-filter">
-					<span>Portfolio Name</span>
-					<select
-						id="statement-portfolio-filter"
-						v-model="selectedPortfolio"
-						:disabled="loading || !hasAssignments"
-						@change="changeFilters"
-					>
-						<option value="">All assigned portfolios</option>
-						<option
-							v-for="portfolio in bootstrap.portfolios"
-							:key="portfolio.name"
-							:value="portfolio.name"
-						>
-							{{ portfolio.label }}
-						</option>
-					</select>
-				</label>
+				<Select
+					id="statement-portfolio-filter"
+					v-model="selectedPortfolio"
+					class="surface-filter"
+					label="Portfolio Name"
+					:options="portfolioOptions"
+					:disabled="loading || !hasAssignments"
+					@update:model-value="changeFilters"
+				/>
 
-				<label class="surface-filter" for="statement-status-filter">
-					<span>Reconciliation Status</span>
-					<select
-						id="statement-status-filter"
-						v-model="selectedStatus"
-						:disabled="loading || !hasAssignments"
-						@change="changeFilters"
-					>
-						<option value="">All statuses</option>
-						<option value="Matched">Matched</option>
-						<option value="Mismatched">Mismatched</option>
-					</select>
-				</label>
+				<Select
+					id="statement-status-filter"
+					v-model="selectedStatus"
+					class="surface-filter"
+					label="Reconciliation Status"
+					:options="statusOptions"
+					:disabled="loading || !hasAssignments"
+					@update:model-value="changeFilters"
+				/>
 			</div>
 		</div>
 
@@ -201,7 +204,7 @@ onMounted(() => void loadStatements());
 			role="alert"
 		>
 			<p>{{ error }}</p>
-			<button class="secondary-button" type="button" @click="retryStatements">Retry</button>
+			<Button label="Retry" variant="outline" @click="retryStatements" />
 		</div>
 
 		<div v-else-if="!hasAssignments" class="surface-state" data-testid="statements-empty">
@@ -219,94 +222,89 @@ onMounted(() => void loadStatements());
 		<template v-else>
 			<div v-if="error" class="surface-state surface-state--error" role="alert">
 				<p>{{ error }}</p>
-				<button class="secondary-button" type="button" @click="retryStatements">
-					Retry
-				</button>
+				<Button label="Retry" variant="outline" @click="retryStatements" />
 			</div>
 
-			<div class="record-table-wrap">
-				<table class="record-table">
-					<thead>
-						<tr>
-							<SortableColumn
-								label="Statement Date"
-								field="statement_date"
-								:sort-by="sortBy"
-								:sort-order="sortOrder"
-								:disabled="loading"
-								@sort="changeSort"
-							/>
-							<SortableColumn
-								label="Portfolio Name"
-								field="portfolio_name"
-								:sort-by="sortBy"
-								:sort-order="sortOrder"
-								:disabled="loading"
-								@sort="changeSort"
-							/>
-							<SortableColumn
-								label="Reconciliation Status"
-								field="reconciliation_status"
-								:sort-by="sortBy"
-								:sort-order="sortOrder"
-								:disabled="loading"
-								@sort="changeSort"
-							/>
-						</tr>
-					</thead>
-					<tbody>
-						<tr
-							v-for="statement in statements"
-							:key="statement.name"
-							data-testid="statement-row"
+			<DataList
+				:items="statements"
+				:columns="['minmax(9rem,1fr)', 'minmax(12rem,1.4fr)', 'minmax(12rem,1fr)']"
+				row-key="name"
+				row-test-id="statement-row"
+			>
+				<template #header>
+					<SortableColumn
+						label="Statement Date"
+						field="statement_date"
+						:sort-by="sortBy"
+						:sort-order="sortOrder"
+						:disabled="loading"
+						@sort="changeSort"
+					/>
+					<SortableColumn
+						label="Portfolio Name"
+						field="portfolio_name"
+						:sort-by="sortBy"
+						:sort-order="sortOrder"
+						:disabled="loading"
+						@sort="changeSort"
+					/>
+					<SortableColumn
+						label="Reconciliation Status"
+						field="reconciliation_status"
+						:sort-by="sortBy"
+						:sort-order="sortOrder"
+						:disabled="loading"
+						@sort="changeSort"
+					/>
+				</template>
+				<template #row="{ item: statement }">
+					<ListCell data-label="Statement Date">
+						<RouterLink
+							:to="`/statements/${encodeURIComponent(statement.name)}`"
+							:aria-label="`View statement ${statement.name}`"
 						>
-							<td data-label="Statement Date">
-								<RouterLink
-									:to="`/statements/${encodeURIComponent(statement.name)}`"
-									:aria-label="`View statement ${statement.name}`"
-								>
-									{{ formatDate(statement.statement_date) }}
-								</RouterLink>
-							</td>
-							<td data-label="Portfolio Name">
-								<button
-									class="list-filter-button"
-									type="button"
-									:aria-label="`Filter Portfolio Name by ${statement.portfolio_name}`"
-									@click="
-										applyFilter(
-											'portfolio_name',
-											'Portfolio Name',
-											statement.portfolio_name
-										)
-									"
-								>
-									{{ statement.portfolio_name }}
-								</button>
-							</td>
-							<td data-label="Reconciliation Status">
-								<button
-									v-if="statement.reconciliation_status"
-									class="status-badge list-filter-status"
-									:class="`status-badge--${statement.reconciliation_status.toLowerCase()}`"
-									type="button"
-									:aria-label="`Filter Reconciliation Status by ${statement.reconciliation_status}`"
-									@click="
-										applyFilter(
-											'reconciliation_status',
-											'Reconciliation Status',
-											statement.reconciliation_status
-										)
-									"
-								>
-									{{ statement.reconciliation_status }}
-								</button>
-								<span v-else class="status-badge status-badge--unset">—</span>
-							</td>
-						</tr>
-					</tbody>
-				</table>
-			</div>
+							{{ formatDate(statement.statement_date) }}
+						</RouterLink>
+					</ListCell>
+					<ListCell data-label="Portfolio Name">
+						<Button
+							class="list-filter-button"
+							variant="ghost"
+							size="sm"
+							:label="`Filter Portfolio Name by ${statement.portfolio_name}`"
+							@click="
+								applyFilter(
+									'portfolio_name',
+									'Portfolio Name',
+									statement.portfolio_name
+								)
+							"
+						>
+							{{ statement.portfolio_name }}
+						</Button>
+					</ListCell>
+					<ListCell data-label="Reconciliation Status">
+						<Button
+							v-if="statement.reconciliation_status"
+							class="status-badge list-filter-status"
+							:class="`status-badge--${statement.reconciliation_status.toLowerCase()}`"
+							variant="ghost"
+							size="sm"
+							:label="`Filter Reconciliation Status by ${statement.reconciliation_status}`"
+							@click="
+								applyFilter(
+									'reconciliation_status',
+									'Reconciliation Status',
+									statement.reconciliation_status
+								)
+							"
+						>
+							{{ statement.reconciliation_status }}
+						</Button>
+						<span v-else class="status-badge status-badge--unset">—</span>
+					</ListCell>
+				</template>
+			</DataList>
 
 			<ListPagination
 				:has-more="pagination.has_more"

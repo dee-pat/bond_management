@@ -1,8 +1,11 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
 import { RouterLink, useRoute } from "vue-router";
+import { Button } from "frappe-ui";
+import { ListCell, ListHeaderCell } from "frappe-ui/list";
 
-import { fetchBond, InvestorApiError, redirectToLogin } from "../lib/api";
+import DataList from "../components/DataList.vue";
+import { InvestorApiError, redirectToLogin, useInvestorApi } from "../lib/api";
 import { formatDate, formatMoney, formatNumber, formatPercent } from "../lib/format";
 import type { BondDetail } from "../types";
 
@@ -35,6 +38,7 @@ const bond = ref<BondDetail | null>(null);
 const loading = ref(true);
 const error = ref<string | null>(null);
 const bondName = computed(() => String(route.params.bondName ?? ""));
+const api = useInvestorApi();
 let latestRequest = 0;
 
 async function loadBond(): Promise<void> {
@@ -43,7 +47,7 @@ async function loadBond(): Promise<void> {
 	error.value = null;
 
 	try {
-		const response = await fetchBond(bondName.value);
+		const response = await api.fetchBond(bondName.value);
 		if (requestId === latestRequest) {
 			bond.value = response.bond;
 		}
@@ -98,7 +102,7 @@ onMounted(() => void loadBond());
 
 		<div v-else-if="error" class="surface-state surface-state--error" role="alert">
 			<p>{{ error }}</p>
-			<button class="secondary-button" type="button" @click="loadBond">Retry</button>
+			<Button label="Retry" variant="outline" @click="loadBond" />
 		</div>
 
 		<template v-else-if="bond">
@@ -124,29 +128,30 @@ onMounted(() => void loadBond());
 				<div v-if="bond.principal_schedule.length === 0" class="surface-state">
 					This bond has no principal schedule.
 				</div>
-				<div v-else class="record-table-wrap">
-					<table class="record-table" data-testid="principal-schedule">
-						<thead>
-							<tr>
-								<th scope="col">Repayment Date</th>
-								<th scope="col">Principal Units</th>
-								<th scope="col">Repayment %</th>
-							</tr>
-						</thead>
-						<tbody>
-							<tr v-for="row in bond.principal_schedule" :key="row.repayment_date">
-								<td data-label="Repayment Date">
-									{{ formatDate(row.repayment_date) }}
-								</td>
-								<td data-label="Principal Units">
-									{{ formatNumber(row.principal_units) }}
-								</td>
-								<td data-label="Repayment %">
-									{{ formatPercent(row.repayment_percent) }}
-								</td>
-							</tr>
-						</tbody>
-					</table>
+				<div v-else>
+					<DataList
+						:items="bond.principal_schedule"
+						:columns="['minmax(12rem,1fr)', 'minmax(12rem,1fr)', 'minmax(10rem,1fr)']"
+						row-key="repayment_date"
+						data-testid="principal-schedule"
+					>
+						<template #header>
+							<ListHeaderCell>Repayment Date</ListHeaderCell>
+							<ListHeaderCell>Principal Units</ListHeaderCell>
+							<ListHeaderCell>Repayment %</ListHeaderCell>
+						</template>
+						<template #row="{ item: row }">
+							<ListCell data-label="Repayment Date">
+								{{ formatDate(row.repayment_date) }}
+							</ListCell>
+							<ListCell data-label="Principal Units">
+								{{ formatNumber(row.principal_units) }}
+							</ListCell>
+							<ListCell data-label="Repayment %">
+								{{ formatPercent(row.repayment_percent) }}
+							</ListCell>
+						</template>
+					</DataList>
 				</div>
 			</section>
 
@@ -155,36 +160,39 @@ onMounted(() => void loadBond());
 				<div v-if="bond.coupon_schedule.length === 0" class="surface-state">
 					This bond has no coupon schedule.
 				</div>
-				<div v-else class="record-table-wrap">
-					<table class="record-table" data-testid="coupon-schedule">
-						<thead>
-							<tr>
-								<th scope="col">Coupon Date</th>
-								<th scope="col">Period Start</th>
-								<th scope="col">Period End</th>
-								<th scope="col">Coupon Factor</th>
-							</tr>
-						</thead>
-						<tbody>
-							<tr
-								v-for="row in bond.coupon_schedule"
-								:key="`${row.coupon_date}-${row.period_start}`"
-							>
-								<td data-label="Coupon Date">
-									{{ formatDate(row.coupon_date) }}
-								</td>
-								<td data-label="Period Start">
-									{{ formatDate(row.period_start) }}
-								</td>
-								<td data-label="Period End">
-									{{ formatDate(row.period_end) }}
-								</td>
-								<td data-label="Coupon Factor">
-									{{ formatPercent(row.coupon_factor) }}
-								</td>
-							</tr>
-						</tbody>
-					</table>
+				<div v-else>
+					<DataList
+						:items="bond.coupon_schedule"
+						:columns="[
+							'minmax(10rem,1fr)',
+							'minmax(10rem,1fr)',
+							'minmax(10rem,1fr)',
+							'minmax(10rem,1fr)',
+						]"
+						row-key="coupon_date"
+						data-testid="coupon-schedule"
+					>
+						<template #header>
+							<ListHeaderCell>Coupon Date</ListHeaderCell>
+							<ListHeaderCell>Period Start</ListHeaderCell>
+							<ListHeaderCell>Period End</ListHeaderCell>
+							<ListHeaderCell>Coupon Factor</ListHeaderCell>
+						</template>
+						<template #row="{ item: row }">
+							<ListCell data-label="Coupon Date">
+								{{ formatDate(row.coupon_date) }}
+							</ListCell>
+							<ListCell data-label="Period Start">
+								{{ formatDate(row.period_start) }}
+							</ListCell>
+							<ListCell data-label="Period End">
+								{{ formatDate(row.period_end) }}
+							</ListCell>
+							<ListCell data-label="Coupon Factor">
+								{{ formatPercent(row.coupon_factor) }}
+							</ListCell>
+						</template>
+					</DataList>
 				</div>
 			</section>
 		</template>

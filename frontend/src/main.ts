@@ -4,6 +4,7 @@ import { FrappeUI } from "frappe-ui";
 import App from "./App.vue";
 import router from "./router";
 import "frappe-ui/style.css";
+import "frappe-ui/list-style.css";
 import "./style.css";
 import "./transaction.css";
 import "./statement.css";

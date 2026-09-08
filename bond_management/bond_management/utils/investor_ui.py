@@ -14,6 +14,18 @@ from bond_management.bond_management.utils.investor_permissions import (
 FEATURE_FLAG = "bond_investor_spa_enabled"
 
 
+def set_investor_api_data(result):
+    """Expose a v1 result through both Frappe's legacy and useCall envelopes.
+
+    This is intentionally a result helper rather than a decorator. Frappe's
+    whitelist decorator validates endpoint annotations from the function's
+    code object, so a generic ``*args``/``**kwargs`` wrapper would bypass its
+    normal argument validation.
+    """
+    frappe.response["data"] = result
+    return result
+
+
 def is_investor_ui_enabled() -> bool:
     """Return the site-level rollout state, disabled when no setting exists."""
     return bool(cint(frappe.conf.get(FEATURE_FLAG, 0)))
