@@ -1,17 +1,8 @@
 # Codex project context
 
-Shared Frappe v16 implementation and quality rules live in the parent bench
-`../../AGENTS.md`; bond-management-specific rules live in this app's
-`AGENTS.md`. Use this file for local environment context and troubleshooting
-notes.
-
-## Environment
-
-- Frappe Framework v16
-- Python 3.14
-- Node 24
-- MariaDB 11.8 or 12.3
-- Redis 6 or newer
+Shared bench-wide rules live in `../../AGENTS.md`; bond-management-specific
+architecture, invariants, environment, sites, and verification policy live in
+`AGENTS.md`. Use this file only for active work and troubleshooting notes.
 
 ## Active multi-phase work
 
@@ -30,10 +21,10 @@ notes.
 - JavaScript field updates: check form triggers and `frm.refresh_field`.
 - Bench build failures: check the Node and Yarn versions.
 - For Cypress startup/login failures or CI bootstrap issues, read
-  [verification.md](../docs/verification.md) for runtime diagnostics, recovery,
-  and the required rerun sequence.
+  `docs/verification.md` for runtime diagnostics, recovery, and the required
+  rerun sequence.
 
 ## Reference commands
 
-See [commands.md](commands.md) for local development, service recovery, and
-individual verification commands.
+See `apps/bond_management/.codex/commands.md` for local development, service
+recovery, and verification commands.

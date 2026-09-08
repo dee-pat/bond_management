@@ -43,6 +43,20 @@ differences in the final field.
   GitHub Actions setup. Obtain approval before recreating or dropping a local
   site.
 
+## Completion and failure handling
+
+- If a required command cannot run because a service, browser, dependency, site,
+  or credential is unavailable, do not substitute an unrelated check. Report
+  the exact command, blocking condition, and verification that remains
+  outstanding.
+- When GitHub Actions fails, inspect the exact traceback and reproduce the
+  failing test both in isolation and in the full suite before changing the
+  implementation or assertion. Do not weaken an assertion merely to make CI
+  pass.
+- Before implementing a multi-phase feature, record the intended slice and
+  verification steps in the project documentation. For a small bug fix, a
+  focused issue note and regression test are sufficient.
+
 ## Cypress runtime and recovery
 
 - For Cypress startup failures, run

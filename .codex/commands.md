@@ -1,15 +1,15 @@
-# Local bench commands
+# Bond Management commands
 
-Run these commands from the bench directory. For general bench CLI usage,
-app/site creation, and installation, use the `frappe-app-dev` skill's
-`references/bench-operations.md` and the relevant setup workflow.
+Run these commands from the bench root. Generic Frappe lifecycle, site
+creation, and installation commands live in
+`apps/bond_management/.agents/skills/frappe-app-dev/references/bench-operations.md`.
 
 ## Interactive development
 
 Use `dev.local` for interactive work; automated test-site rules live in
-[AGENTS.md](../AGENTS.md).
+`apps/bond_management/AGENTS.md`.
 
-```sh
+```bash
 bench --site dev.local migrate
 bench --site dev.local backup --with-files
 ```
@@ -18,26 +18,46 @@ bench --site dev.local backup --with-files
 
 Start MariaDB when it is unavailable:
 
-```sh
+```bash
 brew services start mariadb
 ```
 
 Inspect this bench's processes before recovering a broken state:
 
-```sh
+```bash
 pgrep -af "${PWD}/apps/frappe|${PWD}/Procfile"
 bench restart
 ```
 
-## Individual verification stages
+## Verification
 
 Before verification or CI/Cypress diagnosis, read
-[verification.md](../docs/verification.md) for mandatory gates, evidence,
+`apps/bond_management/docs/verification.md` for mandatory gates, evidence,
 startup diagnostics, and recovery order. The `ui` stage requires an already
 prepared test site.
 
-```sh
+```bash
 apps/bond_management/scripts/verify.sh lint
 apps/bond_management/scripts/verify.sh server
+apps/bond_management/scripts/verify.sh frontend
 apps/bond_management/scripts/verify.sh ui
+apps/bond_management/scripts/verify.sh playwright
+apps/bond_management/scripts/verify.sh pre-push
+apps/bond_management/scripts/verify.sh pre-push-ui
+```
+
+`ui` expects an already prepared `test_site`; the combined gates prepare the
+site as needed. Use `pre-push` for the shared lint/server gate and
+`pre-push-ui` when frontend or browser behavior is in scope.
+
+## Focused UI diagnosis
+
+```bash
+CYPRESS_SPEC="cypress/integration/portfolio_performance.js" \
+    apps/bond_management/scripts/verify.sh ui
+
+apps/bond_management/scripts/cypress-runtime.sh diagnose
+apps/bond_management/scripts/cypress-runtime.sh prepare
+
+bench --site test_site serve --port 8001 --noreload
 ```

@@ -4,23 +4,33 @@ The parent `frappe-bench/AGENTS.md` contains rules shared by Frappe v16 apps.
 This file contains only bond-management-specific additions and overrides. When
 the two files conflict, this app-level file governs.
 
-## Local guidance and verification
+## Non-negotiable completion rules
 
 - Never install or update skills globally. App-specific skills must live under
   `.agents/skills/` in this app.
 - Before changing files, running verification, investigating CI/Cypress failures,
   or reporting completion, read [verification.md](docs/verification.md). It owns
-  the mandatory gate commands, evidence format, fresh-site checks, and runtime
-  recovery procedures. Apply the parent's completion and CI-failure rules.
+  the detailed gate commands, evidence format, fresh-site checks, and runtime
+  recovery procedures.
+- Run every applicable verification gate before committing, pushing, or
+  reporting completion.
+- A gate passes only when its command was executed for the current change and
+  observed to exit with status zero; never fabricate or infer command output or
+  exit statuses.
+- Treat an unavailable required gate as a blocker and report the exact command
+  and remaining verification.
+- Verification becomes stale after relevant edits to code, tests, fixtures,
+  metadata, dependencies, runtime scripts, or CI configuration; rerun the
+  applicable gate.
 
 ## App baseline and structure
 
 - This is a custom Frappe Framework v16 application for bond portfolios,
   accruals, schedules, and statement/transaction attachments. Do not assume
   ERPNext is installed.
-- Before environment setup, dependency changes, or deployment, read
-  [.codex/context.md](.codex/context.md) for the local/CI runtime baseline.
-  Check compatibility against the target Frappe v16 release and host.
+- The local and CI development baseline is Python 3.14, Node 24, MariaDB 11.8
+  or 12.3, and Redis 6 or newer. Deployment compatibility must be checked
+  against the target Frappe v16 release and hosting environment.
 - The app root is `<bench>/apps/bond_management`; this checkout is already that
   app root.
 - The outer Python package is `bond_management/` and uses the import prefix
@@ -44,6 +54,9 @@ the two files conflict, this app-level file governs.
 - Preserve the existing rounding, cash-flow sign, commission, and bank-price
   conventions. Change a convention only with an explicit business decision and
   boundary tests.
+- Normalize financial dates with `frappe.utils.getdate` at system boundaries.
+  Use calendar dates for issue, coupon, trade, settlement, repayment, and
+  maturity rules unless a timestamp is explicitly required.
 - Coupon schedules are generated from issue date through maturity using the
   configured day-count convention. Preserve their period boundaries and
   coupon-date semantics.
@@ -93,13 +106,20 @@ the two files conflict, this app-level file governs.
 
 ## App-specific migrations and permissions
 
-- Put data patches under `bond_management/patches/` and register them in
-  `bond_management/patches.txt`; apply the parent's migration rules.
+- For changes that transform existing site data, add an idempotent patch under
+  `bond_management/patches/`, register it in `bond_management/patches.txt`,
+  and test both migration behavior and resulting business data. Do not use a
+  patch for schema changes handled by normal Frappe migrations.
 - Test the registered patch sequence against representative legacy data, not
   only each patch function in isolation. Include a safe rerun and verify the
   resulting business data and indexes.
-- Install manual unique indexes idempotently on both fresh installation and
-  migration; test both paths alongside controller validation.
+- Enforce concurrency-sensitive business uniqueness at both boundaries: use
+  controller validation for a useful error and a database unique index as the
+  final integrity guarantee. Install manual indexes idempotently, ensure fresh
+  app installation creates them too, and test both paths.
+- Permission patches should update or create only the `DocPerm` rows they own.
+  Do not save a parent `DocType` merely to change permissions, because that can
+  validate or rewrite unrelated metadata during migration.
 - Frappe marks an app's registered patches complete before `after_install` runs.
   Any permission, index, or other invariant that must exist on a fresh install
   must therefore also be bootstrapped by an idempotent `after_install` hook;
@@ -117,14 +137,24 @@ the two files conflict, this app-level file governs.
   without explicit user approval. Do not record site credentials or
   machine-specific database configuration in repository files.
 - Factories may use collision-safe generated names, but test outcomes must not
-  depend on their random suffixes.
-- Attachment parsers need current, supported legacy, malformed, conflicting,
-  encrypted, invalid-password, and non-PDF cases.
+  depend on their random suffixes. Tests must be deterministic, independent,
+  and rerunnable. Attachment parsers need current, supported legacy,
+  malformed, conflicting, encrypted, invalid-password, and non-PDF cases.
+- For bond rules involving `>`, `>=`, `<`, or `<=`, test greater-than,
+  less-than, and equality cases and state equality behavior.
+- Add Cypress coverage only for user-visible form, report, workspace, and
+  routing behavior that is not already covered by server tests. Keep one
+  focused smoke flow per critical surface by default; do not mirror the full
+  financial or permission matrix in Cypress.
 - Use stable routes, labels, roles, and data attributes. Avoid asserting CSS
   layout, SVG geometry, or internal formatter registration. Prefer visible
   controls; use `window.cur_frm` or direct `script_manager.trigger` only for a
   specifically justified client-script hook (for example, deterministic PDF
   attachment parsing where native file upload adds no useful coverage).
+- Add delayed, failed, stale-response, retry, or duplicate-request Cypress
+  cases only for a demonstrated browser regression or a risk that cannot be
+  tested at a lower layer. Keep the scenario deterministic and focused on the
+  user-visible recovery behavior.
 - When a backend field or permission is exposed through Desk, update the
   relevant form/list/workspace code and one representative Cypress smoke
   assertion; server tests own the complete permission and validation matrix.
