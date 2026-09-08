@@ -5,6 +5,7 @@ import { ListCell, ListHeaderCell } from "frappe-ui/list";
 import { RouterLink } from "vue-router";
 
 import DataList from "../components/DataList.vue";
+import { formatMoney, formatNumber, formatPercent } from "../lib/format";
 import type {
 	PerformanceCashflowSelection,
 	PerformanceColumn,
@@ -44,10 +45,10 @@ function formattedValue(row: PerformanceRow, column: PerformanceColumn): string 
 
 	const precision = column.precision ?? 0;
 	if (column.fieldtype === "Currency") {
-		return formatCurrency(value, currencyFor(row, column), precision);
+		return formatMoney(value, currencyFor(row, column), precision);
 	}
 	if (column.fieldtype === "Percent") {
-		return `${formatNumber(value, displayedPercentPrecision(value, precision))}%`;
+		return formatPercent(value, displayedPercentPrecision(value, precision));
 	}
 	if (column.fieldtype === "Float") {
 		return formatNumber(value, precision);
@@ -61,31 +62,6 @@ function currencyFor(row: PerformanceRow, column: PerformanceColumn): string {
 	}
 	const value = row[column.options as keyof PerformanceRow];
 	return typeof value === "string" ? value : "";
-}
-
-function formatCurrency(value: number, currency: string, precision: number): string {
-	if (!currency) {
-		return formatNumber(value, precision);
-	}
-
-	try {
-		return new Intl.NumberFormat("en-GB", {
-			style: "currency",
-			currency,
-			currencyDisplay: "code",
-			minimumFractionDigits: precision,
-			maximumFractionDigits: precision,
-		}).format(value);
-	} catch {
-		return `${currency} ${formatNumber(value, precision)}`;
-	}
-}
-
-function formatNumber(value: number, precision: number): string {
-	return new Intl.NumberFormat("en-GB", {
-		minimumFractionDigits: precision,
-		maximumFractionDigits: precision,
-	}).format(value);
 }
 
 function displayedPercentPrecision(value: number, precision: number): number {

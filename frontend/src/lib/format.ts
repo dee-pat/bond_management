@@ -18,18 +18,23 @@ export function formatNumber(value: number, fractionDigits = 0): string {
   }).format(value);
 }
 
-export function formatMoney(value: number, currency: string): string {
+export function formatMoney(value: number, currency: string, fractionDigits = 2): string {
+  const formattedValue = formatNumber(value, fractionDigits);
   if (!currency) {
-    return formatNumber(value, 2);
+    return formattedValue;
   }
 
-  return new Intl.NumberFormat("en-GB", {
-    style: "currency",
-    currency,
-    currencyDisplay: "code",
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(value);
+  try {
+    return new Intl.NumberFormat("en-GB", {
+      style: "currency",
+      currency,
+      currencyDisplay: "code",
+      minimumFractionDigits: fractionDigits,
+      maximumFractionDigits: fractionDigits,
+    }).format(value);
+  } catch {
+    return `${currency} ${formattedValue}`;
+  }
 }
 
 export function formatPercent(value: number, fractionDigits = 2): string {
