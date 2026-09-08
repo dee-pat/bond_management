@@ -117,6 +117,9 @@ the two files conflict, this app-level file governs.
   controller validation for a useful error and a database unique index as the
   final integrity guarantee. Install manual indexes idempotently, ensure fresh
   app installation creates them too, and test both paths.
+- Permission patches should update or create only the `DocPerm` rows they own.
+  Do not save a parent `DocType` merely to change permissions, because that can
+  validate or rewrite unrelated metadata during migration.
 - Frappe marks an app's registered patches complete before `after_install` runs.
   Any permission, index, or other invariant that must exist on a fresh install
   must therefore also be bootstrapped by an idempotent `after_install` hook;
