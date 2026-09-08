@@ -17,6 +17,21 @@ test("browses the assigned statement list and read-only detail", async ({
     page.getByRole("heading", { name: "Statement history" }),
   ).toHaveCount(0);
   await expect(page.getByRole("columnheader")).toHaveCount(3);
+  const listHeader = page.locator('[data-slot="list-header"]');
+  const firstHeaderCell = page.getByRole("columnheader").first();
+  const firstRow = page.getByTestId("statement-row").first();
+  await expect(listHeader).toBeVisible();
+  await expect(firstRow).toBeVisible();
+  const headerBox = await listHeader.boundingBox();
+  const headerCellBox = await firstHeaderCell.boundingBox();
+  const firstRowBox = await firstRow.boundingBox();
+  if (!headerBox || !headerCellBox || !firstRowBox) {
+    throw new Error("Could not measure the statement list header and first row");
+  }
+  expect(firstRowBox.y).toBeGreaterThanOrEqual(headerBox.y + headerBox.height);
+  expect(firstRowBox.y).toBeGreaterThanOrEqual(
+    headerCellBox.y + headerCellBox.height,
+  );
   const statementDateHeader = page.getByRole("columnheader", {
     name: "Statement Date",
   });

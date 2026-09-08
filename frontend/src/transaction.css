@@ -95,6 +95,12 @@
 	border-radius: 5px;
 }
 
+/* The Frappe UI header defaults to 32px, while these cells need 36px. */
+.record-list-wrap [data-slot="list-header"] {
+	height: auto;
+	min-height: 36px;
+}
+
 /* ListRow has a two-branch root (static row vs. RouterLink row), so row-level
  * hooks belong on this stable app-owned wrapper. Keep the Frappe row as the
  * grid element and restore the list divider relationship across wrappers. */
