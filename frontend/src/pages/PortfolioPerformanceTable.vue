@@ -9,6 +9,7 @@ import { formatMoney, formatNumber, formatPercent } from "../lib/format";
 import type {
 	PerformanceCashflowSelection,
 	PerformanceColumn,
+	PerformanceFieldname,
 	PerformanceRow,
 } from "../report-types";
 
@@ -22,12 +23,23 @@ const emit = defineEmits<{
 	copy: [selection: PerformanceCashflowSelection];
 }>();
 
+const PERFORMANCE_COLUMN_WIDTHS: Record<PerformanceFieldname, string> = {
+	isin: "minmax(12rem, 1.25fr)",
+	currency: "minmax(4.5rem, 0.6fr)",
+	principal_factor: "minmax(8rem, 0.9fr)",
+	nominal_value: "minmax(10rem, 1fr)",
+	purchases_value: "minmax(10rem, 1fr)",
+	proceeds_value: "minmax(10rem, 1fr)",
+	market_value: "minmax(10rem, 1fr)",
+	market_value_usd: "minmax(11rem, 1fr)",
+	gain_value: "minmax(10rem, 1fr)",
+	xirr: "minmax(8rem, 0.75fr)",
+	xirr_usd: "minmax(9rem, 0.8fr)",
+	future_xirr: "minmax(9.5rem, 0.85fr)",
+};
+
 const listColumns = computed(() =>
-	props.columns.map((column) =>
-		column.fieldname === "isin" || column.fieldname === "currency"
-			? "minmax(10rem,1.2fr)"
-			: "minmax(10rem,1fr)"
-	)
+	props.columns.map((column) => PERFORMANCE_COLUMN_WIDTHS[column.fieldname])
 );
 
 function valueFor(row: PerformanceRow, column: PerformanceColumn): string | number | null {

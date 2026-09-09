@@ -42,6 +42,14 @@
 	white-space: nowrap;
 }
 
+.performance-table-wrap [data-slot="list-cell"] > * {
+	min-width: 0;
+	max-width: 100%;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
 .performance-table-wrap a,
 .performance-cashflow-button {
 	color: var(--desk-link);
@@ -58,8 +66,12 @@
 }
 
 .performance-cashflow-button {
+	max-width: 100%;
+	overflow: hidden;
 	padding: 0;
+	text-overflow: ellipsis;
 	font-variant-numeric: inherit;
+	white-space: nowrap;
 }
 
 .performance-cashflow-button:disabled {

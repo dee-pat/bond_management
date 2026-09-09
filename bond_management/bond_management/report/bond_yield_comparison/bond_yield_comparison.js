@@ -18,6 +18,7 @@ const GAP_CHART_LAYOUT = {
 	top: 38,
 	bottom: 286,
 };
+const Y_TICK_STEP = 5;
 const BOND_YIELD_COMPARISON_ROUTE = "Bond Yield Comparison";
 
 // Query Report reuses one page instance across report navigation.
@@ -270,11 +271,7 @@ function get_gap_chart_geometry(model) {
 	const values = model.datasets.flatMap((dataset) =>
 		dataset.values.filter((value) => value !== null)
 	);
-	const min = Math.min(...values);
-	const max = Math.max(...values);
-	const span = max - min;
-	const padding = span ? Math.max(span * 0.1, 0.5) : Math.max(Math.abs(max) * 0.1, 1);
-	const range = { min: min - padding, max: max + padding };
+	const range = get_percent_axis_range(values);
 	const plot_width = GAP_CHART_LAYOUT.width - GAP_CHART_LAYOUT.left - GAP_CHART_LAYOUT.right;
 	const plot_height = GAP_CHART_LAYOUT.bottom - GAP_CHART_LAYOUT.top;
 	const x = (index) =>
@@ -289,13 +286,33 @@ function get_gap_chart_geometry(model) {
 		plot_height,
 		height: GAP_CHART_LAYOUT.bottom + 60,
 		range,
+		y_ticks: get_percent_axis_ticks(range),
 		x,
 		y,
 	};
 }
 
+function get_percent_axis_range(values) {
+	const min_value = Math.min(...values);
+	const max_value = Math.max(...values);
+	const min = Math.floor(Math.min(min_value, 0) / Y_TICK_STEP) * Y_TICK_STEP;
+	let max = Math.ceil(Math.max(max_value, 0) / Y_TICK_STEP) * Y_TICK_STEP;
+	if (max <= min || max === max_value) {
+		max += Y_TICK_STEP;
+	}
+	return { min, max };
+}
+
+function get_percent_axis_ticks(range) {
+	const ticks = [];
+	for (let value = range.min; value <= range.max; value += Y_TICK_STEP) {
+		ticks.push(value);
+	}
+	return ticks;
+}
+
 function make_gap_chart_svg(model, geometry = get_gap_chart_geometry(model)) {
-	const { width, left, top, bottom, height, plot_width, range, x, y } = geometry;
+	const { width, left, top, bottom, height, plot_width, y_ticks, x, y } = geometry;
 	const parts = [
 		`<svg viewBox="0 0 ${width} ${height}" width="100%" height="${height}" role="img" aria-label="Future XIRR comparison chart" data-chart-mode="gap-aware">`,
 		`<text x="${
@@ -309,8 +326,7 @@ function make_gap_chart_svg(model, geometry = get_gap_chart_geometry(model)) {
 		}" text-anchor="middle" class="chart-axis-title">Market date (year)</text>`,
 	];
 
-	for (let index = 0; index < 5; index += 1) {
-		const value = range.max - ((range.max - range.min) * index) / 4;
+	y_ticks.forEach((value) => {
 		const position = y(value);
 		parts.push(
 			`<line x1="${left}" x2="${
@@ -318,9 +334,12 @@ function make_gap_chart_svg(model, geometry = get_gap_chart_geometry(model)) {
 			}" y1="${position}" y2="${position}" class="chart-grid-line"/>`,
 			`<text x="${left - 10}" y="${
 				position + 4
-			}" text-anchor="end" class="chart-axis-label">${format_percent(value, 1)}</text>`
+			}" text-anchor="end" class="chart-axis-label" data-bond-yield-y-tick="true">${format_percent(
+				value,
+				0
+			)}</text>`
 		);
-	}
+	});
 	parts.push(
 		`<line x1="${left}" x2="${left}" y1="${top}" y2="${bottom}" class="chart-axis-line"/>`,
 		`<line x1="${left}" x2="${

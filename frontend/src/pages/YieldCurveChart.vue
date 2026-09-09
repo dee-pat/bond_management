@@ -33,6 +33,7 @@ const margin = { top: 24, right: 24, bottom: 58, left: 72 };
 const plotWidth = width - margin.left - margin.right;
 const plotHeight = height - margin.top - margin.bottom;
 const tickIndexes = [0, 1, 2, 3, 4];
+const Y_TICK_STEP = 5;
 
 const points = computed<YieldPoint[]>(() =>
 	props.rows
@@ -81,14 +82,9 @@ const series = computed<YieldSeries[]>(() => {
 const xMaximum = computed(() => Math.max(...points.value.map((point) => point.years), 1));
 const yDomain = computed(() => {
 	const yields = points.value.map((point) => point.yieldPercent);
-	const minimum = Math.min(...yields);
-	const maximum = Math.max(...yields);
-	const padding =
-		minimum === maximum
-			? Math.max(Math.abs(minimum) * 0.1, 1)
-			: Math.max((maximum - minimum) * 0.1, 0.25);
-	return { minimum: minimum - padding, maximum: maximum + padding };
+	return getPercentAxisDomain(yields);
 });
+const yTicks = computed(() => getPercentAxisTicks(yDomain.value));
 
 function xPosition(years: number): number {
 	return margin.left + (years / xMaximum.value) * plotWidth;
@@ -106,11 +102,6 @@ function xTickValue(index: number): number {
 	return xMaximum.value * (index / (tickIndexes.length - 1));
 }
 
-function yTickValue(index: number): number {
-	const ratio = index / (tickIndexes.length - 1);
-	return yDomain.value.maximum - (yDomain.value.maximum - yDomain.value.minimum) * ratio;
-}
-
 function linePoints(currencyPoints: YieldPoint[]): string {
 	return currencyPoints
 		.map((point) => `${xPosition(point.years)},${yPosition(point.yieldPercent)}`)
@@ -121,6 +112,25 @@ function pointLabel(point: YieldPoint): string {
 	return `${point.isin}, ${point.currency}, ${formatPercent(point.yieldPercent)}, ${formatDate(
 		point.repaymentDate
 	)}, ${formatNumber(point.years, 2)} years`;
+}
+
+function getPercentAxisDomain(values: number[]): { minimum: number; maximum: number } {
+	const minimumValue = Math.min(...values);
+	const maximumValue = Math.max(...values);
+	const minimum = Math.floor(Math.min(minimumValue, 0) / Y_TICK_STEP) * Y_TICK_STEP;
+	let maximum = Math.ceil(Math.max(maximumValue, 0) / Y_TICK_STEP) * Y_TICK_STEP;
+	if (maximum <= minimum || maximum === maximumValue) {
+		maximum += Y_TICK_STEP;
+	}
+	return { minimum, maximum };
+}
+
+function getPercentAxisTicks(domain: { minimum: number; maximum: number }): number[] {
+	const ticks = [];
+	for (let value = domain.minimum; value <= domain.maximum; value += Y_TICK_STEP) {
+		ticks.push(value);
+	}
+	return ticks;
 }
 </script>
 
@@ -145,21 +155,25 @@ function pointLabel(point: YieldPoint): string {
 			>
 				<title>Yield Curve</title>
 
-				<g v-for="index in tickIndexes" :key="`tick-${index}`">
+				<g v-for="tick in yTicks" :key="`y-tick-${tick}`">
 					<line
 						:x1="margin.left"
 						:x2="margin.left + plotWidth"
-						:y1="yPosition(yTickValue(index))"
-						:y2="yPosition(yTickValue(index))"
+						:y1="yPosition(tick)"
+						:y2="yPosition(tick)"
 						class="yield-curve__gridline"
 					/>
 					<text
 						:x="margin.left - 10"
-						:y="yPosition(yTickValue(index)) + 4"
+						:y="yPosition(tick) + 4"
+						data-testid="yield-curve-y-tick"
 						text-anchor="end"
 					>
-						{{ formatPercent(yTickValue(index)) }}
+						{{ formatPercent(tick, 0) }}
 					</text>
+				</g>
+
+				<g v-for="index in tickIndexes" :key="`x-tick-${index}`">
 					<line
 						:x1="xPosition(xTickValue(index))"
 						:x2="xPosition(xTickValue(index))"

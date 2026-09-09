@@ -77,6 +77,11 @@ test("compares persisted yields, selects series, and copies sanitized audit data
   await expect(chart.getByTestId("yield-comparison-year-tick")).toHaveText([
     "2095",
   ]);
+  await expect(chart.getByTestId("yield-comparison-y-tick")).toHaveText([
+    "0%",
+    "5%",
+    "10%",
+  ]);
 
 	await selector
 		.getByRole("checkbox", { name: new RegExp(`Select ${GAP_BOND}`) })

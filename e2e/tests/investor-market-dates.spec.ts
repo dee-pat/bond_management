@@ -56,6 +56,11 @@ test("browses market history, persisted prices, and yield curve", async ({
   await expect(
     curve.locator(`[aria-label^="${BOND_ISIN}, USD,"]`)
   ).toBeVisible();
+  const yTickLabels = await curve.getByTestId("yield-curve-y-tick").allTextContents();
+  const yTickValues = yTickLabels.map((label) => Number(label.replace("%", "")));
+  expect(yTickLabels[0]).toBe("0%");
+  expect(yTickLabels.every((label) => /^-?\d+%$/.test(label))).toBeTruthy();
+  expect(yTickValues.slice(1).every((value, index) => value - yTickValues[index] === 5)).toBeTruthy();
   await expect(page.getByText("Read only")).toBeVisible();
   await expect(page.getByTestId("investor-shell")).not.toContainText(
     "Copy cash flows"

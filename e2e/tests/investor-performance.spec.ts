@@ -40,6 +40,21 @@ test("runs USD portfolio performance and copies sanitized cash flows", async ({
 
   const table = page.getByTestId("performance-table");
   await expect(table).toBeVisible();
+  const list = table.locator('[data-slot="list"]');
+  await expect
+    .poll(() =>
+      list.evaluate((element) =>
+        getComputedStyle(element).getPropertyValue("--list-columns-default"),
+      ),
+    )
+    .toContain("minmax(4.5rem, 0.6fr)");
+  await expect
+    .poll(() =>
+      list.evaluate((element) =>
+        getComputedStyle(element).getPropertyValue("--list-columns-default"),
+      ),
+    )
+    .toContain("minmax(10rem, 1fr)");
   await expect(table.getByRole("columnheader")).toHaveCount(10);
   for (const header of USD_ONLY_HEADERS) {
     await expect(

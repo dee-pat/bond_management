@@ -229,7 +229,7 @@ def get_columns(include_reporting_currency_columns: bool = True) -> list[dict]:
             "label": _("Prin. Factor"),
             "fieldname": "principal_factor",
             "fieldtype": "Float",
-            "width": 110,
+            "width": 120,
             "disable_total": True,
         },
         {
@@ -237,21 +237,21 @@ def get_columns(include_reporting_currency_columns: bool = True) -> list[dict]:
             "fieldname": "nominal_value",
             "fieldtype": "Currency",
             "options": "currency",
-            "width": 135,
+            "width": 145,
         },
         {
             "label": _("Purchases Value"),
             "fieldname": "purchases_value",
             "fieldtype": "Currency",
             "options": "currency",
-            "width": 135,
+            "width": 145,
         },
         {
             "label": _("Proceeds Value"),
             "fieldname": "proceeds_value",
             "fieldtype": "Currency",
             "options": "currency",
-            "width": 135,
+            "width": 145,
             "description": _("Sales, coupon payments and principal amortisation received."),
         },
         {
@@ -259,7 +259,7 @@ def get_columns(include_reporting_currency_columns: bool = True) -> list[dict]:
             "fieldname": "market_value",
             "fieldtype": "Currency",
             "options": "currency",
-            "width": 135,
+            "width": 145,
         },
     ]
     if include_reporting_currency_columns:
@@ -269,7 +269,7 @@ def get_columns(include_reporting_currency_columns: bool = True) -> list[dict]:
                 "fieldname": "market_value_usd",
                 "fieldtype": "Currency",
                 "options": "reporting_currency",
-                "width": 145,
+                "width": 155,
             }
         )
     columns.extend(
@@ -279,14 +279,14 @@ def get_columns(include_reporting_currency_columns: bool = True) -> list[dict]:
                 "fieldname": "gain_value",
                 "fieldtype": "Currency",
                 "options": "currency",
-                "width": 135,
+                "width": 145,
             },
             {
                 "label": _("XIRR"),
                 "fieldname": "xirr",
                 "fieldtype": "Percent",
                 "precision": XIRR_PRECISION,
-                "width": 80,
+                "width": 85,
             },
         ]
     )
@@ -297,7 +297,7 @@ def get_columns(include_reporting_currency_columns: bool = True) -> list[dict]:
                 "fieldname": "xirr_usd",
                 "fieldtype": "Percent",
                 "precision": XIRR_PRECISION,
-                "width": 95,
+                "width": 100,
             }
         )
     columns.append(
@@ -306,7 +306,7 @@ def get_columns(include_reporting_currency_columns: bool = True) -> list[dict]:
             "fieldname": "future_xirr",
             "fieldtype": "Percent",
             "precision": XIRR_PRECISION,
-            "width": 105,
+            "width": 110,
         }
     )
     return columns

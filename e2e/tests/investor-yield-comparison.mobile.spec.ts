@@ -60,6 +60,11 @@ test("compares persisted bond yields without mobile overflow", async ({
   await expect(chart.getByTestId("yield-comparison-year-tick")).toHaveText([
     "2095",
   ]);
+  await expect(chart.getByTestId("yield-comparison-y-tick")).toHaveText([
+    "0%",
+    "5%",
+    "10%",
+  ]);
   await expect(page.locator("table")).toHaveCount(0);
 
   const fitsViewport = await page.evaluate(

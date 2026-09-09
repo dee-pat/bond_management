@@ -52,7 +52,7 @@ const height = 360;
 const margin = { top: 24, right: 24, bottom: 70, left: 72 };
 const plotWidth = width - margin.left - margin.right;
 const plotHeight = height - margin.top - margin.bottom;
-const yTickIndexes = [0, 1, 2, 3, 4];
+const Y_TICK_STEP = 5;
 
 const dates = computed(() => [...new Set(props.rows.map((row) => row.date))].sort());
 const selected = computed(() => new Set(props.selectedIsins));
@@ -82,14 +82,9 @@ const gapCount = computed(() =>
 );
 const yDomain = computed(() => {
 	const values = points.value.map((point) => point.value);
-	const minimum = Math.min(...values);
-	const maximum = Math.max(...values);
-	const padding =
-		minimum === maximum
-			? Math.max(Math.abs(minimum) * 0.1, 1)
-			: Math.max((maximum - minimum) * 0.1, 0.25);
-	return { minimum: minimum - padding, maximum: maximum + padding };
+	return getPercentAxisDomain(values);
 });
+const yTicks = computed(() => getPercentAxisTicks(yDomain.value));
 
 function buildSeries(isin: string): YieldSeries {
 	const rowsByDate = new Map(
@@ -158,11 +153,6 @@ function yPosition(value: number): number {
 	);
 }
 
-function yTickValue(index: number): number {
-	const ratio = index / (yTickIndexes.length - 1);
-	return yDomain.value.maximum - (yDomain.value.maximum - yDomain.value.minimum) * ratio;
-}
-
 function linePoints(segment: YieldPoint[]): string {
 	return segment
 		.map((point) => `${xPosition(point.dateIndex)},${yPosition(point.value)}`)
@@ -177,6 +167,25 @@ function pointLabel(point: YieldPoint): string {
 }
 
 const accessibleDescription = computed(() => points.value.map(pointLabel).join("; "));
+
+function getPercentAxisDomain(values: number[]): { minimum: number; maximum: number } {
+	const minimumValue = Math.min(...values);
+	const maximumValue = Math.max(...values);
+	const minimum = Math.floor(Math.min(minimumValue, 0) / Y_TICK_STEP) * Y_TICK_STEP;
+	let maximum = Math.ceil(Math.max(maximumValue, 0) / Y_TICK_STEP) * Y_TICK_STEP;
+	if (maximum <= minimum || maximum === maximumValue) {
+		maximum += Y_TICK_STEP;
+	}
+	return { minimum, maximum };
+}
+
+function getPercentAxisTicks(domain: { minimum: number; maximum: number }): number[] {
+	const ticks = [];
+	for (let value = domain.minimum; value <= domain.maximum; value += Y_TICK_STEP) {
+		ticks.push(value);
+	}
+	return ticks;
+}
 </script>
 
 <template>
@@ -204,20 +213,21 @@ const accessibleDescription = computed(() => points.value.map(pointLabel).join("
 		>
 			<title>Bond Yield Comparison</title>
 
-			<g v-for="index in yTickIndexes" :key="`yield-tick-${index}`">
+			<g v-for="tick in yTicks" :key="`yield-tick-${tick}`">
 				<line
 					:x1="margin.left"
 					:x2="margin.left + plotWidth"
-					:y1="yPosition(yTickValue(index))"
-					:y2="yPosition(yTickValue(index))"
+					:y1="yPosition(tick)"
+					:y2="yPosition(tick)"
 					class="yield-comparison-chart__gridline"
 				/>
 				<text
 					:x="margin.left - 10"
-					:y="yPosition(yTickValue(index)) + 4"
+					:y="yPosition(tick) + 4"
+					data-testid="yield-comparison-y-tick"
 					text-anchor="end"
 				>
-					{{ formatPercent(yTickValue(index), futureXirrPrecision) }}
+					{{ formatPercent(tick, 0) }}
 				</text>
 			</g>
 

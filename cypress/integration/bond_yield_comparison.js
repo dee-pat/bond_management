@@ -238,6 +238,10 @@ context("Bond Yield Comparison", () => {
 			.each(($checkbox) => cy.wrap($checkbox).should("be.checked"));
 		cy.get("[data-bond-yield-select-all]").should("be.checked");
 		cy.get("[data-bond-yield-selection] tbody").should("contain", "USD").and("contain", "KES");
+		cy.get('[data-chart-mode="gap-aware"] [data-bond-yield-y-tick]').should(
+			"have.text",
+			"0%5%10%15%"
+		);
 		cy.window().then((window) => {
 			const chart = window.frappe.query_report.chart;
 			expect(chart.title).to.equal("Future XIRR (%) by Year");
