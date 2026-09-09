@@ -45,6 +45,16 @@ class TestPortfolioPerformance(IntegrationTestCase):
         labels = {column["fieldname"]: column["label"] for column in columns}
         self.assertEqual(labels["currency"], "CCY")
         self.assertEqual(labels["principal_factor"], "Prin. Factor")
+        xirr_columns = {
+            column["fieldname"]: column
+            for column in columns
+            if column["fieldname"] in {"xirr", "xirr_usd", "future_xirr"}
+        }
+        self.assertEqual(set(xirr_columns), {"xirr", "xirr_usd", "future_xirr"})
+        self.assertEqual(
+            {column["precision"] for column in xirr_columns.values()},
+            {3},
+        )
         principal_factor_column = next(
             column for column in columns if column["fieldname"] == "principal_factor"
         )

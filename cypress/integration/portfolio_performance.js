@@ -23,12 +23,21 @@ context("Portfolio Performance", () => {
 							label: "XIRR",
 							fieldname: "xirr",
 							fieldtype: "Percent",
+							precision: 3,
 							width: 100,
 						},
 						{
 							label: "XIRR (USD)",
 							fieldname: "xirr_usd",
 							fieldtype: "Percent",
+							precision: 3,
+							width: 120,
+						},
+						{
+							label: "Future XIRR",
+							fieldname: "future_xirr",
+							fieldtype: "Percent",
+							precision: 3,
 							width: 120,
 						},
 					],
@@ -37,6 +46,7 @@ context("Portfolio Performance", () => {
 							isin: "TEST-BOND",
 							xirr: 12.5,
 							xirr_usd: 8.75,
+							future_xirr: 7.25,
 						},
 					],
 					execution_time: 0.01,
@@ -68,6 +78,9 @@ context("Portfolio Performance", () => {
 			"/desk/query-report/Portfolio%20Performance?portfolio=TEST-PORTFOLIO&valuation_date=2025-12-31"
 		);
 		cy.wait("@report");
+		cy.get(".dt-row-0 .dt-cell--col-2 .dt-cell__content").should("contain", "12.500%");
+		cy.get(".dt-row-0 .dt-cell--col-3 .dt-cell__content").should("contain", "8.750%");
+		cy.get(".dt-row-0 .dt-cell--col-4 .dt-cell__content").should("contain", "7.250%");
 		cy.window().then((window) => {
 			cy.stub(window.frappe.utils, "copy_to_clipboard").as("copyToClipboard");
 		});

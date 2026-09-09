@@ -168,7 +168,10 @@ class TestInvestorPortfolioPerformance(IntegrationTestCase):
         columns = {column["fieldname"]: column for column in report["columns"]}
         self.assertEqual(columns["principal_factor"]["precision"], 3)
         self.assertEqual(columns["market_value"]["precision"], 2)
-        self.assertEqual(columns["xirr"]["precision"], 3)
+        self.assertEqual(
+            {columns[fieldname]["precision"] for fieldname in ("xirr", "future_xirr")},
+            {3},
+        )
         self.assertIsNone(columns["isin"]["precision"])
         self.assertEqual(
             columns["xirr"]["cashflow_action"],
@@ -227,6 +230,11 @@ class TestInvestorPortfolioPerformance(IntegrationTestCase):
         self.assertEqual(
             [column["fieldname"] for column in report["columns"]],
             list(PORTFOLIO_PERFORMANCE_COLUMN_FIELDS),
+        )
+        columns = {column["fieldname"]: column for column in report["columns"]}
+        self.assertEqual(
+            {columns[fieldname]["precision"] for fieldname in ("xirr", "xirr_usd", "future_xirr")},
+            {3},
         )
         self.assertEqual(
             report["rows"],

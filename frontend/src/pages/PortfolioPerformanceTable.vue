@@ -48,7 +48,7 @@ function formattedValue(row: PerformanceRow, column: PerformanceColumn): string 
 		return formatMoney(value, currencyFor(row, column), precision);
 	}
 	if (column.fieldtype === "Percent") {
-		return formatPercent(value, displayedPercentPrecision(value, precision));
+		return formatPercent(value, precision);
 	}
 	if (column.fieldtype === "Float") {
 		return formatNumber(value, precision);
@@ -62,11 +62,6 @@ function currencyFor(row: PerformanceRow, column: PerformanceColumn): string {
 	}
 	const value = row[column.options as keyof PerformanceRow];
 	return typeof value === "string" ? value : "";
-}
-
-function displayedPercentPrecision(value: number, precision: number): number {
-	const fraction = Math.abs(value).toFixed(precision).split(".")[1] ?? "";
-	return fraction.replace(/0+$/, "").length;
 }
 
 function actionFor(

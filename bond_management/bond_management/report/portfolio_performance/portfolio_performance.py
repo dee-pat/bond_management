@@ -32,6 +32,8 @@ from bond_management.bond_management.utils.xirr import (
     round_cashflow_amount,
 )
 
+XIRR_PRECISION = 3
+
 # ---------- ENTRY POINT ----------
 
 
@@ -279,18 +281,31 @@ def get_columns(include_reporting_currency_columns: bool = True) -> list[dict]:
                 "options": "currency",
                 "width": 135,
             },
-            {"label": _("XIRR"), "fieldname": "xirr", "fieldtype": "Percent", "width": 80},
+            {
+                "label": _("XIRR"),
+                "fieldname": "xirr",
+                "fieldtype": "Percent",
+                "precision": XIRR_PRECISION,
+                "width": 80,
+            },
         ]
     )
     if include_reporting_currency_columns:
         columns.append(
-            {"label": _("XIRR (USD)"), "fieldname": "xirr_usd", "fieldtype": "Percent", "width": 95}
+            {
+                "label": _("XIRR (USD)"),
+                "fieldname": "xirr_usd",
+                "fieldtype": "Percent",
+                "precision": XIRR_PRECISION,
+                "width": 95,
+            }
         )
     columns.append(
         {
             "label": _("Future XIRR"),
             "fieldname": "future_xirr",
             "fieldtype": "Percent",
+            "precision": XIRR_PRECISION,
             "width": 105,
         }
     )

@@ -18,7 +18,12 @@ frappe.query_reports["Portfolio Performance"] = {
 		},
 	],
 	formatter(value, row, column, data, default_formatter) {
-		const formatted_value = default_formatter(value, row, column, data);
+		const formatted_value =
+			["xirr", "xirr_usd", "future_xirr"].includes(column.fieldname) &&
+			value !== null &&
+			value !== undefined
+				? format_xirr(value, column)
+				: default_formatter(value, row, column, data);
 		const cashflow_columns = {
 			xirr: { xirr_type: "past", cashflow_currency: "native" },
 			future_xirr: { xirr_type: "future", cashflow_currency: "native" },
@@ -60,6 +65,11 @@ frappe.query_reports["Portfolio Performance"] = {
 		});
 	},
 };
+
+function format_xirr(value, column) {
+	const precision = column.precision ?? 3;
+	return `<div style="text-align: right">${format_number(value, null, precision)}%</div>`;
+}
 
 function copy_xirr_cashflows(report, isin, xirr_type, cashflow_currency) {
 	const filters = report.get_values();
