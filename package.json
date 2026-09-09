@@ -1,0 +1,18 @@
+{
+  "name": "bond-management",
+  "private": true,
+  "version": "0.0.0",
+  "scripts": {
+    "build": "yarn --cwd frontend build",
+    "dev": "yarn --cwd frontend dev",
+    "lint": "yarn --cwd frontend lint",
+    "postinstall": "yarn --cwd frontend install --frozen-lockfile",
+    "test:e2e": "playwright test",
+    "test:e2e:desktop": "playwright test --project=chromium",
+    "test:e2e:mobile": "playwright test --project=mobile",
+    "typecheck": "yarn --cwd frontend typecheck"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.57.0"
+  }
+}

@@ -1,0 +1,10 @@
+.schedule-section {
+	margin-top: 20px;
+}
+
+.schedule-section h3 {
+	margin: 0 0 10px;
+	color: var(--desk-text);
+	font-size: 14px;
+	font-weight: 600;
+}

@@ -1,9 +1,40 @@
 # Bond Management commands
 
-Run these from the bench root. Generic Frappe lifecycle and site commands live
-in `apps/bond_management/.agents/skills/frappe-app-dev/references/bench-operations.md`.
+Run these commands from the bench root. Generic Frappe lifecycle, site
+creation, and installation commands live in
+`apps/bond_management/.agents/skills/frappe-app-dev/references/bench-operations.md`.
+
+## Interactive development
+
+Use `dev.local` for interactive work; automated test-site rules live in
+`apps/bond_management/AGENTS.md`.
+
+```bash
+bench --site dev.local migrate
+bench --site dev.local backup --with-files
+```
+
+## Local service recovery
+
+Start MariaDB when it is unavailable:
+
+```bash
+brew services start mariadb
+```
+
+Inspect this bench's processes before recovering a broken state:
+
+```bash
+pgrep -af "${PWD}/apps/frappe|${PWD}/Procfile"
+bench restart
+```
 
 ## Verification
+
+Before verification or CI/Cypress diagnosis, read
+`apps/bond_management/docs/verification.md` for mandatory gates, evidence,
+startup diagnostics, and recovery order. The `ui` stage requires an already
+prepared test site.
 
 ```bash
 apps/bond_management/scripts/verify.sh lint

@@ -164,7 +164,26 @@ context("Bond Yield Comparison", () => {
 				.map((value) => ({ value, description: "Test bond" }));
 			request.reply({ statusCode: 200, body: { message: options } });
 		});
+		cy.intercept("GET", "**/api/method/frappe.client.validate_link_and_fetch*", {
+			statusCode: 200,
+			body: { message: { name: "TEST-PORTFOLIO" } },
+		});
 		cy.intercept("GET", "**/api/method/frappe.desk.query_report.run*", (request) => {
+			if (request.query.report_name === "Portfolio Performance") {
+				request.alias = "portfolioReport";
+				request.reply({
+					statusCode: 200,
+					body: {
+						message: {
+							columns: [{ label: "ISIN", fieldname: "isin", fieldtype: "Data" }],
+							result: [{ isin: USD_BOND }],
+							execution_time: 0.01,
+						},
+					},
+				});
+				return;
+			}
+
 			const filters = parse_filters(request.query.filters);
 			const selected_bonds = filters?.bonds || [];
 			const rows = REPORT_ROWS.filter((row) => {
@@ -216,9 +235,19 @@ context("Bond Yield Comparison", () => {
 		cy.get('.page-form .multiselect-list[data-fieldname="bonds"]').should("not.exist");
 		cy.get("[data-bond-yield-selection] .bond-yield-checkbox")
 			.should("have.length", 3)
-			.each(($checkbox) => cy.wrap($checkbox).should("be.checked"));
+			.each(($checkbox) =>
+				cy
+					.wrap($checkbox)
+					.should("be.checked")
+					.and("be.visible")
+					.and("have.css", "width", "16px")
+			);
 		cy.get("[data-bond-yield-select-all]").should("be.checked");
 		cy.get("[data-bond-yield-selection] tbody").should("contain", "USD").and("contain", "KES");
+		cy.get('[data-chart-mode="gap-aware"] [data-bond-yield-y-tick]').should(
+			"have.text",
+			"0%5%10%15%"
+		);
 		cy.window().then((window) => {
 			const chart = window.frappe.query_report.chart;
 			expect(chart.title).to.equal("Future XIRR (%) by Year");
@@ -339,6 +368,25 @@ context("Bond Yield Comparison", () => {
 		cy.window().then((window) => {
 			expect(window.frappe.query_report.chart.data.datasets).to.have.length(5);
 		});
+	});
+
+	it("removes Bond Yield Comparison controls when navigating to another report", () => {
+		cy.visit(
+			"/desk/query-report/Bond%20Yield%20Comparison?from_date=2025-01-01&to_date=2025-03-01"
+		);
+		cy.wait("@yieldReport");
+
+		cy.window().then((window) => {
+			window.frappe.set_route("query-report", "Portfolio Performance", {
+				portfolio: "TEST-PORTFOLIO",
+				valuation_date: "2025-12-31",
+			});
+		});
+		cy.wait("@portfolioReport");
+
+		cy.get(".navbar-breadcrumbs").should("contain", "Portfolio Performance");
+		cy.get("[data-bond-yield-selection]").should("not.exist");
+		cy.get("[data-bond-yield-audit]").should("not.exist");
 	});
 });
 

@@ -8,7 +8,10 @@ the two files conflict, this app-level file governs.
 
 - Never install or update skills globally. App-specific skills must live under
   `.agents/skills/` in this app.
-
+- Before changing files, running verification, investigating CI/Cypress failures,
+  or reporting completion, read [verification.md](docs/verification.md). It owns
+  the detailed gate commands, evidence format, fresh-site checks, and runtime
+  recovery procedures.
 - Run every applicable verification gate before committing, pushing, or
   reporting completion.
 - A gate passes only when its command was executed for the current change and
@@ -45,7 +48,9 @@ the two files conflict, this app-level file governs.
 - Construct precision-sensitive monetary values, accrued interest, yields, and
   quantities with `Decimal` from strings rather than binary floats. Quantize
   only at the business-rule boundary with an explicit rounding mode and
-  documented precision.
+  documented precision. Keep `Decimal` through calculations; convert to binary
+  floats only inside a named external-library adapter or explicit JSON/clipboard
+  serialization boundary, with precision regression tests.
 - Preserve the existing rounding, cash-flow sign, commission, and bank-price
   conventions. Change a convention only with an explicit business decision and
   boundary tests.
@@ -98,9 +103,6 @@ the two files conflict, this app-level file governs.
 - `ignore_permissions=True` is allowed for generated reports, migrations, and
   administrative invariant checks only when the caller's permission boundary is
   verified separately and the code documents that service boundary.
-- Keep `Decimal` through business calculations. Convert to binary floats only
-  inside a named external-library adapter or an explicit JSON/clipboard
-  serialization boundary, with precision regression tests.
 
 ## App-specific migrations and permissions
 
@@ -115,6 +117,9 @@ the two files conflict, this app-level file governs.
   controller validation for a useful error and a database unique index as the
   final integrity guarantee. Install manual indexes idempotently, ensure fresh
   app installation creates them too, and test both paths.
+- Permission patches should update or create only the `DocPerm` rows they own.
+  Do not save a parent `DocType` merely to change permissions, because that can
+  validate or rewrite unrelated metadata during migration.
 - Frappe marks an app's registered patches complete before `after_install` runs.
   Any permission, index, or other invariant that must exist on a fresh install
   must therefore also be bootstrapped by an idempotent `after_install` hook;
@@ -133,9 +138,8 @@ the two files conflict, this app-level file governs.
   machine-specific database configuration in repository files.
 - Factories may use collision-safe generated names, but test outcomes must not
   depend on their random suffixes. Tests must be deterministic, independent,
-  and rerunnable. Attachment parsers need current, supported
-  legacy, malformed, conflicting, encrypted, invalid-password, and non-PDF
-  cases.
+  and rerunnable. Attachment parsers need current, supported legacy,
+  malformed, conflicting, encrypted, invalid-password, and non-PDF cases.
 - For bond rules involving `>`, `>=`, `<`, or `<=`, test greater-than,
   less-than, and equality cases and state equality behavior.
 - Add Cypress coverage only for user-visible form, report, workspace, and
@@ -154,89 +158,6 @@ the two files conflict, this app-level file governs.
 - When a backend field or permission is exposed through Desk, update the
   relevant form/list/workspace code and one representative Cypress smoke
   assertion; server tests own the complete permission and validation matrix.
-
-## App verification gate
-
-### Verification evidence format
-
-Before committing, pushing, or reporting completion, record:
-
-- Risk classification:
-- Required gates:
-- Commands executed:
-- Exit statuses:
-- Tests passed:
-- Tests failed:
-- Tests not run:
-- Blockers:
-- Unverified local/CI differences:
-
-For GitHub Actions, fresh-site bootstrap, Cypress runtime setup, or other
-environment-sensitive changes, document the remaining local-vs-CI platform
-differences in the final field.
-
-- Match verification to the risk of the change: documentation, agent-guidance,
-  and test-only edits need formatting/lint plus the affected test; backend
-  business, permission, migration, hook, or shared utility changes need the
-  targeted test, complete affected module, and full server suite; client-only
-  changes need lint plus the focused Cypress spec, with the full UI suite when
-  they change a shared runtime or critical user journey. A targeted pass is
-  not evidence that a required broader gate passes.
-- From the bench directory, run
-  `apps/bond_management/scripts/verify.sh pre-push`. This shared gate runs
-  pre-commit, migrates `test_site`, and runs the complete server suite. GitHub
-  Actions must call the same script so local and CI commands cannot drift.
-- Changes to JavaScript, reports, DocType metadata, permissions, workspaces, or
-  other Desk behavior must run
-  `apps/bond_management/scripts/verify.sh pre-push-ui`, which adds the complete
-  headless UI suite. Set `CHROME_BIN` when `chrome` is not on `PATH`.
-- The UI gate uses Frappe's Cypress runner with a bench-local cache under
-  `.cache/Cypress`. `scripts/cypress-runtime.sh` pins the Frappe v16 Cypress
-  dependency set, verifies package/binary compatibility, and repairs cache
-  failures before the test run. Host-level Electron launch failures are
-  reported without repeatedly downloading the same binary. It also clears
-  Electron-as-Node and custom-binary environment overrides that make Cypress
-  start incorrectly. Do not rely on a machine-global Cypress cache or bypass
-  this preflight.
-- On macOS in the local development environment, Chrome is installed at
-  `/Applications/Google Chrome.app/Contents/MacOS/Google Chrome`; set
-  `CHROME_BIN` to this path when `chrome` is not on `PATH`.
-- Cypress failure learnings: run the server explicitly for the tested site:
-  `bench --site test_site serve --port 8001 --noreload`. Running `bench serve`
-  without `--site` can serve a different site and produce misleading login
-  failures. Frappe's `run-ui-tests` command injects `CYPRESS_adminPassword`
-  from the selected site's config, so a shell password override may be
-  ignored. If login fails, verify the credential directly against `test_site`,
-  reset the local test Administrator with `bench --site test_site
-  set-admin-password`, and clear stale failed-login cache before retrying;
-  never write test credentials to the repository. Do not repeatedly rerun
-  Cypress while the account is locked. Once server and credentials are
-  correct, rerun the named spec first with `CYPRESS_SPEC`, then rerun the
-  complete UI gate and preserve the failure artifacts.
-- `CYPRESS_VERSION` in `scripts/cypress-runtime.sh` and the GitHub Actions
-  cache key must be updated together when Frappe v16 changes its supported
-  Cypress release. Do not override the version in CI or reuse a cache for a
-  different binary.
-- Changes to patches, schema, hooks, dependencies, installation, or manual
-  indexes must also be validated against a freshly installed site matching the
-  GitHub Actions setup. Obtain approval before recreating or dropping a local
-  site.
-- CI's fresh-site bootstrap must initialize an explicit bench root, assert that
-  its `sites/common_site_config.json` exists before running `bench get-app`, and
-  fetch the checked-out app through a local `file://` source. Keep the bench
-  initialization path, step working directories, caches, and artifact paths in
-  sync. Use a unique run-scoped directory under the runner's temporary folder;
-  never reuse a fixed `/home/runner/frappe-bench` path or overwrite an existing
-  bench. GitHub's `runner` context is unavailable in `jobs.<job_id>.env`; use it
-  in step-level fields or the runner's `$RUNNER_TEMP` variable instead.
-- The server CI job runs the shared lint and full server gate once. The UI CI
-  job runs only the headless Cypress gate against its fresh site; do not make
-  the UI job repeat the full server suite unless the failure requires it.
-- For a Cypress failure, rerun the named spec with `CYPRESS_SPEC` first, then
-  run the complete UI suite. Preserve videos, screenshots, browser logs, and
-  the exact command when escalating a runtime failure.
-- Do not commit, push, or report a change as complete while a required check is
-  failing or unavailable. State exactly which checks ran and their results.
 
 ## References
 

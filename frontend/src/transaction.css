@@ -1,0 +1,496 @@
+.transaction-surface,
+.record-surface {
+	margin-top: 0;
+}
+
+.surface-heading {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 1rem;
+	margin-bottom: 13px;
+}
+
+.surface-heading--filters {
+	justify-content: flex-start;
+}
+
+.surface-kicker {
+	margin: 0 0 3px;
+	color: var(--desk-muted);
+	font-size: 11px;
+	font-weight: 600;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+}
+
+.surface-heading h2 {
+	margin: 0;
+	color: var(--desk-text);
+	font-size: 16px;
+	font-weight: 600;
+	line-height: 1.35;
+}
+
+.portfolio-filter,
+.surface-filter {
+	display: grid;
+	align-content: end;
+	gap: 5px;
+	min-width: min(100%, 18rem);
+	color: var(--desk-muted);
+	font-size: 12px;
+	font-weight: 500;
+}
+
+.portfolio-filter select,
+.surface-filter select,
+.surface-filter input {
+	width: 100%;
+	min-height: 32px;
+	padding: 5px 9px;
+	color: var(--desk-text);
+	background: var(--desk-surface);
+	border: 1px solid var(--desk-border-dark);
+	border-radius: 4px;
+	font-size: 13px;
+}
+
+.portfolio-filter select:focus,
+.surface-filter select:focus,
+.surface-filter input:focus {
+	border-color: var(--desk-link);
+	box-shadow: 0 0 0 2px color-mix(in srgb, var(--ink-blue-7) 12%, transparent);
+	outline: 0;
+}
+
+.surface-state {
+	display: grid;
+	min-height: 100px;
+	padding: 20px;
+	color: var(--desk-muted);
+	background: var(--desk-surface);
+	border: 1px solid var(--desk-border);
+	border-radius: 5px;
+	font-size: 13px;
+	place-items: center;
+	text-align: center;
+}
+
+.surface-state p {
+	margin: 0;
+}
+
+.surface-state--error {
+	color: var(--desk-danger);
+	background: var(--desk-error-surface);
+	border-color: var(--desk-error-border);
+}
+
+.record-list-wrap {
+	max-width: 100%;
+	overflow-x: auto;
+	background: var(--desk-surface);
+	border: 1px solid var(--desk-border);
+	border-radius: 5px;
+}
+
+/* The Frappe UI header defaults to 32px, while these cells need 36px. */
+.record-list-wrap [data-slot="list-header"] {
+	height: auto;
+	min-height: 36px;
+}
+
+/* ListRow has a two-branch root (static row vs. RouterLink row), so row-level
+ * hooks belong on this stable app-owned wrapper. Keep the Frappe row as the
+ * grid element and restore the list divider relationship across wrappers. */
+.record-list__row-wrapper {
+	width: 100%;
+}
+
+.record-list__row-wrapper:not(:first-child) [data-slot="list-divider"] {
+	opacity: 1;
+}
+
+.record-list__row-wrapper:hover [data-slot="list-divider"],
+.record-list__row-wrapper:hover + .record-list__row-wrapper [data-slot="list-divider"] {
+	opacity: 0;
+}
+
+.record-list-wrap [data-slot="list-header-cell"] {
+	min-height: 36px;
+	padding: 9px 12px;
+	color: var(--desk-table-text);
+	background: var(--desk-table-header);
+	font-size: 11px;
+	font-weight: 600;
+	letter-spacing: 0.025em;
+	text-transform: uppercase;
+}
+
+.record-list-wrap [data-slot="list-cell"] {
+	min-height: 40px;
+	padding: 9px 12px;
+	color: var(--desk-table-text);
+	font-size: 13px;
+	font-variant-numeric: tabular-nums;
+	white-space: nowrap;
+}
+
+.record-list-wrap [data-slot="list-row"]:hover {
+	background: var(--desk-table-hover);
+}
+
+.record-list-wrap a {
+	color: var(--desk-link);
+	font-weight: 500;
+	text-decoration: none;
+}
+
+.record-list-wrap a:hover {
+	text-decoration: underline;
+}
+
+.back-link {
+	color: var(--desk-link);
+	font-weight: 500;
+	text-decoration: none;
+}
+
+.back-link:hover {
+	text-decoration: underline;
+}
+
+.list-column-button--active {
+	color: var(--desk-text);
+}
+
+.back-link {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	margin-bottom: 15px;
+	font-size: 12px;
+}
+
+.read-only-badge {
+	display: inline-flex;
+	align-items: center;
+	min-height: 20px;
+	padding: 3px 8px;
+	color: var(--desk-table-text);
+	background: var(--desk-table-header);
+	border: 1px solid var(--desk-border);
+	border-radius: 999px;
+	font-size: 11px;
+	font-weight: 500;
+}
+
+.pdf-attachment-section {
+	margin-top: 18px;
+	padding: 14px;
+	background: var(--desk-surface);
+	border: 1px solid var(--desk-border);
+	border-radius: 5px;
+}
+
+.pdf-attachment-section h3,
+.holding-section h3,
+.schedule-section h3,
+.market-price-section h3,
+.yield-curve-section h3 {
+	margin: 0 0 10px;
+	color: var(--desk-text);
+	font-size: 14px;
+	font-weight: 600;
+}
+
+.pdf-attachment-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 7px;
+}
+
+.pdf-attachment-link {
+	display: inline-flex;
+	align-items: center;
+	min-height: 30px;
+	padding: 5px 9px;
+	color: var(--desk-link);
+	background: var(--desk-surface);
+	border: 1px solid var(--desk-link-border);
+	border-radius: 4px;
+	font-size: 12px;
+	font-weight: 500;
+	text-decoration: none;
+}
+
+.pdf-attachment-link:hover {
+	background: var(--desk-link-surface);
+}
+
+.pdf-attachment-empty {
+	color: var(--desk-muted);
+	font-size: 12px;
+}
+
+.transaction-detail-grid,
+.record-detail-grid {
+	display: grid;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	margin: 0;
+	background: var(--desk-surface);
+	border: 1px solid var(--desk-border);
+	border-radius: 5px;
+	overflow: hidden;
+}
+
+.transaction-detail-grid div,
+.record-detail-grid div {
+	min-width: 0;
+	padding: 12px;
+	border-bottom: 1px solid var(--desk-border);
+}
+
+.transaction-detail-grid div:not(:nth-child(3n + 1)),
+.record-detail-grid div:not(:nth-child(3n + 1)) {
+	border-left: 1px solid var(--desk-border);
+}
+
+.transaction-detail-grid dt,
+.record-detail-grid dt {
+	color: var(--desk-muted);
+	font-size: 11px;
+	font-weight: 600;
+	letter-spacing: 0.025em;
+	text-transform: uppercase;
+}
+
+.transaction-detail-grid dd,
+.record-detail-grid dd {
+	margin: 4px 0 0;
+	color: var(--desk-text);
+	font-weight: 500;
+	overflow-wrap: anywhere;
+}
+
+.list-filter-bar {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: 6px;
+	margin: -2px 0 12px;
+	color: var(--desk-muted);
+	font-size: 12px;
+}
+
+.list-filter-bar__label {
+	font-weight: 600;
+}
+
+.list-filter-chip,
+.list-filter-clear {
+	display: inline-flex;
+	align-items: center;
+	min-height: 24px;
+	gap: 5px;
+	padding: 3px 7px;
+	border-radius: 4px;
+	cursor: pointer;
+	font-size: 11px;
+}
+
+.list-filter-chip {
+	color: var(--desk-table-text);
+	background: var(--desk-table-header);
+	border: 1px solid var(--desk-border);
+}
+
+.list-filter-chip strong {
+	color: var(--desk-text);
+	font-weight: 600;
+}
+
+.list-filter-chip:hover {
+	background: var(--desk-link-surface);
+	border-color: var(--desk-link-border);
+}
+
+.list-filter-clear {
+	color: var(--desk-link);
+	background: transparent;
+	border: 0;
+}
+
+.list-filter-clear:hover {
+	text-decoration: underline;
+}
+
+.list-filter-button {
+	max-width: 100%;
+	padding: 0;
+	color: inherit;
+	background: transparent;
+	border: 0;
+	cursor: pointer;
+	font: inherit;
+	text-align: inherit;
+}
+
+.list-filter-button:hover {
+	color: var(--desk-link);
+	text-decoration: underline;
+}
+
+.list-filter-action {
+	display: inline-flex;
+	margin-left: 6px;
+	color: var(--desk-quiet-text);
+	font-size: 11px;
+	font-weight: 500;
+}
+
+.list-filter-status {
+	border: 0;
+	font: inherit;
+}
+
+.list-paging-area {
+	position: sticky;
+	bottom: 0;
+	z-index: 4;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	min-height: 53px;
+	gap: 16px;
+	margin-top: 12px;
+	padding: 10px 0 0;
+	background: var(--desk-bg);
+	border-top: 1px solid var(--desk-border);
+	color: var(--desk-muted);
+	font-size: 12px;
+}
+
+.list-paging-area__summary,
+.list-paging-area__actions,
+.list-paging-area__sizes {
+	display: flex;
+	align-items: center;
+}
+
+.list-paging-area__summary {
+	gap: 4px;
+}
+
+.list-paging-area__summary strong {
+	color: var(--desk-text);
+	font-weight: 600;
+}
+
+.list-paging-area__more-hint {
+	margin-left: 4px;
+	color: var(--desk-muted);
+}
+
+.list-paging-area__actions {
+	gap: 10px;
+}
+
+.list-paging-area__sizes {
+	gap: 0;
+}
+
+.list-paging-area__size {
+	min-width: 34px;
+	border-radius: 0 !important;
+}
+
+.list-paging-area__size:first-child {
+	border-top-left-radius: 4px !important;
+	border-bottom-left-radius: 4px !important;
+}
+
+.list-paging-area__size:last-child {
+	border-top-right-radius: 4px !important;
+	border-bottom-right-radius: 4px !important;
+}
+
+.list-paging-area__size + .list-paging-area__size {
+	margin-left: -1px;
+}
+
+.list-paging-area__load-more {
+	min-width: 86px;
+}
+
+.status-badge {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	min-height: 20px;
+	padding: 3px 8px;
+	color: var(--desk-table-text);
+	background: var(--desk-table-header);
+	border-radius: 999px;
+	font-size: 11px;
+	font-weight: 500;
+}
+
+.status-badge::before {
+	width: 6px;
+	height: 6px;
+	background: currentColor;
+	border-radius: 50%;
+	content: "";
+}
+
+.status-badge--matched {
+	color: var(--desk-success);
+	background: var(--desk-success-surface);
+}
+
+.status-badge--mismatched {
+	color: var(--desk-danger);
+	background: var(--desk-error-surface);
+}
+
+.holding-section,
+.schedule-section,
+.market-price-section,
+.yield-curve-section {
+	margin-top: 20px;
+}
+
+@media (max-width: 760px) {
+	.surface-heading {
+		align-items: stretch;
+		flex-direction: column;
+	}
+
+	.portfolio-filter,
+	.surface-filter {
+		min-width: 0;
+	}
+
+	.list-paging-area {
+		position: static;
+		align-items: stretch;
+		flex-direction: column;
+		gap: 10px;
+	}
+
+	.list-paging-area__actions {
+		justify-content: space-between;
+	}
+
+	.transaction-detail-grid,
+	.record-detail-grid {
+		grid-template-columns: minmax(0, 1fr);
+	}
+
+	.transaction-detail-grid div:not(:nth-child(3n + 1)),
+	.record-detail-grid div:not(:nth-child(3n + 1)) {
+		border-left: 0;
+	}
+}

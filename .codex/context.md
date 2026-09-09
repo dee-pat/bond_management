@@ -4,6 +4,13 @@ Shared bench-wide rules live in `../../AGENTS.md`; bond-management-specific
 architecture, invariants, environment, sites, and verification policy live in
 `AGENTS.md`. Use this file only for active work and troubleshooting notes.
 
+## Active multi-phase work
+
+- Investor UI migration: before changing the Frappe UI SPA, Playwright setup,
+  investor APIs, investor redirects, or legacy investor workspace, read
+  `docs/specs/investor-ui-migration.md` and update
+  `docs/plans/investor-ui-migration-progress.md` for the current slice.
+
 ## Troubleshooting checklist
 
 - MySQLdb connection errors: check the MariaDB service and credentials.
@@ -13,13 +20,11 @@ architecture, invariants, environment, sites, and verification policy live in
   applicable migration.
 - JavaScript field updates: check form triggers and `frm.refresh_field`.
 - Bench build failures: check the Node and Yarn versions.
-- Cypress startup failures: run
-  `apps/bond_management/scripts/cypress-runtime.sh diagnose`; the UI gate uses
-  a bench-local Cypress cache and repairs a missing or stale binary. If a
-  macOS Electron process aborts after verification, confirm the installed
-  Cypress version supports the host macOS release before replacing test code.
+- For Cypress startup/login failures or CI bootstrap issues, read
+  `docs/verification.md` for runtime diagnostics, recovery, and the required
+  rerun sequence.
 
 ## Reference commands
 
-See `.codex/commands.md` for bond-management verification and runtime
-diagnostic commands.
+See `apps/bond_management/.codex/commands.md` for local development, service
+recovery, and verification commands.

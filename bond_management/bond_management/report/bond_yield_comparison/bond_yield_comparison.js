@@ -18,6 +18,19 @@ const GAP_CHART_LAYOUT = {
 	top: 38,
 	bottom: 286,
 };
+const Y_TICK_STEP = 5;
+const BOND_YIELD_COMPARISON_ROUTE = "Bond Yield Comparison";
+const BOND_YIELD_SELECTOR_STYLE_ID = "bond-yield-comparison-selector-styles";
+
+// Query Report reuses one page instance across report navigation.
+frappe.router.on("change", () => {
+	const route = frappe.get_route();
+	if (route?.[0] === "query-report" && route?.[1] === BOND_YIELD_COMPARISON_ROUTE) {
+		return;
+	}
+
+	remove_report_controls(frappe.query_report);
+});
 
 frappe.query_reports["Bond Yield Comparison"] = {
 	filters: [
@@ -122,6 +135,7 @@ function render_gap_aware_chart(report, model) {
 
 function render_bond_selector(report, model) {
 	const selected = report._bond_yield_selected_isins || new Set();
+	ensure_bond_selector_styles();
 	const $section = $(`<section class="bond-yield-selection" data-bond-yield-selection>
 		<div class="flex justify-between align-center mb-2">
 			<div class="flex align-center">
@@ -188,6 +202,26 @@ function render_bond_selector(report, model) {
 	update_bond_selector_summary(report);
 }
 
+function ensure_bond_selector_styles() {
+	frappe.dom.set_style(
+		`
+			.bond-yield-selection input[type="checkbox"].bond-yield-checkbox,
+			.bond-yield-selection input[type="checkbox"].bond-yield-select-all {
+				-webkit-appearance: auto !important;
+				appearance: auto !important;
+				accent-color: var(--primary-color, #5e64ff);
+				cursor: pointer;
+				height: 16px !important;
+				margin: 0 6px 0 0 !important;
+				min-width: 16px !important;
+				opacity: 1;
+				width: 16px !important;
+			}
+		`,
+		BOND_YIELD_SELECTOR_STYLE_ID
+	);
+}
+
 function update_bond_selector_summary(report) {
 	const $section = report._bond_yield_selector;
 	if (!$section?.length) {
@@ -241,10 +275,13 @@ function audit_cell(value) {
 }
 
 function remove_report_controls(report) {
-	report._bond_yield_selector?.remove();
-	report._bond_yield_audit?.remove();
-	report._bond_yield_selector = null;
-	report._bond_yield_audit = null;
+	report?._bond_yield_selector?.remove();
+	report?._bond_yield_audit?.remove();
+	report?.page?.wrapper?.find("[data-bond-yield-selection], [data-bond-yield-audit]").remove();
+	if (report) {
+		report._bond_yield_selector = null;
+		report._bond_yield_audit = null;
+	}
 }
 
 function show_no_chart_message(report, message) {
@@ -256,11 +293,7 @@ function get_gap_chart_geometry(model) {
 	const values = model.datasets.flatMap((dataset) =>
 		dataset.values.filter((value) => value !== null)
 	);
-	const min = Math.min(...values);
-	const max = Math.max(...values);
-	const span = max - min;
-	const padding = span ? Math.max(span * 0.1, 0.5) : Math.max(Math.abs(max) * 0.1, 1);
-	const range = { min: min - padding, max: max + padding };
+	const range = get_percent_axis_range(values);
 	const plot_width = GAP_CHART_LAYOUT.width - GAP_CHART_LAYOUT.left - GAP_CHART_LAYOUT.right;
 	const plot_height = GAP_CHART_LAYOUT.bottom - GAP_CHART_LAYOUT.top;
 	const x = (index) =>
@@ -275,13 +308,33 @@ function get_gap_chart_geometry(model) {
 		plot_height,
 		height: GAP_CHART_LAYOUT.bottom + 60,
 		range,
+		y_ticks: get_percent_axis_ticks(range),
 		x,
 		y,
 	};
 }
 
+function get_percent_axis_range(values) {
+	const min_value = Math.min(...values);
+	const max_value = Math.max(...values);
+	const min = Math.floor(Math.min(min_value, 0) / Y_TICK_STEP) * Y_TICK_STEP;
+	let max = Math.ceil(Math.max(max_value, 0) / Y_TICK_STEP) * Y_TICK_STEP;
+	if (max <= min || max === max_value) {
+		max += Y_TICK_STEP;
+	}
+	return { min, max };
+}
+
+function get_percent_axis_ticks(range) {
+	const ticks = [];
+	for (let value = range.min; value <= range.max; value += Y_TICK_STEP) {
+		ticks.push(value);
+	}
+	return ticks;
+}
+
 function make_gap_chart_svg(model, geometry = get_gap_chart_geometry(model)) {
-	const { width, left, top, bottom, height, plot_width, range, x, y } = geometry;
+	const { width, left, top, bottom, height, plot_width, y_ticks, x, y } = geometry;
 	const parts = [
 		`<svg viewBox="0 0 ${width} ${height}" width="100%" height="${height}" role="img" aria-label="Future XIRR comparison chart" data-chart-mode="gap-aware">`,
 		`<text x="${
@@ -295,8 +348,7 @@ function make_gap_chart_svg(model, geometry = get_gap_chart_geometry(model)) {
 		}" text-anchor="middle" class="chart-axis-title">Market date (year)</text>`,
 	];
 
-	for (let index = 0; index < 5; index += 1) {
-		const value = range.max - ((range.max - range.min) * index) / 4;
+	y_ticks.forEach((value) => {
 		const position = y(value);
 		parts.push(
 			`<line x1="${left}" x2="${
@@ -304,9 +356,12 @@ function make_gap_chart_svg(model, geometry = get_gap_chart_geometry(model)) {
 			}" y1="${position}" y2="${position}" class="chart-grid-line"/>`,
 			`<text x="${left - 10}" y="${
 				position + 4
-			}" text-anchor="end" class="chart-axis-label">${format_percent(value, 1)}</text>`
+			}" text-anchor="end" class="chart-axis-label" data-bond-yield-y-tick="true">${format_percent(
+				value,
+				0
+			)}</text>`
 		);
-	}
+	});
 	parts.push(
 		`<line x1="${left}" x2="${left}" y1="${top}" y2="${bottom}" class="chart-axis-line"/>`,
 		`<line x1="${left}" x2="${

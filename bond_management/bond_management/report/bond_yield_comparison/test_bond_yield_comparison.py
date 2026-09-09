@@ -61,6 +61,7 @@ class TestBondYieldComparison(IntegrationTestCase):
         self.assertEqual(Decimal(str(rows[0].future_xirr)), Decimal("17.125"))
 
     def test_empty_selection_returns_all_readable_bonds(self):
+        existing_isins = {row.isin for row in execute({"bonds": []})[1]}
         usd_bond = make_bond()
         kes_bond = make_bond(currency="KES")
         market_date = make_market_date(usd_bond, date="2025-04-01")
@@ -68,7 +69,10 @@ class TestBondYieldComparison(IntegrationTestCase):
 
         rows = execute({"bonds": []})[1]
 
-        self.assertEqual({row.isin for row in rows}, {usd_bond.name, kes_bond.name})
+        self.assertEqual(
+            {row.isin for row in rows},
+            existing_isins | {usd_bond.name, kes_bond.name},
+        )
 
     def test_report_filters_reject_invalid_types_and_ranges(self):
         invalid_filters = [

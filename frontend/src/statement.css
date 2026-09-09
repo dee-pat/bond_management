@@ -1,0 +1,55 @@
+.surface-filters {
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: flex-end;
+	gap: 10px;
+}
+
+.status-badge {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	min-height: 20px;
+	padding: 3px 8px;
+	color: var(--desk-table-text);
+	background: var(--desk-table-header);
+	border-radius: 999px;
+	font-size: 11px;
+	font-weight: 500;
+}
+
+.status-badge::before {
+	width: 6px;
+	height: 6px;
+	background: currentColor;
+	border-radius: 50%;
+	content: "";
+}
+
+.status-badge--matched {
+	color: var(--desk-success);
+	background: var(--desk-success-surface);
+}
+
+.status-badge--mismatched {
+	color: var(--desk-danger);
+	background: var(--desk-error-surface);
+}
+
+.holding-section {
+	margin-top: 20px;
+}
+
+.holding-section h3 {
+	margin: 0 0 10px;
+	color: var(--desk-text);
+	font-size: 14px;
+	font-weight: 600;
+}
+
+@media (max-width: 760px) {
+	.surface-filters {
+		display: grid;
+		justify-content: stretch;
+	}
+}

@@ -1,0 +1,119 @@
+.performance-filters {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 18rem)) auto;
+	align-items: end;
+	gap: 10px;
+	margin-bottom: 16px;
+}
+
+.performance-filters .surface-filter {
+	min-width: 0;
+}
+
+.performance-run-button {
+	min-width: 4.5rem;
+	align-self: end;
+}
+
+.performance-table-wrap {
+	max-width: 100%;
+	overflow-x: auto;
+	background: var(--desk-surface);
+	border: 1px solid var(--desk-border);
+	border-radius: 5px;
+}
+
+.performance-table-wrap [data-slot="list-header-cell"] {
+	padding: 9px 12px;
+	color: var(--desk-table-text);
+	background: var(--desk-table-header);
+	font-size: 11px;
+	font-weight: 600;
+	letter-spacing: 0.025em;
+	text-transform: uppercase;
+}
+
+.performance-table-wrap [data-slot="list-cell"] {
+	min-height: 40px;
+	padding: 9px 12px;
+	color: var(--desk-table-text);
+	font-size: 13px;
+	font-variant-numeric: tabular-nums;
+	white-space: nowrap;
+}
+
+.performance-table-wrap [data-slot="list-cell"] > * {
+	min-width: 0;
+	max-width: 100%;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.performance-table-wrap a,
+.performance-cashflow-button {
+	color: var(--desk-link);
+	font-weight: 500;
+}
+
+.performance-table-wrap a {
+	text-decoration: none;
+}
+
+.performance-table-wrap a:hover,
+.performance-cashflow-button:hover {
+	text-decoration: underline;
+}
+
+.performance-cashflow-button {
+	max-width: 100%;
+	overflow: hidden;
+	padding: 0;
+	text-overflow: ellipsis;
+	font-variant-numeric: inherit;
+	white-space: nowrap;
+}
+
+.performance-cashflow-button:disabled {
+	opacity: 0.55;
+	cursor: wait;
+}
+
+.performance-table__total {
+	color: var(--desk-text) !important;
+	background: var(--desk-table-header);
+	border-top-color: var(--desk-border-dark) !important;
+	font-weight: 600;
+}
+
+.performance-copy-feedback {
+	margin: 10px 0 0;
+	color: var(--desk-muted);
+	font-size: 12px;
+}
+
+.performance-copy-feedback--success {
+	color: var(--desk-success);
+}
+
+.performance-copy-feedback--empty {
+	color: var(--desk-warning);
+}
+
+.performance-copy-feedback--error {
+	color: var(--desk-danger);
+}
+
+@media (max-width: 760px) {
+	.performance-filters {
+		grid-template-columns: minmax(0, 1fr);
+	}
+
+	.performance-run-button {
+		width: 100%;
+	}
+
+	.performance-table-wrap {
+		margin-inline: -1px;
+	}
+}
