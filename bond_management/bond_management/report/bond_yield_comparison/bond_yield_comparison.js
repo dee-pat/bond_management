@@ -20,6 +20,7 @@ const GAP_CHART_LAYOUT = {
 };
 const Y_TICK_STEP = 5;
 const BOND_YIELD_COMPARISON_ROUTE = "Bond Yield Comparison";
+const BOND_YIELD_SELECTOR_STYLE_ID = "bond-yield-comparison-selector-styles";
 
 // Query Report reuses one page instance across report navigation.
 frappe.router.on("change", () => {
@@ -134,6 +135,7 @@ function render_gap_aware_chart(report, model) {
 
 function render_bond_selector(report, model) {
 	const selected = report._bond_yield_selected_isins || new Set();
+	ensure_bond_selector_styles();
 	const $section = $(`<section class="bond-yield-selection" data-bond-yield-selection>
 		<div class="flex justify-between align-center mb-2">
 			<div class="flex align-center">
@@ -198,6 +200,26 @@ function render_bond_selector(report, model) {
 	report._bond_yield_selector = $section;
 	report.$chart.after($section);
 	update_bond_selector_summary(report);
+}
+
+function ensure_bond_selector_styles() {
+	frappe.dom.set_style(
+		`
+			.bond-yield-selection input[type="checkbox"].bond-yield-checkbox,
+			.bond-yield-selection input[type="checkbox"].bond-yield-select-all {
+				-webkit-appearance: auto !important;
+				appearance: auto !important;
+				accent-color: var(--primary-color, #5e64ff);
+				cursor: pointer;
+				height: 16px !important;
+				margin: 0 6px 0 0 !important;
+				min-width: 16px !important;
+				opacity: 1;
+				width: 16px !important;
+			}
+		`,
+		BOND_YIELD_SELECTOR_STYLE_ID
+	);
 }
 
 function update_bond_selector_summary(report) {

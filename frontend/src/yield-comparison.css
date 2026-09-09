@@ -40,6 +40,17 @@
 	gap: 0.5rem;
 }
 
+.yield-comparison-selector input[type="checkbox"][data-slot="control"] {
+	flex: 0 0 16px;
+	width: 16px !important;
+	height: 16px !important;
+	min-width: 16px !important;
+	margin: 1px 0 0;
+	appearance: auto;
+	accent-color: var(--desk-link);
+	opacity: 1;
+}
+
 .yield-comparison-selector__all {
 	font-weight: 700;
 }

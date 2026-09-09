@@ -36,15 +36,22 @@ test("compares persisted yields, selects series, and copies sanitized audit data
   await page.getByLabel("To Date").fill(TO_DATE);
   await page.getByRole("button", { name: "Run", exact: true }).click();
 
-  const selector = page.getByTestId("yield-comparison-selector");
+	const selector = page.getByTestId("yield-comparison-selector");
   await expect(selector.getByLabel("Select all bonds")).toBeChecked();
+  await expect(selector.getByLabel("Select all bonds")).toBeVisible();
   await expect(selector).toContainText("2 of 2 bonds selected");
-	await expect(
-		selector.getByRole("checkbox", { name: new RegExp(`Select ${PRIMARY_BOND}`) })
-	).toBeChecked();
-	await expect(
-		selector.getByRole("checkbox", { name: new RegExp(`Select ${GAP_BOND}`) })
-	).toBeChecked();
+  await expect(
+    selector.getByRole("checkbox", { name: new RegExp(`Select ${PRIMARY_BOND}`) })
+  ).toBeChecked();
+  await expect(
+    selector.getByRole("checkbox", { name: new RegExp(`Select ${PRIMARY_BOND}`) })
+  ).toBeVisible();
+  await expect(
+    selector.getByRole("checkbox", { name: new RegExp(`Select ${GAP_BOND}`) })
+  ).toBeChecked();
+  await expect(
+    selector.getByRole("checkbox", { name: new RegExp(`Select ${GAP_BOND}`) })
+  ).toBeVisible();
 
   const chart = page.getByTestId("yield-comparison-chart");
   const image = chart.getByRole("img", {

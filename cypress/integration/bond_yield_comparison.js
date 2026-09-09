@@ -235,7 +235,13 @@ context("Bond Yield Comparison", () => {
 		cy.get('.page-form .multiselect-list[data-fieldname="bonds"]').should("not.exist");
 		cy.get("[data-bond-yield-selection] .bond-yield-checkbox")
 			.should("have.length", 3)
-			.each(($checkbox) => cy.wrap($checkbox).should("be.checked"));
+			.each(($checkbox) =>
+				cy
+					.wrap($checkbox)
+					.should("be.checked")
+					.and("be.visible")
+					.and("have.css", "width", "16px")
+			);
 		cy.get("[data-bond-yield-select-all]").should("be.checked");
 		cy.get("[data-bond-yield-selection] tbody").should("contain", "USD").and("contain", "KES");
 		cy.get('[data-chart-mode="gap-aware"] [data-bond-yield-y-tick]').should(
