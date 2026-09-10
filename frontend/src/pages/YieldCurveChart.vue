@@ -18,6 +18,7 @@ interface YieldPoint {
 const props = defineProps<{ rows: MarketPriceRow[] }>();
 const lineChartRef = ref<{ chart?: unknown } | null>(null);
 const hoveredPoint = ref<YieldPoint | null>(null);
+const hiddenCurrencies = ref<string[]>([]);
 let boundChart: ECharts | undefined;
 
 const points = computed<YieldPoint[]>(() =>
@@ -52,10 +53,22 @@ const points = computed<YieldPoint[]>(() =>
 const currencies = computed(() =>
 	[...new Set(points.value.map((point) => point.currency))].sort()
 );
+// The shared value-axis tooltip chooses the first row at a duplicate X value.
+// Keep a visible currency first so hiding one line does not close the tooltip
+// when another line still has a point at the same duration.
+const plottedPoints = computed<YieldPoint[]>(() => {
+	const hidden = new Set(hiddenCurrencies.value);
+	return [...points.value].sort(
+		(left, right) =>
+			left.years - right.years ||
+			Number(hidden.has(left.currency)) - Number(hidden.has(right.currency)) ||
+			left.isin.localeCompare(right.isin)
+	);
+});
 // Keep one wide row per bond. The chart's long-data pivot would overwrite
 // bonds that share both a currency and a repayment duration.
 const chartData = computed(() =>
-	points.value.map((point) => ({
+	plottedPoints.value.map((point) => ({
 		years: point.years,
 		[point.currency]: point.yieldPercent,
 	}))
@@ -141,9 +154,24 @@ function formatYears(value: number): string {
 }
 
 function visibleTooltipItems(items: ChartTooltipItem[]): ChartTooltipItem[] {
-	return hoveredPoint.value
-		? items.filter((item) => item.name === hoveredPoint.value?.currency)
-		: items;
+	const point = hoveredPoint.value;
+	if (!point) {
+		return items;
+	}
+	if (hiddenCurrencies.value.includes(point.currency)) {
+		return [];
+	}
+
+	const item = items.find((candidate) => candidate.name === point.currency);
+	return [
+		item ?? {
+			name: point.currency,
+			label: seriesConfig.value[point.currency]?.label ?? point.currency,
+			color: seriesConfig.value[point.currency]?.color ?? "",
+			value: point.yieldPercent,
+			formattedValue: formatPercent(point.yieldPercent, 2),
+		},
+	];
 }
 
 function handleChartMouseOver(params: unknown): void {
@@ -163,7 +191,7 @@ function handleChartMouseOver(params: unknown): void {
 		return;
 	}
 
-	const point = points.value[dataIndex];
+	const point = plottedPoints.value[dataIndex];
 	if (!point || point.currency !== seriesName) {
 		clearHoveredPoint();
 		return;
@@ -199,7 +227,11 @@ function getPercentAxisDomain(values: number[]): { minimum: number; maximum: num
 		role="region"
 	>
 		<ChartCard class="yield-curve" data-testid="yield-curve">
-			<LineChart ref="lineChartRef" v-bind="chartProps">
+			<LineChart
+				ref="lineChartRef"
+				v-model:hidden-series="hiddenCurrencies"
+				v-bind="chartProps"
+			>
 				<template #tooltip="{ label, items }">
 					<div v-if="label" class="mb-2 text-p-sm text-ink-gray-5">{{ label }}</div>
 					<div class="flex flex-col gap-1.5" data-testid="yield-curve-tooltip">

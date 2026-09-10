@@ -170,8 +170,17 @@ function formatMarketDate(value: string): string {
 	return parts.length === 3 ? `${parts.slice(0, 2).join(" ")}\n${parts[2]}` : formatDate(value);
 }
 
-function visibleTooltipItems(items: ChartTooltipItem[]): ChartTooltipItem[] {
-	return hoveredIsin.value ? items.filter((item) => item.name === hoveredIsin.value) : items;
+function visibleTooltipItems(items: ChartTooltipItem[], label?: string): ChartTooltipItem[] {
+	const date = dates.value.find((candidate) => formatMarketDate(candidate) === label);
+
+	return items.filter((item) => {
+		if (hoveredIsin.value && item.name !== hoveredIsin.value) {
+			return false;
+		}
+
+		const row = date ? rowsByKey.value.get(pointKey(item.name, date)) : undefined;
+		return row ? numericValue(row.future_xirr) !== null : false;
+	});
 }
 
 function handleChartMouseOver(params: unknown): void {
@@ -221,7 +230,7 @@ function getPercentAxisDomain(values: number[]): { minimum: number; maximum: num
 						data-testid="yield-comparison-chart-tooltip"
 					>
 						<div
-							v-for="item in visibleTooltipItems(items)"
+							v-for="item in visibleTooltipItems(items, label)"
 							:key="item.name"
 							class="flex items-center justify-between gap-5 text-p-sm"
 						>
