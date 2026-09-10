@@ -13,7 +13,7 @@ withDefaults(
 		loadingText: "Loading...",
 		error: null,
 		testId: null,
-	},
+	}
 );
 
 const emit = defineEmits<{
