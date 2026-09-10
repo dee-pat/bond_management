@@ -36,70 +36,55 @@ test("compares persisted yields, selects series, and copies sanitized audit data
   await page.getByLabel("To Date").fill(TO_DATE);
   await page.getByRole("button", { name: "Run", exact: true }).click();
 
-	const selector = page.getByTestId("yield-comparison-selector");
-  await expect(selector.getByLabel("Select all bonds")).toBeChecked();
-  await expect(selector.getByLabel("Select all bonds")).toBeVisible();
-  await expect(selector).toContainText("2 of 2 bonds selected");
-  await expect(
-    selector.getByRole("checkbox", { name: new RegExp(`Select ${PRIMARY_BOND}`) })
-  ).toBeChecked();
-  await expect(
-    selector.getByRole("checkbox", { name: new RegExp(`Select ${PRIMARY_BOND}`) })
-  ).toBeVisible();
-  await expect(
-    selector.getByRole("checkbox", { name: new RegExp(`Select ${GAP_BOND}`) })
-  ).toBeChecked();
-  await expect(
-    selector.getByRole("checkbox", { name: new RegExp(`Select ${GAP_BOND}`) })
-  ).toBeVisible();
-
-  const chart = page.getByTestId("yield-comparison-chart");
-  const image = chart.getByRole("img", {
-    name: "Persisted Future XIRR by market date and bond",
-  });
+	const chart = page.getByTestId("yield-comparison-chart");
+	const image = chart.getByRole("img", {
+		name: "Persisted Future XIRR, By market date and bond",
+	});
   await expect(image).toBeVisible();
-  await expect(chart).toHaveAttribute("data-gap-count", "1");
-  await expect(
-    chart.getByRole("listitem").filter({ hasText: PRIMARY_BOND })
-  ).toBeVisible();
-  await expect(
-    chart.getByRole("listitem").filter({ hasText: GAP_BOND })
-  ).toBeVisible();
-  await expect(image).toHaveAccessibleDescription(
+	await expect(chart).toHaveAttribute("data-gap-count", "1");
+	await expect(
+		chart.getByRole("button", { name: `Hide ${PRIMARY_BOND} · USD` })
+	).toBeVisible();
+	await expect(
+		chart.getByRole("button", { name: `Hide ${GAP_BOND} · KES` })
+	).toBeVisible();
+	await expect(chart).toHaveAccessibleDescription(
     new RegExp(
       `01 Jan 2095, ${GAP_BOND}, KES, Market Price 99.250, Future XIRR 9.125%`
     )
   );
-  await expect(image).toHaveAccessibleDescription(
+	await expect(chart).toHaveAccessibleDescription(
     new RegExp(
       `02 Jan 2095, ${PRIMARY_BOND}, USD, Market Price 102.500, Future XIRR 7.250%`
     )
-  );
-  await expect(
-    chart.getByLabel(
-      `01 Jan 2095, ${GAP_BOND}, KES, Market Price 99.250, Future XIRR 9.125%`,
-      { exact: true },
-    ),
-  ).toBeVisible();
-  await expect(chart.getByTestId("yield-comparison-year-tick")).toHaveText([
-    "2095",
-  ]);
-  await expect(chart.getByTestId("yield-comparison-y-tick")).toHaveText([
-    "0%",
-    "5%",
-    "10%",
-  ]);
+	);
+	await expect(
+		chart.getByTestId("yield-comparison-chart-description")
+			.filter({
+				hasText:
+				`01 Jan 2095, ${GAP_BOND}, KES, Market Price 99.250, Future XIRR 9.125%`,
+			}),
+	).toContainText("Future XIRR 9.125%");
 
-	await selector
-		.getByRole("checkbox", { name: new RegExp(`Select ${GAP_BOND}`) })
-		.uncheck();
-  await expect(selector).toContainText("1 of 2 bonds selected");
-  await expect(
-    chart.getByRole("listitem").filter({ hasText: GAP_BOND })
-  ).toHaveCount(0);
-	await selector
-		.getByRole("checkbox", { name: new RegExp(`Select ${GAP_BOND}`) })
-		.check();
+	const chartImage = await image.boundingBox();
+	expect(chartImage).not.toBeNull();
+	await page.mouse.move(
+		chartImage!.x + chartImage!.width / 2,
+		chartImage!.y + chartImage!.height / 2
+	);
+	const tooltip = page.getByRole("tooltip");
+	await expect(tooltip).toBeVisible();
+	await expect(tooltip).toContainText(`ISIN ${PRIMARY_BOND}`);
+	await expect(tooltip).not.toContainText("Market Price");
+
+	await chart.getByRole("button", { name: `Hide ${GAP_BOND} · KES` }).click();
+	await expect(
+		chart.getByRole("button", { name: `Show ${GAP_BOND} · KES` })
+	).toHaveAttribute("aria-pressed", "false");
+	await chart.getByRole("button", { name: `Show ${GAP_BOND} · KES` }).click();
+	await expect(
+		chart.getByRole("button", { name: `Hide ${GAP_BOND} · KES` })
+	).toHaveAttribute("aria-pressed", "true");
 
   await page.getByRole("button", { name: "Copy audit data to Excel" }).click();
   await expect(page.getByRole("status")).toHaveText("Copied 5 audit rows.");

@@ -8,6 +8,7 @@ import DataList from "../components/DataList.vue";
 import ListFilterBar from "../components/ListFilterBar.vue";
 import ListPagination from "../components/ListPagination.vue";
 import SortableColumn from "../components/SortableColumn.vue";
+import SurfaceState from "../components/SurfaceState.vue";
 import { InvestorApiError, redirectToLogin, useInvestorApi } from "../lib/api";
 import { toFilterValue } from "../lib/list";
 import { formatDate, formatNumber } from "../lib/format";
@@ -168,18 +169,17 @@ onMounted(() => void loadTransactions());
 			@clear-all="clearAllFilters"
 		/>
 
-		<div v-if="loading && transactions.length === 0" class="surface-state" aria-live="polite">
-			Loading transactions…
-		</div>
+		<SurfaceState
+			v-if="loading && transactions.length === 0"
+			:loading="loading"
+			loading-text="Loading transactions…"
+		/>
 
-		<div
+		<SurfaceState
 			v-else-if="error && transactions.length === 0"
-			class="surface-state surface-state--error"
-			role="alert"
-		>
-			<p>{{ error }}</p>
-			<Button label="Retry" variant="outline" @click="retryTransactions" />
-		</div>
+			:error="error"
+			@retry="retryTransactions"
+		/>
 
 		<div v-else-if="!hasAssignments" class="surface-state" data-testid="transactions-empty">
 			No portfolios are assigned to your account.
@@ -194,10 +194,7 @@ onMounted(() => void loadTransactions());
 		</div>
 
 		<template v-else>
-			<div v-if="error" class="surface-state surface-state--error" role="alert">
-				<p>{{ error }}</p>
-				<Button label="Retry" variant="outline" @click="retryTransactions" />
-			</div>
+			<SurfaceState v-if="error" :error="error" @retry="retryTransactions" />
 
 			<DataList
 				:items="transactions"

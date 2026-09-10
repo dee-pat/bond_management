@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
 import { RouterLink, useRoute } from "vue-router";
-import { Button } from "frappe-ui";
 
+import SurfaceState from "../components/SurfaceState.vue";
 import { InvestorApiError, redirectToLogin, useInvestorApi } from "../lib/api";
 import { formatDate, formatNumber } from "../lib/format";
 import type { ExchangeRateDetail } from "../types";
@@ -85,12 +85,9 @@ onMounted(() => void loadExchangeRate());
 	<section class="record-surface" aria-labelledby="exchange-rate-detail-title">
 		<RouterLink class="back-link" to="/exchange-rates"> ← Back to exchange rates </RouterLink>
 
-		<div v-if="loading" class="surface-state" aria-live="polite">Loading exchange rate…</div>
+		<SurfaceState v-if="loading" :loading="loading" loading-text="Loading exchange rate…" />
 
-		<div v-else-if="error" class="surface-state surface-state--error" role="alert">
-			<p>{{ error }}</p>
-			<Button label="Retry" variant="outline" @click="loadExchangeRate" />
-		</div>
+		<SurfaceState v-else-if="error" :error="error" @retry="loadExchangeRate" />
 
 		<template v-else-if="exchangeRate">
 			<div class="surface-heading">

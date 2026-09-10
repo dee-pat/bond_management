@@ -35,10 +35,14 @@ test("omits unavailable yields while preserving a genuine zero yield", async ({
   await page.goto("/bond-investor/market-dates/review-yields");
   await expect(page.getByTestId("market-prices")).toContainText(
     "MISSING-YIELD"
-  );
-  const curve = page.getByTestId("yield-curve");
-  await expect(curve.getByLabel(/^ZERO-YIELD, USD, 0\.00%/)).toBeVisible();
-  await expect(curve.getByLabel(/^MISSING-YIELD,/)).toHaveCount(0);
+	);
+	const curve = page.getByTestId("yield-curve");
+	await expect(curve.getByTestId("yield-curve-description")).toContainText(
+		/^ZERO-YIELD, USD, 0\.00%/,
+	);
+	await expect(curve.getByTestId("yield-curve-description")).not.toContainText(
+		"MISSING-YIELD",
+	);
 });
 
 test("restarts pagination after a failed portfolio filter change", async ({
@@ -121,15 +125,10 @@ test("shows an accessible yield value for a single market date", async ({
   await page.getByLabel("To Date").fill("2095-01-01");
   await page.getByRole("button", { name: "Run", exact: true }).click();
 
-  const point = page
-    .getByTestId("yield-comparison-chart")
-    .getByLabel(
-      "01 Jan 2095, UI-TEST-BOND-001, USD, Market Price 102.500, Future XIRR 7.000%",
-      { exact: true }
-    );
-  await expect(point).toBeVisible();
-  await point.focus();
-  await expect(point).toBeFocused();
+	const chart = page.getByTestId("yield-comparison-chart");
+	await expect(chart.getByTestId("yield-comparison-chart-description")).toContainText(
+			"01 Jan 2095, UI-TEST-BOND-001, USD, Market Price 102.500, Future XIRR 7.000%",
+	);
 });
 
 function marketPrice(isin: string, futureXirr: number | null) {

@@ -109,17 +109,17 @@ test("keeps a newer yield result when an older request finishes last", async ({
 
   await page.getByLabel("From Date").fill("2095-01-02");
   await page.getByRole("button", { name: "Run", exact: true }).click();
-  await expect(page.getByTestId("yield-comparison-selector")).toContainText(
-    "LATEST-BOND",
-  );
+	await expect(page.getByTestId("yield-comparison-chart-description")).toContainText(
+		"LATEST-BOND",
+	);
 
   releaseFirstRequest.resolve();
-  await expect(page.getByTestId("yield-comparison-selector")).toContainText(
-    "LATEST-BOND",
-  );
-  await expect(page.getByTestId("yield-comparison-selector")).not.toContainText(
-    "STALE-BOND",
-  );
+	await expect(page.getByTestId("yield-comparison-chart-description")).toContainText(
+		"LATEST-BOND",
+	);
+	await expect(page.getByTestId("yield-comparison-chart-description")).not.toContainText(
+		"STALE-BOND",
+	);
 });
 
 test.describe("mid-session expiry", () => {

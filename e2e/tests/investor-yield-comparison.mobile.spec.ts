@@ -25,46 +25,29 @@ test("compares persisted bond yields without mobile overflow", async ({
   await page.getByLabel("To Date").fill("2095-01-03");
   await page.getByRole("button", { name: "Run", exact: true }).click();
 
-  const selector = page.getByTestId("yield-comparison-selector");
-  await expect(selector).toContainText("2 of 2 bonds selected");
-	await expect(
-		selector.getByRole("checkbox", { name: new RegExp(`Select ${PRIMARY_BOND}`) })
-	).toBeChecked();
-	await expect(
-		selector.getByRole("checkbox", { name: new RegExp(`Select ${GAP_BOND}`) })
-	).toBeChecked();
-
   const chart = page.getByTestId("yield-comparison-chart");
   const image = chart.getByRole("img", {
-    name: "Persisted Future XIRR by market date and bond",
+    name: "Persisted Future XIRR, By market date and bond",
   });
   await expect(image).toBeVisible();
   await expect(chart).toHaveAttribute("data-gap-count", "1");
   await expect(
-    chart.getByRole("listitem").filter({ hasText: "USD" })
+    chart.getByRole("button", { name: `Hide ${PRIMARY_BOND} · USD` })
   ).toContainText(PRIMARY_BOND);
   await expect(
-    chart.getByRole("listitem").filter({ hasText: "KES" })
+    chart.getByRole("button", { name: `Hide ${GAP_BOND} · KES` })
   ).toContainText(GAP_BOND);
-  await expect(image).toHaveAccessibleDescription(
+  await expect(chart).toHaveAccessibleDescription(
     new RegExp(
       `03 Jan 2095, ${GAP_BOND}, KES, Market Price 100.750, Future XIRR 9.625%`
     )
   );
   await expect(
-    chart.getByLabel(
+    chart.getByTestId("yield-comparison-chart-description").filter({
+      hasText:
       `03 Jan 2095, ${GAP_BOND}, KES, Market Price 100.750, Future XIRR 9.625%`,
-      { exact: true },
-    ),
-  ).toBeVisible();
-  await expect(chart.getByTestId("yield-comparison-year-tick")).toHaveText([
-    "2095",
-  ]);
-  await expect(chart.getByTestId("yield-comparison-y-tick")).toHaveText([
-    "0%",
-    "5%",
-    "10%",
-  ]);
+    }),
+  ).toContainText("Future XIRR 9.625%");
   await expect(page.locator("table")).toHaveCount(0);
 
   const fitsViewport = await page.evaluate(

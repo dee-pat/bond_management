@@ -8,6 +8,7 @@ import DataList from "../components/DataList.vue";
 import ListFilterBar from "../components/ListFilterBar.vue";
 import ListPagination from "../components/ListPagination.vue";
 import SortableColumn from "../components/SortableColumn.vue";
+import SurfaceState from "../components/SurfaceState.vue";
 import { InvestorApiError, redirectToLogin, useInvestorApi } from "../lib/api";
 import { toFilterValue } from "../lib/list";
 import { formatDate } from "../lib/format";
@@ -108,18 +109,17 @@ onMounted(() => void loadMarketDates());
 			@clear-all="clearFilter"
 		/>
 
-		<div v-if="loading && marketDates.length === 0" class="surface-state" aria-live="polite">
-			Loading market dates…
-		</div>
+		<SurfaceState
+			v-if="loading && marketDates.length === 0"
+			:loading="loading"
+			loading-text="Loading market dates…"
+		/>
 
-		<div
+		<SurfaceState
 			v-else-if="error && marketDates.length === 0"
-			class="surface-state surface-state--error"
-			role="alert"
-		>
-			<p>{{ error }}</p>
-			<Button label="Retry" variant="outline" @click="retryMarketDates" />
-		</div>
+			:error="error"
+			@retry="retryMarketDates"
+		/>
 
 		<div
 			v-else-if="marketDates.length === 0"
@@ -130,10 +130,7 @@ onMounted(() => void loadMarketDates());
 		</div>
 
 		<template v-else>
-			<div v-if="error" class="surface-state surface-state--error" role="alert">
-				<p>{{ error }}</p>
-				<Button label="Retry" variant="outline" @click="retryMarketDates" />
-			</div>
+			<SurfaceState v-if="error" :error="error" @retry="retryMarketDates" />
 
 			<DataList
 				:items="marketDates"

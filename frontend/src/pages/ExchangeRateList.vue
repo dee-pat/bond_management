@@ -8,6 +8,7 @@ import DataList from "../components/DataList.vue";
 import ListFilterBar from "../components/ListFilterBar.vue";
 import ListPagination from "../components/ListPagination.vue";
 import SortableColumn from "../components/SortableColumn.vue";
+import SurfaceState from "../components/SurfaceState.vue";
 import { InvestorApiError, redirectToLogin, useInvestorApi } from "../lib/api";
 import { toFilterValue } from "../lib/list";
 import { formatDate, formatNumber } from "../lib/format";
@@ -108,18 +109,17 @@ onMounted(() => void loadExchangeRates());
 			@clear-all="clearFilter"
 		/>
 
-		<div v-if="loading && exchangeRates.length === 0" class="surface-state" aria-live="polite">
-			Loading exchange rates…
-		</div>
+		<SurfaceState
+			v-if="loading && exchangeRates.length === 0"
+			:loading="loading"
+			loading-text="Loading exchange rates…"
+		/>
 
-		<div
+		<SurfaceState
 			v-else-if="error && exchangeRates.length === 0"
-			class="surface-state surface-state--error"
-			role="alert"
-		>
-			<p>{{ error }}</p>
-			<Button label="Retry" variant="outline" @click="retryExchangeRates" />
-		</div>
+			:error="error"
+			@retry="retryExchangeRates"
+		/>
 
 		<div
 			v-else-if="exchangeRates.length === 0"
@@ -130,10 +130,7 @@ onMounted(() => void loadExchangeRates());
 		</div>
 
 		<template v-else>
-			<div v-if="error" class="surface-state surface-state--error" role="alert">
-				<p>{{ error }}</p>
-				<Button label="Retry" variant="outline" @click="retryExchangeRates" />
-			</div>
+			<SurfaceState v-if="error" :error="error" @retry="retryExchangeRates" />
 
 			<DataList
 				:items="exchangeRates"
