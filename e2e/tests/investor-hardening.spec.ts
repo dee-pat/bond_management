@@ -15,7 +15,7 @@ test("announces client navigation with route titles and heading focus", async ({
   await expect(page).toHaveTitle("Bond Investor");
   await expect(homeHeading).toBeFocused();
   await expect(page.getByTestId("investor-shell")).not.toContainText(
-    "subsequent migration slices",
+    "subsequent migration slices"
   );
 
   await page
@@ -31,7 +31,7 @@ test("announces client navigation with route titles and heading focus", async ({
   await expect(
     page
       .getByRole("navigation", { name: "Investor navigation" })
-      .getByRole("link", { name: "Bond Transactions" }),
+      .getByRole("link", { name: "Bond Transactions" })
   ).toHaveAttribute("aria-current", "page");
 });
 
@@ -67,12 +67,12 @@ test("shows loading, failure, retry, and empty transaction states", async ({
 
   releaseFirstRequest.resolve();
   await expect(page.getByRole("alert")).toContainText(
-    "Transactions could not be loaded",
+    "Transactions could not be loaded"
   );
   await page.getByRole("button", { name: "Retry" }).click();
 
   await expect(page.getByTestId("transactions-empty")).toContainText(
-    "No transactions match",
+    "No transactions match"
   );
   expect(attempts).toBe(2);
 });
@@ -96,7 +96,7 @@ test("keeps a newer yield result when an older request finishes last", async ({
       }
 
       await fulfillJson(route, yieldResponse("LATEST-BOND"));
-    },
+    }
   );
 
   await page.goto("/bond-investor/yield-comparison");
@@ -109,17 +109,94 @@ test("keeps a newer yield result when an older request finishes last", async ({
 
   await page.getByLabel("From Date").fill("2095-01-02");
   await page.getByRole("button", { name: "Run", exact: true }).click();
-	await expect(page.getByTestId("yield-comparison-chart-description")).toContainText(
-		"LATEST-BOND",
-	);
+  await expect(
+    page.getByTestId("yield-comparison-chart-description")
+  ).toContainText("LATEST-BOND");
 
   releaseFirstRequest.resolve();
-	await expect(page.getByTestId("yield-comparison-chart-description")).toContainText(
-		"LATEST-BOND",
-	);
-	await expect(page.getByTestId("yield-comparison-chart-description")).not.toContainText(
-		"STALE-BOND",
-	);
+  await expect(
+    page.getByTestId("yield-comparison-chart-description")
+  ).toContainText("LATEST-BOND");
+  await expect(
+    page.getByTestId("yield-comparison-chart-description")
+  ).not.toContainText("STALE-BOND");
+});
+
+test("preserves a pending yield report across responsive shell changes", async ({
+  page,
+}) => {
+  const requestStarted = deferred();
+  const releaseRequest = deferred();
+
+  await page.setViewportSize({ width: 412, height: 915 });
+  await page.route(
+    `${INVESTOR_API}.get_bond_yield_comparison*`,
+    async (route) => {
+      requestStarted.resolve();
+      await releaseRequest.promise;
+      await fulfillJson(route, yieldResponse("RESPONSIVE-BOND"));
+    }
+  );
+
+  await page.goto("/bond-investor/yield-comparison");
+  await expect(page.getByTestId("yield-comparison-initial")).toBeVisible();
+  await page.getByLabel("From Date").fill("2095-01-01");
+  await page.getByLabel("To Date").fill("2095-01-03");
+  await page.getByRole("button", { name: "Run", exact: true }).click();
+  await requestStarted.promise;
+  await expect(page.getByText("Loading bond yield comparison…")).toBeVisible();
+
+  await page.setViewportSize({ width: 915, height: 915 });
+  await expect(page.locator('[data-slot="desktop-shell"]')).toBeVisible();
+  await expect(page.getByLabel("From Date")).toHaveValue("2095-01-01");
+  await expect(page.getByLabel("To Date")).toHaveValue("2095-01-03");
+  await expect(page.getByText("Loading bond yield comparison…")).toBeVisible();
+
+  releaseRequest.resolve();
+  await expect(
+    page.getByTestId("yield-comparison-chart-description")
+  ).toContainText("RESPONSIVE-BOND");
+  await expect(page.getByTestId("yield-comparison-initial")).toHaveCount(0);
+});
+
+test("preserves filtered paginated transactions across responsive shell changes", async ({
+  page,
+}) => {
+  const loadMoreStarted = deferred();
+  const releaseLoadMore = deferred();
+  const filteredIsin = "RESPONSIVE-FILTERED-BOND";
+
+  await page.setViewportSize({ width: 412, height: 915 });
+  await page.route(`${INVESTOR_API}.get_transactions*`, async (route) => {
+    const start = Number(
+      new URL(route.request().url()).searchParams.get("start") ?? 0
+    );
+    if (start === 20) {
+      loadMoreStarted.resolve();
+      await releaseLoadMore.promise;
+    }
+    await fulfillJson(route, transactionPage(start, filteredIsin));
+  });
+
+  await page.goto("/bond-investor/transactions");
+  const rows = page.getByTestId("transaction-row");
+  await expect(rows).toHaveCount(20);
+  await rows
+    .first()
+    .getByRole("button", { name: `Filter ISIN by ${filteredIsin}` })
+    .click();
+  await expect(page.getByTestId("active-filters")).toContainText(filteredIsin);
+
+  await page.getByRole("button", { name: "Load More", exact: true }).click();
+  await loadMoreStarted.promise;
+  await page.setViewportSize({ width: 915, height: 915 });
+  await expect(page.locator('[data-slot="desktop-shell"]')).toBeVisible();
+  await expect(rows).toHaveCount(20);
+  await expect(page.getByTestId("active-filters")).toContainText(filteredIsin);
+
+  releaseLoadMore.resolve();
+  await expect(rows).toHaveCount(21);
+  await expect(page.getByTestId("active-filters")).toContainText(filteredIsin);
 });
 
 test.describe("mid-session expiry", () => {
@@ -131,24 +208,24 @@ test.describe("mid-session expiry", () => {
     await expect(page.getByTestId("transaction-row").first()).toBeVisible();
 
     const csrfToken = await page.evaluate(
-      () => (window as typeof window & { csrf_token?: string }).csrf_token,
+      () => (window as typeof window & { csrf_token?: string }).csrf_token
     );
     const logout = await page.request.post(
       "/api/method/frappe.handler.logout",
       {
         headers: { "X-Frappe-CSRF-Token": csrfToken ?? "" },
-      },
+      }
     );
     expect(logout.ok()).toBeTruthy();
 
     const expiredResponse = page.waitForResponse((response) =>
-      response.url().includes("investor.get_transactions"),
+      response.url().includes("investor.get_transactions")
     );
-	await selectFrappeOption(page, "Portfolio Name", "UI Test Portfolio");
+    await selectFrappeOption(page, "Portfolio Name", "UI Test Portfolio");
     expect((await expiredResponse).status()).toBe(403);
 
     await expect(page).toHaveURL(
-      /\/login\?redirect-to=%2Fbond-investor%2Ftransactions$/,
+      /\/login\?redirect-to=%2Fbond-investor%2Ftransactions$/
     );
   });
 });
@@ -162,7 +239,7 @@ test("keeps an authenticated record denial on its detail route", async ({
 
   await expect(page).toHaveURL(new RegExp(`${path}$`));
   await expect(page.getByRole("alert")).toContainText(
-    "unavailable or you do not have permission",
+    "unavailable or you do not have permission"
   );
 });
 
@@ -214,11 +291,29 @@ function yieldResponse(isin: string): object {
   };
 }
 
+function transactionPage(start: number, isin: string): object {
+  const data = Array.from({ length: start === 20 ? 1 : 20 }, (_, index) => ({
+    name: `RESPONSIVE-TRANSACTION-${start + index}`,
+    settlement_date: "2095-01-02",
+    transaction_type: "Purchase",
+    portfolio_name: "UI Test Portfolio",
+    isin,
+    trade_date: "2095-01-01",
+    quantity_face_value: 10,
+    price: 100,
+  }));
+  const transactionPage = {
+    data,
+    pagination: { start, page_length: 20, has_more: start === 0 },
+  };
+  return { message: transactionPage, data: transactionPage };
+}
+
 function column(
   fieldname: string,
   label: string,
   fieldtype: string,
-  precision: number | null = null,
+  precision: number | null = null
 ): object {
   return {
     fieldname,

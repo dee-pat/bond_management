@@ -17,7 +17,18 @@
 }
 
 .yield-comparison-chart__card {
-	height: 22.5rem;
+	height: auto;
+	min-height: 22.5rem;
+}
+
+.yield-comparison-chart__card [data-slot="chart-container"] {
+	height: auto;
+}
+
+.yield-comparison-chart__card [data-slot="chart-plot"] {
+	flex: 0 0 14rem;
+	height: 14rem;
+	min-height: 14rem;
 }
 
 .yield-comparison-audit {
@@ -40,6 +51,6 @@
 	}
 
 	.yield-comparison-chart__card {
-		height: 20rem;
+		min-height: 20rem;
 	}
 }

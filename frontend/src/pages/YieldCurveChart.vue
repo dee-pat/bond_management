@@ -47,22 +47,22 @@ const points = computed<YieldPoint[]>(() =>
 				},
 			];
 		})
-		.sort((left, right) => left.years - right.years)
+		.sort((left, right) => left.years - right.years || left.isin.localeCompare(right.isin))
 );
 const currencies = computed(() =>
 	[...new Set(points.value.map((point) => point.currency))].sort()
 );
-const chartPoints = computed(() =>
-	currencies.value.flatMap((currency) =>
-		points.value.filter((point) => point.currency === currency)
-	)
+// Keep one wide row per bond. The chart's long-data pivot would overwrite
+// bonds that share both a currency and a repayment duration.
+const chartData = computed(() =>
+	points.value.map((point) => ({
+		years: point.years,
+		[point.currency]: point.yieldPercent,
+	}))
 );
-const chartYears = computed(() =>
-	[...new Set(chartPoints.value.map((point) => point.years))].sort((left, right) => left - right)
-);
-const xMaximum = computed(() => Math.max(...chartPoints.value.map((point) => point.years), 1));
+const xMaximum = computed(() => Math.max(...points.value.map((point) => point.years), 1));
 const yDomain = computed(() =>
-	getPercentAxisDomain(chartPoints.value.map((point) => point.yieldPercent))
+	getPercentAxisDomain(points.value.map((point) => point.yieldPercent))
 );
 const seriesConfig = computed<Record<string, SeriesStyle>>(() =>
 	Object.fromEntries(
@@ -79,14 +79,11 @@ const seriesConfig = computed<Record<string, SeriesStyle>>(() =>
 	)
 );
 const chartProps = computed<LineChartProps>(() => ({
-	data: chartPoints.value,
+	data: chartData.value,
 	x: "years",
-	y: "yieldPercent",
-	series: "currency",
-	// The shared chart pivots long data into one row per x value. A currency
-	// therefore gets nulls at x values that belong to another currency; bridge
-	// those pivot gaps so each currency line matches the Desk chart's
-	// point-to-point series.
+	y: currencies.value,
+	// Wide data keeps every bond row while the value columns remain one series
+	// per currency. Nulls are only between points from different currencies.
 	connectNulls: true,
 	title: "Yield Curve",
 	palette: "categorical",
@@ -105,7 +102,7 @@ const chartProps = computed<LineChartProps>(() => ({
 		format: (value) => formatPercent(value, 2),
 	},
 }));
-const accessibleDescription = computed(() => chartPoints.value.map(pointLabel).join("; "));
+const accessibleDescription = computed(() => points.value.map(pointLabel).join("; "));
 const chartInstance = computed<ECharts | undefined>(() => {
 	const chart = lineChartRef.value?.chart;
 	return isRef(chart) ? (chart.value as ECharts | undefined) : (chart as ECharts | undefined);
@@ -166,14 +163,12 @@ function handleChartMouseOver(params: unknown): void {
 		return;
 	}
 
-	const years = chartYears.value[dataIndex];
-	if (years === undefined) {
+	const point = points.value[dataIndex];
+	if (!point || point.currency !== seriesName) {
 		clearHoveredPoint();
 		return;
 	}
-	hoveredPoint.value =
-		points.value.find((point) => point.currency === seriesName && point.years === years) ??
-		null;
+	hoveredPoint.value = point;
 }
 
 function clearHoveredPoint(): void {
@@ -218,7 +213,8 @@ function getPercentAxisDomain(values: number[]): { minimum: number; maximum: num
 								v-if="hoveredPoint && hoveredPoint.currency === item.name"
 								class="shrink-0 text-p-sm-semibold tabular-nums text-ink-gray-8"
 							>
-								ISIN {{ hoveredPoint.isin }} · Yield {{ item.formattedValue }}
+								ISIN {{ hoveredPoint.isin }} · Yield
+								{{ formatPercent(hoveredPoint.yieldPercent, 2) }}
 							</span>
 							<span
 								v-else

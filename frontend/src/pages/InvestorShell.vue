@@ -51,6 +51,10 @@ const error = ref<string | null>(null);
 const api = useInvestorApi();
 const isMobile = ref(false);
 const shellComponent = computed(() => (isMobile.value ? MobileShell : DesktopShell));
+const pageContentTargetId = computed(() =>
+	isMobile.value ? "investor-page-content-mobile" : "investor-page-content-desktop"
+);
+const pageContentTarget = computed(() => `#${pageContentTargetId.value}`);
 const currentItem = computed(() => INVESTOR_NAVIGATION.find((item) => item.name === route.name));
 const isHome = computed(() => currentItem.value?.name === "home");
 const isTransactionList = computed(() => route.name === "transactions");
@@ -296,70 +300,72 @@ onBeforeUnmount(() => window.removeEventListener("resize", updateMobileLayout));
 				</Breadcrumbs>
 			</nav>
 
-			<div class="investor-page-content px-3 pb-10 pt-5 sm:px-5">
-				<div
-					v-if="error"
-					class="status-panel status-panel--error flex items-center gap-3 rounded-4 border border-outline-red-3 bg-surface-red-2 px-3 py-2 text-sm text-ink-red-7"
-				>
-					<ErrorMessage class="m-0" :message="error" />
-					<Button
-						class="ml-auto"
-						label="Retry"
-						theme="blue"
-						variant="outline"
-						@click="loadBootstrap"
-					/>
-				</div>
-
-				<p
-					v-if="isHome && bootstrap"
-					class="compatibility-note max-w-2xl text-p-sm text-ink-gray-5"
-				>
-					Browse assigned portfolio records, shared bond data and investor reports from
-					the navigation.
-				</p>
-
-				<TransactionList
-					v-else-if="isTransactionList && bootstrap"
-					:bootstrap="bootstrap"
-				/>
-
-				<TransactionDetail v-else-if="isTransactionDetail && bootstrap" />
-
-				<StatementList v-else-if="isStatementList && bootstrap" :bootstrap="bootstrap" />
-
-				<StatementDetail v-else-if="isStatementDetail && bootstrap" />
-
-				<BondList v-else-if="isBondList && bootstrap" />
-
-				<BondDetail v-else-if="isBondDetail && bootstrap" />
-
-				<MarketDateList v-else-if="isMarketDateList && bootstrap" />
-
-				<MarketDateDetail v-else-if="isMarketDateDetail && bootstrap" />
-
-				<ExchangeRateList v-else-if="isExchangeRateList && bootstrap" />
-
-				<ExchangeRateDetail v-else-if="isExchangeRateDetail && bootstrap" />
-
-				<PortfolioPerformance
-					v-else-if="isPortfolioPerformance && bootstrap"
-					:bootstrap="bootstrap"
-				/>
-
-				<YieldComparison v-else-if="isYieldComparison && bootstrap" />
-
-				<div
-					v-else-if="bootstrap"
-					class="not-found-state rounded-4 border border-dashed border-outline-red-3 bg-surface-red-2 p-4 text-p-sm text-ink-red-7"
-					data-testid="not-found"
-				>
-					<strong>This investor page does not exist.</strong>
-					<p class="m-0 mt-1">
-						Use the investor navigation to return to an available route.
-					</p>
-				</div>
-			</div>
+			<div :id="pageContentTargetId" class="investor-page-content-target" />
 		</main>
 	</component>
+
+	<!-- Keep the routed page mounted while only the shell chrome changes at a breakpoint. -->
+	<Teleport defer :to="pageContentTarget">
+		<div class="investor-page-content px-3 pb-10 pt-5 sm:px-5">
+			<div
+				v-if="error"
+				class="status-panel status-panel--error flex items-center gap-3 rounded-4 border border-outline-red-3 bg-surface-red-2 px-3 py-2 text-sm text-ink-red-7"
+			>
+				<ErrorMessage class="m-0" :message="error" />
+				<Button
+					class="ml-auto"
+					label="Retry"
+					theme="blue"
+					variant="outline"
+					@click="loadBootstrap"
+				/>
+			</div>
+
+			<p
+				v-if="isHome && bootstrap"
+				class="compatibility-note max-w-2xl text-p-sm text-ink-gray-5"
+			>
+				Browse assigned portfolio records, shared bond data and investor reports from the
+				navigation.
+			</p>
+
+			<TransactionList v-else-if="isTransactionList && bootstrap" :bootstrap="bootstrap" />
+
+			<TransactionDetail v-else-if="isTransactionDetail && bootstrap" />
+
+			<StatementList v-else-if="isStatementList && bootstrap" :bootstrap="bootstrap" />
+
+			<StatementDetail v-else-if="isStatementDetail && bootstrap" />
+
+			<BondList v-else-if="isBondList && bootstrap" />
+
+			<BondDetail v-else-if="isBondDetail && bootstrap" />
+
+			<MarketDateList v-else-if="isMarketDateList && bootstrap" />
+
+			<MarketDateDetail v-else-if="isMarketDateDetail && bootstrap" />
+
+			<ExchangeRateList v-else-if="isExchangeRateList && bootstrap" />
+
+			<ExchangeRateDetail v-else-if="isExchangeRateDetail && bootstrap" />
+
+			<PortfolioPerformance
+				v-else-if="isPortfolioPerformance && bootstrap"
+				:bootstrap="bootstrap"
+			/>
+
+			<YieldComparison v-else-if="isYieldComparison && bootstrap" />
+
+			<div
+				v-else-if="bootstrap"
+				class="not-found-state rounded-4 border border-dashed border-outline-red-3 bg-surface-red-2 p-4 text-p-sm text-ink-red-7"
+				data-testid="not-found"
+			>
+				<strong>This investor page does not exist.</strong>
+				<p class="m-0 mt-1">
+					Use the investor navigation to return to an available route.
+				</p>
+			</div>
+		</div>
+	</Teleport>
 </template>

@@ -15,7 +15,12 @@
 }
 
 .yield-curve {
-	height: 21.25rem;
+	height: auto;
+	min-height: 21.25rem;
+}
+
+.yield-curve [data-slot="chart-container"] {
+	height: auto;
 }
 
 .yield-curve [data-slot="chart-header"],
@@ -34,11 +39,14 @@
 }
 
 .yield-curve [data-slot="chart-plot"] {
+	flex: 0 0 14rem;
+	height: 14rem;
 	order: 2;
+	min-height: 14rem;
 }
 
 @media (max-width: 760px) {
 	.yield-curve {
-		height: 20rem;
+		min-height: 20rem;
 	}
 }
