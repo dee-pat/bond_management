@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
 import { RouterLink, useRoute } from "vue-router";
-import { Button } from "frappe-ui";
 
 import PdfAttachmentActions from "../components/PdfAttachmentActions.vue";
+import SurfaceState from "../components/SurfaceState.vue";
 import { InvestorApiError, redirectToLogin, useInvestorApi } from "../lib/api";
 import { formatDate, formatMoney, formatNumber, formatPercent } from "../lib/format";
 import type { TransactionDetail } from "../types";
@@ -113,12 +113,9 @@ onMounted(() => void loadTransaction());
 	<section class="transaction-surface" aria-labelledby="transaction-detail-title">
 		<RouterLink class="back-link" to="/transactions"> ← Back to transactions </RouterLink>
 
-		<div v-if="loading" class="surface-state" aria-live="polite">Loading transaction…</div>
+		<SurfaceState v-if="loading" :loading="loading" loading-text="Loading transaction…" />
 
-		<div v-else-if="error" class="surface-state surface-state--error" role="alert">
-			<p>{{ error }}</p>
-			<Button label="Retry" variant="outline" @click="loadTransaction" />
-		</div>
+		<SurfaceState v-else-if="error" :error="error" @retry="loadTransaction" />
 
 		<template v-else-if="transaction">
 			<div class="surface-heading">

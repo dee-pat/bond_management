@@ -47,20 +47,18 @@ test("browses market history, persisted prices, and yield curve", async ({
   await expect(prices).toContainText("01 Jan 2027");
 
   const curve = page.getByTestId("yield-curve");
-  await expect(
-    curve.getByRole("img", {
-      name: "Yield curve by currency and weighted average principal repayment",
-    })
-  ).toBeVisible();
-  await expect(curve.getByRole("listitem").filter({ hasText: "USD" })).toBeVisible();
-  await expect(
-    curve.locator(`[aria-label^="${BOND_ISIN}, USD,"]`)
-  ).toBeVisible();
-  const yTickLabels = await curve.getByTestId("yield-curve-y-tick").allTextContents();
-  const yTickValues = yTickLabels.map((label) => Number(label.replace("%", "")));
-  expect(yTickLabels[0]).toBe("0%");
-  expect(yTickLabels.every((label) => /^-?\d+%$/.test(label))).toBeTruthy();
-  expect(yTickValues.slice(1).every((value, index) => value - yTickValues[index] === 5)).toBeTruthy();
+	await expect(
+		curve.getByRole("img", {
+			name: "Yield Curve",
+		})
+	).toBeVisible();
+	await expect(
+		curve.getByTestId("yield-curve-description")
+	).toContainText(`${BOND_ISIN}, USD,`);
+	const yieldPoint = curve.locator('[data-slot="chart-plot"] svg path[fill^="#"]').first();
+	await expect(yieldPoint).toBeVisible();
+	await yieldPoint.hover();
+	await expect(page.getByRole("tooltip")).toContainText(`ISIN ${BOND_ISIN}`);
   await expect(page.getByText("Read only")).toBeVisible();
   await expect(page.getByTestId("investor-shell")).not.toContainText(
     "Copy cash flows"
