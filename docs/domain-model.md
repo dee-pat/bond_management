@@ -1,155 +1,100 @@
 # Bond Management domain model
 
-This document maps the current persisted DocType relationships and the main
-runtime dependencies between capture, derived data, analytics, and user-facing
-surfaces. It is source-derived rather than a proposed schema: update it when
-DocType metadata or relationship-owning services change.
+This is a source-derived map of the current app, not a proposed schema. The app
+has six standalone DocTypes and four child-table DocTypes.
 
-## Legend
+## How to read the graphs
 
-- Solid edges represent persisted `Link` or `Table` relationships.
-- Dotted edges represent runtime reads, derived writes, or service dependencies.
-- Frappe child tables also carry the implicit `parent`, `parenttype`, and
-  `parentfield` relationship fields.
+- An edge label is the field that creates the relationship.
+- Solid edges are ordinary `Link` or `Table` relationships.
+- Dotted edges are persisted links maintained by server code.
+- Child tables have Frappe's implicit `parent`, `parenttype`, and `parentfield`
+  fields.
 
 ## DocType relationships
 
 ```mermaid
-flowchart LR
-    subgraph Reference["Reference / instrument data"]
-        BM["Bond Master<br/>(name = ISIN)"]
-        CUR["Currency<br/>(Frappe core)"]
-        BCS[["Bond Coupon Schedule<br/>(child table)"]]
-        BPS[["Bond Principal Schedule<br/>(child table)"]]
+flowchart TB
+    subgraph Setup["Setup"]
+        BP["Bond Portfolio"]
+        BM["Bond Master<br/>name = ISIN"]
+        BCS[["Bond Coupon Schedule<br/>child table"]]
+        BPS[["Bond Principal Schedule<br/>child table"]]
     end
 
-    subgraph Operations["Portfolio / capture"]
-        BP["Bond Portfolio"]
+    subgraph Activity["Portfolio activity"]
         BT["Bond Transaction"]
         BS["Bond Statement"]
-        BSD[["Bond Statement Details<br/>(child table)"]]
+        BSD[["Bond Statement Details<br/>child table"]]
     end
 
-    subgraph Market["Market / FX"]
+    subgraph Market["Market data"]
         BMD["Bond Market Date"]
-        BMP[["Bond Market Prices<br/>(child table)"]]
+        BMP[["Bond Market Prices<br/>child table"]]
         BER["Bond Exchange Rate"]
     end
 
-    FILE["File<br/>(Frappe private storage)"]
+    BM -->|"coupon_schedule"| BCS
+    BM -->|"principal_schedule"| BPS
 
-    BM -->|"Table: coupon_schedule (1:N)"| BCS
-    BM -->|"Table: principal_schedule (1:N)"| BPS
-    BMD -->|"Table: bond_market_prices (1:N)"| BMP
-    BS -->|"Table: bond_statement_details (1:N)"| BSD
+    BT -->|"portfolio_name"| BP
+    BT -->|"isin"| BM
+    BS -->|"portfolio_name"| BP
+    BS -->|"bond_statement_details"| BSD
+    BSD -->|"isin"| BM
 
-    BT -->|"Link: isin (N:1)"| BM
-    BT -->|"Link: portfolio_name (N:1)"| BP
-    BS -->|"Link: portfolio_name (N:1)"| BP
-    BS -->|"Link: market_price_posting (N:1, derived)"| BMD
-    BER -->|"Link: statement (optional PDF owner)"| BS
-    BMP -->|"Link: isin (N:1)"| BM
-    BSD -->|"Link: isin (N:1)"| BM
-
-    BM -->|"Link: currency"| CUR
-    BER -->|"Link: from_currency"| CUR
-    BER -->|"Link: to_currency"| CUR
-
-    BS -.->|"Attach: statement PDF + reconciliation report"| FILE
-    BT -.->|"Attach: transaction PDF"| FILE
+    BMD -->|"bond_market_prices"| BMP
+    BMP -->|"isin"| BM
+    BS -.->|"market_price_posting"| BMD
+    BER -.->|"statement"| BS
 ```
 
-## Runtime and reporting dependencies
+`Bond Master` and `Bond Exchange Rate` also link to Frappe's `Currency`
+DocType. Statement and transaction attachments use private Frappe `File`
+records; those framework relationships are omitted above to keep the domain
+graph focused.
+
+## Main processing flow
 
 ```mermaid
-flowchart TB
-    FILE["Private PDF via Frappe File API"]
+flowchart LR
+    SPDF["Statement PDF"] --> BS["Bond Statement"]
+    TPDF["Transaction PDF"] --> BT["Bond Transaction"]
 
-    SPF["statement_pdf.py<br/>parse identity, holdings, prices, FX"]
-    TPF["transaction_pdf.py<br/>parse transaction rows"]
+    BS -->|"holdings"| BSD["Statement Details"]
+    BS -->|"prices"| MARKET["Market Date + Prices"]
+    BS -->|"FX rates"| FX["Exchange Rates"]
+    BS --> REPORT["Reconciliation report"]
 
-    BS["Bond Statement"]
-    BT["Bond Transaction"]
-    BP["Bond Portfolio"]
-    BM["Bond Master"]
-
-    SMP["statement_market_prices.py"]
-    SER["statement_exchange_rates.py"]
-    REC["Quantity reconciliation<br/>+ generated report"]
-
-    BMD["Bond Market Date<br/>+ Bond Market Prices"]
-    BER["Bond Exchange Rate"]
-
-    CTX["load_portfolio_performance_context()"]
+    DATA["Portfolios + transactions<br/>+ bonds + market data + FX"]
     PP["Portfolio Performance"]
     YIELD["Bond Yield Comparison"]
+    API["Read-only investor API"]
+    SPA["Investor app"]
 
-    API["Investor API<br/>investor.py + investor_reports.py"]
-    SPA["Vue investor app<br/>/bond-investor"]
-    DESK["Bond Investor Desk workspace"]
-
-    FILE -.-> SPF
-    FILE -.-> TPF
-
-    SPF -->|"authoritative PDF values"| BS
-    TPF -->|"authoritative PDF values"| BT
-    SPF -.-> BP
-    SPF -.-> BM
-    TPF -.-> BP
-    TPF -.-> BM
-
-    BS --> REC
-    BS --> SMP
-    SMP -->|"upsert by statement date"| BMD
-    BS --> SER
-    SER -->|"statement-owned rates"| BER
-
-    BP -.-> CTX
-    BT -.-> CTX
-    BM -.-> CTX
-    BMD -.-> CTX
-    BER -.-> CTX
-    BS -.-> CTX
-
-    CTX --> PP
-    BM -.-> YIELD
-    BMD -.-> YIELD
-
+    DATA --> PP
+    MARKET --> YIELD
     PP --> API
     YIELD --> API
     API --> SPA
-    DESK --> BS
-    DESK --> BT
-    DESK --> BM
-    DESK --> BMD
-    DESK --> BER
 ```
 
-## Relationship notes
+Desk owns financial writes. The investor app reads fixed, permission-scoped API
+projections.
 
-- `Bond Master` is the reference hub. Its name is the ISIN, and it owns coupon
-  and principal schedules as child tables.
-- `Bond Transaction` is the portfolio ledger. Each transaction links one bond
-  to one portfolio.
-- `Bond Statement` is the ingestion and reconciliation hub. Saving a statement
-  can populate statement-detail rows, update the market snapshot for its date,
-  synchronize statement-owned exchange rates, and generate a private
-  reconciliation report.
-- `Bond Market Prices` and `Bond Statement Details` each link their row to a
-  `Bond Master` in addition to belonging to their respective parent table.
-- `Bond Exchange Rate.statement` is optional: statement-derived rates point
-  back to their owning statement, while manually maintained rates do not.
-- Portfolio performance reads transactions, bond terms and schedules, market
-  prices, and exchange rates. Yield comparison reads persisted market-date
-  snapshots and filters them through readable `Bond Master` records.
-- The investor application is read-only and receives fixed projections through
-  the investor API; financial mutations remain in Desk workflows.
+## Important behavior
+
+- `Bond Transaction` is the portfolio ledger.
+- Saving a `Bond Statement` derives holdings, market prices, exchange rates,
+  reconciliation status, and a private reconciliation report.
+- A statement-derived exchange rate links back to its statement; a manual rate
+  does not.
+- Portfolio performance combines all core financial data. Yield comparison
+  reads persisted market snapshots.
 
 ## Source anchors
 
 - [DocType metadata](../bond_management/bond_management/doctype/)
-- [Bond Statement controller](../bond_management/bond_management/doctype/bond_statement/bond_statement.py)
-- [Market-price synchronization](../bond_management/bond_management/utils/statement_market_prices.py)
-- [Exchange-rate synchronization](../bond_management/bond_management/utils/statement_exchange_rates.py)
-- [Performance context](../bond_management/bond_management/utils/performance.py)
+- [Statement-derived data](../bond_management/bond_management/doctype/bond_statement/bond_statement.py)
+- [Performance inputs](../bond_management/bond_management/utils/performance.py)
 - [Investor API](../bond_management/bond_management/api/investor.py)
