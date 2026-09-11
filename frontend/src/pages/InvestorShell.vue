@@ -283,7 +283,7 @@ onBeforeUnmount(() => window.removeEventListener("resize", updateMobileLayout));
 			</template>
 		</PageHeaderMobile>
 
-		<main class="investor-card min-h-full bg-surface-gray-1">
+		<main class="min-h-full bg-surface-gray-1">
 			<nav
 				v-if="isMobile"
 				class="border-b border-outline-gray-1 px-3 py-2 sm:px-5"
@@ -309,7 +309,7 @@ onBeforeUnmount(() => window.removeEventListener("resize", updateMobileLayout));
 		<div class="investor-page-content px-3 pb-10 pt-5 sm:px-5">
 			<div
 				v-if="error"
-				class="status-panel status-panel--error flex items-center gap-3 rounded-4 border border-outline-red-3 bg-surface-red-2 px-3 py-2 text-sm text-ink-red-7"
+				class="flex items-center gap-3 rounded-4 border border-outline-red-3 bg-surface-red-2 px-3 py-2 text-sm text-ink-red-7"
 			>
 				<ErrorMessage class="m-0" :message="error" />
 				<Button
@@ -321,10 +321,7 @@ onBeforeUnmount(() => window.removeEventListener("resize", updateMobileLayout));
 				/>
 			</div>
 
-			<p
-				v-if="isHome && bootstrap"
-				class="compatibility-note max-w-2xl text-p-sm text-ink-gray-5"
-			>
+			<p v-if="isHome && bootstrap" class="max-w-2xl text-p-sm text-ink-gray-5">
 				Browse assigned portfolio records, shared bond data and investor reports from the
 				navigation.
 			</p>
@@ -358,7 +355,7 @@ onBeforeUnmount(() => window.removeEventListener("resize", updateMobileLayout));
 
 			<div
 				v-else-if="bootstrap"
-				class="not-found-state rounded-4 border border-dashed border-outline-red-3 bg-surface-red-2 p-4 text-p-sm text-ink-red-7"
+				class="rounded-4 border border-dashed border-outline-red-3 bg-surface-red-2 p-4 text-p-sm text-ink-red-7"
 				data-testid="not-found"
 			>
 				<strong>This investor page does not exist.</strong>

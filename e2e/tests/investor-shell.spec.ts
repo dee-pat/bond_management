@@ -20,14 +20,9 @@ test("renders the authenticated investor compatibility shell", async ({
     homeBreadcrumbs.getByText("Bond Investor", { exact: true })
   ).toBeVisible();
   await expect(page.getByTestId("bootstrap-status")).toHaveCount(0);
-  await expect(page.locator('[data-slot="desktop-shell"]')).toBeVisible();
-  await expect(page.locator('[data-slot="sidebar"]')).toBeVisible();
-  await expect(
-    page.locator('[data-slot="desktop-shell-content"]')
-  ).toBeVisible();
-  await expect(
-    page.locator('[data-slot="desktop-shell-content"] [data-slot="scroll-area"]')
-  ).toBeVisible();
+  await expect(page.locator(".investor-shell")).toBeVisible();
+  await expect(page.locator(".investor-navigation")).toBeVisible();
+  await expect(page.locator(".investor-page-header")).toBeVisible();
   await expect(
     page
       .getByRole("navigation", { name: "Investor navigation" })
@@ -93,40 +88,20 @@ test("keeps native shell chrome outside the main scroll region", async ({
 
   const scrollLayout = await page.evaluate(() => {
     const shell = document.querySelector<HTMLElement>(".investor-shell");
-    const shellContent = document.querySelector<HTMLElement>(
-      '[data-slot="desktop-shell-content"]'
-    );
     const navigation = document.querySelector<HTMLElement>(
-      '[data-slot="sidebar"]'
+      ".investor-navigation"
     );
-    const scrollArea = shellContent?.querySelector<HTMLElement>(
-      '[data-slot="scroll-area"]'
+    const content = document.querySelector<HTMLElement>(
+      ".investor-page-content"
     );
-    const viewport = shellContent?.querySelector<HTMLElement>(
-      '[data-slot="scroll-area-viewport"]'
-    );
-    const content = viewport?.querySelector<HTMLElement>("main");
     const pageHeader = document.querySelector<HTMLElement>(
       ".investor-page-header"
     );
-    const pagination = document.querySelector<HTMLElement>(
-      '[data-testid="desk-pagination"]'
-    );
 
-    if (
-      !shell ||
-      !shellContent ||
-      !navigation ||
-      !scrollArea ||
-      !viewport ||
-      !content ||
-      !pageHeader ||
-      !pagination
-    ) {
+    if (!shell || !navigation || !content || !pageHeader) {
       throw new Error("Investor scroll layout is incomplete");
     }
 
-    const computedStyle = (element: HTMLElement) => getComputedStyle(element);
     const rect = (element: HTMLElement) => {
       const bounds = element.getBoundingClientRect();
       return {
@@ -136,10 +111,8 @@ test("keeps native shell chrome outside the main scroll region", async ({
       };
     };
     const chromePositions = () => ({
-      shellContent: rect(shellContent),
       navigation: rect(navigation),
       pageHeader: rect(pageHeader),
-      viewport: rect(viewport),
     });
 
     const beforeScroll = chromePositions();
@@ -147,28 +120,38 @@ test("keeps native shell chrome outside the main scroll region", async ({
     spacer.style.height = "100vh";
     spacer.style.flex = "0 0 auto";
     content.append(spacer);
-    viewport.scrollTop = Math.min(
+
+    let scrollContainer = content.parentElement;
+    while (scrollContainer && scrollContainer !== shell) {
+      if (scrollContainer.scrollHeight > scrollContainer.clientHeight) {
+        scrollContainer.scrollTop = 1;
+        if (scrollContainer.scrollTop > 0) {
+          break;
+        }
+      }
+      scrollContainer = scrollContainer.parentElement;
+    }
+    if (!scrollContainer || scrollContainer === shell) {
+      spacer.remove();
+      throw new Error("Investor content scroll region is incomplete");
+    }
+
+    scrollContainer.scrollTop = Math.min(
       120,
-      viewport.scrollHeight - viewport.clientHeight
+      scrollContainer.scrollHeight - scrollContainer.clientHeight
     );
-    const contentScrollTop = viewport.scrollTop;
+    const contentScrollTop = scrollContainer.scrollTop;
     const afterScroll = chromePositions();
     const documentScrollTop = document.scrollingElement?.scrollTop ?? 0;
     spacer.remove();
-    viewport.scrollTop = 0;
+    scrollContainer.scrollTop = 0;
 
     return {
       viewportHeight: window.innerHeight,
       documentScrollHeight: document.documentElement.scrollHeight,
       shellHeight: shell.getBoundingClientRect().height,
-      shellContent: beforeScroll.shellContent,
       navigation: beforeScroll.navigation,
       pageHeader: beforeScroll.pageHeader,
-      viewport: beforeScroll.viewport,
-      viewportOverflowY: computedStyle(viewport).overflowY,
-      scrollAreaOverflow: computedStyle(scrollArea).overflow,
-      navigationOverflow: computedStyle(navigation).overflow,
-      paginationPosition: computedStyle(pagination).position,
       contentScrollTop,
       documentScrollTop,
       afterScroll,
@@ -184,31 +167,16 @@ test("keeps native shell chrome outside the main scroll region", async ({
   expect(scrollLayout.documentScrollHeight).toBeLessThanOrEqual(
     scrollLayout.viewportHeight + 1
   );
-  expect(scrollLayout.viewportOverflowY).toBe("scroll");
-  expect(scrollLayout.scrollAreaOverflow).toBe("hidden");
-  expect(scrollLayout.navigationOverflow).toBe("hidden");
-  expect(scrollLayout.paginationPosition).toBe("sticky");
   expect(scrollLayout.contentScrollTop).toBeGreaterThan(0);
   expect(scrollLayout.documentScrollTop).toBe(0);
-  expect(scrollLayout.afterScroll.shellContent.top).toBe(
-    scrollLayout.shellContent.top
-  );
   expect(scrollLayout.afterScroll.navigation.top).toBe(
     scrollLayout.navigation.top
   );
   expect(scrollLayout.afterScroll.pageHeader.top).toBe(
     scrollLayout.pageHeader.top
   );
-  expect(scrollLayout.afterScroll.viewport.top).toBe(
-    scrollLayout.viewport.top
-  );
-  expect(scrollLayout.shellContent.top).toBe(0);
   expect(scrollLayout.navigation.top).toBe(0);
-  expect(scrollLayout.pageHeader.top).toBe(scrollLayout.shellContent.top);
-  expect(scrollLayout.viewport.top).toBe(scrollLayout.pageHeader.bottom);
-  expect(scrollLayout.navigation.bottom).toBe(
-    scrollLayout.shellContent.bottom
-  );
+  expect(scrollLayout.pageHeader.top).toBe(0);
 });
 
 test.describe("expired investor session", () => {

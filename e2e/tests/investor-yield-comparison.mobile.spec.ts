@@ -24,10 +24,12 @@ test("compares persisted bond yields without mobile overflow", async ({
     defaults.message.filters.to_date
   );
   await page.getByLabel("From Date").fill("2095-01-01");
-  await page.getByLabel("To Date").fill("2095-01-03");
-  await page.getByRole("button", { name: "Run", exact: true }).click();
+	await page.getByLabel("To Date").fill("2095-01-03");
+	await page.getByRole("button", { name: "Run", exact: true }).click();
 
-  const chart = page.getByTestId("yield-comparison-chart");
+	await expect(page.getByTestId("yield-comparison-selector")).toHaveCount(0);
+
+	const chart = page.getByTestId("yield-comparison-chart");
   const image = chart.getByRole("img", {
     name: "Persisted Future XIRR, By market date and bond",
   });

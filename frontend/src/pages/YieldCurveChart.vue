@@ -74,6 +74,8 @@ const chartData = computed(() =>
 	}))
 );
 const xMaximum = computed(() => Math.max(...points.value.map((point) => point.years), 1));
+// This snapshot view keeps the observed yield range readable with breathing
+// room; unlike the time-series comparison, zero is not a required baseline.
 const yDomain = computed(() =>
 	getPercentAxisDomain(points.value.map((point) => point.yieldPercent))
 );

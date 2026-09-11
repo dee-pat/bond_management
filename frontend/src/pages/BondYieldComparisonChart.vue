@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, isRef, onBeforeUnmount, ref, watch } from "vue";
-import { ChartCard, LineChart } from "frappe-ui/charts";
+import { ChartCard, LineChart, paletteColors, useChartTheme } from "frappe-ui/charts";
 import type { ChartTooltipItem, LineChartProps, SeriesStyle } from "frappe-ui/charts";
 import type { ECharts } from "echarts/core";
 
@@ -25,10 +25,21 @@ const props = defineProps<{
 }>();
 
 const Y_TICK_STEP = 5;
+const chartRoot = ref<HTMLElement>();
 const lineChartRef = ref<{ chart?: unknown } | null>(null);
 const hoveredIsin = ref<string | null>(null);
+const { theme } = useChartTheme(chartRoot);
 let boundChart: ECharts | undefined;
 const dates = computed(() => [...new Set(props.rows.map((row) => row.date))].sort());
+const currencies = computed(() =>
+	[...new Set(props.rows.map((row) => row.currency))].sort((left, right) =>
+		left.localeCompare(right)
+	)
+);
+const currencyColors = computed(() => {
+	const colors = paletteColors("categorical", theme.value, currencies.value.length);
+	return new Map(currencies.value.map((currency, index) => [currency, colors[index]]));
+});
 const series = computed<YieldSeries[]>(() => {
 	const currencies = new Map<string, string>();
 	props.rows.forEach((row) => {
@@ -70,6 +81,8 @@ const gapCount = computed(() =>
 		0
 	)
 );
+// This time-series view uses zero and 5-point ticks so values stay comparable
+// across the selected market-date range.
 const yDomain = computed(() => getPercentAxisDomain(points.value.map((point) => point.value)));
 const seriesConfig = computed<Record<string, SeriesStyle>>(() =>
 	Object.fromEntries(
@@ -77,6 +90,7 @@ const seriesConfig = computed<Record<string, SeriesStyle>>(() =>
 			item.isin,
 			{
 				label: `${item.isin} · ${item.currency}`,
+				color: currencyColors.value.get(item.currency),
 				showDataPoints: true,
 				// ECharts only forwards mouse events from a line path when this
 				// option is enabled. The Desk chart listens on each path, so keep
@@ -214,6 +228,7 @@ function getPercentAxisDomain(values: number[]): { minimum: number; maximum: num
 
 <template>
 	<section
+		ref="chartRoot"
 		class="yield-comparison-chart"
 		data-testid="yield-comparison-chart"
 		:data-gap-count="gapCount"

@@ -33,8 +33,10 @@ test("compares persisted yields, selects series, and copies sanitized audit data
   );
 
   await page.getByLabel("From Date").fill(FROM_DATE);
-  await page.getByLabel("To Date").fill(TO_DATE);
-  await page.getByRole("button", { name: "Run", exact: true }).click();
+	await page.getByLabel("To Date").fill(TO_DATE);
+	await page.getByRole("button", { name: "Run", exact: true }).click();
+
+	await expect(page.getByTestId("yield-comparison-selector")).toHaveCount(0);
 
 	const chart = page.getByTestId("yield-comparison-chart");
 	const image = chart.getByRole("img", {
@@ -66,13 +68,21 @@ test("compares persisted yields, selects series, and copies sanitized audit data
 			}),
 	).toContainText("Future XIRR 9.125%");
 
-	const chartImage = await image.boundingBox();
-	expect(chartImage).not.toBeNull();
-	await page.mouse.move(
-		chartImage!.x + chartImage!.width / 2,
-		chartImage!.y + chartImage!.height / 2
-	);
+	const plot = chart.locator('[data-slot="chart-plot"]');
+	const plotBox = await plot.boundingBox();
+	expect(plotBox).not.toBeNull();
 	const tooltip = page.getByRole("tooltip");
+	await expect(plot.locator("svg")).toBeVisible();
+	await expect(plot.locator('svg path[stroke^="#"]')).toHaveCount(2);
+	await expect
+		.poll(async () => {
+			await plot.hover({
+				position: { x: plotBox!.width / 2, y: plotBox!.height / 2 },
+				force: true,
+			});
+			return tooltip.isVisible();
+		})
+		.toBe(true);
 	await expect(tooltip).toBeVisible();
 	await expect(tooltip).toContainText(`ISIN ${PRIMARY_BOND}`);
 	await expect(tooltip).not.toContainText("Market Price");
@@ -92,12 +102,13 @@ test("compares persisted yields, selects series, and copies sanitized audit data
   expect(clipboard).toContain("Date\tISIN\tCCY\tMarket Price\tFuture XIRR");
   expect(clipboard).toContain(`${FROM_DATE}\t'${GAP_BOND}\tKES\t99.25\t9.125`);
 
-  await expect(page.locator("table")).toHaveCount(0);
+	await expect(page.locator("table")).toHaveCount(0);
   await expect(
     page.getByRole("button", { name: /Export|Print|Email/ })
   ).toHaveCount(0);
-  const fitsViewport = await page.evaluate(
-    () => document.documentElement.scrollWidth <= window.innerWidth
-  );
-  expect(fitsViewport).toBeTruthy();
+	const fitsViewport = await page.evaluate(
+		() => document.documentElement.scrollWidth <= window.innerWidth
+	);
+	expect(fitsViewport).toBeTruthy();
+
 });

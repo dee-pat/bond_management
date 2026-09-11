@@ -302,11 +302,11 @@ function transactionPage(start: number, isin: string): object {
     quantity_face_value: 10,
     price: 100,
   }));
-  const transactionPage = {
+  const pageData = {
     data,
     pagination: { start, page_length: 20, has_more: start === 0 },
   };
-  return { message: transactionPage, data: transactionPage };
+  return { message: pageData, data: pageData };
 }
 
 function column(
