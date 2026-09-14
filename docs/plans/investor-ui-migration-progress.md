@@ -783,7 +783,7 @@ yield.
 - [x] Record the explicit report API contract.
 - [x] Add a permission-scoped adapter around the existing report.
 - [x] Add the responsive chart-only route with loading, initial, empty, failed and retry states.
-- [x] Preserve client-only bond selection and the sanitized audit-copy action.
+- [x] Preserve client-only bond selection through the chart legend and the sanitized audit-copy action.
 - [x] Add desktop/mobile Playwright flows and run focused and complete gates.
 
 ### Intended Phase 5b implementation slice — 2026-08-26
@@ -805,8 +805,8 @@ app-owned report JavaScript and the standard Query Report runner.
   oldest permission-readable persisted yield date and To Date defaults to the
   current site date. Both bounds remain editable and inclusive; an omitted
   bound leaves that side open. From Date must be on or before To Date. Bond
-  selection is an app-owned client-only control, not a server report filter in
-  the SPA.
+  selection is an app-owned client-only chart-legend control, not a server
+  report filter in the SPA; the SPA does not render a separate bond selector.
 - Raw columns, in order: Date, ISIN, CCY, Market Price and Future XIRR. The Desk
   table is hidden after a successful refresh; the SPA likewise keeps these raw
   rows out of the visible result surface.
@@ -832,8 +832,8 @@ app-owned report JavaScript and the standard Query Report runner.
   controls, arbitrary report filters, client financial calculations and
   mutation controls.
 - View states: filters ready but not run; loading; empty result; failed request
-  with Retry; chart with all, some or no bonds selected; audit copy success or
-  failure; expired-session redirect; and stale-response suppression after
+  with Retry; chart with all or some bonds visible through its legend; audit copy
+  success or failure; expired-session redirect; and stale-response suppression after
   filter changes or a newer run.
 
 ### Bond Yield Comparison API contract
@@ -872,10 +872,11 @@ app-owned report JavaScript and the standard Query Report runner.
 
 The seeded investor opens Bond Yield Comparison without relying on a portfolio
 assignment, receives the oldest-readable/current-date defaults, enters an
-inclusive deterministic date range, runs the report and sees the persisted test
-bond series. Desktop checks all filter labels, line-only rendering, one label
-per visible year, series selection, representative accessible Market Price and
-Future XIRR point text, a chart gap, the hidden raw table and sanitized
+  inclusive deterministic date range, runs the report and sees the persisted test
+  bond series. Bond series are selected in the chart legend; no separate bond
+  selector is rendered. Desktop checks all filter labels, line-only rendering,
+  one label per visible year, legend series selection, representative accessible
+  Market Price and Future XIRR point text, a chart gap, the hidden raw table and sanitized
 audit-copy output. Pixel 7 checks the same filters, yearly axis, series and
 representative values without horizontal viewport overflow. Server tests own
 role and Report permission, no-assignment access, default bounds, exact dynamic

@@ -22,6 +22,12 @@ the two files conflict, this app-level file governs.
 - Verification becomes stale after relevant edits to code, tests, fixtures,
   metadata, dependencies, runtime scripts, or CI configuration; rerun the
   applicable gate.
+- Keep [docs/domain-model.md](docs/domain-model.md) synchronized with the
+  current app. When a change adds, removes, renames, or changes a DocType,
+  `Link` or `Table` field, child-table ownership, attachment/derived-data
+  relationship, or report/API/service data flow, update the graph and notes in
+  the same change. If the change does not affect a mapped relationship, review
+  the graph and record that review in completion evidence.
 
 ## App baseline and structure
 

@@ -10,6 +10,13 @@ This is a follow-up specification. It records work that still needs an
 explicit implementation slice; it does not restore or replace deleted review
 progress files.
 
+## Current data model
+
+The source-derived DocType relationships and key runtime dependencies are
+documented in [docs/domain-model.md](docs/domain-model.md). This is an
+implementation map rather than a proposed schema; update it when DocType
+metadata or relationship-owning services change.
+
 ## Current evidence
 
 - `bond_management/bond_management/utils/private_attachment.py` still has two

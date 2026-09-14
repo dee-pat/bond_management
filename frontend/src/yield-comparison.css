@@ -12,149 +12,23 @@
 	font-size: 12px;
 }
 
-.yield-comparison-selector {
-	margin: 0 0 16px;
-	padding: 12px;
-	background: var(--desk-surface);
-	border: 1px solid var(--desk-border);
-	border-radius: 5px;
-}
-
-.yield-comparison-selector legend {
-	padding: 0 5px;
-	color: var(--desk-text);
-	font-size: 13px;
-	font-weight: 600;
-}
-
-.yield-comparison-selector > span {
-	margin-left: 16px;
-	color: var(--desk-muted);
-	font-size: 12px;
-}
-
-.yield-comparison-selector .yield-comparison-selector__all,
-.yield-comparison-selector .yield-comparison-selector__bond {
-	display: inline-flex;
-	align-items: center;
-	gap: 0.5rem;
-}
-
-.yield-comparison-selector input[type="checkbox"][data-slot="control"] {
-	flex: 0 0 16px;
-	width: 16px !important;
-	height: 16px !important;
-	min-width: 16px !important;
-	margin: 1px 0 0;
-	appearance: auto;
-	accent-color: var(--desk-link);
-	opacity: 1;
-}
-
-.yield-comparison-selector__all {
-	font-weight: 700;
-}
-
-.yield-comparison-selector__bonds {
-	display: grid;
-	grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
-	gap: 6px;
-	margin-top: 0.85rem;
-}
-
-.yield-comparison-selector__bonds .yield-comparison-selector__bond {
-	min-width: 0;
-	padding: 8px;
-	background: var(--desk-table-header);
-	border: 1px solid transparent;
-	border-radius: 4px;
-}
-
-.yield-comparison-selector__bonds .yield-comparison-selector__bond label,
-.yield-comparison-selector__bonds strong {
-	min-width: 0;
-	overflow-wrap: anywhere;
-	color: var(--desk-table-text);
-	font-size: 12px;
-}
-
-.yield-comparison-selector__bonds small {
-	margin-left: auto;
-	color: var(--desk-muted);
-}
-
 .yield-comparison-chart {
-	padding: 12px;
-	background: var(--desk-surface);
-	border: 1px solid var(--desk-border);
-	border-radius: 5px;
-	overflow: hidden;
-}
-
-.yield-comparison-chart__legend {
-	display: flex;
-	flex-wrap: wrap;
-	gap: 6px 16px;
-	margin-bottom: 8px;
-	color: var(--desk-muted);
-	font-size: 11px;
-}
-
-.yield-comparison-chart__legend span {
-	display: inline-flex;
-	align-items: center;
-	gap: 5px;
-}
-
-.yield-comparison-chart__legend i {
-	width: 7px;
-	height: 7px;
-	border-radius: 999px;
-}
-
-.yield-comparison-chart svg {
 	display: block;
-	width: 100%;
+}
+
+.yield-comparison-chart__card {
 	height: auto;
-	max-height: 22.5rem;
+	min-height: 22.5rem;
 }
 
-.yield-comparison-chart__description {
-	position: absolute;
-	width: 1px;
-	height: 1px;
-	padding: 0;
-	margin: -1px;
-	overflow: hidden;
-	clip: rect(0, 0, 0, 0);
-	white-space: nowrap;
-	border: 0;
+.yield-comparison-chart__card [data-slot="chart-container"] {
+	height: auto;
 }
 
-.yield-comparison-chart text {
-	fill: var(--desk-muted);
-	font-size: 11px;
-}
-
-.yield-comparison-chart__gridline {
-	stroke: var(--desk-border);
-	stroke-width: 1;
-}
-
-.yield-comparison-chart__axis {
-	stroke: var(--desk-quiet-text);
-	stroke-width: 1;
-}
-
-.yield-comparison-chart__line {
-	fill: none;
-	stroke-linecap: round;
-	stroke-linejoin: round;
-	stroke-width: 2.5;
-}
-
-.yield-comparison-chart__axis-label {
-	font-weight: 700;
+.yield-comparison-chart__card [data-slot="chart-plot"] {
+	flex: 0 0 14rem;
+	height: 14rem;
+	min-height: 14rem;
 }
 
 .yield-comparison-audit {
@@ -176,12 +50,7 @@
 		width: 100%;
 	}
 
-	.yield-comparison-selector > span {
-		display: block;
-		margin: 0.5rem 0 0;
-	}
-
-	.yield-comparison-chart {
-		padding: 0.5rem;
+	.yield-comparison-chart__card {
+		min-height: 20rem;
 	}
 }

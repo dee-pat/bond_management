@@ -37,7 +37,10 @@ differences in the final field.
 - Changes to JavaScript, reports, DocType metadata, permissions, workspaces, or
   other Desk behavior must run
   `apps/bond_management/scripts/verify.sh pre-push-ui`, which adds the complete
-  headless UI suite. Set `CHROME_BIN` when `chrome` is not on `PATH`.
+  headless Cypress suite and the authenticated Playwright suite. The Playwright
+  portion requires `FRAPPE_USER` and `FRAPPE_PASSWORD`; set `BASE_URL` (or
+  `PLAYWRIGHT_BASE_URL`) when the test server is not at its default. Set
+  `CHROME_BIN` when `chrome` is not on `PATH`.
 - Changes to patches, schema, hooks, dependencies, installation, or manual
   indexes must also be validated against a freshly installed site matching the
   GitHub Actions setup. Obtain approval before recreating or dropping a local
@@ -108,6 +111,7 @@ differences in the final field.
   never reuse a fixed `/home/runner/frappe-bench` path or overwrite an existing
   bench. GitHub's `runner` context is unavailable in `jobs.<job_id>.env`; use it
   in step-level fields or the runner's `$RUNNER_TEMP` variable instead.
-- The server CI job runs the shared lint and full server gate once. The UI CI
-  job runs only the headless Cypress gate against its fresh site; do not make
-  the UI job repeat the full server suite unless the failure requires it.
+- The server CI job runs the shared lint and full server gate once. The Chrome UI
+  job runs the headless Cypress gate, and the Playwright UI job runs the
+  authenticated Playwright gate, each against its own fresh site; do not make
+  either UI job repeat the full server suite unless the failure requires it.

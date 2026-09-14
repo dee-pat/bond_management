@@ -7,6 +7,7 @@ export default {
 		"./src/**/*.{vue,js,ts,jsx,tsx}",
 		"./node_modules/frappe-ui/src/components/**/*.{vue,js,ts,jsx,tsx}",
 		"./node_modules/frappe-ui/src/molecules/**/*.{vue,js,ts,jsx,tsx}",
+		"./node_modules/frappe-ui/src/charts/**/*.{vue,js,ts,jsx,tsx}",
 	],
 	theme: {
 		extend: {},

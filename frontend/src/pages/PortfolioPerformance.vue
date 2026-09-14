@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
-import { Button, FormControl } from "frappe-ui";
+import { Button, ErrorMessage, FormControl, LoadingText } from "frappe-ui";
 
 import { InvestorApiError, redirectToLogin, useInvestorApi } from "../lib/api";
 import type {
@@ -9,6 +9,7 @@ import type {
 	PortfolioPerformanceReport,
 } from "../report-types";
 import type { InvestorBootstrap } from "../types";
+import SurfaceState from "../components/SurfaceState.vue";
 import PortfolioPerformanceTable from "./PortfolioPerformanceTable.vue";
 
 const props = defineProps<{ bootstrap: InvestorBootstrap }>();
@@ -217,14 +218,13 @@ function sanitizedText(value: string): string {
 				/>
 			</form>
 
-			<div v-if="loading" class="surface-state" aria-live="polite">
-				Loading portfolio performance…
-			</div>
+			<SurfaceState
+				v-if="loading"
+				:loading="loading"
+				loading-text="Loading portfolio performance…"
+			/>
 
-			<div v-else-if="error" class="surface-state surface-state--error" role="alert">
-				<p>{{ error }}</p>
-				<Button label="Retry" variant="outline" @click="runReport" />
-			</div>
+			<SurfaceState v-else-if="error" :error="error" @retry="runReport" />
 
 			<div v-else-if="!hasRun" class="surface-state" data-testid="performance-initial">
 				Select a portfolio, then run the report.
@@ -245,14 +245,22 @@ function sanitizedText(value: string): string {
 					:copying-key="copyingKey"
 					@copy="copyCashflows"
 				/>
-				<p v-if="copyingKey" class="performance-copy-feedback" aria-live="polite">
-					Copying cash flows…
-				</p>
+				<LoadingText
+					v-if="copyingKey"
+					class="performance-copy-feedback"
+					text="Copying cash flows…"
+					aria-live="polite"
+				/>
+				<ErrorMessage
+					v-else-if="copyFeedback?.kind === 'error'"
+					class="performance-copy-feedback performance-copy-feedback--error"
+					:message="copyFeedback.message"
+				/>
 				<p
 					v-else-if="copyFeedback"
 					class="performance-copy-feedback"
 					:class="`performance-copy-feedback--${copyFeedback.kind}`"
-					:role="copyFeedback.kind === 'error' ? 'alert' : 'status'"
+					role="status"
 				>
 					{{ copyFeedback.message }}
 				</p>

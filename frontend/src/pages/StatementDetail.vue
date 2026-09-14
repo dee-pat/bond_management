@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
 import { RouterLink, useRoute } from "vue-router";
-import { Button } from "frappe-ui";
 import { ListCell, ListHeaderCell } from "frappe-ui/list";
 
 import DataList from "../components/DataList.vue";
 import PdfAttachmentActions from "../components/PdfAttachmentActions.vue";
+import SurfaceState from "../components/SurfaceState.vue";
 import { InvestorApiError, redirectToLogin, useInvestorApi } from "../lib/api";
 import { formatDate, formatNumber } from "../lib/format";
 import type { StatementDetail } from "../types";
@@ -58,12 +58,9 @@ onMounted(() => void loadStatement());
 	<section class="record-surface" aria-labelledby="statement-detail-title">
 		<RouterLink class="back-link" to="/statements"> ← Back to statements </RouterLink>
 
-		<div v-if="loading" class="surface-state" aria-live="polite">Loading statement…</div>
+		<SurfaceState v-if="loading" :loading="loading" loading-text="Loading statement…" />
 
-		<div v-else-if="error" class="surface-state surface-state--error" role="alert">
-			<p>{{ error }}</p>
-			<Button label="Retry" variant="outline" @click="loadStatement" />
-		</div>
+		<SurfaceState v-else-if="error" :error="error" @retry="loadStatement" />
 
 		<template v-else-if="statement">
 			<div class="surface-heading">

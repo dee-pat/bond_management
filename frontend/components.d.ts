@@ -18,5 +18,6 @@ declare module 'vue' {
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
     SortableColumn: typeof import('./src/components/SortableColumn.vue')['default']
+    SurfaceState: typeof import('./src/components/SurfaceState.vue')['default']
   }
 }

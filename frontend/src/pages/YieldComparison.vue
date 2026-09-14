@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, watch } from "vue";
-import { Button, FormControl } from "frappe-ui";
+import { Button, ErrorMessage, FormControl } from "frappe-ui";
 
 import { InvestorApiError, redirectToLogin, useInvestorApi } from "../lib/api";
+import SurfaceState from "../components/SurfaceState.vue";
 import type { BondYieldComparisonReport, YieldComparisonFieldname } from "../report-types";
 import BondYieldComparisonChart from "./BondYieldComparisonChart.vue";
 import YieldComparisonControls from "./YieldComparisonControls.vue";
@@ -10,7 +11,6 @@ import YieldComparisonControls from "./YieldComparisonControls.vue";
 const fromDate = ref("");
 const toDate = ref("");
 const report = ref<BondYieldComparisonReport | null>(null);
-const selectedIsins = ref<Set<string>>(new Set());
 const defaultsLoading = ref(true);
 const defaultsError = ref(false);
 const datesEdited = ref(false);
@@ -24,21 +24,8 @@ const dateRangeInvalid = computed(() =>
 	Boolean(fromDate.value && toDate.value && fromDate.value > toDate.value)
 );
 const canRun = computed(() => !defaultsLoading.value);
-const bonds = computed(() => {
-	const currencies = new Map<string, string>();
-	report.value?.rows.forEach((row) => {
-		if (!currencies.has(row.isin)) {
-			currencies.set(row.isin, row.currency);
-		}
-	});
-	return [...currencies.entries()]
-		.sort(([left], [right]) => left.localeCompare(right))
-		.map(([isin, currency]) => ({ isin, currency }));
-});
-const hasSelectedValues = computed(() =>
-	(report.value?.rows ?? []).some(
-		(row) => selectedIsins.value.has(row.isin) && numericValue(row.future_xirr) !== null
-	)
+const hasPersistedValues = computed(() =>
+	(report.value?.rows ?? []).some((row) => numericValue(row.future_xirr) !== null)
 );
 const marketPricePrecision = computed(() => columnPrecision("market_price", 3));
 const futureXirrPrecision = computed(() => columnPrecision("future_xirr", 3));
@@ -87,7 +74,6 @@ async function runReport(): Promise<void> {
 	loading.value = true;
 	error.value = null;
 	report.value = null;
-	selectedIsins.value = new Set();
 	resetCopyState();
 
 	try {
@@ -97,7 +83,6 @@ async function runReport(): Promise<void> {
 		});
 		if (requestId === latestReportRequest) {
 			report.value = response.report;
-			selectedIsins.value = new Set(response.report.rows.map((row) => row.isin));
 		}
 	} catch (caughtError) {
 		if (requestId !== latestReportRequest) {
@@ -113,20 +98,6 @@ async function runReport(): Promise<void> {
 			loading.value = false;
 		}
 	}
-}
-
-function toggleAll(checked: boolean): void {
-	selectedIsins.value = checked ? new Set(bonds.value.map((bond) => bond.isin)) : new Set();
-}
-
-function toggleBond(isin: string, checked: boolean): void {
-	const next = new Set(selectedIsins.value);
-	if (checked) {
-		next.add(isin);
-	} else {
-		next.delete(isin);
-	}
-	selectedIsins.value = next;
 }
 
 async function copyAuditData(): Promise<void> {
@@ -163,7 +134,6 @@ function invalidateResults(): void {
 	++latestReportRequest;
 	++latestCopyRequest;
 	report.value = null;
-	selectedIsins.value = new Set();
 	loading.value = false;
 	hasRun.value = false;
 	error.value = null;
@@ -240,27 +210,31 @@ function numericValue(value: unknown): number | null {
 			/>
 		</form>
 
-		<p v-if="dateRangeInvalid" class="yield-comparison-date-error" role="alert">
-			From Date must be on or before To Date.
-		</p>
+		<ErrorMessage
+			v-if="dateRangeInvalid"
+			class="yield-comparison-date-error"
+			message="From Date must be on or before To Date."
+		/>
 
-		<div v-if="defaultsLoading" class="surface-state" aria-live="polite">
-			Loading default date range…
-		</div>
+		<SurfaceState
+			v-if="defaultsLoading"
+			:loading="defaultsLoading"
+			loading-text="Loading default date range…"
+		/>
 
-		<div v-else-if="defaultsError" class="surface-state surface-state--error" role="alert">
-			<p>Default date range could not be loaded. Please retry.</p>
-			<Button label="Retry" variant="outline" @click="loadDefaultDates" />
-		</div>
+		<SurfaceState
+			v-else-if="defaultsError"
+			error="Default date range could not be loaded. Please retry."
+			@retry="loadDefaultDates"
+		/>
 
-		<div v-else-if="loading" class="surface-state" aria-live="polite">
-			Loading bond yield comparison…
-		</div>
+		<SurfaceState
+			v-else-if="loading"
+			:loading="loading"
+			loading-text="Loading bond yield comparison…"
+		/>
 
-		<div v-else-if="error" class="surface-state surface-state--error" role="alert">
-			<p>{{ error }}</p>
-			<Button label="Retry" variant="outline" @click="runReport" />
-		</div>
+		<SurfaceState v-else-if="error" :error="error" @retry="runReport" />
 
 		<div v-else-if="!hasRun" class="surface-state" data-testid="yield-comparison-initial">
 			Choose optional date bounds, then run the report.
@@ -276,35 +250,23 @@ function numericValue(value: unknown): number | null {
 
 		<template v-else-if="report">
 			<YieldComparisonControls
-				:bonds="bonds"
 				:copy-feedback="copyFeedback"
 				:copying="copying"
-				:selected-isins="[...selectedIsins]"
 				@copy="copyAuditData"
-				@toggle-all="toggleAll"
-				@toggle-bond="toggleBond"
 			/>
 
 			<div
-				v-if="selectedIsins.size === 0"
-				class="surface-state"
-				data-testid="yield-comparison-no-selection"
-			>
-				Select one or more bonds to display their stored Future XIRR.
-			</div>
-			<div
-				v-else-if="!hasSelectedValues"
+				v-if="!hasPersistedValues"
 				class="surface-state"
 				data-testid="yield-comparison-no-values"
 			>
-				Selected bonds have no persisted Future XIRR values.
+				No persisted Future XIRR values were returned for these filters.
 			</div>
 			<BondYieldComparisonChart
 				v-else
 				:future-xirr-precision="futureXirrPrecision"
 				:market-price-precision="marketPricePrecision"
 				:rows="report.rows"
-				:selected-isins="[...selectedIsins]"
 			/>
 		</template>
 	</section>

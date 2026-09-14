@@ -1,5 +1,8 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, isRef, onBeforeUnmount, ref, watch } from "vue";
+import { ChartCard, LineChart } from "frappe-ui/charts";
+import type { ChartTooltipItem, LineChartProps, SeriesStyle } from "frappe-ui/charts";
+import type { ECharts } from "echarts/core";
 
 import { formatDate, formatNumber, formatPercent } from "../lib/format";
 import type { MarketPriceRow } from "../types";
@@ -12,28 +15,11 @@ interface YieldPoint {
 	yieldPercent: number;
 }
 
-interface YieldSeries {
-	currency: string;
-	color: string;
-	points: YieldPoint[];
-}
-
 const props = defineProps<{ rows: MarketPriceRow[] }>();
-const colors = [
-	"var(--desk-chart-blue)",
-	"var(--desk-chart-pink)",
-	"var(--desk-chart-green)",
-	"var(--desk-chart-amber)",
-	"var(--desk-chart-violet)",
-	"var(--desk-chart-red)",
-];
-const width = 900;
-const height = 340;
-const margin = { top: 24, right: 24, bottom: 58, left: 72 };
-const plotWidth = width - margin.left - margin.right;
-const plotHeight = height - margin.top - margin.bottom;
-const tickIndexes = [0, 1, 2, 3, 4];
-const Y_TICK_STEP = 5;
+const lineChartRef = ref<{ chart?: unknown } | null>(null);
+const hoveredPoint = ref<YieldPoint | null>(null);
+const hiddenCurrencies = ref<string[]>([]);
+let boundChart: ECharts | undefined;
 
 const points = computed<YieldPoint[]>(() =>
 	props.rows
@@ -62,51 +48,102 @@ const points = computed<YieldPoint[]>(() =>
 				},
 			];
 		})
-		.sort((left, right) => left.years - right.years)
+		.sort((left, right) => left.years - right.years || left.isin.localeCompare(right.isin))
 );
-
-const series = computed<YieldSeries[]>(() => {
-	const grouped = new Map<string, YieldPoint[]>();
-	points.value.forEach((point) => {
-		grouped.set(point.currency, [...(grouped.get(point.currency) ?? []), point]);
-	});
-	return [...grouped.entries()]
-		.sort(([left], [right]) => left.localeCompare(right))
-		.map(([currency, currencyPoints], index) => ({
-			currency,
-			color: colors[index % colors.length],
-			points: currencyPoints,
-		}));
-});
-
-const xMaximum = computed(() => Math.max(...points.value.map((point) => point.years), 1));
-const yDomain = computed(() => {
-	const yields = points.value.map((point) => point.yieldPercent);
-	return getPercentAxisDomain(yields);
-});
-const yTicks = computed(() => getPercentAxisTicks(yDomain.value));
-
-function xPosition(years: number): number {
-	return margin.left + (years / xMaximum.value) * plotWidth;
-}
-
-function yPosition(yieldPercent: number): number {
-	const domain = yDomain.value;
-	return (
-		margin.top +
-		((domain.maximum - yieldPercent) / (domain.maximum - domain.minimum)) * plotHeight
+const currencies = computed(() =>
+	[...new Set(points.value.map((point) => point.currency))].sort()
+);
+// The shared value-axis tooltip chooses the first row at a duplicate X value.
+// Keep a visible currency first so hiding one line does not close the tooltip
+// when another line still has a point at the same duration.
+const plottedPoints = computed<YieldPoint[]>(() => {
+	const hidden = new Set(hiddenCurrencies.value);
+	return [...points.value].sort(
+		(left, right) =>
+			left.years - right.years ||
+			Number(hidden.has(left.currency)) - Number(hidden.has(right.currency)) ||
+			left.isin.localeCompare(right.isin)
 	);
-}
+});
+// Keep one wide row per bond. The chart's long-data pivot would overwrite
+// bonds that share both a currency and a repayment duration.
+const chartData = computed(() =>
+	plottedPoints.value.map((point) => ({
+		years: point.years,
+		[point.currency]: point.yieldPercent,
+	}))
+);
+const xMaximum = computed(() => Math.max(...points.value.map((point) => point.years), 1));
+// This snapshot view keeps the observed yield range readable with breathing
+// room; unlike the time-series comparison, zero is not a required baseline.
+const yDomain = computed(() =>
+	getPercentAxisDomain(points.value.map((point) => point.yieldPercent))
+);
+const seriesConfig = computed<Record<string, SeriesStyle>>(() =>
+	Object.fromEntries(
+		currencies.value.map((currency) => [
+			currency,
+			{
+				label: currency,
+				lineWidth: 2.5,
+				showDataPoints: true,
+				// Keep line hits tied to the point so the tooltip can identify its bond.
+				echartOptions: { triggerLineEvent: true },
+			},
+		])
+	)
+);
+const chartProps = computed<LineChartProps>(() => ({
+	data: chartData.value,
+	x: "years",
+	y: currencies.value,
+	// Wide data keeps every bond row while the value columns remain one series
+	// per currency. Nulls are only between points from different currencies.
+	connectNulls: true,
+	title: "Yield Curve",
+	palette: "categorical",
+	seriesConfig: seriesConfig.value,
+	xAxis: {
+		type: "value",
+		title: "Years to weighted average principal repayment",
+		min: 0,
+		max: xMaximum.value,
+		format: (value) => formatYears(value),
+	},
+	yAxis: {
+		title: "Yield (%)",
+		min: yDomain.value.minimum,
+		max: yDomain.value.maximum,
+		format: (value) => formatPercent(value, 2),
+	},
+}));
+const accessibleDescription = computed(() => points.value.map(pointLabel).join("; "));
+const chartInstance = computed<ECharts | undefined>(() => {
+	const chart = lineChartRef.value?.chart;
+	return isRef(chart) ? (chart.value as ECharts | undefined) : (chart as ECharts | undefined);
+});
 
-function xTickValue(index: number): number {
-	return xMaximum.value * (index / (tickIndexes.length - 1));
-}
+watch(chartInstance, (chart) => {
+	if (boundChart === chart) {
+		return;
+	}
+	if (boundChart) {
+		boundChart.off("mouseover", handleChartMouseOver);
+		boundChart.off("mouseout", clearHoveredPoint);
+	}
+	boundChart = chart;
+	if (boundChart) {
+		boundChart.on("mouseover", handleChartMouseOver);
+		boundChart.on("mouseout", clearHoveredPoint);
+	}
+});
 
-function linePoints(currencyPoints: YieldPoint[]): string {
-	return currencyPoints
-		.map((point) => `${xPosition(point.years)},${yPosition(point.yieldPercent)}`)
-		.join(" ");
-}
+onBeforeUnmount(() => {
+	if (boundChart) {
+		boundChart.off("mouseover", handleChartMouseOver);
+		boundChart.off("mouseout", clearHoveredPoint);
+	}
+});
 
 function pointLabel(point: YieldPoint): string {
 	return `${point.isin}, ${point.currency}, ${formatPercent(point.yieldPercent)}, ${formatDate(
@@ -114,134 +151,127 @@ function pointLabel(point: YieldPoint): string {
 	)}, ${formatNumber(point.years, 2)} years`;
 }
 
-function getPercentAxisDomain(values: number[]): { minimum: number; maximum: number } {
-	const minimumValue = Math.min(...values);
-	const maximumValue = Math.max(...values);
-	const minimum = Math.floor(Math.min(minimumValue, 0) / Y_TICK_STEP) * Y_TICK_STEP;
-	let maximum = Math.ceil(Math.max(maximumValue, 0) / Y_TICK_STEP) * Y_TICK_STEP;
-	if (maximum <= minimum || maximum === maximumValue) {
-		maximum += Y_TICK_STEP;
-	}
-	return { minimum, maximum };
+function formatYears(value: number): string {
+	return `${formatNumber(value, value >= 10 ? 1 : 2)}y`;
 }
 
-function getPercentAxisTicks(domain: { minimum: number; maximum: number }): number[] {
-	const ticks = [];
-	for (let value = domain.minimum; value <= domain.maximum; value += Y_TICK_STEP) {
-		ticks.push(value);
+function visibleTooltipItems(items: ChartTooltipItem[]): ChartTooltipItem[] {
+	const point = hoveredPoint.value;
+	if (!point) {
+		return items;
 	}
-	return ticks;
+	if (hiddenCurrencies.value.includes(point.currency)) {
+		return [];
+	}
+
+	const item = items.find((candidate) => candidate.name === point.currency);
+	return [
+		item ?? {
+			name: point.currency,
+			label: seriesConfig.value[point.currency]?.label ?? point.currency,
+			color: seriesConfig.value[point.currency]?.color ?? "",
+			value: point.yieldPercent,
+			formattedValue: formatPercent(point.yieldPercent, 2),
+		},
+	];
+}
+
+function handleChartMouseOver(params: unknown): void {
+	if (!params || typeof params !== "object") {
+		clearHoveredPoint();
+		return;
+	}
+
+	const seriesName = "seriesName" in params ? params.seriesName : undefined;
+	const dataIndex = "dataIndex" in params ? params.dataIndex : undefined;
+	if (
+		typeof seriesName !== "string" ||
+		typeof dataIndex !== "number" ||
+		!Number.isInteger(dataIndex)
+	) {
+		clearHoveredPoint();
+		return;
+	}
+
+	const point = plottedPoints.value[dataIndex];
+	if (!point || point.currency !== seriesName) {
+		clearHoveredPoint();
+		return;
+	}
+	hoveredPoint.value = point;
+}
+
+function clearHoveredPoint(): void {
+	hoveredPoint.value = null;
+}
+
+function getPercentAxisDomain(values: number[]): { minimum: number; maximum: number } {
+	if (!values.length) return { minimum: 0, maximum: 1 };
+
+	const minimumValue = Math.min(...values);
+	const maximumValue = Math.max(...values);
+	const padding =
+		minimumValue === maximumValue
+			? Math.max(Math.abs(minimumValue) * 0.1, 1)
+			: Math.max((maximumValue - minimumValue) * 0.1, 0.25);
+	return {
+		minimum: minimumValue - padding,
+		maximum: maximumValue + padding,
+	};
 }
 </script>
 
 <template>
-	<section class="yield-curve-section">
-		<h3>Yield Curve</h3>
-		<div v-if="points.length === 0" class="surface-state" data-testid="yield-curve-empty">
-			No valid yield-curve data.
-		</div>
-		<div v-else class="yield-curve" data-testid="yield-curve">
-			<div class="yield-curve__legend" aria-label="Yield curve currencies" role="list">
-				<span v-for="item in series" :key="item.currency" role="listitem">
-					<i :style="{ backgroundColor: item.color }" aria-hidden="true" />
-					{{ item.currency }}
-				</span>
-			</div>
-
-			<svg
-				:viewBox="`0 0 ${width} ${height}`"
-				role="img"
-				aria-label="Yield curve by currency and weighted average principal repayment"
+	<section
+		class="yield-curve-section"
+		:aria-describedby="points.length ? 'yield-curve-description' : undefined"
+		aria-label="Yield curve chart"
+		role="region"
+	>
+		<ChartCard class="yield-curve" data-testid="yield-curve">
+			<LineChart
+				ref="lineChartRef"
+				v-model:hidden-series="hiddenCurrencies"
+				v-bind="chartProps"
 			>
-				<title>Yield Curve</title>
-
-				<g v-for="tick in yTicks" :key="`y-tick-${tick}`">
-					<line
-						:x1="margin.left"
-						:x2="margin.left + plotWidth"
-						:y1="yPosition(tick)"
-						:y2="yPosition(tick)"
-						class="yield-curve__gridline"
-					/>
-					<text
-						:x="margin.left - 10"
-						:y="yPosition(tick) + 4"
-						data-testid="yield-curve-y-tick"
-						text-anchor="end"
-					>
-						{{ formatPercent(tick, 0) }}
-					</text>
-				</g>
-
-				<g v-for="index in tickIndexes" :key="`x-tick-${index}`">
-					<line
-						:x1="xPosition(xTickValue(index))"
-						:x2="xPosition(xTickValue(index))"
-						:y1="margin.top + plotHeight"
-						:y2="margin.top + plotHeight + 5"
-						class="yield-curve__axis"
-					/>
-					<text
-						:x="xPosition(xTickValue(index))"
-						:y="margin.top + plotHeight + 20"
-						text-anchor="middle"
-					>
-						{{ formatNumber(xTickValue(index), 2) }}
-					</text>
-				</g>
-
-				<line
-					:x1="margin.left"
-					:x2="margin.left"
-					:y1="margin.top"
-					:y2="margin.top + plotHeight"
-					class="yield-curve__axis"
-				/>
-				<line
-					:x1="margin.left"
-					:x2="margin.left + plotWidth"
-					:y1="margin.top + plotHeight"
-					:y2="margin.top + plotHeight"
-					class="yield-curve__axis"
-				/>
-
-				<g v-for="item in series" :key="`series-${item.currency}`">
-					<polyline
-						:points="linePoints(item.points)"
-						:stroke="item.color"
-						class="yield-curve__line"
-					/>
-					<circle
-						v-for="point in item.points"
-						:key="`${point.isin}-${point.years}`"
-						:cx="xPosition(point.years)"
-						:cy="yPosition(point.yieldPercent)"
-						:fill="item.color"
-						:aria-label="pointLabel(point)"
-						class="yield-curve__point"
-						r="7"
-						tabindex="0"
-					>
-						<title>{{ pointLabel(point) }}</title>
-					</circle>
-				</g>
-
-				<text
-					:x="margin.left + plotWidth / 2"
-					:y="height - 8"
-					class="yield-curve__axis-label"
-					text-anchor="middle"
-				>
-					Weighted average principal repayment years
-				</text>
-				<text
-					:transform="`translate(18 ${margin.top + plotHeight / 2}) rotate(-90)`"
-					class="yield-curve__axis-label"
-					text-anchor="middle"
-				>
-					Future XIRR (%)
-				</text>
-			</svg>
-		</div>
+				<template #tooltip="{ label, items }">
+					<div v-if="label" class="mb-2 text-p-sm text-ink-gray-5">{{ label }}</div>
+					<div class="flex flex-col gap-1.5" data-testid="yield-curve-tooltip">
+						<div
+							v-for="item in visibleTooltipItems(items)"
+							:key="item.name"
+							class="flex items-center justify-between gap-5 text-p-sm"
+						>
+							<span class="min-w-0 truncate text-ink-gray-6">{{ item.label }}</span>
+							<span
+								v-if="hoveredPoint && hoveredPoint.currency === item.name"
+								class="shrink-0 text-p-sm-semibold tabular-nums text-ink-gray-8"
+							>
+								ISIN {{ hoveredPoint.isin }} · Yield
+								{{ formatPercent(hoveredPoint.yieldPercent, 2) }}
+							</span>
+							<span
+								v-else
+								class="shrink-0 text-p-sm-semibold tabular-nums text-ink-gray-8"
+							>
+								{{ item.formattedValue }}
+							</span>
+						</div>
+					</div>
+				</template>
+				<template #empty>
+					<span class="text-p-sm text-ink-gray-5" data-testid="yield-curve-empty">
+						No valid yield-curve data.
+					</span>
+				</template>
+			</LineChart>
+			<p
+				id="yield-curve-description"
+				class="yield-curve__description sr-only"
+				data-testid="yield-curve-description"
+			>
+				{{ accessibleDescription }}
+			</p>
+		</ChartCard>
 	</section>
 </template>

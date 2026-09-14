@@ -4,13 +4,14 @@
     "baseUrl": ".",
     "esModuleInterop": true,
     "isolatedModules": true,
-    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "module": "ESNext",
     "moduleResolution": "Bundler",
     "noEmit": true,
+    "allowImportingTsExtensions": true,
     "paths": {
-      "frappe-ui": ["src/shims/frappe-ui.ts"],
-      "frappe-ui/style.css": ["src/shims/frappe-ui-style.d.ts"]
+      "frappe-ui": ["src/types/frappe-ui.d.ts"],
+      "#utils/*": ["node_modules/frappe-ui/src/utils/*"]
     },
     "resolveJsonModule": true,
     "skipLibCheck": true,

@@ -8,6 +8,7 @@ import DataList from "../components/DataList.vue";
 import ListFilterBar from "../components/ListFilterBar.vue";
 import ListPagination from "../components/ListPagination.vue";
 import SortableColumn from "../components/SortableColumn.vue";
+import SurfaceState from "../components/SurfaceState.vue";
 import { InvestorApiError, redirectToLogin, useInvestorApi } from "../lib/api";
 import { toFilterValue } from "../lib/list";
 import { formatDate } from "../lib/format";
@@ -108,28 +109,20 @@ onMounted(() => void loadBonds());
 			@clear-all="clearFilter"
 		/>
 
-		<div v-if="loading && bonds.length === 0" class="surface-state" aria-live="polite">
-			Loading bonds…
-		</div>
+		<SurfaceState
+			v-if="loading && bonds.length === 0"
+			:loading="loading"
+			loading-text="Loading bonds…"
+		/>
 
-		<div
-			v-else-if="error && bonds.length === 0"
-			class="surface-state surface-state--error"
-			role="alert"
-		>
-			<p>{{ error }}</p>
-			<Button label="Retry" variant="outline" @click="retryBonds" />
-		</div>
+		<SurfaceState v-else-if="error && bonds.length === 0" :error="error" @retry="retryBonds" />
 
 		<div v-else-if="bonds.length === 0" class="surface-state" data-testid="bonds-empty">
 			No bonds match the selected filters.
 		</div>
 
 		<template v-else>
-			<div v-if="error" class="surface-state surface-state--error" role="alert">
-				<p>{{ error }}</p>
-				<Button label="Retry" variant="outline" @click="retryBonds" />
-			</div>
+			<SurfaceState v-if="error" :error="error" @retry="retryBonds" />
 
 			<DataList
 				:items="bonds"
