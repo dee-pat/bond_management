@@ -18,7 +18,7 @@ const USD_ONLY_HEADERS = [
   "Future XIRR",
 ];
 
-test("runs USD portfolio performance and copies sanitized cash flows", async ({
+test("runs USD portfolio performance and copies future cash flows", async ({
   context,
   page,
 }) => {
@@ -90,7 +90,7 @@ test("runs USD portfolio performance and copies sanitized cash flows", async ({
 
   await bondRow
     .getByRole("button", {
-      name: `Copy native cash flows for ${BOND_ISIN} XIRR`,
+      name: `Copy native cash flows for ${BOND_ISIN} Future XIRR`,
       exact: true,
     })
     .click();
@@ -102,7 +102,7 @@ test("runs USD portfolio performance and copies sanitized cash flows", async ({
     "isin\ttransaction_type\tdate\tcurrency\tamount\tquantity\trate"
   );
   expect(clipboard).toContain(
-    `${BOND_ISIN}\tpurchase\t${VALUATION_DATE}\tUSD\t-1051\t10\t-105.1`
+    `${BOND_ISIN}\tmarket_price\t${VALUATION_DATE}\tUSD\t-1025\t10\t-102.5`
   );
 
   await expect(
