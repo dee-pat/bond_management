@@ -1,6 +1,6 @@
 # Investor UI Migration Progress
 
-Last updated: 2026-09-08
+Last updated: 2026-09-11
 Specification: [investor-ui-migration.md](../specs/investor-ui-migration.md)
 Current phase: Phase 7 — Pilot
 Overall status: Phase 7 in progress; pilot acceptance pending
@@ -13,23 +13,26 @@ This file records execution state and evidence. Product, architecture and accept
 - `In progress`: current implementation slice.
 - `Blocked`: cannot proceed; the blocker and required decision are recorded below.
 - `Complete`: every completion criterion and required gate passed for the current change.
+- `Verified locally; CI follow-up pending`: local gates pass, but a required
+  CI-shaped fresh-site or GitHub observation remains unverified.
 
 ## Phase summary
 
-| Phase | Slice                                | Status      | Evidence                                                                   |
-| ----- | ------------------------------------ | ----------- | -------------------------------------------------------------------------- |
-| 0     | Decision record and baseline         | Complete    | Specification and this tracker created; documentation lint recorded below. |
-| 1     | Compatibility and toolchain          | Complete    | Local and fresh-site gates recorded below.                                 |
-| 2     | Coexistence shell                    | Complete    | Route matrix, responsive navigation and complete gates recorded below.     |
-| 3     | Transaction tracer bullet            | Complete    | API projections, responsive routes and complete gates recorded below.      |
-| 4     | Remaining read-only records          | Complete    | All four record surfaces and complete gates recorded below.                |
-| 5     | Reports                              | Complete    | Both report surfaces and complete gates recorded below.                    |
-| 6     | Parity and hardening                 | Complete    | Shared hardening and clean-site verification recorded below.               |
-| 7     | Pilot                                | In progress | Acceptance cycle and rollback evidence tracked below.                      |
-| 8     | Cutover                              | Pending     | —                                                                          |
-| 9     | Legacy investor workspace retirement | Pending     | Separate release.                                                          |
+| Phase | Slice                                | Status                                 | Evidence                                                                   |
+| ----- | ------------------------------------ | -------------------------------------- | -------------------------------------------------------------------------- |
+| 0     | Decision record and baseline         | Complete                               | Specification and this tracker created; documentation lint recorded below. |
+| 1     | Compatibility and toolchain          | Verified locally; CI follow-up pending | Local gates and the remaining CI difference are recorded below.            |
+| 2     | Coexistence shell                    | Complete                               | Route matrix, responsive navigation and complete gates recorded below.     |
+| 3     | Transaction tracer bullet            | Complete                               | API projections, responsive routes and complete gates recorded below.      |
+| 4     | Remaining read-only records          | Complete                               | All four record surfaces and complete gates recorded below.                |
+| 5     | Reports                              | Complete                               | Both report surfaces and complete gates recorded below.                    |
+| 6     | Parity and hardening                 | Complete                               | Shared hardening and clean-site verification recorded below.               |
+| 6a    | Desk-aligned investor presentation   | Verified locally; CI follow-up pending | Current-tree UI gates and the remaining CI difference are recorded below.  |
+| 7     | Pilot                                | In progress                            | Acceptance cycle and rollback evidence tracked below.                      |
+| 8     | Cutover                              | Pending                                | —                                                                          |
+| 9     | Legacy investor workspace retirement | Pending                                | Separate release.                                                          |
 
-## In-progress slice: Desk-aligned investor presentation
+## Verified locally: Phase 6 follow-up — Desk-aligned investor presentation
 
 Objective: make the read-only investor application visually familiar to Desk
 users while retaining Frappe UI, the existing routes and the current API/data
@@ -81,7 +84,7 @@ screens; detail views retain their record-specific heading.
 - Pagination exposes the loaded record count, supported rows-per-page choices
   and Desk-style Load More behavior without client-side financial pagination.
 
-## Completed slice: Phase 1
+## Phase 1 — local completion; CI follow-up pending
 
 Objective: prove Vue 3, Frappe UI, Playwright and the existing Frappe v16/Cypress stack can coexist in a production-shaped build before feature screens are added.
 
@@ -105,7 +108,7 @@ The first implementation slice will cross the source, server, build, browser,
 and CI layers without adding an investor record surface:
 
 - Add the root package delegation and `frontend/` Vue 3/TypeScript scaffold.
-- Pin `frappe-ui` `1.0.0-beta.25`, Vue `3.5.16`, Vue Router `4.5.1`, Vite
+- Pin `frappe-ui` `1.0.0-beta.42`, Vue `3.5.16`, Vue Router `4.5.1`, Vite
   `5.4.10`, `@vitejs/plugin-vue` `5.1.4`, TypeScript `5.8.3`, and
   `@playwright/test` `1.57.0`; verify the generated lockfiles in the current
   Node 24 environment.
@@ -134,8 +137,13 @@ assets and the copied website entry remain build output and are ignored.
 - [x] Existing complete Cypress suite exits 0.
 - [x] `apps/bond_management/scripts/verify.sh pre-push` exits 0.
 - [x] `apps/bond_management/scripts/verify.sh pre-push-ui` exits 0.
-- [x] CI-shaped fresh-site install and build exit 0.
+- [ ] CI-shaped fresh-site install and build exit 0.
 - [x] Local-versus-CI differences are recorded.
+
+The initial compatibility proof used `frappe-ui` `1.0.0-beta.25`; the current
+pin is `1.0.0-beta.42`, upgraded during the Phase 6 presentation follow-up.
+The local installation and build passed, but the CI-shaped fresh-site gate
+remains pending.
 
 ## Completed slice: Phase 2
 
@@ -872,11 +880,11 @@ app-owned report JavaScript and the standard Query Report runner.
 
 The seeded investor opens Bond Yield Comparison without relying on a portfolio
 assignment, receives the oldest-readable/current-date defaults, enters an
-  inclusive deterministic date range, runs the report and sees the persisted test
-  bond series. Bond series are selected in the chart legend; no separate bond
-  selector is rendered. Desktop checks all filter labels, line-only rendering,
-  one label per visible year, legend series selection, representative accessible
-  Market Price and Future XIRR point text, a chart gap, the hidden raw table and sanitized
+inclusive deterministic date range, runs the report and sees the persisted test
+bond series. Bond series are selected in the chart legend; no separate bond
+selector is rendered. Desktop checks all filter labels, line-only rendering,
+one label per visible year, legend series selection, representative accessible
+Market Price and Future XIRR point text, a chart gap, the hidden raw table and sanitized
 audit-copy output. Pixel 7 checks the same filters, yearly axis, series and
 representative values without horizontal viewport overflow. Server tests own
 role and Report permission, no-assignment access, default bounds, exact dynamic
@@ -932,8 +940,8 @@ now targets the Vue homepage when the site flag is enabled.
 - [ ] Record internal-team acceptance, participants, date and reviewed surfaces.
 - [ ] Complete one full statement/reporting cycle with pilot investors and record the date, participants and defects found.
 - [ ] Resolve every high-severity pilot defect and link its verification evidence.
-- [x] Run the complete Playwright and Cypress suites against the restored `test_site` pilot configuration; rerun after pilot defects or config changes.
-- [x] Rehearse rollback by disabling `bond_investor_spa_enabled`, verifying the SPA route returns to `/desk/bond-investor`, then restore the approved pilot state.
+- [x] Run the complete Playwright and Cypress suites against the enabled `test_site` verification configuration; rerun after pilot defects or config changes.
+- [x] Rehearse rollback by disabling `bond_investor_spa_enabled`, verifying the SPA route returns to `/desk/bond-investor`, then restore the captured initial `test_site` state.
 - [ ] Record the final pilot flag state and the person approving that state. `test_site` is restored to its initial enabled state; pilot-site approval remains pending.
 
 ### Intended Phase 7 pilot slice — 2026-08-26
@@ -946,17 +954,18 @@ values, credentials or private attachment metadata in this repository.
 
 Rollback rehearsal will use the canonical `test_site`: capture the initial flag
 state, disable the flag, verify `/bond-investor` temporarily redirects to the
-unchanged `/desk/bond-investor` fallback, restore the approved pilot state and
-verify the SPA route again. This slice does not change financial data, schema,
-the legacy Workspace or the Apps screen route.
+unchanged `/desk/bond-investor` fallback, restore the captured initial state
+and verify the SPA route again. This local rehearsal does not establish the
+production or pilot-site flag state. This slice does not change financial data,
+schema, the legacy Workspace or the Apps screen route.
 
 ### Pilot acceptance record
 
-- Internal-team acceptance: Pending.
-- Pilot statement/reporting cycle: Pending.
-- High-severity defects: Pending pilot execution; none inferred from pre-pilot gates.
-- Final pilot flag state and approver: Pending.
-- Rollback rehearsal: Complete on `test_site` on 2026-08-26; evidence is in the verification log.
+- Internal-team acceptance: Pending; participants, date and reviewed surfaces are not recorded.
+- Pilot statement/reporting cycle: Pending; pilot participants, date and defects/follow-ups are not recorded.
+- High-severity defects: Pending pilot execution; pre-pilot gates do not establish pilot acceptance.
+- Final pilot flag state and approver: Pending; the local `test_site` flag was restored to its captured initial value `1`.
+- Rollback rehearsal: Complete on `test_site` on 2026-08-26; this validates only the local fallback and is recorded in the verification log.
 - Pilot feedback complete: Yield Comparison now uses line-only rendering, one label per year, oldest-readable/current-date defaults and an accessible non-visual point description.
 
 ## Pilot and retirement gates
@@ -1048,7 +1057,8 @@ Add one entry after every slice. Preserve failed or unavailable gates; later suc
 - Tests passed: Fresh Frappe site creation; fresh Bond Management installation; frontend lint/typecheck/build; deterministic browser seed; 12 focused investor seed/API/website tests.
 - Tests failed: The first new-site attempt exited `1` because MariaDB had pre-created a passwordless `root@127.0.0.1` account; no site database existed and the corrected retry passed. The first frontend command exited `1` because Bench could not write its normal log inside the filesystem sandbox; the escalated rerun passed. The first optional seed attempt exited `1` because Redis Queue was stopped; after starting the existing bench Redis services, the seed and every focused module passed.
 - Tests not run: GitHub Actions itself was not run in this workspace.
-- Blockers: None; Phase 1 is complete.
+- Blockers: The CI-shaped fresh-site install/build and GitHub Actions observation
+  remain unverified; local Phase 1 verification is complete.
 - Unverified local/CI differences: The fresh site used the current macOS/arm64 bench, MariaDB 12.3.2 and Redis 8.8.0. CI uses a unique Ubuntu bench fetched from local `file://` source, MariaDB 11.8 and Redis Alpine. The app install, generated schema, frontend dependency graph and production build entry point were exercised on a genuinely new site, while the separate GitHub Playwright job remains to be observed on its native runner.
 
 ### 2026-08-24 — Phase 2 coexistence shell
@@ -1379,7 +1389,62 @@ apps/bond_management/scripts/verify.sh ui` and
 - Blockers: None.
 - Unverified local/CI differences: Local verification used macOS/arm64, Chrome 152, the existing `test_site` and an explicit server at `127.0.0.1:8001`; CI uses Ubuntu, its own browser and fresh-site setup. The existing four non-blocking frontend Vue lint warnings remain unchanged.
 
-## Next slice: Phase 7
+### 2026-09-11 — Phase 6 follow-up: Desk-aligned presentation and chart corrections
+
+- Risk classification: Medium; shared Vue shell, list/report presentation, chart
+  recovery and the `frappe-ui` beta.25-to-beta.42 dependency upgrade changed.
+  Financial calculations, API projections, permissions, mutations and schema
+  were unchanged.
+- Required gates: Current-tree `pre-push-ui`; frontend lint/typecheck/build;
+  complete server, Cypress and Playwright suites; documentation formatting and
+  scoped pre-commit checks. A fresh CI-shaped site remains required because the
+  frontend dependency changed.
+- Commands executed:
+  - `FRAPPE_USER=... FRAPPE_PASSWORD=<ephemeral> BASE_URL=http://127.0.0.1:8001 CHROME_BIN="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" apps/bond_management/scripts/verify.sh pre-push-ui` — final exit `0`; migration, 297 server tests, frontend lint/typecheck/build, 14 Cypress tests and 34 Playwright tests passed.
+  - `../frappe/node_modules/.bin/prettier --check docs/plans/investor-ui-migration-progress.md` — exit `0` after correcting the tracker indentation.
+  - `../../env/bin/pre-commit run --files docs/plans/investor-ui-migration-progress.md` — exit `0`.
+  - `git diff --check` — exit `0`.
+- Exit statuses: The first UI-gate attempt exited `1` before migration because
+  the local Redis cache and queue services were stopped; after both services
+  were restarted, the final gate and documentation checks exited `0`.
+- Tests passed: Pre-commit, blocking/advisory Semgrep scans and rule tests;
+  migration; 297 server tests; frontend lint/typecheck/build; 14 Cypress tests;
+  and 34 Playwright desktop/mobile tests.
+- Tests failed: The initial UI-gate attempt was unavailable before migration
+  because Redis was stopped; no application assertion failed in the final run.
+- Tests not run: GitHub Actions and a newly created CI-shaped fresh site were
+  not run in this workspace.
+- Blockers: Pilot acceptance still requires named internal and pilot
+  participants, one real statement/reporting cycle, high-severity defect
+  disposition and a pilot-site flag approver. CI-shaped fresh-site verification
+  for the current `frappe-ui` pin also remains pending.
+- Unverified local/CI differences: The final local gate used macOS/arm64,
+  Chrome 152, Redis 8.8, the existing `test_site` and `127.0.0.1:8001`. CI
+  uses Ubuntu, MariaDB 11.8, Redis Alpine, a run-scoped fresh bench/site and
+  GitHub-hosted browsers; those conditions remain unobserved locally.
+
+### 2026-09-11 — Specification alignment
+
+- Risk classification: Low; documentation-only alignment of the approved
+  migration specification with the current dependency baseline and pilot
+  rollback evidence. No runtime, schema, permission or financial behavior
+  changed.
+- Required gates: Documentation formatting, scoped pre-commit checks and
+  `git diff --check`.
+- Commands executed:
+  - `../frappe/node_modules/.bin/prettier --check docs/specs/investor-ui-migration.md docs/plans/investor-ui-migration-progress.md` — exit `0`.
+  - `../../env/bin/pre-commit run --files docs/specs/investor-ui-migration.md docs/plans/investor-ui-migration-progress.md` — exit `0`.
+  - `git diff --check` — exit `0`.
+- Exit statuses: All documentation checks exited `0`.
+- Tests passed: Documentation formatting and repository pre-commit checks.
+- Tests failed: None.
+- Tests not run: Runtime, server, Cypress, Playwright, fresh-site and GitHub
+  Actions checks were not rerun because this was documentation-only.
+- Blockers: None introduced by the specification alignment; the existing
+  CI-shaped fresh-site and pilot-acceptance blockers remain recorded above.
+- Unverified local/CI differences: None introduced; runtime was unchanged.
+
+## Next actions: Phase 7 pilot acceptance
 
 Record named internal-team acceptance and one complete statement/reporting cycle
 with pilot investors. Close any high-severity defects, rerun affected and
@@ -1389,9 +1454,11 @@ Do not begin cutover until those acceptance gates are recorded.
 ## Blockers and deviations
 
 Phase 7 depends on pilot participants, acceptance evidence and an approved final
-pilot-site flag state. Rollback mechanics are rehearsed locally. The Phase 6
-fresh-site workaround used an isolated MariaDB 12.3 server because the shared
-MariaDB root credential is intentionally unavailable; it did not touch or
-recreate an existing site.
+pilot-site flag state. Rollback mechanics are rehearsed locally only. The
+current UI follow-up passed the local `pre-push-ui` gate, but its required
+CI-shaped fresh-site verification remains unobserved. The Phase 6 fresh-site
+workaround used an isolated MariaDB 12.3 server because the shared MariaDB
+root credential is intentionally unavailable; it did not touch or recreate an
+existing site.
 
 When implementation changes a settled decision, record the reason here during the slice and update the specification before marking that slice complete.
