@@ -1,7 +1,7 @@
 # Investor UI Migration
 
 Status: Approved for phased implementation
-Last updated: 2026-08-28
+Last updated: 2026-09-11
 Progress: [investor-ui-migration-progress.md](../plans/investor-ui-migration-progress.md)
 
 ## Outcome
@@ -93,7 +93,7 @@ The compatibility phase may adjust generated-output locations to match the teste
 ### Build and dependency rules
 
 - The root package delegates application development and production builds to `frontend/`, following the app-owned frontend pattern used by ERPNext.
-- Pin Frappe UI and Playwright to exact versions proven against Frappe v16, Python 3.14 and Node 24. Upgrade them through an explicit compatibility change.
+- Pin Frappe UI and Playwright to exact versions proven against Frappe v16, Python 3.14 and Node 24. The current compatibility baseline is `frappe-ui` `1.0.0-beta.42` and `@playwright/test` `1.57.0`; the remaining frontend pins are recorded in the progress tracker and package manifests. Upgrade them through an explicit compatibility change and repeat fresh-site verification.
 - Prefer the official `frappe-ui/vite` plugin for proxying, boot data, asset paths and the generated website entry when its tested release supports the app baseline.
 - Treat the generated HTML and assets as build output. Source changes belong in `frontend/`.
 - Define TypeScript view models for investor API responses. Generated DocType types may assist implementation but do not become the public client contract.
@@ -327,6 +327,7 @@ Phase 1 must extend the shared verification script so `pre-push-ui` means all ac
 ## Rollback
 
 - Pilot rollback: disable `bond_investor_spa_enabled`; the `/bond-investor` login target temporarily redirects to the unchanged Desk route.
+- A local `test_site` rollback rehearsal proves the fallback mechanics only; pilot-site flag state, acceptance and the approving person remain separate pilot evidence.
 - Cutover rollback: restore the Apps screen route to `/desk/bond-investor`; the workspace remains installed.
 - API rollback: explicit endpoints are additive until retirement and do not change existing DocType or report contracts.
 - Data rollback: no migration phase changes investor financial data, so rollback requires no data transformation.
