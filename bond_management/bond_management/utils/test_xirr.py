@@ -1,9 +1,11 @@
-from datetime import date
+from datetime import date, timedelta
 
+import frappe
 from frappe.tests import IntegrationTestCase
 
 from bond_management.bond_management.tests.factories import (
     make_bond,
+    make_market_date,
     make_portfolio,
     make_transaction,
 )
@@ -11,11 +13,39 @@ from bond_management.bond_management.utils.xirr import (
     calculate_xirr,
     create_future_cash_flows,
     create_past_cash_flows,
+    get_last_xirr_guesses,
     round_cashflow_amount,
 )
 
 
 class TestXirr(IntegrationTestCase):
+    def test_last_guess_uses_latest_snapshot(self):
+        bond = make_bond()
+        market_date = date(2090, 1, 1)
+        while frappe.db.exists("Bond Market Date", {"date": market_date}):
+            market_date += timedelta(days=1)
+
+        previous = make_market_date(bond, date=market_date)
+        latest = make_market_date(bond, date=market_date + timedelta(days=1))
+        frappe.db.set_value(
+            "Bond Market Prices",
+            previous.bond_market_prices[0].name,
+            "future_xirr",
+            12.5,
+            update_modified=False,
+        )
+        frappe.db.set_value(
+            "Bond Market Prices",
+            latest.bond_market_prices[0].name,
+            "future_xirr",
+            13.5,
+            update_modified=False,
+        )
+
+        guesses = get_last_xirr_guesses({bond.name}, latest.date)
+
+        self.assertEqual(guesses, {bond.name: 0.135})
+
     def test_returns_none_for_cashflows_without_both_signs(self):
         self.assertIsNone(calculate_xirr({date(2025, 1, 1): 100, date(2026, 1, 1): 110}))
 

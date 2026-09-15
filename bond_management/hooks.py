@@ -102,6 +102,7 @@ after_install = [
     "bond_management.patches.add_bond_management_manager_access.execute",
     "bond_management.patches.add_bond_management_report_permission.execute",
     "bond_management.patches.add_bond_exchange_rate_permissions.execute",
+    "bond_management.patches.add_bond_exchange_rate_provenance.execute",
 ]
 
 # Frappe schema sync removes manual indexes when the DocField cannot declare
@@ -282,7 +283,10 @@ on_session_creation = [
 # Frappe's login client gives that URL precedence over the server-provided
 # home_page, so redirect the resulting generic Desk route to the Vue app after
 # boot. The app itself falls back to the restricted Workspace when disabled.
-app_include_js = "/assets/bond_management/js/investor_desk_redirect.js"
+app_include_js = [
+    "/assets/bond_management/js/clipboard.js",
+    "/assets/bond_management/js/investor_desk_redirect.js",
+]
 
 # Automatically update python controller files with type annotations for this app.
 # export_python_type_annotations = True

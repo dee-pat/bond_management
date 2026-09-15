@@ -17,6 +17,9 @@ from bond_management.bond_management.utils.statement_pdf import (
 )
 
 MAX_TRANSACTION_PDF_BYTES = 10 * 1024 * 1024
+MAX_TRANSACTION_PDF_PAGES = 200
+MAX_TRANSACTION_PDF_TEXT_CHARS = 2_000_000
+MAX_POSITIONED_TEXT_FRAGMENTS = 100_000
 POSITIONED_TEXT_Y_TOLERANCE = 2.5
 ISIN_PATTERN = r"[A-Z]{2}[A-Z0-9]{10}"
 NUMBER_PATTERN = r"[+-]?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?"
@@ -299,10 +302,28 @@ def get_transaction_attachment_details(attachment: str) -> TransactionAttachment
 
 
 def _parse_reader(reader: PdfReader) -> ParsedTransactionPdf:
-    if not reader.pages:
-        raise TransactionPdfError("The transaction PDF has no pages.")
     try:
-        text = "\n".join(page.extract_text() or "" for page in reader.pages)
+        page_count = len(reader.pages)
+    except (DependencyError, FileNotDecryptedError, PdfReadError, PdfStreamError) as error:
+        raise TransactionPdfError("The transaction PDF pages could not be read.") from error
+    if page_count > MAX_TRANSACTION_PDF_PAGES:
+        raise TransactionPdfError(
+            f"The transaction PDF cannot contain more than {MAX_TRANSACTION_PDF_PAGES} pages."
+        )
+    if not page_count:
+        raise TransactionPdfError("The transaction PDF has no pages.")
+    text_length = 0
+    try:
+        page_texts = []
+        for page in reader.pages:
+            page_text = page.extract_text() or ""
+            text_length += len(page_text)
+            if text_length > MAX_TRANSACTION_PDF_TEXT_CHARS:
+                raise TransactionPdfError(
+                    "The transaction PDF contains more text than the parser can safely process."
+                )
+            page_texts.append(page_text)
+        text = "\n".join(page_texts)
     except (DependencyError, FileNotDecryptedError, PdfReadError, PdfStreamError) as error:
         raise TransactionPdfError("The transaction PDF pages could not be read.") from error
 
@@ -315,40 +336,72 @@ def _parse_reader(reader: PdfReader) -> ParsedTransactionPdf:
         # Retry with the text fragments grouped by their page coordinates while
         # preserving the existing parser for older and simpler confirmations.
         try:
-            positioned_text = "\n".join(_extract_positioned_page_text(page) for page in reader.pages)
-            return parse_transaction_pdf_text(positioned_text)
+            positioned_pages = []
+            positioned_fragment_count = 0
+            for page in reader.pages:
+                positioned_page, page_fragment_count = _extract_positioned_page_text(
+                    page,
+                    fragment_limit=MAX_POSITIONED_TEXT_FRAGMENTS - positioned_fragment_count,
+                    include_fragment_count=True,
+                )
+                positioned_pages.append(positioned_page)
+                positioned_fragment_count += page_fragment_count
         except (DependencyError, FileNotDecryptedError, PdfReadError, PdfStreamError):
             raise plain_text_error
+        positioned_text = "\n".join(positioned_pages)
+        if len(positioned_text) > MAX_TRANSACTION_PDF_TEXT_CHARS:
+            raise TransactionPdfError("The positioned transaction PDF text exceeds the parser safety limit.")
+        try:
+            return parse_transaction_pdf_text(positioned_text)
         except TransactionPdfError:
             raise plain_text_error
 
 
-def _extract_positioned_page_text(page) -> str:
+def _extract_positioned_page_text(
+    page,
+    *,
+    fragment_limit=MAX_POSITIONED_TEXT_FRAGMENTS,
+    include_fragment_count=False,
+) -> str | tuple[str, int]:
     """Rebuild readable rows from PDFs whose content stream is column-ordered."""
     fragments = []
 
     def visitor_text(text, _cm, tm, _font, _font_size):
         cleaned = " ".join((text or "").split())
         if cleaned:
+            if len(fragments) >= fragment_limit:
+                raise TransactionPdfError("The transaction PDF contains too many positioned text fragments.")
             fragments.append((float(tm[5]), float(tm[4]), cleaned))
 
     page.extract_text(visitor_text=visitor_text)
 
     rows = []
+    rows_by_bucket = {}
     for y, x, text in fragments:
-        row = next(
-            (candidate for candidate in rows if abs(candidate[0] - y) <= POSITIONED_TEXT_Y_TOLERANCE),
-            None,
+        bucket = round(y / POSITIONED_TEXT_Y_TOLERANCE)
+        candidates = [
+            rows_by_bucket[neighbor]
+            for neighbor in (bucket - 1, bucket, bucket + 1)
+            if neighbor in rows_by_bucket
+        ]
+        row = min(
+            candidates,
+            key=lambda candidate: abs(candidate[0] - y),
+            default=None,
         )
-        if row is None:
+        if row is None or abs(row[0] - y) > POSITIONED_TEXT_Y_TOLERANCE:
             row = [y, []]
             rows.append(row)
+            rows_by_bucket[bucket] = row
+        else:
+            rows_by_bucket.setdefault(bucket, row)
         row[1].append((x, text))
 
     rows.sort(key=lambda row: row[0], reverse=True)
-    return "\n".join(
+    positioned_text = "\n".join(
         " ".join(text for _x, text in sorted(fragments_for_row)) for _y, fragments_for_row in rows
     )
+    return (positioned_text, len(fragments)) if include_fragment_count else positioned_text
 
 
 def _get_portfolio_credentials() -> list[TransactionPortfolioPdfCredentials]:

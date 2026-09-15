@@ -111,10 +111,9 @@ function copy_xirr_cashflows(report, isin, xirr_type, cashflow_currency) {
 }
 
 function clipboard_text(value) {
-	const text = String(value ?? "").replace(/[\u0000-\u001f\u007f]/g, " ");
-	return /^[=+\-@]/.test(text) ? `'${text}` : text;
+	return frappe.provide("bond_management.utils.clipboard").sanitize(value);
 }
 
 function clipboard_number(value) {
-	return String(value ?? "");
+	return frappe.provide("bond_management.utils.clipboard").sanitize(value, { numeric: true });
 }

@@ -3,6 +3,8 @@ from decimal import Decimal
 
 import frappe
 from frappe.utils import getdate
+from pypika.analytics import RowNumber
+from pypika.enums import Order
 from pyxirr import InvalidPaymentsError, xirr
 
 from bond_management.bond_management.utils.accrual import (
@@ -87,26 +89,42 @@ def get_last_xirr_guess(isin, date):
 
 
 def get_last_xirr_guesses(isins, date):
+    """Return the latest non-null persisted guess for each requested ISIN."""
     isins = sorted(set(isins or ()))
     if not isins or not date:
         return {}
 
-    results = frappe.qb.get_query(
+    market_date = frappe.qb.DocType("Bond Market Date")
+    market_price = frappe.qb.DocType("Bond Market Prices")
+    guess_rank = (
+        RowNumber()
+        .over(market_price.isin)
+        .orderby(market_date.date, order=Order.desc)
+        .orderby(market_date.name, order=Order.desc)
+        .as_("guess_rank")
+    )
+    ranked_query = frappe.qb.get_query(
         "Bond Market Date",
-        fields=["bond_market_prices.isin", "bond_market_prices.future_xirr"],
-        filters={"date": ["<=", date], "bond_market_prices.isin": ["in", isins]},
-        order_by="date desc, name desc",
+        fields=[
+            "bond_market_prices.isin as isin",
+            "bond_market_prices.future_xirr as future_xirr",
+            guess_rank,
+        ],
+        filters={
+            "date": ["<=", date],
+            "bond_market_prices.isin": ["in", isins],
+            "bond_market_prices.future_xirr": ["is", "set"],
+        },
         ignore_permissions=False,
+    )
+    ranked_market = ranked_query.as_("ranked_market")
+    results = (
+        frappe.qb.from_(ranked_market)
+        .select(ranked_market["isin"], ranked_market["future_xirr"])
+        .where(ranked_market["guess_rank"] == 1)
     ).run(as_dict=True)
 
-    guesses = {}
-    for result in results:
-        isin = result.get("isin")
-        if isin in guesses or result.get("future_xirr") is None:
-            continue
-        guesses[isin] = float(to_decimal(result["future_xirr"]) / to_decimal(100))
-
-    return guesses
+    return {result.isin: float(to_decimal(result.future_xirr) / to_decimal(100)) for result in results}
 
 
 def consolidate_cashflows(cash_flows):
@@ -417,13 +435,3 @@ def create_past_cash_flows(isin, date, market_price, portfolio, bond_doc=None, t
     past_cash_flows = [d for d in past_cash_flows if to_decimal(d.get("amount")) != 0]
     past_cash_flows = round_cashflow_amounts(past_cash_flows)
     return sorted(past_cash_flows, key=lambda x: x["date"])
-
-
-def calculate_past_xirr(isin, date, market_price, portfolio):
-    # Create past cash flows
-    past_cash_flows = create_past_cash_flows(isin, date, market_price, portfolio)
-
-    # Consolidate cash flows
-    consolidated_cash_flows = consolidate_cashflows(past_cash_flows)
-
-    return calculate_xirr(consolidated_cash_flows)

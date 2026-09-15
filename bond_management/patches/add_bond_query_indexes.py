@@ -5,6 +5,8 @@ REPORT_INDEX = "bond_transaction_portfolio_settlement_isin"
 MARKET_DATE_UNIQUE = "unique_bond_market_date"
 STATEMENT_ATTACHMENT_UNIQUE = "unique_bond_statement_attachment"
 EXCHANGE_RATE_UNIQUE = "unique_bond_exchange_rate"
+EXCHANGE_RATE_SOURCE_EXCHANGE_RATE_INDEX = "bond_exchange_rate_source_exchange_rate"
+EXCHANGE_RATE_SOURCE_STATEMENT_INDEX = "bond_exchange_rate_source_statement"
 
 
 def execute():
@@ -44,6 +46,17 @@ def reapply_bond_query_indexes():
         ["rate_date", "from_currency", "to_currency"],
         constraint_name=EXCHANGE_RATE_UNIQUE,
     )
+    if frappe.db.table_exists("Bond Exchange Rate Source"):
+        frappe.db.add_index(
+            "Bond Exchange Rate Source",
+            ["exchange_rate"],
+            index_name=EXCHANGE_RATE_SOURCE_EXCHANGE_RATE_INDEX,
+        )
+        frappe.db.add_index(
+            "Bond Exchange Rate Source",
+            ["statement"],
+            index_name=EXCHANGE_RATE_SOURCE_STATEMENT_INDEX,
+        )
 
 
 def _validate_duplicates():

@@ -1,4 +1,5 @@
 from contextlib import contextmanager
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import frappe
@@ -8,6 +9,7 @@ from frappe.tests import IntegrationTestCase
 from bond_management.bond_management.api.investor import (
     EXCHANGE_RATE_DETAIL_FIELDS,
     EXCHANGE_RATE_LIST_FIELDS,
+    MAX_PAGE_START,
     get_exchange_rate,
     get_exchange_rates,
 )
@@ -22,6 +24,9 @@ from bond_management.bond_management.utils.investor_permissions import (
     INVESTOR_ROLE,
 )
 from bond_management.bond_management.utils.investor_ui import FEATURE_FLAG
+from bond_management.bond_management.utils.statement_exchange_rates import (
+    sync_statement_exchange_rates,
+)
 
 
 class TestInvestorExchangeRates(IntegrationTestCase):
@@ -147,6 +152,11 @@ class TestInvestorExchangeRates(IntegrationTestCase):
                 get_exchange_rates(page_length="0")
             with self.assertRaisesRegex(frappe.ValidationError, "must be at least 0"):
                 get_exchange_rates(start="-1")
+            with self.assertRaisesRegex(
+                frappe.ValidationError,
+                f"cannot exceed {MAX_PAGE_START}",
+            ):
+                get_exchange_rates(start=MAX_PAGE_START + 1)
             with self.assertRaises(FrappeTypeError):
                 get_exchange_rates(start=[])
             with self.assertRaises(TypeError):
@@ -184,8 +194,17 @@ class TestInvestorExchangeRates(IntegrationTestCase):
     def _make_statement_exchange_rate(portfolio):
         exchange_rate = make_exchange_rate()
         statement = make_statement(portfolio, statement_date=exchange_rate.rate_date)
-        exchange_rate.statement = statement.name
-        exchange_rate.save()
+        sync_statement_exchange_rates(
+            statement,
+            [
+                SimpleNamespace(
+                    from_currency=exchange_rate.from_currency,
+                    to_currency=exchange_rate.to_currency,
+                    rate=exchange_rate.rate,
+                )
+            ],
+        )
+        exchange_rate.reload()
         return exchange_rate
 
     @staticmethod

@@ -6,6 +6,7 @@ from decimal import Decimal
 
 import frappe
 from frappe import _
+from frappe.desk.query_report import get_report_doc
 from frappe.utils import escape_html, getdate
 
 from bond_management.bond_management.utils.accrual import (
@@ -80,6 +81,9 @@ def get_xirr_cashflows(
     cashflow_currency: str | None = None,
 ) -> list[dict]:
     """Return native or reporting-currency cash flows behind a report XIRR."""
+    # This helper is directly whitelisted by the Desk report JavaScript, so the
+    # wrapper's report-role check must not be its only authorization boundary.
+    get_report_doc("Portfolio Performance")
     portfolio, valuation_date = validate_report_inputs(portfolio, valuation_date)
 
     isin = required_string(isin, "ISIN")
@@ -163,7 +167,7 @@ def get_xirr_cashflows(
             # the underlying cash-flow calculations remain Decimal-based.
             "amount": round_cashflow_amount(cashflow["amount"]),
             "quantity": float(cashflow["quantity"]),
-            "rate": round_cashflow_amount(to_decimal(cashflow["amount"]) / to_decimal(cashflow["quantity"])),
+            "rate": _cashflow_rate(cashflow["amount"], cashflow["quantity"]),
         }
         for cashflow in sorted(
             cashflows,
@@ -182,6 +186,13 @@ def validate_report_inputs(portfolio, valuation_date):
         frappe.throw(f"Bond Portfolio {frappe.bold(escape_html(portfolio))} does not exist")
 
     return portfolio, getdate(valuation_date)
+
+
+def _cashflow_rate(amount, quantity):
+    quantity = to_decimal(quantity)
+    if not quantity:
+        return None
+    return round_cashflow_amount(to_decimal(amount) / quantity)
 
 
 def get_terminal_market_price(isin, valuation_date, quantity, market_price):
@@ -391,10 +402,8 @@ def get_data(portfolio, valuation_date, context=None):
             reporting_totals["sale"] + reporting_totals["coupon"] + reporting_totals["amortisation"]
         )
 
-        xirr = calculate_xirr(consolidate_cashflows(cashflows))
-        xirr = xirr * 100.0 if xirr is not None else 0.0
-        xirr_usd = calculate_xirr(consolidate_cashflows(reporting_cashflows))
-        xirr_usd = xirr_usd * 100.0 if xirr_usd is not None else 0.0
+        xirr = _percent_value(calculate_xirr(consolidate_cashflows(cashflows)))
+        xirr_usd = _percent_value(calculate_xirr(consolidate_cashflows(reporting_cashflows)))
 
         if quantity:
             future_cashflows = create_future_cash_flows(
@@ -530,8 +539,12 @@ def make_total_row(
         "reporting_currency": REPORTING_CURRENCY,
         **native_values,
         **reporting_values,
-        "xirr": (xirr_value * 100 if xirr_value is not None else (0.0 if single_native_currency else None)),
-        "future_xirr": future_xirr * 100 if future_xirr is not None else None,
-        "xirr_usd": reporting_xirr * 100 if reporting_xirr is not None else 0.0,
-        "future_xirr_usd": future_reporting_xirr * 100 if future_reporting_xirr is not None else None,
+        "xirr": _percent_value(xirr_value),
+        "future_xirr": _percent_value(future_xirr),
+        "xirr_usd": _percent_value(reporting_xirr),
+        "future_xirr_usd": _percent_value(future_reporting_xirr),
     }
+
+
+def _percent_value(value):
+    return value * 100 if value is not None else None

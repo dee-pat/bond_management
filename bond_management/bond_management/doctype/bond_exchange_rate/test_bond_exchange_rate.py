@@ -1,16 +1,57 @@
 from decimal import Decimal
+from types import SimpleNamespace
 
 import frappe
 from frappe.tests import IntegrationTestCase
 
-from bond_management.bond_management.tests.factories import make_exchange_rate
-from bond_management.patches.add_bond_query_indexes import EXCHANGE_RATE_UNIQUE
+from bond_management.bond_management.tests.factories import make_exchange_rate, make_portfolio, make_statement
+from bond_management.bond_management.utils.statement_exchange_rates import sync_statement_exchange_rates
+from bond_management.patches.add_bond_query_indexes import (
+    EXCHANGE_RATE_SOURCE_EXCHANGE_RATE_INDEX,
+    EXCHANGE_RATE_SOURCE_STATEMENT_INDEX,
+    EXCHANGE_RATE_UNIQUE,
+)
 from bond_management.patches.backfill_bond_exchange_reverse_rates import (
     execute as backfill_reverse_rates,
 )
 
 
 class TestBondExchangeRate(IntegrationTestCase):
+    def test_statement_derived_rate_cannot_be_changed_or_deleted_directly(self):
+        exchange_rate = make_exchange_rate()
+        statement = make_statement(make_portfolio(), statement_date=exchange_rate.rate_date)
+        sync_statement_exchange_rates(
+            statement,
+            [
+                SimpleNamespace(
+                    from_currency=exchange_rate.from_currency,
+                    to_currency=exchange_rate.to_currency,
+                    rate=exchange_rate.rate,
+                )
+            ],
+        )
+        exchange_rate.reload()
+
+        exchange_rate.rate = "0.00800000"
+        with self.assertRaisesRegex(frappe.ValidationError, "managed from the source PDF"):
+            exchange_rate.save()
+
+        with self.assertRaisesRegex(frappe.ValidationError, "derived from"):
+            exchange_rate.delete()
+
+        self.assertTrue(
+            frappe.db.has_index(
+                "tabBond Exchange Rate Source",
+                EXCHANGE_RATE_SOURCE_EXCHANGE_RATE_INDEX,
+            )
+        )
+        self.assertTrue(
+            frappe.db.has_index(
+                "tabBond Exchange Rate Source",
+                EXCHANGE_RATE_SOURCE_STATEMENT_INDEX,
+            )
+        )
+
     def test_manual_rate_is_stored_as_source_to_usd(self):
         rate = make_exchange_rate()
 

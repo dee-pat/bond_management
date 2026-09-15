@@ -1,6 +1,7 @@
 # Copyright (c) 2026, Deepak Patel and Contributors
 # See license.txt
 
+from datetime import date, timedelta
 from decimal import Decimal
 from io import BytesIO
 from pathlib import Path
@@ -21,6 +22,7 @@ from bond_management.bond_management.tests.factories import (
     unique_name,
 )
 from bond_management.bond_management.tests.pdf_factory import make_text_pdf
+from bond_management.bond_management.utils.statement_exchange_rates import SOURCE_DOCTYPE
 from bond_management.bond_management.utils.statement_quantity_reconciliation import (
     StatementQuantityComparison,
 )
@@ -263,17 +265,15 @@ class TestBondStatement(IntegrationTestCase):
 
         statement = frappe.get_doc({"doctype": "Bond Statement", "attachment": attachment}).insert()
 
-        parsed_rate = frappe.qb.get_query(
-            "Bond Exchange Rate",
-            fields=["rate", "source", "statement"],
-            filters={
-                "rate_date": "2026-06-30",
-                "from_currency": "KES",
-            },
+        source = frappe.qb.get_query(
+            SOURCE_DOCTYPE,
+            fields=["exchange_rate", "rate"],
+            filters={"statement": statement.name},
             limit=1,
             ignore_permissions=False,
         ).run(as_dict=True)[0]
-        self.assertEqual(parsed_rate.rate, 0.00772499)
+        parsed_rate = frappe.get_doc("Bond Exchange Rate", source.exchange_rate)
+        self.assertEqual(source.rate, 0.00772499)
         self.assertEqual(parsed_rate.source, "Statement PDF")
         self.assertEqual(parsed_rate.statement, statement.name)
 
@@ -301,7 +301,7 @@ class TestBondStatement(IntegrationTestCase):
         )
         statement = frappe.get_doc({"doctype": "Bond Statement", "attachment": original_attachment}).insert()
         self.assertEqual(
-            frappe.db.count("Bond Exchange Rate", {"statement": statement.name}),
+            frappe.db.count(SOURCE_DOCTYPE, {"statement": statement.name}),
             1,
         )
 
@@ -319,18 +319,10 @@ class TestBondStatement(IntegrationTestCase):
 
         self.assertEqual(statement.statement_date.isoformat(), "2026-07-31")
         self.assertEqual(
-            frappe.db.count("Bond Exchange Rate", {"statement": statement.name}),
+            frappe.db.count(SOURCE_DOCTYPE, {"statement": statement.name}),
             0,
         )
-        self.assertFalse(
-            frappe.db.exists(
-                "Bond Exchange Rate",
-                {
-                    "rate_date": "2026-06-30",
-                    "from_currency": "KES",
-                },
-            )
-        )
+        self.assertFalse(frappe.db.exists(SOURCE_DOCTYPE, {"statement": statement.name}))
 
     def test_deleting_statement_removes_derived_exchange_rates(self):
         account_no = unique_name("FX-DELETE")
@@ -349,15 +341,137 @@ class TestBondStatement(IntegrationTestCase):
         )
         statement = frappe.get_doc({"doctype": "Bond Statement", "attachment": attachment}).insert()
         derived_rate = frappe.db.get_value(
-            "Bond Exchange Rate",
+            SOURCE_DOCTYPE,
             {"statement": statement.name},
-            "name",
+            "exchange_rate",
         )
         self.assertTrue(derived_rate)
 
         statement.delete()
 
-        self.assertFalse(frappe.db.exists("Bond Exchange Rate", derived_rate))
+        self.assertFalse(frappe.db.exists(SOURCE_DOCTYPE, {"statement": statement.name}))
+        if frappe.db.exists(SOURCE_DOCTYPE, {"exchange_rate": derived_rate}):
+            self.assertTrue(frappe.db.exists("Bond Exchange Rate", derived_rate))
+        else:
+            self.assertFalse(frappe.db.exists("Bond Exchange Rate", derived_rate))
+
+    def test_equal_statement_rates_share_a_canonical_row_and_cleanup_only_their_sources(self):
+        _statement_date, statement_date_text = self._next_exchange_rate_date()
+        statements = []
+        for suffix in ("FIRST", "SECOND"):
+            account_no = unique_name(f"FX-SHARED-{suffix}")
+            password = unique_name(f"FX-PASSWORD-{suffix}")
+            make_portfolio(account_no=account_no, statement_pdf_password=password)
+            attachment = self._attach_pdf(
+                "\n".join(
+                    [
+                        f"Portfolio Summary as of {statement_date_text}",
+                        f"Product Account No.: {account_no}",
+                        "Currency Pair Rate",
+                        "KES / USD 0.00772499",
+                    ]
+                ),
+                password,
+            )
+            statements.append(
+                frappe.get_doc({"doctype": "Bond Statement", "attachment": attachment}).insert()
+            )
+
+        sources = frappe.qb.get_query(
+            SOURCE_DOCTYPE,
+            fields=["name", "exchange_rate", "statement"],
+            filters={"statement": ["in", [statement.name for statement in statements]]},
+            ignore_permissions=False,
+        ).run(as_dict=True)
+        self.assertEqual(len(sources), 2)
+        self.assertEqual(len({source.exchange_rate for source in sources}), 1)
+        canonical_name = sources[0].exchange_rate
+
+        statements[1].delete()
+        self.assertTrue(frappe.db.exists("Bond Exchange Rate", canonical_name))
+        self.assertEqual(frappe.db.count(SOURCE_DOCTYPE, {"exchange_rate": canonical_name}), 1)
+
+        statements[0].delete()
+        self.assertFalse(frappe.db.exists("Bond Exchange Rate", canonical_name))
+
+    def test_conflicting_statement_rate_is_rejected_without_overwriting_the_canonical_row(self):
+        _statement_date, statement_date_text = self._next_exchange_rate_date()
+        first_account = unique_name("FX-CONFLICT-FIRST")
+        first_password = unique_name("FX-PASSWORD-FIRST")
+        second_account = unique_name("FX-CONFLICT-SECOND")
+        second_password = unique_name("FX-PASSWORD-SECOND")
+        make_portfolio(account_no=first_account, statement_pdf_password=first_password)
+        make_portfolio(account_no=second_account, statement_pdf_password=second_password)
+
+        first_attachment = self._attach_pdf(
+            "\n".join(
+                [
+                    f"Portfolio Summary as of {statement_date_text}",
+                    f"Product Account No.: {first_account}",
+                    "Currency Pair Rate",
+                    "KES / USD 0.00772499",
+                ]
+            ),
+            first_password,
+        )
+        first = frappe.get_doc({"doctype": "Bond Statement", "attachment": first_attachment}).insert()
+        second_attachment = self._attach_pdf(
+            "\n".join(
+                [
+                    f"Portfolio Summary as of {statement_date_text}",
+                    f"Product Account No.: {second_account}",
+                    "Currency Pair Rate",
+                    "KES / USD 0.00800000",
+                ]
+            ),
+            second_password,
+        )
+
+        with self.assertRaisesRegex(ValidationError, "conflicts"):
+            frappe.get_doc({"doctype": "Bond Statement", "attachment": second_attachment}).insert()
+
+        canonical = frappe.qb.get_query(
+            "Bond Exchange Rate",
+            fields=["rate", "statement"],
+            filters={"rate_date": _statement_date, "from_currency": "KES"},
+            limit=1,
+            ignore_permissions=False,
+        ).run(as_dict=True)[0]
+        self.assertEqual(canonical.rate, 0.00772499)
+        self.assertEqual(canonical.statement, first.name)
+        self.assertEqual(frappe.db.count(SOURCE_DOCTYPE, {"statement": first.name}), 1)
+
+    def test_manual_fallback_survives_statement_source_cleanup(self):
+        statement_date, statement_date_text = self._next_exchange_rate_date()
+        account_no = unique_name("FX-MANUAL-FALLBACK")
+        password = unique_name("FX-PASSWORD-MANUAL")
+        make_portfolio(account_no=account_no, statement_pdf_password=password)
+        manual = make_exchange_rate(
+            from_currency="KES",
+            rate="0.00770000",
+            rate_date=statement_date,
+        )
+        attachment = self._attach_pdf(
+            "\n".join(
+                [
+                    f"Portfolio Summary as of {statement_date_text}",
+                    f"Product Account No.: {account_no}",
+                    "Currency Pair Rate",
+                    "KES / USD 0.00770000",
+                ]
+            ),
+            password,
+        )
+        statement = frappe.get_doc({"doctype": "Bond Statement", "attachment": attachment}).insert()
+
+        manual.reload()
+        self.assertEqual(manual.manual_fallback, 1)
+        self.assertEqual(manual.source, "Statement PDF")
+        statement.delete()
+        manual.reload()
+        self.assertTrue(frappe.db.exists("Bond Exchange Rate", manual.name))
+        self.assertEqual(manual.source, "Manual")
+        self.assertIsNone(manual.statement)
 
     def test_attachment_accepts_transaction_account_and_keeps_product_account_filename(self):
         product_account_no = unique_name("PRODUCT-ACCOUNT")
@@ -1014,6 +1128,15 @@ class TestBondStatement(IntegrationTestCase):
                     "attachment": attachment,
                 }
             ).insert()
+
+    def _next_exchange_rate_date(self):
+        candidate = date(2090, 1, 1)
+        while frappe.db.exists(
+            "Bond Exchange Rate",
+            {"rate_date": candidate, "from_currency": "KES", "to_currency": "USD"},
+        ):
+            candidate += timedelta(days=1)
+        return candidate, candidate.strftime("%d/%m/%Y")
 
     def _attach_pdf(self, text, password, file_name=None):
         file_doc = frappe.get_doc(

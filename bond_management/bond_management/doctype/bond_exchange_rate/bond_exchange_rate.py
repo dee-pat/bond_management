@@ -7,6 +7,7 @@ from frappe.utils import getdate
 
 from bond_management.bond_management.utils.exchange_rate import REPORTING_CURRENCY
 from bond_management.bond_management.utils.financial import to_decimal
+from bond_management.bond_management.utils.statement_exchange_rates import SOURCE_DOCTYPE
 
 ONE = Decimal("1")
 
@@ -17,7 +18,7 @@ class BondExchangeRate(Document):
             self.rate_date = getdate(self.rate_date)
 
         self.to_currency = REPORTING_CURRENCY
-        self.source = "Statement PDF" if self.statement else "Manual"
+        self._set_source_projection()
         self._sync_rate_values()
 
     def validate(self):
@@ -74,6 +75,69 @@ class BondExchangeRate(Document):
                 ),
                 frappe.UniqueValidationError,
             )
+
+    def on_trash(self):
+        if frappe.flags.get("in_statement_exchange_rate_sync"):
+            return
+        if self._statement_sources():
+            frappe.throw(
+                _(
+                    "This exchange-rate row is derived from one or more Bond Statement PDFs. "
+                    "Delete or replace the source statement instead."
+                )
+            )
+
+    def _set_source_projection(self):
+        syncing = frappe.flags.get("in_statement_exchange_rate_sync")
+        if self.is_new():
+            if not syncing:
+                self.source = "Manual"
+                self.statement = None
+                self.manual_fallback = 1
+            else:
+                self.source = "Statement PDF" if self.statement else "Manual"
+            return
+
+        sources = self._statement_sources()
+        if sources:
+            if not syncing and self._financial_values_changed():
+                frappe.throw(
+                    _(
+                        "Statement-derived exchange rates are managed from the source PDF. "
+                        "Delete or replace the source statement before changing the rate."
+                    )
+                )
+            self.source = "Statement PDF"
+            self.statement = min(source.statement for source in sources)
+            return
+
+        self.source = "Manual"
+        self.statement = None
+        self.manual_fallback = 1
+
+    def _statement_sources(self):
+        # Direct rate edit/delete checks must see derived provenance even when
+        # the current user cannot browse the internal source DocType.
+        return frappe.get_all(
+            SOURCE_DOCTYPE,
+            filters={"exchange_rate": self.name},
+            fields=["name", "statement"],
+            order_by="statement asc, name asc",
+            ignore_permissions=True,
+        )
+
+    def _financial_values_changed(self):
+        previous = self.get_doc_before_save()
+        if not previous:
+            self.load_doc_before_save()
+            previous = self.get_doc_before_save()
+        if not previous:
+            return True
+        return any(
+            _decimal_or_none(self.get(fieldname), fieldname)
+            != _decimal_or_none(previous.get(fieldname), fieldname)
+            for fieldname in ("rate", "reverse_rate")
+        )
 
     def _sync_rate_values(self):
         rate = _decimal_or_none(self.rate, "Rate")

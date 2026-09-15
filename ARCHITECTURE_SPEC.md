@@ -36,6 +36,13 @@ metadata or relationship-owning services change.
   SVG rendering. `bond_transaction.js` combines PDF selection/attachment state
   and amount calculation. Their seams should be split only when a concrete
   change needs the seam.
+- Exchange rates use one global canonical row per date/from/to currency and a
+  separate `Bond Exchange Rate Source` row for each statement provenance. A
+  statement may share an equal-valued canonical rate with another statement;
+  differing values fail the save atomically. The legacy canonical `statement`
+  link remains a deterministic display projection, while source rows own
+  replacement and trash cleanup. Manual canonical rows remain as fallback data
+  after their last PDF source is removed.
 - Existing Cypress specs cover client state and serialization with stubs. A
   small server-backed smoke path is still needed for attachment upload,
   authoritative PDF response, save, and generated report/file behavior.
@@ -115,6 +122,18 @@ Each extracted public module gets a small typed interface and focused tests.
 Do not duplicate parser or permission logic across adapters.
 
 ## Test plan
+
+### Approved implementation slice
+
+The first implementation slice covers global exchange-rate provenance and the
+directly coupled integrity/security hardening: report-role enforcement and
+zero-quantity serialization, `None` XIRR propagation, shared clipboard formula
+sanitization, parser page/text/fragment limits, bounded investor pagination,
+windowed XIRR history lookup, and removal of the unused past-XIRR helper.
+Verification is the targeted server modules, the complete server gate, and the
+complete UI gate for the report/DocType/clipboard changes. Schema and index
+changes also require fresh-site validation in CI or an approved fresh local
+site.
 
 ### Unit and integration
 

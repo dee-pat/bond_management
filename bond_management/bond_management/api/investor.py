@@ -24,6 +24,7 @@ from bond_management.bond_management.utils.validation import optional_string, re
 
 DEFAULT_PAGE_LENGTH = 20
 MAX_PAGE_LENGTH = 50
+MAX_PAGE_START = 10_000
 TRANSACTION_LIST_FIELDS = (
     "name",
     "settlement_date",
@@ -252,7 +253,13 @@ def get_transactions(
         filter_fields=TRANSACTION_FILTER_FIELDS,
         default_order="settlement_date desc, name desc",
     )
-    start_value = _integer_argument(start, "Start", default=0, minimum=0)
+    start_value = _integer_argument(
+        start,
+        "Start",
+        default=0,
+        minimum=0,
+        maximum=MAX_PAGE_START,
+    )
     page_length_value = _integer_argument(
         page_length,
         "Page length",
@@ -336,7 +343,13 @@ def get_statements(
     if reconciliation_status and reconciliation_status not in STATEMENT_RECONCILIATION_STATUSES:
         frappe.throw(_("Reconciliation status must be Matched or Mismatched."))
 
-    start_value = _integer_argument(start, "Start", default=0, minimum=0)
+    start_value = _integer_argument(
+        start,
+        "Start",
+        default=0,
+        minimum=0,
+        maximum=MAX_PAGE_START,
+    )
     page_length_value = _integer_argument(
         page_length,
         "Page length",
@@ -421,7 +434,13 @@ def get_bonds(
         default_order="issue_date desc, name desc",
     )
 
-    start_value = _integer_argument(start, "Start", default=0, minimum=0)
+    start_value = _integer_argument(
+        start,
+        "Start",
+        default=0,
+        minimum=0,
+        maximum=MAX_PAGE_START,
+    )
     page_length_value = _integer_argument(
         page_length,
         "Page length",
@@ -500,7 +519,13 @@ def get_market_dates(
         default_order="date desc, name desc",
     )
 
-    start_value = _integer_argument(start, "Start", default=0, minimum=0)
+    start_value = _integer_argument(
+        start,
+        "Start",
+        default=0,
+        minimum=0,
+        maximum=MAX_PAGE_START,
+    )
     page_length_value = _integer_argument(
         page_length,
         "Page length",
@@ -576,7 +601,13 @@ def get_exchange_rates(
         default_order="rate_date desc, name desc",
     )
 
-    start_value = _integer_argument(start, "Start", default=0, minimum=0)
+    start_value = _integer_argument(
+        start,
+        "Start",
+        default=0,
+        minimum=0,
+        maximum=MAX_PAGE_START,
+    )
     page_length_value = _integer_argument(
         page_length,
         "Page length",

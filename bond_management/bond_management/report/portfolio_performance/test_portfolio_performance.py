@@ -6,6 +6,7 @@ from frappe.exceptions import FrappeTypeError
 from frappe.tests import IntegrationTestCase
 
 from bond_management.bond_management.report.portfolio_performance.portfolio_performance import (
+    _cashflow_rate,
     execute,
     get_columns,
     get_data,
@@ -25,6 +26,26 @@ from bond_management.bond_management.utils.xirr import create_future_cash_flows
 
 
 class TestPortfolioPerformance(IntegrationTestCase):
+    def test_direct_cashflow_endpoint_rechecks_report_permission(self):
+        portfolio = make_portfolio()
+
+        with patch(
+            "bond_management.bond_management.report.portfolio_performance.portfolio_performance.get_report_doc",
+            side_effect=frappe.PermissionError,
+        ):
+            with self.assertRaises(frappe.PermissionError):
+                get_xirr_cashflows(portfolio.name, "2025-12-31", "TOTAL", "past")
+
+    def test_invalid_xirr_values_and_zero_quantity_rates_stay_blank(self):
+        rows = [{"currency": "USD", "proceeds_value": 10}]
+        cashflows = [{"date": "2025-01-01", "amount": 10}]
+
+        total = make_total_row(rows, cashflows, [], cashflows, [])
+
+        self.assertIsNone(total["xirr"])
+        self.assertIsNone(total["xirr_usd"])
+        self.assertIsNone(_cashflow_rate(100, 0))
+
     def test_columns_are_defined_and_multi_currency_totals_use_usd(self):
         columns = get_columns()
         fieldnames = [column["fieldname"] for column in columns]

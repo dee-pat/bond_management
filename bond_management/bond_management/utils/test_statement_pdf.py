@@ -1,10 +1,13 @@
 from datetime import date
 from decimal import Decimal
+from unittest.mock import patch
 
 from frappe.tests import UnitTestCase
 
 from bond_management.bond_management.tests.pdf_factory import make_text_pdf
 from bond_management.bond_management.utils.statement_pdf import (
+    MAX_STATEMENT_PDF_PAGES,
+    MAX_STATEMENT_PDF_TEXT_CHARS,
     StatementPdfError,
     StatementPdfPasswordError,
     extract_statement_pdf,
@@ -15,6 +18,28 @@ from bond_management.bond_management.utils.statement_pdf import (
 
 
 class TestStatementPdf(UnitTestCase):
+    def test_rejects_pdf_with_too_many_pages_before_extracting_text(self):
+        reader = patch("bond_management.bond_management.utils.statement_pdf.PdfReader")
+        with reader as pdf_reader:
+            pdf_reader.return_value.is_encrypted = False
+            pdf_reader.return_value.pages = [object()] * (MAX_STATEMENT_PDF_PAGES + 1)
+
+            with self.assertRaisesRegex(StatementPdfError, "cannot contain more than"):
+                extract_statement_pdf(b"%PDF-", [])
+
+    def test_rejects_statement_text_above_the_parser_limit(self):
+        class LargePage:
+            def extract_text(self):
+                return "x" * (MAX_STATEMENT_PDF_TEXT_CHARS + 1)
+
+        reader = patch("bond_management.bond_management.utils.statement_pdf.PdfReader")
+        with reader as pdf_reader:
+            pdf_reader.return_value.is_encrypted = False
+            pdf_reader.return_value.pages = [LargePage()]
+
+            with self.assertRaisesRegex(StatementPdfError, "more text than"):
+                extract_statement_pdf(b"%PDF-", [])
+
     def test_parses_current_portfolio_summary_layout(self):
         parsed = parse_statement_pdf_text(
             """

@@ -259,9 +259,9 @@ function copy_audit_data(report) {
 	const columns = (report.raw_data?.columns || []).filter((column) => !column.hidden);
 	const rows = report.raw_data?.result || [];
 	const lines = [
-		columns.map((column) => audit_cell(column.label)).join("\t"),
+		columns.map((column) => audit_cell(column.label, column)).join("\t"),
 		...rows.map((row) =>
-			columns.map((column) => audit_cell(row[column.fieldname])).join("\t")
+			columns.map((column) => audit_cell(row[column.fieldname], column)).join("\t")
 		),
 	];
 	frappe.utils.copy_to_clipboard(
@@ -270,8 +270,10 @@ function copy_audit_data(report) {
 	);
 }
 
-function audit_cell(value) {
-	return String(value ?? "").replace(/[\t\r\n]+/g, " ");
+function audit_cell(value, column) {
+	return frappe.provide("bond_management.utils.clipboard").sanitize(value, {
+		numeric: ["Currency", "Float", "Int", "Percent"].includes(column?.fieldtype),
+	});
 }
 
 function remove_report_controls(report) {

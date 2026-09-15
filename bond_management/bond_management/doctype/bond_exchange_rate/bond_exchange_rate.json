@@ -15,7 +15,8 @@
   "column_break_exchange_rate",
   "rate",
   "reverse_rate",
-  "statement"
+  "statement",
+  "manual_fallback"
  ],
  "fields": [
   {
@@ -75,10 +76,19 @@
    "read_only": 1
   },
   {
+   "description": "Display-only representative statement. Source provenance is stored separately for every statement.",
    "fieldname": "statement",
    "fieldtype": "Link",
-   "label": "Statement",
+   "label": "Representative Statement",
    "options": "Bond Statement",
+   "read_only": 1
+  },
+  {
+   "default": "1",
+   "fieldname": "manual_fallback",
+   "fieldtype": "Check",
+   "hidden": 1,
+   "label": "Manual Fallback",
    "read_only": 1
   }
  ],
