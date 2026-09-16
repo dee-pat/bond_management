@@ -52,6 +52,71 @@ class TestBondExchangeRate(IntegrationTestCase):
             )
         )
 
+    def test_statement_derived_rate_cannot_be_reassigned_to_another_currency(self):
+        exchange_rate = make_exchange_rate()
+        statement = make_statement(make_portfolio(), statement_date=exchange_rate.rate_date)
+        sync_statement_exchange_rates(
+            statement,
+            [
+                SimpleNamespace(
+                    from_currency=exchange_rate.from_currency,
+                    to_currency=exchange_rate.to_currency,
+                    rate=exchange_rate.rate,
+                )
+            ],
+        )
+        exchange_rate.reload()
+
+        exchange_rate.from_currency = "EUR"
+        with self.assertRaisesRegex(frappe.ValidationError, "managed from the source PDF"):
+            exchange_rate.save()
+
+        exchange_rate.reload()
+        self.assertEqual(exchange_rate.from_currency, "KES")
+
+    def test_statement_derived_rate_preserves_stored_manual_fallback(self):
+        statement = make_statement(make_portfolio(), statement_date="2025-12-30")
+        sync_statement_exchange_rates(
+            statement,
+            [SimpleNamespace(from_currency="EUR", to_currency="USD", rate="0.91")],
+        )
+        derived_name = frappe.db.get_value(
+            "Bond Exchange Rate",
+            {
+                "rate_date": statement.statement_date,
+                "from_currency": "EUR",
+                "to_currency": "USD",
+            },
+            "name",
+        )
+        derived_rate = frappe.get_doc("Bond Exchange Rate", derived_name)
+        self.assertEqual(derived_rate.manual_fallback, 0)
+
+        derived_rate.manual_fallback = 1
+        derived_rate.save()
+        derived_rate.reload()
+        self.assertEqual(derived_rate.manual_fallback, 0)
+
+        fallback_rate = make_exchange_rate()
+        fallback_statement = make_statement(make_portfolio(), statement_date=fallback_rate.rate_date)
+        sync_statement_exchange_rates(
+            fallback_statement,
+            [
+                SimpleNamespace(
+                    from_currency=fallback_rate.from_currency,
+                    to_currency=fallback_rate.to_currency,
+                    rate=fallback_rate.rate,
+                )
+            ],
+        )
+        fallback_rate.reload()
+        self.assertEqual(fallback_rate.manual_fallback, 1)
+
+        fallback_rate.manual_fallback = 0
+        fallback_rate.save()
+        fallback_rate.reload()
+        self.assertEqual(fallback_rate.manual_fallback, 1)
+
     def test_manual_rate_is_stored_as_source_to_usd(self):
         rate = make_exchange_rate()
 

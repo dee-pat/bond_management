@@ -100,13 +100,15 @@ class BondExchangeRate(Document):
 
         sources = self._statement_sources()
         if sources:
-            if not syncing and self._financial_values_changed():
-                frappe.throw(
-                    _(
-                        "Statement-derived exchange rates are managed from the source PDF. "
-                        "Delete or replace the source statement before changing the rate."
+            if not syncing:
+                if self._financial_values_changed():
+                    frappe.throw(
+                        _(
+                            "Statement-derived exchange rates are managed from the source PDF. "
+                            "Delete or replace the source statement before changing the rate."
+                        )
                     )
-                )
+                self.manual_fallback = self.get_doc_before_save().manual_fallback
             self.source = "Statement PDF"
             self.statement = min(source.statement for source in sources)
             return
@@ -133,10 +135,14 @@ class BondExchangeRate(Document):
             previous = self.get_doc_before_save()
         if not previous:
             return True
-        return any(
-            _decimal_or_none(self.get(fieldname), fieldname)
-            != _decimal_or_none(previous.get(fieldname), fieldname)
-            for fieldname in ("rate", "reverse_rate")
+        return (
+            self.from_currency != previous.from_currency
+            or self.to_currency != previous.to_currency
+            or any(
+                _decimal_or_none(self.get(fieldname), fieldname)
+                != _decimal_or_none(previous.get(fieldname), fieldname)
+                for fieldname in ("rate", "reverse_rate")
+            )
         )
 
     def _sync_rate_values(self):

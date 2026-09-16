@@ -53,17 +53,10 @@ def execute():
             }
             source_name = frappe.db.get_value(SOURCE_DOCTYPE, {"source_key": source_key}, "name")
             if source_name:
-                for fieldname, value in values.items():
-                    if fieldname != "doctype":
-                        frappe.db.set_value(
-                            SOURCE_DOCTYPE,
-                            source_name,
-                            fieldname,
-                            value,
-                            update_modified=False,
-                        )
-            else:
-                frappe.get_doc(values).insert(ignore_permissions=True)
+                # Existing provenance may belong to a manual fallback shared
+                # with this statement; do not take ownership away on rerun.
+                continue
+            frappe.get_doc(values).insert(ignore_permissions=True)
             frappe.db.set_value(
                 "Bond Exchange Rate",
                 row.name,
