@@ -83,7 +83,7 @@ function actionFor(
 	const action = column.cashflow_action;
 	if (
 		!action ||
-		valueFor(row, column) === null ||
+		!row[action.xirr_type === "past" ? "has_past_cashflows" : "has_future_cashflows"] ||
 		(row.isin === "TOTAL" && action.cashflow_currency === "native" && !row.currency)
 	) {
 		return null;
@@ -152,7 +152,7 @@ function actionFor(
 					} ${column.label}`"
 					@click="emit('copy', actionFor(row, column)!)"
 				>
-					{{ formattedValue(row, column) }}
+					{{ formattedValue(row, column) || "Copy cash flows" }}
 				</Button>
 				<span v-else>{{ formattedValue(row, column) }}</span>
 			</ListCell>

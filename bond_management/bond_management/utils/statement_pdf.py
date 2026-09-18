@@ -16,6 +16,8 @@ from bond_management.bond_management.utils.private_attachment import read_privat
 from bond_management.bond_management.utils.validation import optional_string
 
 MAX_STATEMENT_PDF_BYTES = 10 * 1024 * 1024
+MAX_STATEMENT_PDF_PAGES = 200
+MAX_STATEMENT_PDF_TEXT_CHARS = 2_000_000
 DATE_PATTERNS = (
     re.compile(r"Portfolio\s+Summary\s+as\s+of\s+(\d{2}/\d{2}/\d{4})", re.IGNORECASE),
     re.compile(
@@ -456,13 +458,28 @@ def _parse_reader(
     account_no_hint: str | None,
     bond_name_to_isin: Mapping[str, str] | None,
 ) -> ParsedStatementPdf:
-    if not reader.pages:
+    try:
+        page_count = len(reader.pages)
+    except (DependencyError, FileNotDecryptedError, PdfReadError, PdfStreamError) as error:
+        raise StatementPdfError("The statement PDF pages could not be read.") from error
+    if page_count > MAX_STATEMENT_PDF_PAGES:
+        raise StatementPdfError(
+            f"The statement PDF cannot contain more than {MAX_STATEMENT_PDF_PAGES} pages."
+        )
+    if not page_count:
         raise StatementPdfError("The statement PDF has no pages.")
 
     page_texts = []
+    text_length = 0
     try:
         for page in reader.pages:
-            page_texts.append(page.extract_text() or "")
+            page_text = page.extract_text() or ""
+            text_length += len(page_text)
+            if text_length > MAX_STATEMENT_PDF_TEXT_CHARS:
+                raise StatementPdfError(
+                    "The statement PDF contains more text than the parser can safely process."
+                )
+            page_texts.append(page_text)
     except (DependencyError, FileNotDecryptedError, PdfReadError, PdfStreamError) as error:
         raise StatementPdfError("The statement PDF pages could not be read.") from error
 

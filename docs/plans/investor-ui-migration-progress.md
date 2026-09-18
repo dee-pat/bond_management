@@ -1444,6 +1444,18 @@ apps/bond_management/scripts/verify.sh ui` and
   CI-shaped fresh-site and pilot-acceptance blockers remain recorded above.
 - Unverified local/CI differences: None introduced; runtime was unchanged.
 
+### 2026-09-18 — PR #9 cash-flow export correction
+
+- Portfolio Performance now separates XIRR solver results from clipboard
+  availability through additive `has_past_cashflows` and
+  `has_future_cashflows` row fields. Both interfaces retain a labelled copy
+  action when cash flows exist but the yield is undefined. Mixed-currency
+  native totals and empty future cash flows remain unavailable.
+- Financial amounts, permissions, routes, and the cash-flow endpoint retain
+  their existing contracts. The backend remains authoritative for availability.
+- Implementation and current verification evidence are tracked in
+  [PR #9 review fixes](pr9-review-fixes.md).
+
 ## Next actions: Phase 7 pilot acceptance
 
 Record named internal-team acceptance and one complete statement/reporting cycle

@@ -6,6 +6,7 @@ from frappe.exceptions import FrappeTypeError
 from frappe.tests import IntegrationTestCase
 
 from bond_management.bond_management.report.portfolio_performance.portfolio_performance import (
+    _cashflow_rate,
     execute,
     get_columns,
     get_data,
@@ -25,6 +26,46 @@ from bond_management.bond_management.utils.xirr import create_future_cash_flows
 
 
 class TestPortfolioPerformance(IntegrationTestCase):
+    def test_direct_cashflow_endpoint_rechecks_report_permission(self):
+        portfolio = make_portfolio()
+
+        with patch(
+            "bond_management.bond_management.report.portfolio_performance.portfolio_performance.get_report_doc",
+            side_effect=frappe.PermissionError,
+        ):
+            with self.assertRaises(frappe.PermissionError):
+                get_xirr_cashflows(portfolio.name, "2025-12-31", "TOTAL", "past")
+
+    def test_invalid_xirr_values_and_zero_quantity_rates_stay_blank(self):
+        rows = [{"currency": "USD", "proceeds_value": 10}]
+        cashflows = [{"date": "2025-01-01", "amount": 10}]
+
+        total = make_total_row(rows, cashflows, [], cashflows, [])
+
+        self.assertIsNone(total["xirr"])
+        self.assertIsNone(total["xirr_usd"])
+        self.assertTrue(total["has_past_cashflows"])
+        self.assertFalse(total["has_future_cashflows"])
+        self.assertIsNone(_cashflow_rate(100, 0))
+
+    def test_same_day_purchase_keeps_cashflow_exports_without_xirr(self):
+        bond = make_bond()
+        portfolio = make_portfolio()
+        make_transaction(bond, portfolio)
+        make_market_date(bond)
+
+        _, rows = execute({"portfolio": portfolio.name, "valuation_date": "2025-12-31"})
+
+        for row in rows:
+            self.assertIsNone(row["xirr"])
+            self.assertIsNone(row["xirr_usd"])
+            self.assertTrue(row["has_past_cashflows"])
+            self.assertTrue(row["has_future_cashflows"])
+            for currency in ("native", "reporting"):
+                cashflows = get_xirr_cashflows(portfolio.name, "2025-12-31", row["isin"], "past", currency)
+                self.assertTrue(cashflows)
+                self.assertEqual({flow["date"] for flow in cashflows}, {"2025-12-31"})
+
     def test_columns_are_defined_and_multi_currency_totals_use_usd(self):
         columns = get_columns()
         fieldnames = [column["fieldname"] for column in columns]
@@ -468,6 +509,8 @@ class TestPortfolioPerformance(IntegrationTestCase):
         self.assertIsNone(rows[0]["future_xirr"])
         self.assertTrue(past_cashflows)
         self.assertEqual(future_cashflows, [])
+        self.assertTrue(rows[0]["has_past_cashflows"])
+        self.assertFalse(rows[0]["has_future_cashflows"])
         self.assertEqual(
             get_xirr_cashflows(portfolio.name, "2026-01-03", bond.name, "future"),
             [],
@@ -483,6 +526,7 @@ class TestPortfolioPerformance(IntegrationTestCase):
         self.assertEqual(rows[0]["market_value"], 0)
         self.assertIsNone(rows[0]["future_xirr"])
         self.assertEqual(future_cashflows, [])
+        self.assertFalse(rows[0]["has_future_cashflows"])
 
     def test_report_inputs_and_permissions_are_validated(self):
         with self.assertRaisesRegex(frappe.ValidationError, "Portfolio is required"):

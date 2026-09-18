@@ -1,17 +1,53 @@
 from decimal import Decimal
+from unittest.mock import patch
 
 from frappe.tests import UnitTestCase
 
 from bond_management.bond_management.tests.pdf_factory import make_positioned_text_pdf, make_text_pdf
 from bond_management.bond_management.utils.transaction_pdf import (
+    MAX_POSITIONED_TEXT_FRAGMENTS,
+    MAX_TRANSACTION_PDF_PAGES,
+    MAX_TRANSACTION_PDF_TEXT_CHARS,
     TransactionPdfError,
     TransactionPdfPasswordError,
+    _extract_positioned_page_text,
     extract_transaction_pdf,
     parse_transaction_pdf_text,
 )
 
 
 class TestTransactionPdf(UnitTestCase):
+    def test_rejects_pdf_with_too_many_pages_before_extracting_text(self):
+        reader = patch("bond_management.bond_management.utils.transaction_pdf.PdfReader")
+        with reader as pdf_reader:
+            pdf_reader.return_value.is_encrypted = False
+            pdf_reader.return_value.pages = [object()] * (MAX_TRANSACTION_PDF_PAGES + 1)
+
+            with self.assertRaisesRegex(TransactionPdfError, "cannot contain more than"):
+                extract_transaction_pdf(b"%PDF-", [])
+
+    def test_rejects_transaction_text_above_the_parser_limit(self):
+        class LargePage:
+            def extract_text(self):
+                return "x" * (MAX_TRANSACTION_PDF_TEXT_CHARS + 1)
+
+        reader = patch("bond_management.bond_management.utils.transaction_pdf.PdfReader")
+        with reader as pdf_reader:
+            pdf_reader.return_value.is_encrypted = False
+            pdf_reader.return_value.pages = [LargePage()]
+
+            with self.assertRaisesRegex(TransactionPdfError, "more text than"):
+                extract_transaction_pdf(b"%PDF-", [])
+
+    def test_rejects_positioned_text_with_too_many_fragments(self):
+        class FragmentedPage:
+            def extract_text(self, visitor_text):
+                for _ in range(MAX_POSITIONED_TEXT_FRAGMENTS + 1):
+                    visitor_text("x", None, [1, 0, 0, 1, 0, 0], None, None)
+
+        with self.assertRaisesRegex(TransactionPdfError, "too many positioned text fragments"):
+            _extract_positioned_page_text(FragmentedPage())
+
     def test_parses_current_multi_transaction_confirmation(self):
         parsed = parse_transaction_pdf_text(
             _current_transaction_text("U1999155", quantity="20,000.000000")

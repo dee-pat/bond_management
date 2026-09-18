@@ -1,7 +1,7 @@
 # Bond Management domain model
 
-This is a source-derived map of the current app, not a proposed schema. The app
-has six standalone DocTypes and four child-table DocTypes.
+This is a source-derived map of the current app. The app has seven standalone
+DocTypes and four child-table DocTypes.
 
 ## How to read the graphs
 
@@ -32,6 +32,7 @@ flowchart TB
         BMD["Bond Market Date"]
         BMP[["Bond Market Prices<br/>child table"]]
         BER["Bond Exchange Rate"]
+        BERS["Bond Exchange Rate Source<br/>provenance"]
     end
 
     BM -->|"coupon_schedule"| BCS
@@ -46,7 +47,9 @@ flowchart TB
     BMD -->|"bond_market_prices"| BMP
     BMP -->|"isin"| BM
     BS -.->|"market_price_posting"| BMD
-    BER -.->|"statement"| BS
+    BER -.->|"display statement"| BS
+    BERS -->|"exchange_rate"| BER
+    BERS -->|"statement"| BS
 ```
 
 `Bond Master` and `Bond Exchange Rate` also link to Frappe's `Currency`
@@ -74,7 +77,7 @@ flowchart LR
 
     DATA --> PP
     MARKET --> YIELD
-    PP --> API
+    PP -->|"values + cash-flow availability"| API
     YIELD --> API
     API --> SPA
 ```
@@ -87,10 +90,20 @@ projections.
 - `Bond Transaction` is the portfolio ledger.
 - Saving a `Bond Statement` derives holdings, market prices, exchange rates,
   reconciliation status, and a private reconciliation report.
-- A statement-derived exchange rate links back to its statement; a manual rate
-  does not.
-- Portfolio performance combines all core financial data. Yield comparison
-  reads persisted market snapshots.
+- `Bond Exchange Rate` is one global canonical row per date/from/to currency.
+  `Bond Exchange Rate Source` stores the many-to-many statement provenance;
+  equal source values share the canonical row and conflicting values are
+  rejected. Statement rates are rounded half-up to the existing 12-decimal
+  storage boundary before persistence and comparison; rates rounding to zero
+  are rejected. Cash amounts retain their separate half-even convention.
+- The canonical `statement` link is a deterministic display projection only,
+  not an ownership link. A manual canonical row is retained as fallback data
+  when its last statement source is removed.
+- Portfolio performance combines all core financial data and exposes actual
+  past/future cash-flow availability independently of XIRR solver success.
+  Desk and the investor app use those flags for clipboard actions. Yield
+  comparison reads persisted market snapshots; historical solver guesses
+  retain zero yields and skip only null values.
 
 ## Source anchors
 

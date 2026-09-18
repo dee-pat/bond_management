@@ -182,6 +182,10 @@ class TestInvestorPortfolioPerformance(IntegrationTestCase):
             {"xirr_type": "future", "cashflow_currency": "native"},
         )
         self.assertIsNone(columns["market_value"]["cashflow_action"])
+        for row in report["rows"]:
+            self.assertIsNone(row["xirr"])
+            self.assertTrue(row["has_past_cashflows"])
+            self.assertTrue(row["has_future_cashflows"])
         self.assertIs(investor_api.get_portfolio_performance, get_portfolio_performance)
         self.assertEqual(frappe.allowed_http_methods_for_whitelisted_func[get_portfolio_performance], ["GET"])
 

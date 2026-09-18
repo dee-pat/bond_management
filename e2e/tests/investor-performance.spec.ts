@@ -18,7 +18,7 @@ const USD_ONLY_HEADERS = [
   "Future XIRR",
 ];
 
-test("runs USD portfolio performance and copies sanitized cash flows", async ({
+test("copies past cash flows without XIRR and future cash flows", async ({
   context,
   page,
 }) => {
@@ -29,12 +29,12 @@ test("runs USD portfolio performance and copies sanitized cash flows", async ({
     page.getByRole("heading", { name: "Portfolio Performance" })
   ).toBeVisible();
   await expect(
-    page.getByRole("heading", { name: "Performance report" }),
+    page.getByRole("heading", { name: "Performance report" })
   ).toHaveCount(0);
   await expect(page.getByTestId("performance-initial")).toBeVisible();
   await expect(page.getByLabel("Valuation Date")).not.toHaveValue("");
 
-	await selectFrappeOption(page, "Portfolio (required)", PORTFOLIO);
+  await selectFrappeOption(page, "Portfolio (required)", PORTFOLIO);
   await page.getByLabel("Valuation Date").fill(VALUATION_DATE);
   await page.getByRole("button", { name: "Run", exact: true }).click();
 
@@ -44,15 +44,15 @@ test("runs USD portfolio performance and copies sanitized cash flows", async ({
   await expect
     .poll(() =>
       list.evaluate((element) =>
-        getComputedStyle(element).getPropertyValue("--list-columns-default"),
-      ),
+        getComputedStyle(element).getPropertyValue("--list-columns-default")
+      )
     )
     .toContain("minmax(4.5rem, 0.6fr)");
   await expect
     .poll(() =>
       list.evaluate((element) =>
-        getComputedStyle(element).getPropertyValue("--list-columns-default"),
-      ),
+        getComputedStyle(element).getPropertyValue("--list-columns-default")
+      )
     )
     .toContain("minmax(10rem, 1fr)");
   await expect(table.getByRole("columnheader")).toHaveCount(10);
@@ -88,9 +88,31 @@ test("runs USD portfolio performance and copies sanitized cash flows", async ({
   await expect(totalRow).toContainText("1,059.81");
   await expect(totalRow).toContainText("4.473%");
 
+  const pastCopy = bondRow.getByRole("button", {
+    name: `Copy native cash flows for ${BOND_ISIN} XIRR`,
+    exact: true,
+  });
+  await expect(pastCopy).toHaveText("Copy cash flows");
+  await expect(
+    totalRow.getByRole("button", {
+      name: "Copy native cash flows for TOTAL XIRR",
+      exact: true,
+    })
+  ).toHaveText("Copy cash flows");
+  await pastCopy.click();
+  await expect(page.getByRole("status")).toContainText(
+    /^Copied \d+ cash flows\.$/
+  );
+  const pastClipboard = await page.evaluate(() =>
+    navigator.clipboard.readText()
+  );
+  expect(pastClipboard).toContain(
+    `${BOND_ISIN}\tpurchase\t${VALUATION_DATE}\tUSD\t-1051`
+  );
+
   await bondRow
     .getByRole("button", {
-      name: `Copy native cash flows for ${BOND_ISIN} XIRR`,
+      name: `Copy native cash flows for ${BOND_ISIN} Future XIRR`,
       exact: true,
     })
     .click();
@@ -102,7 +124,7 @@ test("runs USD portfolio performance and copies sanitized cash flows", async ({
     "isin\ttransaction_type\tdate\tcurrency\tamount\tquantity\trate"
   );
   expect(clipboard).toContain(
-    `${BOND_ISIN}\tpurchase\t${VALUATION_DATE}\tUSD\t-1051\t10\t-105.1`
+    `${BOND_ISIN}\tmarket_price\t${VALUATION_DATE}\tUSD\t-1025\t10\t-102.5`
   );
 
   await expect(
