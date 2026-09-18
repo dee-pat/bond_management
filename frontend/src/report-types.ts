@@ -10,7 +10,9 @@ export type PerformanceFieldname =
   | "gain_value"
   | "xirr"
   | "xirr_usd"
-  | "future_xirr";
+  | "future_xirr"
+  | "expected_coupons_next_year"
+  | "expected_coupons_next_year_usd";
 
 export type CashflowCurrency = "native" | "reporting";
 export type XirrType = "past" | "future";
@@ -44,6 +46,8 @@ export interface PerformanceRow {
   xirr: number | null;
   xirr_usd: number | null;
   future_xirr: number | null;
+  expected_coupons_next_year: number | null;
+  expected_coupons_next_year_usd: number | null;
   has_past_cashflows: boolean;
   has_future_cashflows: boolean;
 }

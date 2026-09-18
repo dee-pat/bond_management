@@ -709,19 +709,22 @@ app-owned report JavaScript and the standard Query Report runner.
 - Row order: ISIN ascending. A calculated `TOTAL` row appears last only when at
   least one bond row exists.
 - Native columns, in order: ISIN, CCY, Prin. Factor, Nominal Value, Purchases
-  Value, Proceeds Value, Market Value, Gain Value, XIRR and Future XIRR.
-- Mixed-currency columns: Market Value (USD) appears after Market Value and XIRR
-  (USD) appears after XIRR when any bond currency is not USD. USD-only results
-  omit both duplicate reporting-currency columns. Hidden calculation helpers,
-  including Exchange Rate and the other USD value fields, are not displayed.
+  Value, Proceeds Value, Market Value, Gain Value, XIRR, Future XIRR and
+  Expected Coupons (Next Year). Expected coupons include payments after the
+  valuation date through the inclusive date exactly one year later.
+- Mixed-currency columns: Expected Coupons (Next Year) (USD) follows the native
+  Expected Coupons (Next Year) column at the end when any bond currency is not
+  USD. USD-only results omit this duplicate reporting-currency column. Hidden
+  calculation helpers, including Exchange Rate and the other USD value fields,
+  are not displayed.
 - Currency and percentage meaning: native money columns use each row's CCY;
   Market Value (USD) uses the report's USD reporting currency; Percent and
   Float precision follows the resolved report/system precision. Values remain
   server-authoritative.
 - Total behavior: single-currency results contain native money and XIRR totals.
   Mixed-currency results leave native money and native XIRR totals blank and
-  retain the comparable USD Market Value and XIRR totals. Principal Factor is
-  blank on `TOTAL`.
+  retain the comparable USD Expected Coupons (Next Year), Market Value and XIRR
+  totals. Principal Factor is blank on `TOTAL`.
 - Chart: none. The existing report returns no chart or chart series, so Phase 5a
   adds no visualization.
 - App-owned action: each non-null visible XIRR value copies its underlying
@@ -749,8 +752,10 @@ app-owned report JavaScript and the standard Query Report runner.
   metadata contains only `fieldname`, `label`, `fieldtype`, `options`,
   `description`, resolved `precision` and the optional cash-flow action. Rows
   contain only `isin`, `currency`, `reporting_currency`, `principal_factor`,
-  `nominal_value`, `purchases_value`, `proceeds_value`, `market_value`,
-  `market_value_usd`, `gain_value`, `xirr`, `xirr_usd` and `future_xirr`.
+  `nominal_value`, `purchases_value`, `proceeds_value`,
+  `market_value`, `market_value_usd`, `gain_value`, `xirr`, `xirr_usd` and
+  `future_xirr`, `expected_coupons_next_year` and
+  `expected_coupons_next_year_usd`.
 - Permission behavior: the common feature, session and role gate runs first;
   normal Report-role and `Bond Portfolio` report permissions remain required;
   the requested portfolio must also resolve through normal read permissions.

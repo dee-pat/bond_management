@@ -40,13 +40,22 @@ context("Portfolio Performance", () => {
 							precision: 3,
 							width: 120,
 						},
+						{
+							label: "Expected Coupons (Next Year)",
+							fieldname: "expected_coupons_next_year",
+							fieldtype: "Currency",
+							options: "currency",
+							width: 190,
+						},
 					],
 					result: [
 						{
 							isin: "TEST-BOND",
+							currency: "USD",
 							xirr: 12.5,
 							xirr_usd: 8.75,
 							future_xirr: 7.25,
+							expected_coupons_next_year: 70,
 							has_past_cashflows: true,
 							has_future_cashflows: true,
 						},
@@ -110,6 +119,7 @@ context("Portfolio Performance", () => {
 		cy.get(".dt-row-0 .dt-cell--col-2 .dt-cell__content").should("contain", "12.500%");
 		cy.get(".dt-row-0 .dt-cell--col-3 .dt-cell__content").should("contain", "8.750%");
 		cy.get(".dt-row-0 .dt-cell--col-4 .dt-cell__content").should("contain", "7.250%");
+		cy.get(".dt-row-0 .dt-cell--col-5 .dt-cell__content").should("contain", "70.00");
 		cy.get('.portfolio-cashflow-copy[data-isin="UNDEFINED-XIRR"]')
 			.should("have.length", 3)
 			.and("contain", "Copy cash flows")

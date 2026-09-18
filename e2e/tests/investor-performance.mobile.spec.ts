@@ -16,13 +16,14 @@ test("runs portfolio performance without mobile overflow", async ({ page }) => {
 
   const table = page.getByTestId("performance-table");
   await expect(table).toBeVisible();
-  await expect(table.getByRole("columnheader")).toHaveCount(10);
+  await expect(table.getByRole("columnheader")).toHaveCount(11);
   const bondRow = page
     .getByTestId("performance-row")
     .filter({ hasText: BOND_ISIN });
   await expect(bondRow).toContainText("USD");
   await expect(bondRow).toContainText("1.000");
   await expect(bondRow).toContainText("1,000.00");
+  await expect(bondRow).toContainText("70.00");
   await expect(bondRow).toContainText("1,059.81");
   await expect(bondRow).toContainText("4.473%");
   const totalRow = page
