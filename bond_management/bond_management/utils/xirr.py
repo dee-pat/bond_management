@@ -113,10 +113,9 @@ def get_last_xirr_guesses(isins, date):
         filters={
             "date": ["<=", date],
             "bond_market_prices.isin": ["in", isins],
-            "bond_market_prices.future_xirr": ["is", "set"],
         },
         ignore_permissions=False,
-    )
+    ).where(market_price.future_xirr.isnotnull())
     ranked_market = ranked_query.as_("ranked_market")
     results = (
         frappe.qb.from_(ranked_market)

@@ -44,6 +44,8 @@ export interface PerformanceRow {
   xirr: number | null;
   xirr_usd: number | null;
   future_xirr: number | null;
+  has_past_cashflows: boolean;
+  has_future_cashflows: boolean;
 }
 
 export interface PortfolioPerformanceReport {

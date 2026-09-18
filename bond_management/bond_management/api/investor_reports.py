@@ -54,6 +54,8 @@ PORTFOLIO_PERFORMANCE_ROW_FIELDS = (
     "xirr",
     "xirr_usd",
     "future_xirr",
+    "has_past_cashflows",
+    "has_future_cashflows",
 )
 PORTFOLIO_CASHFLOW_FIELDS = (
     "isin",

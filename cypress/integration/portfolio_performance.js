@@ -47,6 +47,35 @@ context("Portfolio Performance", () => {
 							xirr: 12.5,
 							xirr_usd: 8.75,
 							future_xirr: 7.25,
+							has_past_cashflows: true,
+							has_future_cashflows: true,
+						},
+						{
+							isin: "UNDEFINED-XIRR",
+							currency: "USD",
+							xirr: null,
+							xirr_usd: null,
+							future_xirr: null,
+							has_past_cashflows: true,
+							has_future_cashflows: true,
+						},
+						{
+							isin: "CLOSED-BOND",
+							currency: "USD",
+							xirr: 0,
+							xirr_usd: 0,
+							future_xirr: null,
+							has_past_cashflows: true,
+							has_future_cashflows: false,
+						},
+						{
+							isin: "TOTAL",
+							currency: null,
+							xirr: null,
+							xirr_usd: null,
+							future_xirr: null,
+							has_past_cashflows: true,
+							has_future_cashflows: true,
 						},
 					],
 					execution_time: 0.01,
@@ -81,12 +110,26 @@ context("Portfolio Performance", () => {
 		cy.get(".dt-row-0 .dt-cell--col-2 .dt-cell__content").should("contain", "12.500%");
 		cy.get(".dt-row-0 .dt-cell--col-3 .dt-cell__content").should("contain", "8.750%");
 		cy.get(".dt-row-0 .dt-cell--col-4 .dt-cell__content").should("contain", "7.250%");
+		cy.get('.portfolio-cashflow-copy[data-isin="UNDEFINED-XIRR"]')
+			.should("have.length", 3)
+			.and("contain", "Copy cash flows")
+			.and("not.contain", "%");
+		cy.get(
+			'.portfolio-cashflow-copy[data-isin="CLOSED-BOND"][data-xirr-type="future"]'
+		).should("not.exist");
+		cy.get('.portfolio-cashflow-copy[data-isin="CLOSED-BOND"][data-xirr-type="past"]').should(
+			"contain",
+			"0.000%"
+		);
+		cy.get(
+			'.portfolio-cashflow-copy[data-isin="TOTAL"][data-cashflow-currency="native"]'
+		).should("not.exist");
 		cy.window().then((window) => {
 			cy.stub(window.frappe.utils, "copy_to_clipboard").as("copyToClipboard");
 		});
 
 		cy.get(
-			'.portfolio-cashflow-copy[data-xirr-type="past"][data-cashflow-currency="reporting"]'
+			'.portfolio-cashflow-copy[data-isin="UNDEFINED-XIRR"][data-xirr-type="past"][data-cashflow-currency="reporting"]'
 		)
 			.should("be.visible")
 			.click();
@@ -96,7 +139,7 @@ context("Portfolio Performance", () => {
 			expect(body).to.include({
 				portfolio: "TEST-PORTFOLIO",
 				valuation_date: "2025-12-31",
-				isin: "TEST-BOND",
+				isin: "UNDEFINED-XIRR",
 				xirr_type: "past",
 				cashflow_currency: "reporting",
 			});

@@ -18,12 +18,6 @@ frappe.query_reports["Portfolio Performance"] = {
 		},
 	],
 	formatter(value, row, column, data, default_formatter) {
-		const formatted_value =
-			["xirr", "xirr_usd", "future_xirr"].includes(column.fieldname) &&
-			value !== null &&
-			value !== undefined
-				? format_xirr(value, column)
-				: default_formatter(value, row, column, data);
 		const cashflow_columns = {
 			xirr: { xirr_type: "past", cashflow_currency: "native" },
 			future_xirr: { xirr_type: "future", cashflow_currency: "native" },
@@ -31,11 +25,13 @@ frappe.query_reports["Portfolio Performance"] = {
 			future_xirr_usd: { xirr_type: "future", cashflow_currency: "reporting" },
 		};
 		const cashflow = cashflow_columns[column.fieldname];
+		const formatted_value = cashflow
+			? format_xirr(value, column)
+			: default_formatter(value, row, column, data);
 		if (
 			!data ||
 			!cashflow ||
-			value === null ||
-			value === undefined ||
+			!data[cashflow.xirr_type === "past" ? "has_past_cashflows" : "has_future_cashflows"] ||
 			(data.isin === "TOTAL" && cashflow.cashflow_currency === "native" && !data.currency)
 		) {
 			return formatted_value;
@@ -45,9 +41,9 @@ frappe.query_reports["Portfolio Performance"] = {
 			data.isin
 		)}" data-xirr-type="${cashflow.xirr_type}" data-cashflow-currency="${
 			cashflow.cashflow_currency
-		}" title="Copy ${
-			cashflow.cashflow_currency
-		} cash flows for Excel">${formatted_value}</button>`;
+		}" title="Copy ${cashflow.cashflow_currency} cash flows for Excel">${
+			formatted_value || __("Copy cash flows")
+		}</button>`;
 	},
 	onload(report) {
 		const selector = ".portfolio-cashflow-copy";
@@ -67,6 +63,9 @@ frappe.query_reports["Portfolio Performance"] = {
 };
 
 function format_xirr(value, column) {
+	if (value === null || value === undefined) {
+		return "";
+	}
 	const precision = column.precision ?? 3;
 	return `<div style="text-align: right">${format_number(value, null, precision)}%</div>`;
 }

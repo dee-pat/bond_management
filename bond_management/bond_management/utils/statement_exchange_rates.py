@@ -1,5 +1,5 @@
 from contextlib import contextmanager
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 from hashlib import sha256
 
 import frappe
@@ -9,6 +9,7 @@ from frappe.utils import getdate
 from bond_management.bond_management.utils.exchange_rate import REPORTING_CURRENCY
 
 SOURCE_DOCTYPE = "Bond Exchange Rate Source"
+RATE_PRECISION = Decimal("0.000000000001")
 
 
 def build_source_key(exchange_rate_name: str, statement_name: str) -> str:
@@ -95,6 +96,12 @@ def _get_statement_sources(statement_name):
 
 
 def _get_or_create_exchange_rate(statement, parsed_rate):
+    rate = _stored_rate(parsed_rate.rate)
+    if rate <= 0:
+        frappe.throw(
+            _("The statement exchange rate is too small to store at 12 decimal places."),
+            frappe.ValidationError,
+        )
     filters = {
         "rate_date": getdate(statement.statement_date),
         "from_currency": parsed_rate.from_currency,
@@ -114,7 +121,7 @@ def _get_or_create_exchange_rate(statement, parsed_rate):
                 {
                     "doctype": "Bond Exchange Rate",
                     **filters,
-                    "rate": parsed_rate.rate,
+                    "rate": rate,
                     "source": "Statement PDF",
                     "statement": statement.name,
                     "manual_fallback": 0,
@@ -135,7 +142,7 @@ def _get_or_create_exchange_rate(statement, parsed_rate):
                 raise
 
     exchange_rate = frappe.get_doc("Bond Exchange Rate", existing_name[0])
-    _validate_source_rate(exchange_rate, statement.name, parsed_rate.rate)
+    _validate_source_rate(exchange_rate, statement.name, rate)
     return exchange_rate
 
 
@@ -165,6 +172,7 @@ def _validate_source_rate(exchange_rate, statement_name, desired_rate):
 
 
 def _upsert_statement_source(exchange_rate, statement, parsed_rate):
+    rate = _stored_rate(parsed_rate.rate)
     source_key = build_source_key(exchange_rate.name, statement.name)
     source_name = frappe.db.get_value(SOURCE_DOCTYPE, {"source_key": source_key}, "name")
     values = {
@@ -172,8 +180,8 @@ def _upsert_statement_source(exchange_rate, statement, parsed_rate):
         "source_key": source_key,
         "exchange_rate": exchange_rate.name,
         "statement": statement.name,
-        "rate": parsed_rate.rate,
-        "reverse_rate": _reverse_rate(parsed_rate.rate),
+        "rate": rate,
+        "reverse_rate": _reverse_rate(rate),
     }
     if source_name:
         source = frappe.get_doc(SOURCE_DOCTYPE, source_name)
@@ -225,7 +233,12 @@ def _reverse_rate(rate):
 
 
 def _rates_differ(first, second):
-    return Decimal(str(first)) != Decimal(str(second))
+    return _stored_rate(first) != _stored_rate(second)
+
+
+def _stored_rate(rate):
+    """Match the 12-place, half-up DECIMAL storage boundary of rate fields."""
+    return Decimal(str(rate)).quantize(RATE_PRECISION, rounding=ROUND_HALF_UP)
 
 
 def _throw_conflict(exchange_rate, statement_name, desired_rate):

@@ -77,7 +77,7 @@ flowchart LR
 
     DATA --> PP
     MARKET --> YIELD
-    PP --> API
+    PP -->|"values + cash-flow availability"| API
     YIELD --> API
     API --> SPA
 ```
@@ -93,12 +93,17 @@ projections.
 - `Bond Exchange Rate` is one global canonical row per date/from/to currency.
   `Bond Exchange Rate Source` stores the many-to-many statement provenance;
   equal source values share the canonical row and conflicting values are
-  rejected.
+  rejected. Statement rates are rounded half-up to the existing 12-decimal
+  storage boundary before persistence and comparison; rates rounding to zero
+  are rejected. Cash amounts retain their separate half-even convention.
 - The canonical `statement` link is a deterministic display projection only,
   not an ownership link. A manual canonical row is retained as fallback data
   when its last statement source is removed.
-- Portfolio performance combines all core financial data. Yield comparison
-  reads persisted market snapshots.
+- Portfolio performance combines all core financial data and exposes actual
+  past/future cash-flow availability independently of XIRR solver success.
+  Desk and the investor app use those flags for clipboard actions. Yield
+  comparison reads persisted market snapshots; historical solver guesses
+  retain zero yields and skip only null values.
 
 ## Source anchors
 

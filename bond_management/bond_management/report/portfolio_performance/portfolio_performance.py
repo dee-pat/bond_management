@@ -469,6 +469,8 @@ def get_data(portfolio, valuation_date, context=None):
                 "future_xirr": future_xirr,
                 "xirr_usd": xirr_usd,
                 "future_xirr_usd": future_xirr_usd,
+                "has_past_cashflows": bool(cashflows),
+                "has_future_cashflows": bool(future_cashflows),
             }
         )
 
@@ -543,6 +545,8 @@ def make_total_row(
         "future_xirr": _percent_value(future_xirr),
         "xirr_usd": _percent_value(reporting_xirr),
         "future_xirr_usd": _percent_value(future_reporting_xirr),
+        "has_past_cashflows": bool(combined_cashflow),
+        "has_future_cashflows": bool(combined_future_cashflow),
     }
 
 

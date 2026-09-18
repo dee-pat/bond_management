@@ -213,6 +213,11 @@ same normal Frappe permissions.
 - Bond Yield Comparison defaults From Date to the oldest permission-readable persisted yield date and To Date to the current site date. Its chart uses persisted market dates for horizontal positions and shows one x-axis label per year. Connected segments render as lines without point markers; an isolated value uses a visible, keyboard-focusable marker so single-date results and values around gaps remain readable without connecting missing data.
 - The chart contract uses `gap_policy: "preserve"`: the x-axis keeps the union of persisted market dates returned by the report. If a bond has no market-price row or has a null Future XIRR at a returned date, that series has no point there; the gap is not treated as zero and adjacent points are not interpolated or connected. A date absent from every returned row is not added to the x-axis.
 - Preserve server-provided precision and financial conventions.
+- Portfolio Performance exposes `has_past_cashflows` and `has_future_cashflows`
+  on each row. Clipboard actions use those server-provided availability flags,
+  independently of whether XIRR has a solution. Undefined yields remain blank;
+  a copy action has its own label. Native totals for mixed currencies remain
+  unavailable, and empty future cash flows have no copy action.
 - Assert visible table labels, values and series names. Avoid tests tied to SVG geometry or internal chart-library objects.
 - Keep clipboard/export actions out of scope unless they are confirmed as investor-visible parity before the report phase starts.
 
