@@ -85,10 +85,12 @@ test("hides duplicate USD columns for a USD-only portfolio", async ({
   await installPortfolioPerformanceFixtures(page, "usd-only");
   await page.goto(reportRoute);
 
+  await expect(
+    page.getByText("Expected Coupons (Next Year)", { exact: true })
+  ).toBeVisible();
   const headers = await page
     .locator(".dt-cell--header .dt-cell__content")
     .allTextContents();
-  expect(headers).toContain("Expected Coupons (Next Year)");
   expect(headers.join(" ")).not.toContain("Market Value (USD)");
   expect(headers.join(" ")).not.toContain("XIRR (USD)");
 });
