@@ -113,7 +113,18 @@ test("compares selected bonds and assigns one colour per currency", async ({
   await page.locator("[data-copy-audit-data]").click();
   const clipboardCalls = await readClipboardCalls(page);
   expect(clipboardCalls).toHaveLength(1);
-  expect(clipboardCalls[0][0]).toContain("Future XIRR");
+  expect(clipboardCalls[0][0]).toBe(
+    [
+      "Date\tISIN\tCCY\tMarket Price\tFuture XIRR",
+      "2025-01-01\tTEST-BOND-USD\tUSD\t99\t8.25",
+      "2025-01-01\tTEST-BOND-USD-TWO\tUSD\t100\t8.75",
+      "2025-01-01\tTEST-BOND-KES\tKES\t101\t11.5",
+      "2025-02-01\tTEST-BOND-USD\tUSD\t98\t8.5",
+      "2025-02-01\tTEST-BOND-USD-TWO\tUSD\t99\t9",
+      "2025-02-01\tTEST-BOND-KES\tKES\t100\t11.75",
+      "2025-03-01\tTEST-BOND-USD\tUSD\t97\t8.75",
+    ].join("\n")
+  );
   await expect(page.locator(".report-wrapper")).toBeHidden();
 
   await selectAll.uncheck();

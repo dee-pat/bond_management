@@ -79,7 +79,7 @@ test("copies cash flows from the rendered XIRR action", async ({ page }) => {
   ]);
 });
 
-test("hides duplicate USD columns for a USD-only portfolio", async ({
+test("renders the columns returned by a USD-only report", async ({
   page,
 }) => {
   await installPortfolioPerformanceFixtures(page, "usd-only");

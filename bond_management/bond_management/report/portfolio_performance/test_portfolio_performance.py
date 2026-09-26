@@ -174,23 +174,32 @@ class TestPortfolioPerformance(IntegrationTestCase):
         self.assertEqual(total["reporting_currency"], "USD")
         self.assertEqual(total["proceeds_value_usd"], 8)
         self.assertEqual(total["expected_coupons_next_year_usd"], 8)
-        with patch(
-            "bond_management.bond_management.report.portfolio_performance.portfolio_performance.get_data",
-            return_value=(rows[:1], [], [], [], []),
-        ):
-            usd_only_columns, _ = execute({"portfolio": portfolio.name, "valuation_date": "2025-01-01"})
-        usd_only_fieldnames = [column["fieldname"] for column in usd_only_columns]
-        self.assertEqual(
-            usd_only_fieldnames[-2:],
-            ["future_xirr", "expected_coupons_next_year"],
-        )
-        self.assertNotIn("market_value_usd", usd_only_fieldnames)
-        self.assertNotIn("xirr_usd", usd_only_fieldnames)
 
         total = make_total_row(rows[:1], [], [], [], [])
         self.assertEqual(total["currency"], "USD")
         self.assertEqual(total["proceeds_value"], 3)
         self.assertEqual(total["expected_coupons_next_year"], 3)
+
+    def test_usd_only_report_omits_reporting_currency_columns(self):
+        portfolio = make_portfolio()
+        usd_rows = [{"currency": "USD"}]
+        report_module = "bond_management.bond_management.report.portfolio_performance.portfolio_performance"
+
+        with (
+            patch(f"{report_module}.get_data", return_value=(usd_rows, [], [], [], [])),
+            patch(f"{report_module}.make_total_row", return_value={}),
+        ):
+            columns, _ = execute({"portfolio": portfolio.name, "valuation_date": "2025-01-01"})
+
+        ordered_fieldnames = [column["fieldname"] for column in columns]
+        self.assertEqual(
+            ordered_fieldnames[-2:],
+            ["future_xirr", "expected_coupons_next_year"],
+        )
+        fieldnames = set(ordered_fieldnames)
+        self.assertNotIn("market_value_usd", fieldnames)
+        self.assertNotIn("xirr_usd", fieldnames)
+        self.assertNotIn("expected_coupons_next_year_usd", fieldnames)
 
     def test_expected_coupons_include_the_exact_one_year_cutoff_only(self):
         bond = make_bond(
