@@ -1,6 +1,7 @@
 import { defineConfig, devices } from "@playwright/test";
 
-const authFile = "e2e/.auth/user.json";
+import { administratorStorageState } from "./e2e/desk/fixtures";
+import { investorStorageState } from "./e2e/investor/fixtures";
 
 export default defineConfig({
   testDir: "./e2e",
@@ -23,27 +24,40 @@ export default defineConfig({
   },
   projects: [
     {
-      name: "setup",
-      testMatch: /auth\.setup\.ts/,
+      name: "investor-setup",
+      testMatch: /investor\/auth\.setup\.ts/,
     },
     {
-      name: "chromium",
+      name: "desk-setup",
+      testMatch: /desk\/auth\.setup\.ts/,
+    },
+    {
+      name: "investor-desktop",
       use: {
         ...devices["Desktop Chrome"],
-        storageState: authFile,
+        storageState: investorStorageState,
       },
-      testMatch: /\.spec\.ts$/,
+      testMatch: /investor\/.*\.spec\.ts$/,
       testIgnore: /\.mobile\.spec\.ts$/,
-      dependencies: ["setup"],
+      dependencies: ["investor-setup"],
     },
     {
-      name: "mobile",
+      name: "investor-mobile",
       use: {
         ...devices["Pixel 7"],
-        storageState: authFile,
+        storageState: investorStorageState,
       },
-      testMatch: /\.mobile\.spec\.ts$/,
-      dependencies: ["setup"],
+      testMatch: /investor\/.*\.mobile\.spec\.ts$/,
+      dependencies: ["investor-setup"],
+    },
+    {
+      name: "desk",
+      use: {
+        ...devices["Desktop Chrome"],
+        storageState: administratorStorageState,
+      },
+      testMatch: /desk\/.*\.spec\.ts$/,
+      dependencies: ["desk-setup"],
     },
   ],
 });

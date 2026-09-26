@@ -43,7 +43,8 @@ metadata or relationship-owning services change.
   link remains a deterministic display projection, while source rows own
   replacement and trash cleanup. Manual canonical rows remain as fallback data
   after their last PDF source is removed.
-- Existing Cypress specs cover client state and serialization with stubs. A
+- Existing Desk Playwright specs cover client state and serialization with
+  focused test doubles. A
   small server-backed smoke path is still needed for attachment upload,
   authoritative PDF response, save, and generated report/file behavior.
 - Generated PDFs cover parser-shaped text and malformed/password cases. Add a
@@ -150,7 +151,7 @@ site.
   an explicit parent for an intentional same-date multi-bond case;
 - equality and both sides for every financial comparison boundary.
 
-### Cypress
+### Desk browser coverage (Playwright)
 
 Add one focused server-backed smoke spec covering:
 
@@ -160,8 +161,9 @@ Add one focused server-backed smoke spec covering:
 4. generated private report/file visibility for the owning record; and
 5. failed extraction recovery without losing newer form input.
 
-Keep existing stubbed specs for deterministic client formatting, stale-response,
-and clipboard behavior. Do not duplicate the full financial matrix in Cypress.
+Keep focused API and clipboard test doubles for deterministic client formatting,
+stale-response, and export behavior. Do not duplicate the full financial matrix
+in browser tests.
 
 ## Acceptance criteria
 
@@ -226,7 +228,7 @@ run the report without receiving write, import, or mutation access.
 
 Reject malformed filter types, invalid date ranges, and unreadable bonds at the
 report boundary. Add server tests for filtering, ordering, stored-value use,
-currency metadata, permissions, and empty results. Add one Cypress smoke test
+currency metadata, permissions, and empty results. Add one Playwright smoke test
 that selects multiple bonds, verifies the report request, and checks that the
 chart renders with one dataset per selected bond and currency-derived colours.
 Add the report to the Bond Investor workspace and bootstrap its report

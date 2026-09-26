@@ -8,7 +8,7 @@ the two files conflict, this app-level file governs.
 
 - Never install or update skills globally. App-specific skills must live under
   `.agents/skills/` in this app.
-- Before changing files, running verification, investigating CI/Cypress failures,
+- Before changing files, running verification, investigating CI/Playwright failures,
   or reporting completion, read [verification.md](docs/verification.md). It owns
   the detailed gate commands, evidence format, fresh-site checks, and runtime
   recovery procedures.
@@ -99,10 +99,6 @@ the two files conflict, this app-level file governs.
 
 ## Controlled Frappe integration exceptions
 
-- `scripts/cypress-runtime.sh` may temporarily add Frappe's v16 Cypress
-  dependencies to the framework manifest because Frappe's own UI runner uses
-  that bootstrap. It must restore `apps/frappe/package.json` on every exit,
-  never commit framework-manifest changes, and keep installed versions pinned.
 - Permission-query hooks may return a SQL condition only where Frappe requires
   that hook shape. Use fixed DocType/field identifiers, escape every value with
   Frappe's database API, and never interpolate client-controlled identifiers.
@@ -148,21 +144,21 @@ the two files conflict, this app-level file governs.
   malformed, conflicting, encrypted, invalid-password, and non-PDF cases.
 - For bond rules involving `>`, `>=`, `<`, or `<=`, test greater-than,
   less-than, and equality cases and state equality behavior.
-- Add Cypress coverage only for user-visible form, report, workspace, and
+- Add Playwright coverage only for user-visible form, report, workspace, and
   routing behavior that is not already covered by server tests. Keep one
   focused smoke flow per critical surface by default; do not mirror the full
-  financial or permission matrix in Cypress.
+  financial or permission matrix in browser tests.
 - Use stable routes, labels, roles, and data attributes. Avoid asserting CSS
   layout, SVG geometry, or internal formatter registration. Prefer visible
   controls; use `window.cur_frm` or direct `script_manager.trigger` only for a
   specifically justified client-script hook (for example, deterministic PDF
   attachment parsing where native file upload adds no useful coverage).
-- Add delayed, failed, stale-response, retry, or duplicate-request Cypress
+- Add delayed, failed, stale-response, retry, or duplicate-request Playwright
   cases only for a demonstrated browser regression or a risk that cannot be
   tested at a lower layer. Keep the scenario deterministic and focused on the
   user-visible recovery behavior.
 - When a backend field or permission is exposed through Desk, update the
-  relevant form/list/workspace code and one representative Cypress smoke
+  relevant form/list/workspace code and one representative Playwright smoke
   assertion; server tests own the complete permission and validation matrix.
 
 ## References

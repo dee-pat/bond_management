@@ -6,7 +6,6 @@ MODE="${1:-pre-push}"
 TEST_SITE_NAME="${TEST_SITE:-test_site}"
 APP_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BENCH_ROOT="$(cd "${APP_ROOT}/../.." && pwd)"
-export CYPRESS_CACHE_FOLDER="${BENCH_ROOT}/.cache/Cypress"
 
 SEMGREP_VERSION="1.172.0"
 FRAPPE_SEMGREP_RULES_REPOSITORY="https://github.com/frappe/semgrep-rules.git"
@@ -14,14 +13,6 @@ FRAPPE_SEMGREP_RULES_SHA="de085539bc9b4d74eb0a2ac508d21f33495be733"
 FRAPPE_SEMGREP_RULES_CACHE="${BENCH_ROOT}/.cache/frappe-semgrep-rules/${FRAPPE_SEMGREP_RULES_SHA}"
 APP_SEMGREP_RULES_FILE="${APP_ROOT}/semgrep/bond_management.yml"
 APP_SEMGREP_TESTS_FILE="${APP_ROOT}/semgrep/tests/bond_management.py"
-
-# These overrides affect the subsequent Frappe runner as well as the runtime
-# preflight. Clear them in this parent process, not only inside the helper's
-# child shell, so Electron is launched as an Electron app.
-unset ELECTRON_RUN_AS_NODE CYPRESS_RUN_BINARY
-if [[ -n "${CYPRESS_INSTALL_BINARY:-}" ]]; then
-    unset CYPRESS_INSTALL_BINARY
-fi
 
 usage() {
     echo "Usage: scripts/verify.sh [lint|server|frontend|ui|playwright|pre-push|pre-push-ui]" >&2
@@ -175,35 +166,6 @@ run_frontend_checks() {
     bench build --app bond_management
 }
 
-run_ui_tests() {
-    "${APP_ROOT}/scripts/cypress-runtime.sh" prepare
-
-    local chrome_binary="${CHROME_BIN:-}"
-    if [[ -z "${chrome_binary}" ]]; then
-        chrome_binary="$(command -v chrome || true)"
-    fi
-    if [[ -z "${chrome_binary}" ]]; then
-        echo "Chrome was not found; set CHROME_BIN to the browser executable." >&2
-        exit 1
-    fi
-
-    # Frappe assembles the Cypress command through a shell string. Pass the
-    # browser by name and let CHROME_BIN carry the executable path so paths
-    # containing spaces (such as the macOS application bundle) are preserved.
-    export CHROME_BIN="${chrome_binary}"
-
-    # The headless command-log UI can trigger a runner-frame ResizeObserver loop.
-    # Keep application errors fatal; disable only Cypress's log rendering.
-    export CYPRESS_NO_COMMAND_LOG="${CYPRESS_NO_COMMAND_LOG:-1}"
-
-    local -a cypress_args=(--headless --browser chrome)
-    if [[ -n "${CYPRESS_SPEC:-}" ]]; then
-        cypress_args+=(--spec "${CYPRESS_SPEC}")
-    fi
-
-    bench --site "${TEST_SITE_NAME}" run-ui-tests bond_management "${cypress_args[@]}"
-}
-
 prepare_playwright_site() {
     prepare_test_site
     bench --site "${TEST_SITE_NAME}" set-config bond_investor_spa_enabled 1
@@ -214,6 +176,10 @@ prepare_playwright_site() {
 run_playwright_tests() {
     if [[ -z "${FRAPPE_USER:-}" ]] || [[ -z "${FRAPPE_PASSWORD:-}" ]]; then
         echo "FRAPPE_USER and FRAPPE_PASSWORD are required for investor browser tests." >&2
+        exit 1
+    fi
+    if [[ -z "${FRAPPE_ADMIN_USER:-}" ]] || [[ -z "${FRAPPE_ADMIN_PASSWORD:-}" ]]; then
+        echo "FRAPPE_ADMIN_USER and FRAPPE_ADMIN_PASSWORD are required for Desk browser tests." >&2
         exit 1
     fi
 
@@ -240,7 +206,7 @@ case "${MODE}" in
         run_frontend_checks
         ;;
     ui)
-        run_ui_tests
+        run_playwright_tests
         ;;
     playwright)
         run_playwright_tests
@@ -253,7 +219,6 @@ case "${MODE}" in
         run_lint
         run_server_tests
         run_frontend_checks
-        run_ui_tests
         run_playwright_tests
         ;;
     *)
