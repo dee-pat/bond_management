@@ -16,6 +16,7 @@ const USD_ONLY_HEADERS = [
   "Gain Value",
   "XIRR",
   "Future XIRR",
+  "Expected Coupons (Next Year)",
 ];
 
 test("copies past cash flows without XIRR and future cash flows", async ({
@@ -40,27 +41,15 @@ test("copies past cash flows without XIRR and future cash flows", async ({
 
   const table = page.getByTestId("performance-table");
   await expect(table).toBeVisible();
-  const list = table.locator('[data-slot="list"]');
-  await expect
-    .poll(() =>
-      list.evaluate((element) =>
-        getComputedStyle(element).getPropertyValue("--list-columns-default")
-      )
+  const headers = table.getByRole("columnheader");
+  await expect(headers).toHaveCount(11);
+  expect(
+    await headers.evaluateAll((elements) =>
+      elements.map((element) => element.textContent?.trim() ?? "")
     )
-    .toContain("minmax(4.5rem, 0.6fr)");
-  await expect
-    .poll(() =>
-      list.evaluate((element) =>
-        getComputedStyle(element).getPropertyValue("--list-columns-default")
-      )
-    )
-    .toContain("minmax(10rem, 1fr)");
-  await expect(table.getByRole("columnheader")).toHaveCount(10);
-  for (const header of USD_ONLY_HEADERS) {
-    await expect(
-      table.getByRole("columnheader", { name: header, exact: true })
-    ).toBeVisible();
-  }
+  ).toEqual(USD_ONLY_HEADERS);
+  await expect(table.locator("tbody > tr")).toHaveCount(2);
+  await expect(table.locator("tbody > tr").first().locator("td")).toHaveCount(11);
   await expect(
     table.getByRole("columnheader", { name: "Market Value (USD)", exact: true })
   ).toHaveCount(0);
@@ -75,6 +64,7 @@ test("copies past cash flows without XIRR and future cash flows", async ({
   await expect(bondRow).toContainText("1.000");
   await expect(bondRow).toContainText("1,000.00");
   await expect(bondRow).toContainText("1,051.00");
+  await expect(bondRow).toContainText("70.00");
   await expect(bondRow).toContainText("1,059.81");
   await expect(bondRow).toContainText("8.81");
   await expect(bondRow).toContainText("4.473%");

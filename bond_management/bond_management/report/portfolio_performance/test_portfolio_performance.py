@@ -69,8 +69,14 @@ class TestPortfolioPerformance(IntegrationTestCase):
     def test_columns_are_defined_and_multi_currency_totals_use_usd(self):
         columns = get_columns()
         fieldnames = [column["fieldname"] for column in columns]
+        self.assertEqual(
+            fieldnames[-2:],
+            ["expected_coupons_next_year", "expected_coupons_next_year_usd"],
+        )
         self.assertIn("isin", fieldnames)
         self.assertIn("proceeds_value", fieldnames)
+        self.assertIn("expected_coupons_next_year", fieldnames)
+        self.assertIn("expected_coupons_next_year_usd", fieldnames)
         self.assertNotIn("proceeds_value_usd", fieldnames)
         self.assertNotIn("nominal_value_usd", fieldnames)
         self.assertNotIn("purchases_value_usd", fieldnames)
@@ -110,9 +116,11 @@ class TestPortfolioPerformance(IntegrationTestCase):
                 "nominal_value": 145,
                 "purchases_value": 145,
                 "proceeds_value": 145,
+                "expected_coupons_next_year": 190,
                 "market_value": 145,
                 "gain_value": 145,
                 "xirr": 85,
+                "expected_coupons_next_year_usd": 210,
                 "market_value_usd": 155,
                 "xirr_usd": 100,
                 "future_xirr": 110,
@@ -125,12 +133,14 @@ class TestPortfolioPerformance(IntegrationTestCase):
                 "nominal_value": 1,
                 "purchases_value": 1,
                 "proceeds_value": 3,
+                "expected_coupons_next_year": 3,
                 "market_value": 1,
                 "gain_value": 3,
                 "reporting_currency": "USD",
                 "nominal_value_usd": 1,
                 "purchases_value_usd": 1,
                 "proceeds_value_usd": 3,
+                "expected_coupons_next_year_usd": 3,
                 "market_value_usd": 1,
                 "gain_value_usd": 3,
             },
@@ -139,12 +149,14 @@ class TestPortfolioPerformance(IntegrationTestCase):
                 "nominal_value": 1,
                 "purchases_value": 1,
                 "proceeds_value": 5,
+                "expected_coupons_next_year": 5,
                 "market_value": 1,
                 "gain_value": 5,
                 "reporting_currency": "USD",
                 "nominal_value_usd": 2,
                 "purchases_value_usd": 2,
                 "proceeds_value_usd": 5,
+                "expected_coupons_next_year_usd": 5,
                 "market_value_usd": 2,
                 "gain_value_usd": 5,
             },
@@ -161,18 +173,51 @@ class TestPortfolioPerformance(IntegrationTestCase):
         self.assertIsNone(total["currency"])
         self.assertEqual(total["reporting_currency"], "USD")
         self.assertEqual(total["proceeds_value_usd"], 8)
+        self.assertEqual(total["expected_coupons_next_year_usd"], 8)
         with patch(
             "bond_management.bond_management.report.portfolio_performance.portfolio_performance.get_data",
             return_value=(rows[:1], [], [], [], []),
         ):
             usd_only_columns, _ = execute({"portfolio": portfolio.name, "valuation_date": "2025-01-01"})
-        usd_only_fieldnames = {column["fieldname"] for column in usd_only_columns}
+        usd_only_fieldnames = [column["fieldname"] for column in usd_only_columns]
+        self.assertEqual(
+            usd_only_fieldnames[-2:],
+            ["future_xirr", "expected_coupons_next_year"],
+        )
         self.assertNotIn("market_value_usd", usd_only_fieldnames)
         self.assertNotIn("xirr_usd", usd_only_fieldnames)
 
         total = make_total_row(rows[:1], [], [], [], [])
         self.assertEqual(total["currency"], "USD")
         self.assertEqual(total["proceeds_value"], 3)
+        self.assertEqual(total["expected_coupons_next_year"], 3)
+
+    def test_expected_coupons_include_the_exact_one_year_cutoff_only(self):
+        bond = make_bond(
+            maturity_date="2027-12-31",
+            principal_schedule=[{"repayment_date": "2027-12-31", "principal_units": 100}],
+        )
+        portfolio = make_portfolio()
+        make_transaction(bond, portfolio)
+        make_market_date(bond)
+
+        rows, _, future_cashflows, _, future_reporting_cashflows = get_data(
+            portfolio.name,
+            "2025-12-31",
+        )
+
+        self.assertEqual(rows[0]["expected_coupons_next_year"], Decimal("70.0000"))
+        self.assertEqual(rows[0]["expected_coupons_next_year_usd"], Decimal("70.0000"))
+        self.assertEqual(
+            [cashflow["date"].isoformat() for cashflow in future_cashflows if cashflow["type"] == "coupon"],
+            ["2026-06-30", "2026-12-31", "2027-06-30", "2027-12-31"],
+        )
+        self.assertEqual(
+            sum(
+                cashflow["amount"] for cashflow in future_reporting_cashflows if cashflow["type"] == "coupon"
+            ),
+            Decimal("140.0000"),
+        )
 
     def test_returns_copyable_past_and_future_xirr_cashflows(self):
         bond = make_bond()

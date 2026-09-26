@@ -7,7 +7,7 @@ from decimal import Decimal
 import frappe
 from frappe import _
 from frappe.desk.query_report import get_report_doc
-from frappe.utils import escape_html, getdate
+from frappe.utils import add_years, escape_html, getdate
 
 from bond_management.bond_management.utils.accrual import (
     calculate_principal_factor_from_bond,
@@ -265,14 +265,16 @@ def get_columns(include_reporting_currency_columns: bool = True) -> list[dict]:
             "width": 145,
             "description": _("Sales, coupon payments and principal amortisation received."),
         },
+    ]
+    columns.append(
         {
             "label": _("Market Value"),
             "fieldname": "market_value",
             "fieldtype": "Currency",
             "options": "currency",
             "width": 145,
-        },
-    ]
+        }
+    )
     if include_reporting_currency_columns:
         columns.append(
             {
@@ -320,12 +322,50 @@ def get_columns(include_reporting_currency_columns: bool = True) -> list[dict]:
             "width": 110,
         }
     )
+    columns.append(
+        {
+            "label": _("Expected Coupons (Next Year)"),
+            "fieldname": "expected_coupons_next_year",
+            "fieldtype": "Currency",
+            "options": "currency",
+            "width": 190,
+            "description": _("Coupon payments after the valuation date through exactly one year after it."),
+        }
+    )
+    if include_reporting_currency_columns:
+        columns.append(
+            {
+                "label": _("Expected Coupons (Next Year) (USD)"),
+                "fieldname": "expected_coupons_next_year_usd",
+                "fieldtype": "Currency",
+                "options": "reporting_currency",
+                "width": 210,
+            }
+        )
     return columns
 
 
 def has_non_reporting_currency(data) -> bool:
     """Return whether the report contains a bond outside the reporting currency."""
     return any(row.get("currency") and row.get("currency") != REPORTING_CURRENCY for row in data)
+
+
+def expected_coupon_value(cashflows, valuation_date):
+    """Return coupons after valuation through the inclusive one-year cutoff."""
+    valuation_date = getdate(valuation_date)
+    cutoff_date = getdate(add_years(valuation_date, 1))
+    return quantize_money(
+        sum(
+            (
+                to_decimal(cashflow.get("amount"))
+                for cashflow in cashflows
+                if cashflow.get("type") == "coupon"
+                and cashflow.get("date")
+                and valuation_date < getdate(cashflow.get("date")) <= cutoff_date
+            ),
+            Decimal(0),
+        )
+    )
 
 
 # ---------- CORE DATA ----------
@@ -431,6 +471,11 @@ def get_data(portfolio, valuation_date, context=None):
             rate_date=valuation_date,
         )
         combined_future_reporting_cashflow.extend(future_reporting_cashflows)
+        expected_coupons_next_year = expected_coupon_value(future_cashflows, valuation_date)
+        expected_coupons_next_year_usd = expected_coupon_value(
+            future_reporting_cashflows,
+            valuation_date,
+        )
 
         future_xirr = future_xirr * 100.0 if future_xirr is not None else None
         future_xirr_usd = (
@@ -461,6 +506,8 @@ def get_data(portfolio, valuation_date, context=None):
                 "purchases_value_usd": quantize_money(purchases_value_usd),
                 "proceeds_value": quantize_money(proceeds_value),
                 "proceeds_value_usd": quantize_money(proceeds_value_usd),
+                "expected_coupons_next_year": expected_coupons_next_year,
+                "expected_coupons_next_year_usd": expected_coupons_next_year_usd,
                 "market_value": quantize_money(market_value),
                 "market_value_usd": quantize_money(market_value_usd),
                 "gain_value": quantize_money(market_value + proceeds_value - purchases_value),
@@ -504,6 +551,9 @@ def make_total_row(
         "nominal_value": sum_field("nominal_value") if single_native_currency else None,
         "purchases_value": sum_field("purchases_value") if single_native_currency else None,
         "proceeds_value": sum_field("proceeds_value") if single_native_currency else None,
+        "expected_coupons_next_year": (
+            sum_field("expected_coupons_next_year") if single_native_currency else None
+        ),
         "market_value": sum_field("market_value") if single_native_currency else None,
         "gain_value": sum_field("gain_value") if single_native_currency else None,
     }
@@ -511,6 +561,10 @@ def make_total_row(
         "nominal_value_usd": sum_field("nominal_value_usd", "nominal_value"),
         "purchases_value_usd": sum_field("purchases_value_usd", "purchases_value"),
         "proceeds_value_usd": sum_field("proceeds_value_usd", "proceeds_value"),
+        "expected_coupons_next_year_usd": sum_field(
+            "expected_coupons_next_year_usd",
+            "expected_coupons_next_year",
+        ),
         "market_value_usd": sum_field("market_value_usd", "market_value"),
         "gain_value_usd": sum_field("gain_value_usd", "gain_value"),
     }

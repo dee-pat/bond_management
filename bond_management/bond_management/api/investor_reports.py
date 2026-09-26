@@ -39,6 +39,8 @@ PORTFOLIO_PERFORMANCE_COLUMN_FIELDS = (
     "xirr",
     "xirr_usd",
     "future_xirr",
+    "expected_coupons_next_year",
+    "expected_coupons_next_year_usd",
 )
 PORTFOLIO_PERFORMANCE_ROW_FIELDS = (
     "isin",
@@ -54,6 +56,8 @@ PORTFOLIO_PERFORMANCE_ROW_FIELDS = (
     "xirr",
     "xirr_usd",
     "future_xirr",
+    "expected_coupons_next_year",
+    "expected_coupons_next_year_usd",
     "has_past_cashflows",
     "has_future_cashflows",
 )
