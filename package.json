@@ -8,11 +8,13 @@
     "lint": "yarn --cwd frontend lint",
     "postinstall": "yarn --cwd frontend install --frozen-lockfile",
     "test:e2e": "playwright test",
-    "test:e2e:desktop": "playwright test --project=chromium",
-    "test:e2e:mobile": "playwright test --project=mobile",
+    "test:e2e:desktop": "playwright test --project=investor-desktop --project=desk",
+    "test:e2e:mobile": "playwright test --project=investor-mobile",
+    "test:e2e:desk": "playwright test --project=desk",
     "typecheck": "yarn --cwd frontend typecheck"
   },
   "devDependencies": {
+    "@playwright/cli": "0.1.21",
     "@playwright/test": "1.57.0"
   }
 }

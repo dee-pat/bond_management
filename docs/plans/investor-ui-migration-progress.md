@@ -1,11 +1,14 @@
 # Investor UI Migration Progress
 
-Last updated: 2026-09-11
+Last updated: 2026-09-25
 Specification: [investor-ui-migration.md](../specs/investor-ui-migration.md)
 Current phase: Phase 7 — Pilot
 Overall status: Phase 7 in progress; pilot acceptance pending
 
 This file records execution state and evidence. Product, architecture and acceptance decisions belong in the specification.
+
+Browser-runner evidence in entries dated before 2026-09-25 records historical
+activity. Current browser tests, local gates, and CI use Playwright only.
 
 ## Status legend
 
@@ -1461,6 +1464,92 @@ apps/bond_management/scripts/verify.sh ui` and
 - Implementation and current verification evidence are tracked in
   [PR #9 review fixes](pr9-review-fixes.md).
 
+### 2026-09-25 — Playwright-only E2E migration
+
+- Scope: move the 14 Desk cases from the former Cypress suite into Playwright;
+  organize investor and Desk tests under separate domains; remove the old
+  runner, config, runtime script, and CI job; and make Playwright the only
+  browser gate. No application behavior, API contract, permission, financial
+  rule, schema, or production dependency changed.
+- The Desk suite retains the existing narrow report-response, PDF-response,
+  market-data, transaction-calculation, and clipboard doubles. Form routes and
+  application code run on the authenticated Frappe `test_site`. Administrator
+  and investor logins use separate environment variables and storage states.
+- The Playwright UI CI job retains a unique run-scoped bench and fresh site. It
+  runs `scripts/verify.sh ui`; the server CI job continues to run
+  `scripts/verify.sh pre-push` once. Locally, `pre-push-ui` includes server,
+  frontend, and full browser checks. The UI job now sets the disposable
+  Administrator password, enables the investor feature flag, and seeds the
+  investor account and fixtures before its web process starts; `verify.sh ui`
+  repeats the idempotent preparation before running Playwright.
+- Required gates: targeted Playwright browser coverage; `pre-push-ui`; CI
+  fresh-site validation for the workflow and runner change.
+- Commands executed:
+  - `yarn playwright test --list` — exit `0`; discovered 49 tests in 28 files,
+    including all 14 Desk cases. This lists tests but does not execute them.
+  - `yarn test:e2e:desk` — exit `0`; all 14 Desk cases plus Administrator setup
+    passed.
+  - `apps/bond_management/scripts/verify.sh pre-push` — final exit `0`; lint,
+    blocking and advisory Semgrep, rule tests, migration, and all 284 server
+    tests passed.
+  - `apps/bond_management/scripts/verify.sh pre-push-ui` — final exit `0`; the
+    complete server, frontend lint/typecheck/build, and 49-test investor,
+    mobile, and Desk Playwright suite passed.
+  - Fresh isolated MariaDB site install and `bench build` completed with exit
+    `0`. On a second disposable site, explicit Administrator password setup,
+    pre-server feature-flag setup and fixture seeding, then
+    `scripts/verify.sh ui` passed all 49 tests. The test-site password is random
+    and temporary; the existing `test_site` was not recreated or dropped.
+  - `git diff --check` and the repository pre-commit formatting checks passed.
+- Exit statuses: All final local gates and the fresh-site UI run exited `0`.
+- Tests failed: An initial fresh-site browser run showed Administrator login
+  returned HTTP 401 when relying only on `bench new-site --admin-password` in
+  the isolated setup. Repeating `bench --site <fresh-site> set-admin-password`
+  with the same temporary value fixed the login. The final fresh-site run also
+  enabled the feature flag and seeded fixtures before starting the web process;
+  all 49 Playwright tests then passed. Initial local UI attempts during the
+  migration exposed locator semantics mismatches; the corrected full gate
+  passed without weakening the expected behavior.
+- Tests not run: GitHub Actions itself was not run or observed in this
+  workspace.
+- Blockers: Local migration and fresh-site gates passed. Phase 7 still requires
+  named pilot acceptance, one complete statement/reporting cycle, and an
+  approved pilot-site flag state.
+- Unverified local/CI differences: The isolated local fresh-site run used macOS
+  and MariaDB 12.3; GitHub Actions uses Ubuntu and MariaDB 11.8. No actual
+  GitHub Actions result exists until the workflow runs on a pushed revision.
+  The domain model was reviewed; this test-runner migration changes no mapped
+  DocType or data relationship.
+
+### 2026-09-26 — Main-based PR verification
+
+- Risk classification: Medium; browser-test organization, CI setup, developer
+  dependencies and app-local skills changed. Production behavior and the
+  domain model did not change.
+- Required gates: `pre-push-ui`; fresh-site install and UI bootstrap; locked
+  dependency install; Playwright discovery.
+- Commands executed:
+  - `yarn install --frozen-lockfile` — exit `0`.
+  - `yarn playwright-cli --version` — exit `0`; version `0.1.21`.
+  - `yarn playwright test --list` — exit `0`; 49 tests in 28 files.
+  - `apps/bond_management/scripts/verify.sh pre-push-ui` — exit `0`; lint,
+    Semgrep, all 321 server tests, frontend lint/typecheck/build, and all 49
+    investor, mobile, and Desk Playwright tests passed on `test_site`.
+  - `bench new-site --db-socket <isolated MariaDB socket> --install-app bond_management <fresh-site>` — exit `0`.
+  - CI-shaped fresh-site setup followed by `TEST_SITE=<fresh-site> apps/bond_management/scripts/verify.sh ui` — exit `0`; all 49 Playwright tests passed after enabling the SPA and seeding the investor fixtures before the web process started.
+  - `quick_validate.py` for the three app-local skills and
+    `git diff --cached --check` — exit `0`.
+- Tests failed: An initial full-suite attempt failed one performance spec
+  because it queried `tbody > tr` while the accessible table uses role-based
+  rows. The assertion now uses row and cell roles; the focused spec passed 2
+  tests and the repeated full gate passed all 49.
+- Tests not run: GitHub Actions has not run on the pushed revision.
+- Blockers: None for local verification. Pilot acceptance remains a separate
+  Phase 7 task.
+- Unverified local/CI differences: Verification used macOS and MariaDB 12.3.2;
+  GitHub Actions uses Ubuntu and MariaDB 11.8. The domain model was reviewed;
+  no mapped DocType or data relationship changed.
+
 ## Next actions: Phase 7 pilot acceptance
 
 Record named internal-team acceptance and one complete statement/reporting cycle
@@ -1472,10 +1561,9 @@ Do not begin cutover until those acceptance gates are recorded.
 
 Phase 7 depends on pilot participants, acceptance evidence and an approved final
 pilot-site flag state. Rollback mechanics are rehearsed locally only. The
-current UI follow-up passed the local `pre-push-ui` gate, but its required
-CI-shaped fresh-site verification remains unobserved. The Phase 6 fresh-site
-workaround used an isolated MariaDB 12.3 server because the shared MariaDB
-root credential is intentionally unavailable; it did not touch or recreate an
-existing site.
+Playwright migration's local server, UI, and fresh-site gates pass; GitHub
+Actions has not yet run on this revision. The disposable fresh-site checks used
+an isolated MariaDB 12.3 server because the shared MariaDB root credential is
+intentionally unavailable; they did not touch or recreate an existing site.
 
 When implementation changes a settled decision, record the reason here during the slice and update the specification before marking that slice complete.

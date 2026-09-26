@@ -11,15 +11,15 @@ Financial calculations and permissions are enforced on the server. Uploaded stat
 
 ## What the app does
 
-| Area | Capabilities | Main records or reports |
-| --- | --- | --- |
-| Reference data | Define bonds, coupon schedules, principal repayments, day-count conventions, currencies, withholding tax, and quantity-change rules. | Bond Master, Bond Coupon Schedule, Bond Principal Schedule |
-| Portfolio operations | Store portfolio and account details and associate users with the portfolios they are allowed to see. | Bond Portfolio |
-| Transactions | Record purchases and sales manually or extract transaction data from private PDF attachments. Validate dates, prices, accrued interest, commissions, and ledger consistency. | Bond Transaction |
-| Statements | Extract statement identity, holdings, prices, and exchange rates from private PDFs; reconcile statement quantities with calculated portfolio positions; generate a reconciliation report. | Bond Statement, Bond Statement Details |
-| Market data | Maintain dated market prices, principal factors, weighted repayment dates, future XIRR values, and yield-curve data. | Bond Market Date, Bond Market Prices |
-| Exchange rates | Store statement-sourced and manually maintained currency rates, including reverse rates. | Bond Exchange Rate |
-| Analytics | Review portfolio value, proceeds, gains, past and future XIRR, and historical stored bond yields. | Portfolio Performance, Bond Yield Comparison |
+| Area                 | Capabilities                                                                                                                                                                              | Main records or reports                                    |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| Reference data       | Define bonds, coupon schedules, principal repayments, day-count conventions, currencies, withholding tax, and quantity-change rules.                                                      | Bond Master, Bond Coupon Schedule, Bond Principal Schedule |
+| Portfolio operations | Store portfolio and account details and associate users with the portfolios they are allowed to see.                                                                                      | Bond Portfolio                                             |
+| Transactions         | Record purchases and sales manually or extract transaction data from private PDF attachments. Validate dates, prices, accrued interest, commissions, and ledger consistency.              | Bond Transaction                                           |
+| Statements           | Extract statement identity, holdings, prices, and exchange rates from private PDFs; reconcile statement quantities with calculated portfolio positions; generate a reconciliation report. | Bond Statement, Bond Statement Details                     |
+| Market data          | Maintain dated market prices, principal factors, weighted repayment dates, future XIRR values, and yield-curve data.                                                                      | Bond Market Date, Bond Market Prices                       |
+| Exchange rates       | Store statement-sourced and manually maintained currency rates, including reverse rates.                                                                                                  | Bond Exchange Rate                                         |
+| Analytics            | Review portfolio value, proceeds, gains, past and future XIRR, and historical stored bond yields.                                                                                         | Portfolio Performance, Bond Yield Comparison               |
 
 The normal operating flow is:
 
@@ -127,7 +127,7 @@ yarn dev
 
 ## Verification
 
-The repository has shared verification gates for formatting, linting, server tests, Desk tests, and investor UI tests. Run them from the bench directory:
+The repository has shared verification gates for formatting, linting, server tests, and Playwright browser tests for Desk and investor workflows. Run them from the bench directory:
 
 ```bash
 apps/bond_management/scripts/verify.sh pre-push
@@ -139,7 +139,7 @@ For changes affecting JavaScript, reports, DocType metadata, workspaces, or othe
 apps/bond_management/scripts/verify.sh pre-push-ui
 ```
 
-See [`docs/verification.md`](docs/verification.md) for the required gates, test-site rules, Cypress runtime recovery, and completion evidence format.
+See [`docs/verification.md`](docs/verification.md) for the required gates, test-site rules, Playwright setup, and completion evidence format.
 
 ## Design and security principles
 

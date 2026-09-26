@@ -17,7 +17,7 @@ Before committing, pushing, or reporting completion, record:
 - Blockers:
 - Unverified local/CI differences:
 
-For GitHub Actions, fresh-site bootstrap, Cypress runtime setup, or other
+For GitHub Actions, fresh-site bootstrap, Playwright setup, or other
 environment-sensitive changes, document the remaining local-vs-CI platform
 differences in the final field.
 
@@ -27,20 +27,21 @@ differences in the final field.
   and test-only edits need formatting/lint plus the affected test; backend
   business, permission, migration, hook, or shared utility changes need the
   targeted test, complete affected module, and full server suite; client-only
-  changes need lint plus the focused Cypress spec, with the full UI suite when
-  they change a shared runtime or critical user journey. A targeted pass is
-  not evidence that a required broader gate passes.
+  changes need lint plus the focused Playwright spec, with the full UI suite
+  when they change a shared runtime or critical user journey.
 - From the bench directory, run
   `apps/bond_management/scripts/verify.sh pre-push`. This shared gate runs
   pre-commit, migrates `test_site`, and runs the complete server suite. GitHub
   Actions must call the same script so local and CI commands cannot drift.
 - Changes to JavaScript, reports, DocType metadata, permissions, workspaces, or
   other Desk behavior must run
-  `apps/bond_management/scripts/verify.sh pre-push-ui`, which adds the complete
-  headless Cypress suite and the authenticated Playwright suite. The Playwright
-  portion requires `FRAPPE_USER` and `FRAPPE_PASSWORD`; set `BASE_URL` (or
-  `PLAYWRIGHT_BASE_URL`) when the test server is not at its default. Set
-  `CHROME_BIN` when `chrome` is not on `PATH`.
+  `apps/bond_management/scripts/verify.sh pre-push-ui`. It includes the
+  complete server gate, frontend lint/typecheck/build, test-site preparation,
+  and the complete authenticated Playwright suite for investor and Desk flows.
+  Browser tests require `FRAPPE_USER` and `FRAPPE_PASSWORD` for the seeded
+  investor plus `FRAPPE_ADMIN_USER` and `FRAPPE_ADMIN_PASSWORD` for Desk. Set
+  `BASE_URL` (or `PLAYWRIGHT_BASE_URL`) when the test server is not at its
+  default address.
 - Changes to patches, schema, hooks, dependencies, installation, or manual
   indexes must also be validated against a freshly installed site matching the
   GitHub Actions setup. Obtain approval before recreating or dropping a local
@@ -49,57 +50,44 @@ differences in the final field.
 ## Completion and failure handling
 
 - If a required command cannot run because a service, browser, dependency, site,
-  or credential is unavailable, do not substitute an unrelated check. Report
-  the exact command, blocking condition, and verification that remains
-  outstanding.
-- When GitHub Actions fails, inspect the exact traceback and reproduce the
-  failing test both in isolation and in the full suite before changing the
-  implementation or assertion. Do not weaken an assertion merely to make CI
-  pass.
+  or credential is unavailable, report the exact command, blocking condition,
+  and remaining verification. Do not substitute an unrelated check.
+- When GitHub Actions fails, inspect the traceback and reproduce the failing
+  test in isolation and in the full suite before changing implementation or
+  assertions. Do not weaken an assertion merely to make CI pass.
 - Before implementing a multi-phase feature, record the intended slice and
   verification steps in the project documentation. For a small bug fix, a
   focused issue note and regression test are sufficient.
 
-## Cypress runtime and recovery
+## Playwright browser setup and recovery
 
-- For Cypress startup failures, run
-  `apps/bond_management/scripts/cypress-runtime.sh diagnose`. If macOS Electron
-  aborts after verification, check host/Cypress compatibility before changing tests.
-- The UI gate uses Frappe's Cypress runner with a bench-local cache under
-  `.cache/Cypress`. `scripts/cypress-runtime.sh` pins the Frappe v16 Cypress
-  dependency set, verifies package/binary compatibility, and repairs cache
-  failures before the test run. Host-level Electron launch failures are
-  reported without repeatedly downloading the same binary. It also clears
-  Electron-as-Node and custom-binary environment overrides that make Cypress
-  start incorrectly. Do not rely on a machine-global Cypress cache or bypass
-  this preflight.
-- On macOS in the local development environment, Chrome is installed at
-  `/Applications/Google Chrome.app/Contents/MacOS/Google Chrome`; set
-  `CHROME_BIN` to this path when `chrome` is not on `PATH`.
-- The headless gate defaults `CYPRESS_NO_COMMAND_LOG=1`: Cypress 13.17.0's
-  command-log display triggered a runner-frame `ResizeObserver` loop during
-  report navigation on Chrome 152. The unchanged spec passes with that display
-  disabled. Application errors and assertions remain fatal; screenshots/videos
-  omit the command log, while terminal results remain available. Set the value
-  to `0` to investigate the runner display. See Cypress's
-  [command-log troubleshooting](https://docs.cypress.io/app/references/troubleshooting#disable-the-command-log).
-- Cypress failure learnings: run the server explicitly for the tested site:
-  `bench --site test_site serve --port 8001 --noreload`. Running `bench serve`
-  without `--site` can serve a different site and produce misleading login
-  failures. Frappe's `run-ui-tests` command injects `CYPRESS_adminPassword`
-  from the selected site's config, so a shell password override may be
-  ignored. If login fails, verify the credential directly against `test_site`,
-  reset the local test Administrator with `bench --site test_site
-  set-admin-password`, and clear stale failed-login cache before retrying;
-  never write test credentials to the repository. Do not repeatedly rerun
-  Cypress while the account is locked.
-- After resolving a Cypress failure, rerun the named spec with `CYPRESS_SPEC`,
-  then the complete UI gate. Preserve videos, screenshots, browser logs, and
-  the exact command when escalating a runtime failure.
-- `CYPRESS_VERSION` in `scripts/cypress-runtime.sh` and the GitHub Actions
-  cache key must be updated together when Frappe v16 changes its supported
-  Cypress release. Do not override the version in CI or reuse a cache for a
-  different binary.
+- Use `test_site` for automated browser tests. The browser gate migrates it,
+  enables the investor app, and runs the idempotent investor-data seed helper
+  before Playwright. It does not create, drop, or restore a site.
+- When bootstrapping a fresh site, enable the investor app and seed its browser
+  user and fixtures before starting the web process. Frappe must load the site
+  feature flag at process startup; the CI workflow does this explicitly.
+- Install the Playwright browser when it is missing with
+  `yarn playwright install chromium` from the app root. CI installs Chromium
+  and its system dependencies in its run-scoped bench.
+- Start the intended local site explicitly so the browser cannot land on a
+  different default site: `bench --site test_site serve --port 8001 --noreload`.
+  Set `BASE_URL=http://localhost:8001` for the browser gate in that case.
+- Keep investor credentials separate from Administrator credentials. The
+  investor seed helper uses `FRAPPE_USER` and `FRAPPE_PASSWORD`; the Desk
+  browser setup uses `FRAPPE_ADMIN_USER` and `FRAPPE_ADMIN_PASSWORD`. Never
+  write either password to repository files. In CI, the fresh site uses
+  `Administrator` with the one-run site password `admin`, while the investor
+  password is generated and masked for that job.
+- If login fails, verify each credential against `test_site` and reset only the
+  local test Administrator with `bench --site test_site set-admin-password`.
+  Never run destructive credential or cache recovery against `dev.local` or a
+  non-test site. Do not repeatedly rerun browser tests while an account is
+  locked.
+- Playwright preserves traces on the first CI retry, screenshots on failure,
+  videos on failure, and the HTML report locally. Keep the exact command,
+  browser logs, trace, screenshot, video, and server log when escalating a
+  browser failure.
 
 ## CI bootstrap and job boundaries
 
@@ -109,9 +97,13 @@ differences in the final field.
   initialization path, step working directories, caches, and artifact paths in
   sync. Use a unique run-scoped directory under the runner's temporary folder;
   never reuse a fixed `/home/runner/frappe-bench` path or overwrite an existing
-  bench. GitHub's `runner` context is unavailable in `jobs.<job_id>.env`; use it
-  in step-level fields or the runner's `$RUNNER_TEMP` variable instead.
-- The server CI job runs the shared lint and full server gate once. The Chrome UI
-  job runs the headless Cypress gate, and the Playwright UI job runs the
-  authenticated Playwright gate, each against its own fresh site; do not make
-  either UI job repeat the full server suite unless the failure requires it.
+  bench. GitHub's `runner` context is unavailable in `jobs.<job_id>.env`; use
+  it in step-level fields or the runner's `$RUNNER_TEMP` variable instead.
+- Before starting the UI job's web server, set its disposable Administrator
+  password, enable `bond_investor_spa_enabled`, and seed the investor browser
+  user and fixture records. The web process must start after the feature flag
+  is set. `scripts/verify.sh ui` repeats the idempotent seed before Playwright.
+- The server CI job runs the shared lint and full server gate once. The UI job
+  has its own run-scoped fresh bench/site and runs
+  `apps/bond_management/scripts/verify.sh ui`, which prepares the site and runs
+  the full Playwright suite without repeating the server suite.

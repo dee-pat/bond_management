@@ -41,7 +41,7 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v6
         with:
-          python-version: '3.14'
+          python-version: "3.14"
 
       - name: Setup Node
         uses: actions/setup-node@v6
@@ -93,7 +93,7 @@ jobs:
           bench --site test_site install-app bond_management
           bench build
         env:
-          CI: 'Yes'
+          CI: "Yes"
 
       - name: Run Tests
         working-directory: ${{ runner.temp }}/bond-management-bench-${{ github.run_id }}-${{ github.run_attempt }}
@@ -101,133 +101,6 @@ jobs:
           apps/bond_management/scripts/verify.sh pre-push
 
   ui-tests:
-    runs-on: ubuntu-latest
-    timeout-minutes: 35
-    name: UI (Chrome)
-
-    services:
-      redis-cache:
-        image: redis:alpine
-        ports:
-          - 13000:6379
-      redis-queue:
-        image: redis:alpine
-        ports:
-          - 11000:6379
-      mariadb:
-        image: mariadb:11.8
-        env:
-          MYSQL_ROOT_PASSWORD: root
-        ports:
-          - 3306:3306
-        options: --health-cmd="mariadb-admin ping" --health-interval=5s --health-timeout=2s --health-retries=3
-
-    steps:
-      - name: Clone
-        uses: actions/checkout@v6
-
-      - name: Setup Python
-        uses: actions/setup-python@v6
-        with:
-          python-version: '3.14'
-
-      - name: Setup Node
-        uses: actions/setup-node@v6
-        with:
-          node-version: 24
-          check-latest: true
-
-      - name: Cache pip
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-ui-pip-${{ hashFiles('**/*requirements.txt', '**/pyproject.toml', '**/setup.py', '**/setup.cfg') }}
-          restore-keys: |
-            ${{ runner.os }}-ui-pip-
-            ${{ runner.os }}-pip-
-
-      - name: Cache Cypress binary
-        uses: actions/cache@v4
-        with:
-          path: ${{ runner.temp }}/bond-management-bench-${{ github.run_id }}-${{ github.run_attempt }}/.cache/Cypress
-          key: ${{ runner.os }}-${{ runner.arch }}-cypress-13.17.0
-
-      - name: Install MariaDB Client
-        run: |
-          sudo apt update
-          sudo apt-get install mariadb-client
-
-      - name: Setup Bench
-        run: |
-          pip install frappe-bench
-          BENCH_ROOT="$RUNNER_TEMP/bond-management-bench-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
-          test ! -e "$BENCH_ROOT"
-          bench init --frappe-branch version-16 --skip-redis-config-generation --skip-assets --python "$(which python)" "$BENCH_ROOT"
-          test -f "$BENCH_ROOT/sites/common_site_config.json"
-
-      - name: Install App and Build Assets
-        working-directory: ${{ runner.temp }}/bond-management-bench-${{ github.run_id }}-${{ github.run_attempt }}
-        run: |
-          test -f sites/common_site_config.json
-          bench get-app bond_management "file://$GITHUB_WORKSPACE"
-          bench setup requirements --dev
-          bench set-config -g admin_password admin
-          bench new-site --db-root-password root --admin-password admin test_site
-          bench --site test_site set-config allow_tests true
-          bench --site test_site set-config host_name "http://test_site:8000"
-          bench --site test_site install-app bond_management
-          bench build
-        env:
-          CI: 'Yes'
-
-      - name: Seed UI Test Site
-        working-directory: ${{ runner.temp }}/bond-management-bench-${{ github.run_id }}-${{ github.run_attempt }}
-        run: |
-          bench --site test_site execute frappe.utils.install.complete_setup_wizard
-          bench --site test_site execute frappe.tests.ui_test_helpers.create_test_user
-
-      - name: Prepare Cypress runtime
-        working-directory: ${{ runner.temp }}/bond-management-bench-${{ github.run_id }}-${{ github.run_attempt }}
-        run: apps/bond_management/scripts/cypress-runtime.sh prepare
-        env:
-          CI: 'Yes'
-
-      - name: Setup Chrome
-        uses: browser-actions/setup-chrome@latest
-
-      - name: Start Web Server
-        working-directory: ${{ runner.temp }}/bond-management-bench-${{ github.run_id }}-${{ github.run_attempt }}
-        run: |
-          echo "127.0.0.1 test_site" | sudo tee -a /etc/hosts
-          nohup bench serve --port 8000 > "$RUNNER_TEMP/bench-web.log" 2>&1 &
-          curl --noproxy '*' --fail --silent --show-error --retry 30 --retry-connrefused --retry-delay 2 http://test_site:8000/api/method/ping
-
-      - name: Run Cypress
-        working-directory: ${{ runner.temp }}/bond-management-bench-${{ github.run_id }}-${{ github.run_attempt }}
-        run: |
-          apps/bond_management/scripts/verify.sh ui
-        env:
-          CI: 'Yes'
-
-      - name: Capture Cypress diagnostics
-        if: failure()
-        working-directory: ${{ runner.temp }}/bond-management-bench-${{ github.run_id }}-${{ github.run_attempt }}
-        run: |
-          apps/bond_management/scripts/cypress-runtime.sh diagnose > "$RUNNER_TEMP/cypress-diagnostics.txt" 2>&1 || true
-
-      - name: Upload UI failure artifacts
-        if: failure()
-        uses: actions/upload-artifact@v6
-        with:
-          name: ui-test-failure-artifacts
-          if-no-files-found: ignore
-          path: |
-            ${{ runner.temp }}/bond-management-bench-${{ github.run_id }}-${{ github.run_attempt }}/cypressVideos
-            ${{ runner.temp }}/bond-management-bench-${{ github.run_id }}-${{ github.run_attempt }}/apps/bond_management/cypress/screenshots
-            ${{ runner.temp }}/cypress-diagnostics.txt
-            ${{ runner.temp }}/bench-web.log
-
-  playwright-tests:
     runs-on: ubuntu-latest
     timeout-minutes: 35
     name: UI (Playwright)
@@ -256,7 +129,7 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v6
         with:
-          python-version: '3.14'
+          python-version: "3.14"
 
       - name: Setup Node
         uses: actions/setup-node@v6
@@ -264,7 +137,7 @@ jobs:
           node-version: 24
           check-latest: true
 
-      - name: Prepare investor test credentials
+      - name: Prepare browser test credentials
         run: |
           investor_test_password="$(openssl rand -hex 24)"
           echo "::add-mask::${investor_test_password}"
@@ -320,13 +193,18 @@ jobs:
           bench new-site --db-root-password root --admin-password admin test_site
           bench --site test_site set-config allow_tests true
           bench --site test_site set-config host_name "http://test_site:8000"
-          bench --site test_site set-config bond_investor_spa_enabled true
           bench --site test_site install-app bond_management
           bench build
           apps/bond_management/scripts/verify.sh frontend
-          bench --site test_site execute bond_management.bond_management.tests.investor_ui_seed.seed_investor_ui_browser_test_data
         env:
-          CI: 'Yes'
+          CI: "Yes"
+
+      - name: Prepare browser site before starting the server
+        working-directory: ${{ runner.temp }}/bond-management-playwright-${{ github.run_id }}-${{ github.run_attempt }}
+        run: |
+          bench --site test_site set-admin-password admin
+          bench --site test_site set-config bond_investor_spa_enabled 1
+          bench --site test_site execute bond_management.bond_management.tests.investor_ui_seed.seed_investor_ui_browser_test_data
 
       - name: Install Playwright browser
         working-directory: ${{ runner.temp }}/bond-management-playwright-${{ github.run_id }}-${{ github.run_attempt }}/apps/bond_management
@@ -341,10 +219,12 @@ jobs:
 
       - name: Run Playwright
         working-directory: ${{ runner.temp }}/bond-management-playwright-${{ github.run_id }}-${{ github.run_attempt }}
-        run: apps/bond_management/scripts/verify.sh playwright
+        run: apps/bond_management/scripts/verify.sh ui
         env:
           BASE_URL: http://localhost:8000
-          CI: 'Yes'
+          FRAPPE_ADMIN_USER: Administrator
+          FRAPPE_ADMIN_PASSWORD: admin
+          CI: "Yes"
 
       - name: Upload Playwright failure artifacts
         if: failure()

@@ -1,14 +1,16 @@
 # Investor UI Migration
 
 Status: Approved for phased implementation
-Last updated: 2026-09-11
+Last updated: 2026-09-25
 Progress: [investor-ui-migration-progress.md](../plans/investor-ui-migration-progress.md)
 
 ## Outcome
 
 Provide bond investors with a responsive, read-only Vue 3 and Frappe UI application at `/bond-investor`. Keep internal operations in Desk and keep the existing investor workspace available until the new application completes a controlled pilot and separate retirement release.
 
-Playwright owns the new application. Cypress continues to own Desk behaviour during coexistence.
+Playwright owns browser coverage for the investor application and internal Desk.
+The server suite remains the authority for financial rules, permissions, and
+data invariants.
 
 ## Product boundary
 
@@ -38,7 +40,7 @@ Before implementing a surface, record its investor-visible fields, filters, sort
 - Internal reconciliation, posting, accrual, market-data maintenance and attachment workflows.
 - New financial calculations, changed rounding, changed cash-flow rules or redesigned report semantics.
 - Replacing internal Desk screens.
-- Removing Cypress as part of the investor migration.
+- Replacing or removing internal Desk screens as part of the investor migration.
 
 ## Settled decisions
 
@@ -52,7 +54,7 @@ Before implementing a surface, record its investor-visible fields, filters, sort
 | Authorization  | Existing investor role and portfolio `User Permission` boundary, enforced again by explicit server APIs.                                                     |
 | Data access    | Explicit read-only investor endpoints with allow-listed inputs and outputs. Generic DocType REST is not the production screen contract.                      |
 | Calculations   | Existing server services and reports remain authoritative. The client formats and presents returned values only.                                             |
-| Testing        | Playwright for the SPA; Cypress for Desk; server tests own finance and permission matrices.                                                                  |
+| Testing        | Playwright covers investor and Desk browser behavior by domain; server tests own finance and permission matrices.                                            |
 | Design         | Functional parity first, with a clean responsive shell but no product redesign.                                                                              |
 | Retirement     | Cutover and legacy workspace removal are separate releases.                                                                                                  |
 
@@ -223,20 +225,28 @@ same normal Frappe permissions.
 
 ## Test ownership
 
-| Risk                                              | Primary owner                                                | Browser coverage                                          |
-| ------------------------------------------------- | ------------------------------------------------------------ | --------------------------------------------------------- |
-| Financial calculations and report values          | Existing and new server tests                                | One representative visible value per report flow.         |
-| Investor portfolio isolation and role permissions | Server integration tests                                     | One allowed-data smoke flow; denial remains server-owned. |
-| SPA routing, loading and recovery                 | Playwright                                                   | Required on desktop and mobile.                           |
-| Internal Desk form scripts and attachment parsing | Existing Cypress and server tests                            | Cypress remains unchanged.                                |
-| Legacy investor Desk navigation                   | Existing workspace/server tests and Cypress where applicable | Retained until retirement.                                |
+| Risk                                              | Primary owner                         | Browser coverage                                                                       |
+| ------------------------------------------------- | ------------------------------------- | -------------------------------------------------------------------------------------- |
+| Financial calculations and report values          | Existing and new server tests         | One representative visible value per report flow.                                      |
+| Investor portfolio isolation and role permissions | Server integration tests              | One allowed-data smoke flow; denial remains server-owned.                              |
+| SPA routing, loading and recovery                 | Playwright                            | Required on desktop and mobile.                                                        |
+| Internal Desk form scripts and attachment parsing | Playwright and server tests           | Playwright checks visible Desk wiring; server tests own parser and financial matrices. |
+| Legacy investor Desk navigation                   | Workspace/server tests and Playwright | Retained until retirement.                                                             |
 
-Current Cypress specs exercise Desk internals and internal mutations, including `cur_frm`, form triggers, PDF parsing and query-report objects. They are not replaced by investor Playwright tests. A Cypress spec is removed only when the Desk behaviour it owns is itself retired.
+Desk browser specs exercise focused form hooks and report interactions, including
+`cur_frm`, form triggers, PDF attachment responses and query-report controls.
+Desk and investor specs live under their own E2E domains, with separate
+Administrator and investor sessions. Test doubles stay on narrow API or
+clipboard boundaries where the user-visible client behavior needs deterministic
+data; real Frappe routes and the seeded `test_site` are used wherever practical.
 
 ### Playwright baseline
 
-- Root `playwright.config.ts` with an authentication setup project and ignored storage state.
-- Chromium desktop and Pixel 7 mobile projects.
+- Root `playwright.config.ts` with investor and Administrator authentication
+  setup projects and ignored, separate storage states.
+- Desk Chromium, investor Chromium, and investor Pixel 7 projects.
+- Domain-owned fixtures and helpers under `e2e/desk/` and `e2e/investor/`, with
+  plain `*.spec.ts` files beside each domain.
 - One worker initially for deterministic Frappe fixtures; add sharding only when runtime justifies it.
 - CI retries of two, trace on first retry, screenshot on failure and retained video on failure.
 - Real `test_site`, real investor permissions and real investor APIs. Mocking is limited to third-party boundaries that cannot be made deterministic locally.
@@ -249,7 +259,8 @@ Frontend unit testing is deferred until non-trivial client logic exists. Financi
 
 ### Phase 0 — Decision record and baseline
 
-Capture this specification, the progress tracker, current investor surfaces, current Cypress ownership and the verification commands.
+Capture this specification, the progress tracker, current investor surfaces,
+browser-test ownership, and the verification commands.
 
 Complete when both documents are linted and the progress tracker points to Phase 1 as the next slice.
 
@@ -262,9 +273,9 @@ Prove the smallest production-shaped stack:
 3. Frappe UI Vite production build into app assets and `www` entry.
 4. Same-origin session and CSRF request to a read-only ping/bootstrap endpoint.
 5. Playwright authentication setup plus one desktop and mobile shell test.
-6. A separate Playwright CI job and local verification mode; existing Cypress remains green.
+6. A Playwright CI job and local verification mode covering both E2E domains.
 
-Complete when the scaffold works on `test_site`, `bench build --app bond_management`, a fresh CI-shaped site, Playwright desktop/mobile and the existing full Cypress gate.
+Complete when the scaffold works on `test_site`, `bench build --app bond_management`, a fresh CI-shaped site, and the Playwright desktop/mobile and Desk projects.
 
 ### Phase 2 — Coexistence shell
 
@@ -294,25 +305,25 @@ Complete when filters and representative output match Desk on desktop and mobile
 
 Close the full surface matrix; test loading, empty, error, retry, stale-session and deep-link refresh behaviour; complete accessibility and responsive checks; verify investor responses contain no unapproved file metadata.
 
-Complete when all parity rows are accepted and all local/fresh-site server, Cypress and Playwright gates pass.
+Complete when all parity rows are accepted and all local/fresh-site server and Playwright gates pass.
 
 ### Phase 7 — Pilot
 
-Enable the site flag while retaining the legacy Apps screen route. Default investor login to the Vue route, collect defects and run both UI suites. Complete one full statement/reporting cycle with the pilot group.
+Enable the site flag while retaining the legacy Apps screen route. Default investor login to the Vue route, collect defects, and run the investor and Desk Playwright projects. Complete one full statement/reporting cycle with the pilot group.
 
 Complete with internal-team acceptance, pilot acceptance, no open high-severity defects and a recorded rollback rehearsal.
 
 ### Phase 8 — Cutover
 
-Change the Apps screen route to `/bond-investor`. Keep the old workspace reachable as a rollback path and keep all Desk/Cypress coverage.
+Change the Apps screen route to `/bond-investor`. Keep the old workspace reachable as a rollback path and keep all Desk Playwright coverage.
 
 Complete after production verification and an agreed observation period with no rollback condition triggered.
 
 ### Phase 9 — Legacy investor workspace retirement
 
-In a separate release, remove the investor workspace/sidebar and obsolete redirect code only after confirming no supported investor path depends on them. Internal Desk forms, reports and their Cypress coverage remain until a later internal-UI migration retires those behaviours.
+In a separate release, remove the investor workspace/sidebar and obsolete redirect code only after confirming no supported investor path depends on them. Retain internal Desk forms, reports, and their Playwright coverage until a later internal-UI migration retires those behaviours.
 
-Complete when migration tests, route tests, fresh installation, full server suite, Cypress and Playwright all pass and rollback no longer requires the old workspace.
+Complete when migration tests, route tests, fresh installation, full server suite, and Playwright all pass and rollback no longer requires the old workspace.
 
 ## Verification gates
 
@@ -322,12 +333,15 @@ Every implementation slice records the evidence required by `AGENTS.md`. At mini
 - the complete affected server module and full server suite for shared backend changes;
 - frontend lint/typecheck/build for frontend changes;
 - the focused Playwright spec, followed by the complete Playwright suite;
-- focused Cypress, followed by the complete Cypress suite, when Desk or shared runtime behaviour changes;
+- focused Playwright coverage, followed by the complete browser suite, when Desk
+  or shared runtime behavior changes;
 - `apps/bond_management/scripts/verify.sh pre-push`;
 - `apps/bond_management/scripts/verify.sh pre-push-ui` for UI, metadata, hooks or shared runtime changes;
 - fresh-site verification for dependencies, hooks, installation, build or CI changes.
 
-Phase 1 must extend the shared verification script so `pre-push-ui` means all active UI suites while allowing CI to run Cypress and Playwright in separate jobs without repeating the full server suite.
+The shared verification script keeps `pre-push-ui` as the complete local server,
+frontend, and browser gate. CI runs `pre-push` once in the server job and `ui` in
+one separate Playwright job against its own run-scoped fresh site.
 
 ## Rollback
 
@@ -344,5 +358,4 @@ Phase 1 must extend the shared verification script so `pre-push-ui` means all ac
 - [Frappe Wiki Playwright workflow](https://github.com/frappe/wiki/blob/develop/.github/workflows/ui-tests.yml)
 - [ERPNext v16 app-owned frontend package](https://github.com/frappe/erpnext/blob/version-16/package.json)
 - [ERPNext v16 banking package](https://github.com/frappe/erpnext/blob/version-16/banking/package.json)
-- [ERPNext Cypress UI tests](https://github.com/frappe/erpnext_ui_tests)
 - [Playwright documentation](https://playwright.dev/docs/intro)
