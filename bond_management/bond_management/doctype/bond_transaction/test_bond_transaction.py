@@ -1,6 +1,7 @@
 # Copyright (c) 2026, Deepak Patel and Contributors
 # See license.txt
 
+import hashlib
 from decimal import Decimal
 from pathlib import Path
 from unittest.mock import patch
@@ -25,6 +26,7 @@ from bond_management.bond_management.utils.portfolio import (
     get_position,
     get_position_for_payment,
 )
+from bond_management.bond_management.utils.private_attachment import standardize_private_pdf_attachment
 from bond_management.patches.backfill_transaction_amounts import (
     execute as backfill_transaction_amounts,
 )
@@ -37,6 +39,87 @@ from bond_management.patches.standardize_bond_transaction_attachment_names impor
 
 
 class TestBondTransaction(IntegrationTestCase):
+    def test_distinct_same_day_confirmation_pdfs_keep_separate_private_content(self):
+        bond = self._make_pdf_bond()
+        portfolio = make_portfolio()
+        transactions = []
+        contents = []
+        for quantity in ("5.000000", "7.000000"):
+            reference = self._numeric_reference("U")
+            attachment = self._attach_transaction_pdf(
+                self._confirmation_text(portfolio.account_no, reference, bond.name, quantity=quantity),
+                "test-password",
+            )
+            file_name = frappe.db.get_value("File", {"file_url": attachment}, "name")
+            contents.append(frappe.get_doc("File", file_name).get_content(encodings=()))
+            transaction = frappe.get_doc({"doctype": "Bond Transaction", "attachment": attachment}).insert()
+            transactions.append(transaction)
+
+        self.assertNotEqual(transactions[0].attachment, transactions[1].attachment)
+        self.assertNotEqual(contents[0], contents[1])
+        for transaction, content in zip(transactions, contents, strict=True):
+            with self.subTest(transaction=transaction.name):
+                transaction.reload()
+                file_name = frappe.db.get_value(
+                    "File",
+                    {
+                        "file_url": transaction.attachment,
+                        "attached_to_doctype": "Bond Transaction",
+                        "attached_to_name": transaction.name,
+                    },
+                    "name",
+                )
+                file_doc = frappe.get_doc("File", file_name)
+                self.assertTrue(file_doc.is_private)
+                self.assertEqual(file_doc.get_content(encodings=()), content)
+                canonical_url = transaction.attachment
+                transaction.save()
+                self.assertEqual(transaction.attachment, canonical_url)
+
+    def test_saving_legacy_canonical_pdf_reuses_existing_url(self):
+        bond = self._make_pdf_bond()
+        portfolio = make_portfolio()
+        reference = self._numeric_reference("U")
+        attachment = self._attach_transaction_pdf(
+            self._confirmation_text(portfolio.account_no, reference, bond.name),
+            "test-password",
+        )
+        transaction = make_transaction(
+            bond,
+            portfolio,
+            transaction_reference=reference,
+            trade_date="2025-12-30",
+            settlement_date="2025-12-31",
+        )
+        transaction.attachment = attachment
+        legacy_filename = f"Transaction-{portfolio.account_no}-20251231.pdf"
+        legacy_url = standardize_private_pdf_attachment(transaction, legacy_filename)
+        transaction.db_set("attachment", legacy_url, update_modified=False)
+
+        transaction.reload()
+        transaction.save()
+        self.assertEqual(transaction.attachment, legacy_url)
+        file_name = frappe.db.get_value("File", {"file_url": legacy_url}, "name")
+        file_doc = frappe.get_doc("File", file_name)
+        self.assertTrue(file_doc.is_private)
+        self.assertEqual(file_doc.file_name, legacy_filename)
+        legacy_content = file_doc.get_content(encodings=())
+
+        other_attachment = self._attach_transaction_pdf(
+            self._confirmation_text(
+                portfolio.account_no, self._numeric_reference("U"), bond.name, quantity="7.000000"
+            ),
+            "test-password",
+        )
+        other_transaction = frappe.get_doc(
+            {"doctype": "Bond Transaction", "attachment": other_attachment}
+        ).insert()
+        self.assertNotEqual(other_transaction.attachment, legacy_url)
+        self.assertEqual(file_doc.get_content(encodings=()), legacy_content)
+        transaction.reload()
+        transaction.save()
+        self.assertEqual(transaction.attachment, legacy_url)
+
     def test_read_transaction_pdf_rejects_complex_attachment_values(self):
         transaction = frappe.get_doc({"doctype": "Bond Transaction", "attachment": {}})
 
@@ -84,6 +167,7 @@ class TestBondTransaction(IntegrationTestCase):
             "test-password",
         )
 
+        expected_attachment = self._expected_pdf_attachment(attachment, portfolio)
         transaction = frappe.get_doc(
             {
                 "doctype": "Bond Transaction",
@@ -105,7 +189,7 @@ class TestBondTransaction(IntegrationTestCase):
         self.assertEqual(transaction.settlement_amount, 1051)
         self.assertEqual(
             transaction.attachment,
-            f"/private/files/Transaction-{portfolio.account_no}-20251231.pdf",
+            expected_attachment,
         )
 
         attachment_files = frappe.qb.get_query(
@@ -171,6 +255,7 @@ class TestBondTransaction(IntegrationTestCase):
             "test-password",
         )
 
+        expected_attachment = self._expected_pdf_attachment(attachment, portfolio)
         transaction = frappe.get_doc(
             {
                 "doctype": "Bond Transaction",
@@ -181,7 +266,7 @@ class TestBondTransaction(IntegrationTestCase):
         self.assertEqual(transaction.portfolio_name, portfolio.name)
         self.assertEqual(
             transaction.attachment,
-            f"/private/files/Transaction-{portfolio.account_no}-20251231.pdf",
+            expected_attachment,
         )
 
     def test_multi_transaction_pdf_creates_selected_documents_with_same_attachment(self):
@@ -200,6 +285,7 @@ class TestBondTransaction(IntegrationTestCase):
             ),
             "test-password",
         )
+        expected_attachment = self._expected_pdf_attachment(attachment, portfolio)
         staging = frappe.get_doc(
             {
                 "doctype": "Bond Transaction",
@@ -210,7 +296,6 @@ class TestBondTransaction(IntegrationTestCase):
         created = staging.create_selected_pdf_transactions(references)
 
         self.assertCountEqual(created, references)
-        expected_attachment = f"/private/files/Transaction-{portfolio.account_no}-20251231.pdf"
         quantities = {}
         for reference in references:
             transaction = frappe.get_doc("Bond Transaction", reference)
@@ -261,6 +346,7 @@ class TestBondTransaction(IntegrationTestCase):
             + self._confirmation_row_text(references[1], bond.name, quantity="7.000000"),
             "test-password",
         )
+        expected_attachment = self._expected_pdf_attachment(attachment, pdf_portfolio)
         staging = frappe.get_doc(
             {
                 "doctype": "Bond Transaction",
@@ -294,7 +380,6 @@ class TestBondTransaction(IntegrationTestCase):
         self.assertEqual(overridden.attachment_portfolio_override, 1)
         self.assertEqual(standard.portfolio_name, pdf_portfolio.name)
         self.assertEqual(standard.attachment_portfolio_override, 0)
-        expected_attachment = f"/private/files/Transaction-{pdf_portfolio.account_no}-20251231.pdf"
         self.assertEqual(overridden.attachment, expected_attachment)
         self.assertEqual(standard.attachment, expected_attachment)
 
@@ -315,6 +400,7 @@ class TestBondTransaction(IntegrationTestCase):
             ),
             "test-password",
         )
+        expected_attachment = self._expected_pdf_attachment(attachment, portfolio)
         transaction = make_transaction(
             bond,
             portfolio,
@@ -327,7 +413,6 @@ class TestBondTransaction(IntegrationTestCase):
         standardize_existing_transaction_attachments([transaction.name])
         transaction.reload()
 
-        expected_attachment = f"/private/files/Transaction-{portfolio.account_no}-20251231.pdf"
         self.assertEqual(transaction.attachment, expected_attachment)
         attachment_files = frappe.qb.get_query(
             "File",
@@ -765,6 +850,12 @@ class TestBondTransaction(IntegrationTestCase):
         ).insert()
         self.addCleanup(Path(file_doc.get_full_path()).unlink, missing_ok=True)
         return file_doc.file_url
+
+    def _expected_pdf_attachment(self, attachment, portfolio):
+        file_name = frappe.db.get_value("File", {"file_url": attachment}, "name")
+        content = frappe.get_doc("File", file_name).get_content(encodings=())
+        digest = hashlib.sha256(content).hexdigest()
+        return f"/private/files/Transaction-{portfolio.account_no}-20251231-{digest}.pdf"
 
     def _confirmation_text(
         self,
