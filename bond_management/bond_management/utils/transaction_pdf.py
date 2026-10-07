@@ -2,7 +2,7 @@ import hmac
 import re
 from dataclasses import dataclass, field
 from datetime import date, datetime
-from decimal import ROUND_HALF_EVEN, Decimal, InvalidOperation
+from decimal import ROUND_HALF_EVEN, Decimal
 from io import BytesIO
 
 import frappe
@@ -25,8 +25,16 @@ ISIN_PATTERN = r"[A-Z]{2}[A-Z0-9]{10}"
 NUMBER_PATTERN = r"[+-]?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?"
 ACCOUNT_PATTERN = re.compile(r"\bAccount\s+No\s*:\s*([A-Za-z0-9-]+)", re.IGNORECASE)
 TRANSACTION_BLOCK_PATTERN = re.compile(
-    r"\bBonds\s+Name\s*:"
-    r"(?P<body>[\s\S]*?\bTransaction\s+Reference\s*:\s*(?P<reference>[RU]\d+)\b)",
+    r"(?P<body>\bBonds\s+Name\s*:[\s\S]*?"
+    r"\bTransaction\s+Reference\s*:\s*(?P<reference>\S+))",
+    re.IGNORECASE,
+)
+
+FIELD_PATTERN = re.compile(
+    r"\b(?P<label>Bonds\s+Name|ISIN|Currency|Quantity(?:\s*/\s*Face\s+Value)?|"
+    r"Face\s+Value|Price|Principal|Trade\s+Date|Settlement\s+Date|"
+    r"Settlement\s+Amount(?:\s+in\s+Currency)?|Accrued\s+Interest|"
+    r"Commission(?:\s*%|\s+Amount)?|Transaction\s+Reference)\s*:",
     re.IGNORECASE,
 )
 
@@ -123,43 +131,26 @@ def parse_transaction_pdf_text(text: str) -> ParsedTransactionPdf:
     rows_by_reference = {}
     for match in TRANSACTION_BLOCK_PATTERN.finditer(text or ""):
         reference = match.group("reference").upper()
-        body = match.group("body")
-        settlement_date = _required_date(body, "Settlement Date")
-        trade_date = _optional_date(body, "Trade Date") or settlement_date
-        commission_percent, commission_amount = _parse_commission(body)
+        if not re.fullmatch(r"[RU]\d+", reference):
+            raise TransactionPdfError("The transaction PDF contains an invalid Transaction Reference.")
+        fields = _parse_row_fields(match.group("body"))
+        settlement_date = _required_date(fields, "Settlement Date")
+        trade_date = _optional_date(fields, "Trade Date") or settlement_date
+        commission_percent, commission_amount = _parse_commission(fields)
+        quantity_label = "Quantity / Face Value" if "Quantity / Face Value" in fields else "Quantity"
         row = ParsedTransactionPdfRow(
             transaction_reference=reference,
             transaction_type="Sale" if reference.startswith("R") else "Purchase",
-            isin=_required_match(body, rf"\b(?P<value>{ISIN_PATTERN})\b", "ISIN").upper(),
+            isin=_parse_isin(fields),
             trade_date=trade_date,
             settlement_date=settlement_date,
-            quantity_face_value=_required_decimal(
-                body,
-                rf"\bQuantity(?:\s*/\s*Face\s+Value)?\s*:\s*(?P<value>{NUMBER_PATTERN})",
-                "Quantity / Face Value",
-            ),
-            price=_required_decimal(
-                body,
-                rf"\bPrice\s*:\s*(?P<value>{NUMBER_PATTERN})",
-                "Price",
-            ),
-            accrued_interest_paid=_required_decimal(
-                body,
-                rf"\bAccrued\s+Interest\s*:\s*(?P<value>{NUMBER_PATTERN})",
-                "Accrued Interest",
-            ),
+            quantity_face_value=_required_decimal(fields, quantity_label),
+            price=_required_decimal(fields, "Price"),
+            accrued_interest_paid=_required_decimal(fields, "Accrued Interest"),
             commission_percent=commission_percent,
             commission_amount=commission_amount,
-            principal=_optional_decimal(
-                body,
-                rf"\bPrincipal\s*:\s*(?P<value>{NUMBER_PATTERN})",
-                "Principal",
-            ),
-            settlement_amount=_optional_decimal(
-                body,
-                rf"\bSettlement\s+Amount(?:\s+in\s+Currency)?\s*:\s*(?P<value>{NUMBER_PATTERN})",
-                "Settlement Amount",
-            ),
+            principal=_optional_decimal(fields, "Principal"),
+            settlement_amount=_optional_decimal(fields, "Settlement Amount"),
         )
         _validate_transaction_row_values(row)
         existing = rows_by_reference.get(reference)
@@ -464,79 +455,115 @@ def _resolve_portfolio(
     return portfolio
 
 
-def _required_match(text: str, pattern: str, label: str) -> str:
-    match = re.search(pattern, text, re.IGNORECASE)
-    if not match:
+def _parse_row_fields(text: str) -> dict[str, str]:
+    matches = list(FIELD_PATTERN.finditer(text))
+    fields = {}
+    for index, match in enumerate(matches):
+        label = " ".join(match.group("label").split()).title()
+        label = re.sub(r"\s*/\s*", " / ", label)
+        label = re.sub(r"\s*%", " %", label)
+        label = label.removesuffix(" In Currency")
+        end = matches[index + 1].start() if index + 1 < len(matches) else len(text)
+        value = text[match.end() : end].strip()
+        if label in fields and fields[label] != value:
+            raise TransactionPdfError(f"The transaction PDF contains conflicting {label} values.")
+        fields[label] = value
+    return fields
+
+
+def _parse_isin(fields: dict[str, str]) -> str:
+    name_isins = set(re.findall(rf"\b{ISIN_PATTERN}\b", fields.get("Bonds Name", ""), re.IGNORECASE))
+    isins = {value.upper() for value in name_isins}
+    if "Isin" in fields:
+        value = fields["Isin"].upper()
+        if not re.fullmatch(ISIN_PATTERN, value):
+            raise TransactionPdfError("The transaction PDF contains an invalid ISIN.")
+        isins.add(value)
+    if not isins:
+        raise TransactionPdfError("Could not find ISIN in a transaction PDF row.")
+    if len(isins) > 1:
+        raise TransactionPdfError("The transaction PDF contains conflicting ISIN values.")
+    return isins.pop()
+
+
+def _required_value(fields: dict[str, str], label: str) -> str:
+    if label not in fields:
         raise TransactionPdfError(f"Could not find {label} in a transaction PDF row.")
-    return match.group("value")
+    return fields[label]
 
 
-def _required_decimal(text: str, pattern: str, label: str) -> Decimal:
-    value = _required_match(text, pattern, label)
-    try:
-        parsed = Decimal(value.replace(",", ""))
-    except InvalidOperation as error:
-        raise TransactionPdfError(f"The transaction PDF contains an invalid {label}: {value}.") from error
-    if not parsed.is_finite():
-        raise TransactionPdfError(f"The transaction PDF contains a non-finite {label}.")
-    return parsed
+def _parse_decimal(value: str, label: str) -> Decimal:
+    if not re.fullmatch(NUMBER_PATTERN, value):
+        raise TransactionPdfError(f"The transaction PDF contains an invalid {label}: {value}.")
+    return Decimal(value.replace(",", ""))
 
 
-def _optional_decimal(text: str, pattern: str, label: str) -> Decimal | None:
-    if not re.search(pattern, text, re.IGNORECASE):
-        return None
-    return _required_decimal(text, pattern, label)
+def _required_decimal(fields: dict[str, str], label: str) -> Decimal:
+    return _parse_decimal(_required_value(fields, label), label)
 
 
-def _required_date(text: str, label: str) -> date:
-    value = _required_match(
-        text,
-        rf"\b{re.escape(label)}\s*:\s*(?P<value>\d{{2}}/\d{{2}}/\d{{4}})",
-        label,
-    )
-    return _parse_date(value, label)
+def _optional_decimal(fields: dict[str, str], label: str) -> Decimal | None:
+    return _required_decimal(fields, label) if label in fields else None
 
 
-def _optional_date(text: str, label: str) -> date | None:
-    match = re.search(
-        rf"\b{re.escape(label)}\s*:\s*(?P<value>\d{{2}}/\d{{2}}/\d{{4}})",
-        text,
-        re.IGNORECASE,
-    )
-    return _parse_date(match.group("value"), label) if match else None
+def _required_date(fields: dict[str, str], label: str) -> date:
+    return _parse_date(_required_value(fields, label), label)
+
+
+def _optional_date(fields: dict[str, str], label: str) -> date | None:
+    return _required_date(fields, label) if label in fields else None
 
 
 def _parse_date(value: str, label: str) -> date:
     try:
+        if not re.fullmatch(r"\d{2}/\d{2}/\d{4}", value):
+            raise ValueError("Invalid date format")
         return datetime.strptime(value, "%d/%m/%Y").date()
     except ValueError as error:
         raise TransactionPdfError(f"The transaction PDF contains an invalid {label}: {value}.") from error
 
 
-def _parse_commission(text: str) -> tuple[Decimal | None, Decimal | None]:
-    percent_match = re.search(
-        rf"\bCommission\s*%\s*:\s*(?P<value>N/?A|{NUMBER_PATTERN})\s*%?",
-        text,
-        re.IGNORECASE,
-    )
-    if percent_match:
-        value = percent_match.group("value")
-        return (
-            Decimal("0") if re.fullmatch(r"N/?A", value, re.IGNORECASE) else Decimal(value.replace(",", "")),
-            None,
-        )
-
-    amount_match = re.search(
-        rf"\bCommission(?:\s+Amount)?\s*:\s*(?P<value>{NUMBER_PATTERN})",
-        text,
-        re.IGNORECASE,
-    )
-    if amount_match:
-        return None, Decimal(amount_match.group("value").replace(",", ""))
-
-    if re.search(r"\bCommission(?:\s*%|\s+Amount)?\s*:", text, re.IGNORECASE):
+def _parse_commission(fields: dict[str, str]) -> tuple[Decimal | None, Decimal | None]:
+    percent = None
+    amount = None
+    if "Commission %" in fields:
+        value = fields["Commission %"]
+        if value == "%":
+            raise TransactionPdfError("The transaction PDF contains an invalid Commission %.")
+        value = value.removesuffix("%").strip()
+        if value:
+            percent = (
+                Decimal("0")
+                if re.fullmatch(r"N/?A", value, re.IGNORECASE)
+                else _parse_decimal(value, "Commission %")
+            )
+    for label in ("Commission Amount", "Commission"):
+        if label in fields:
+            value = fields[label]
+            parsed_amount = (
+                Decimal("0")
+                if not value or re.fullmatch(r"N/?A", value, re.IGNORECASE)
+                else _parse_decimal(value, label)
+            )
+            if parsed_amount < 0:
+                raise TransactionPdfError("Commission Amount must be zero or greater.")
+            if amount is not None and amount != parsed_amount:
+                raise TransactionPdfError(
+                    "The transaction PDF contains conflicting Commission Amount values."
+                )
+            amount = parsed_amount
+    if percent is not None:
+        # A valid percentage is the primary source; amount labels still must be valid.
+        return percent, None
+    if amount is not None:
+        if all(
+            not fields.get(label) or re.fullmatch(r"N/?A", fields[label], re.IGNORECASE)
+            for label in ("Commission Amount", "Commission")
+        ):
+            return Decimal("0"), None
+        return None, amount
+    if "Commission %" in fields:
         return Decimal("0"), None
-
     raise TransactionPdfError("Could not find Commission in a transaction PDF row.")
 
 
