@@ -106,6 +106,7 @@ run_semgrep() {
     cd "${APP_ROOT}"
     echo "Running blocking Frappe Semgrep rules (ERROR severity)."
     "${binary}" scan \
+        --error \
         --metrics=off \
         --disable-version-check \
         --config "${rules_dir}/rules" \
@@ -131,6 +132,7 @@ run_semgrep() {
 
     echo "Running blocking Bond Management Semgrep rules."
     "${binary}" scan \
+        --error \
         --metrics=off \
         --disable-version-check \
         --config "${APP_SEMGREP_RULES_FILE}" \
@@ -150,6 +152,9 @@ run_lint() {
     cd "${APP_ROOT}"
     run_pre_commit
     run_semgrep
+    python3 "${APP_ROOT}/scripts/test_verify_semgrep.py" \
+        --semgrep "$(semgrep_binary)" \
+        --frappe-rules "$(frappe_semgrep_rules_dir)"
 }
 
 run_server_tests() {
@@ -194,6 +199,10 @@ run_playwright_tests() {
     local base_url="${BASE_URL:-${PLAYWRIGHT_BASE_URL:-http://localhost:8000}}"
     BASE_URL="${base_url}" yarn test:e2e
 }
+
+if [[ "${BASH_SOURCE[0]}" != "$0" ]]; then
+    return
+fi
 
 case "${MODE}" in
     lint)
