@@ -74,6 +74,26 @@ class TestInvestorMarketDates(IntegrationTestCase):
         self.assertNotIn("parent", str(response))
         self.assertNotIn("modified", str(response))
 
+    def test_detail_rejects_children_outside_bond_user_permissions(self):
+        readable = make_bond()
+        restricted = make_bond()
+        market_date = make_market_date(readable)
+        make_market_date(restricted, market_date=market_date)
+        investor = self._make_user([INVESTOR_ROLE])
+        frappe.get_doc(
+            {
+                "doctype": "User Permission",
+                "user": investor,
+                "allow": "Bond Master",
+                "for_value": readable.name,
+                "apply_to_all_doctypes": 1,
+            }
+        ).insert(ignore_permissions=True)
+
+        with self._as_user(investor):
+            with self.assertRaises(frappe.PermissionError):
+                get_market_date(market_date.name)
+
     def test_unreadable_and_unknown_detail_have_same_failure(self):
         readable = make_market_date(make_bond())
         unreadable = make_market_date(make_bond())
