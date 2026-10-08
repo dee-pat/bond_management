@@ -31,19 +31,22 @@ class SemgrepGateTests(unittest.TestCase):
     def test_frappe_error_blocks_before_advisory_and_app_scans(self):
         result = self.scan("value = eval(user_input)\n")
         self.assertEqual(result.returncode, 1, result.stdout)
-        self.assertIn("frappe-codeinjection-eval", result.stdout)
+        self.assertIn("frappe-codeinjection-eval", "".join(result.stdout.split()))
         self.assertNotIn("Running advisory Frappe Semgrep rules.", result.stdout)
 
     def test_app_error_blocks_before_rule_tests(self):
         result = self.scan("import frappe\nfrappe.db.commit()\n")
         self.assertEqual(result.returncode, 1, result.stdout)
-        self.assertIn("Do not manually commit or roll back a Frappe request transaction.", result.stdout)
+        self.assertIn(
+            "bond-management-no-manual-transaction-boundary",
+            "".join(result.stdout.split()),
+        )
         self.assertNotIn("Running Bond Management Semgrep rule tests.", result.stdout)
 
     def test_advisory_warning_does_not_block(self):
         result = self.scan('import frappe\nfrappe.db.sql(f"SELECT {user_input}")\n')
         self.assertEqual(result.returncode, 0, result.stdout)
-        self.assertIn("frappe-sql-format-injection", result.stdout)
+        self.assertIn("frappe-sql-format-injection", "".join(result.stdout.split()))
         self.assertIn("Running Bond Management Semgrep rule tests.", result.stdout)
 
     def scan(self, source):
