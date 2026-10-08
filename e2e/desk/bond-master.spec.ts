@@ -132,8 +132,14 @@ test("ignores an old KES response during a pending USD currency update", async (
       browserWindow.releaseQuantityUpdate = releaseQuantityUpdate;
 
       const originalSetValue = form.set_value.bind(form);
+      let hasHeldUsdQuantityUpdate = false;
       form.set_value = (...args) => {
-        if (args[0] === "quantity_change" && form.doc.currency === "USD") {
+        if (
+          !hasHeldUsdQuantityUpdate &&
+          args[0] === "quantity_change" &&
+          form.doc.currency === "USD"
+        ) {
+          hasHeldUsdQuantityUpdate = true;
           const valueUpdate = originalSetValue(...args);
           browserWindow.quantityUpdateStarted = true;
           return Promise.resolve(valueUpdate).then(() => quantityUpdateHold);
