@@ -57,6 +57,19 @@ class TestInvestorExchangeRates(IntegrationTestCase):
 
         self.assertIn(exchange_rate.name, {row.name for row in response["data"]})
 
+    def test_generic_list_keeps_rows_without_statement_provenance(self):
+        exchange_rate = make_exchange_rate()
+        investor = self._make_user([INVESTOR_ROLE])
+
+        with self._as_user(investor):
+            rows = get_list(
+                "Bond Exchange Rate",
+                fields=["name"],
+                filters={"name": exchange_rate.name},
+            )
+
+        self.assertEqual(rows, [{"name": exchange_rate.name}])
+
     def test_list_has_exact_visible_projection(self):
         exchange_rate = make_exchange_rate()
         investor = self._make_user([INVESTOR_ROLE])
@@ -108,9 +121,22 @@ class TestInvestorExchangeRates(IntegrationTestCase):
         self._assign_user_permission(investor, "Bond Portfolio", assigned_portfolio.name)
 
         with self._as_user(investor):
+            listed = get_exchange_rates()
             response = get_exchange_rate(exchange_rate.name)
-            self._assert_generic_apis_hide_statement(exchange_rate.name)
+            self._assert_generic_apis_hide_statement(exchange_rate.name, list_visible=False)
+            try:
+                rows = get_list(
+                    "Bond Exchange Rate",
+                    fields=["name"],
+                    filters={"statement": exchange_rate.statement},
+                )
+            except frappe.PermissionError:
+                # Frappe versions that reject high-permlevel filters stop the
+                # probe before the app's row condition needs to apply.
+                rows = None
+            self.assertIn(rows, (None, []))
 
+        self.assertIn(exchange_rate.name, {row.name for row in listed["data"]})
         detail = response["exchange_rate"]
         self.assertEqual(detail.source, "Statement PDF")
         self.assertIsNone(detail.statement)
@@ -123,6 +149,9 @@ class TestInvestorExchangeRates(IntegrationTestCase):
             with self.subTest(roles=roles), self._as_user(manager):
                 for api, response in self._generic_api_responses(exchange_rate.name).items():
                     with self.subTest(api=api):
+                        if api == "frappe.client.get_list":
+                            self.assertEqual(len(response), 1)
+                            response = response[0]
                         self.assertEqual(response["statement"], exchange_rate.statement)
 
     def test_unreadable_and_unknown_detail_have_same_failure(self):
@@ -205,13 +234,18 @@ class TestInvestorExchangeRates(IntegrationTestCase):
         self.assertLess(names.index(older.name), names.index(newer.name))
         self.assertEqual({row.name for row in filtered["data"]}, {older.name, newer.name})
 
-    def _assert_generic_apis_hide_statement(self, name):
+    def _assert_generic_apis_hide_statement(self, name, *, list_visible=True):
         for api, response in self._generic_api_responses(name).items():
             with self.subTest(api=api):
+                if api == "frappe.client.get_list":
+                    if not list_visible:
+                        self.assertEqual(response, [])
+                        continue
+                    self.assertEqual(len(response), 1)
+                    response = response[0]
+                    self.assertNotIn("statement", response)
                 self.assertEqual(response["name"], name)
                 self.assertIsNone(response.get("statement"))
-                if api == "frappe.client.get_list":
-                    self.assertNotIn("statement", response)
 
     @staticmethod
     def _generic_api_responses(name):
@@ -223,7 +257,7 @@ class TestInvestorExchangeRates(IntegrationTestCase):
                 "Bond Exchange Rate",
                 fields=["name", "statement"],
                 filters={"name": name},
-            )[0],
+            ),
             "frappe.api.v1.read_doc": rest_document,
         }
 

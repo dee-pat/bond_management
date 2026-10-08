@@ -100,8 +100,12 @@ projections.
 - The canonical `statement` link is a deterministic display projection only,
   not an ownership link. A manual canonical row is retained as fallback data
   when its last statement source is removed. The link is private at permission
-  level 1 in generic document/list APIs, readable by managers. Investor detail
-  first authorizes the shared exchange-rate row, then returns the representative
+  level 1 in generic document/list APIs, readable by managers. A permission-query
+  condition also hides rows whose representative statement is unreadable, so a
+  generic list path that accepts protected-field filters cannot use statement
+  names as row-existence probes. Fixed
+  investor and performance projections retain shared rate history without
+  selecting the private link. Investor detail returns the representative
   reference only when the investor can read the linked statement.
 - Portfolio performance combines all core financial data and exposes actual
   past/future cash-flow availability independently of XIRR solver success.

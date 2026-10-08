@@ -75,6 +75,12 @@ class TestInvestorPermissions(IntegrationTestCase):
         finally:
             frappe.set_user(previous_user)
 
+    def test_exchange_rate_query_condition_is_registered(self):
+        self.assertEqual(
+            app_hooks.permission_query_conditions["Bond Exchange Rate"],
+            "bond_management.bond_management.utils.investor_permissions.exchange_rate_query_condition",
+        )
+
     def test_read_only_permission_patch_is_idempotent_and_clears_mutating_access(self):
         ensure_investor_access()
         ensure_investor_access()
@@ -103,6 +109,25 @@ class TestInvestorPermissions(IntegrationTestCase):
             get_query.return_value.run.return_value = []
 
             self.assertEqual(investor_permissions.transaction_query_condition("investor@example.com"), "1=0")
+
+    def test_exchange_rate_query_condition_hides_unreadable_statement_links(self):
+        statement_condition = "`tabBond Statement`.`portfolio_name` in ('Assigned')"
+        with patch.object(
+            investor_permissions,
+            "statement_query_condition",
+            return_value=statement_condition,
+        ):
+            condition = investor_permissions.exchange_rate_query_condition("investor@example.com")
+            self.assertIn("`tabBond Exchange Rate`.`statement` is null", condition)
+            self.assertIn("select `tabBond Statement`.`name`", condition)
+            self.assertIn(statement_condition, condition)
+
+            with investor_permissions.include_shared_exchange_rates_in_safe_projection():
+                self.assertIsNone(investor_permissions.exchange_rate_query_condition("investor@example.com"))
+            self.assertIn(
+                statement_condition,
+                investor_permissions.exchange_rate_query_condition("investor@example.com"),
+            )
 
     def test_investor_query_is_restricted_to_assigned_portfolios(self):
         with (
