@@ -407,6 +407,7 @@ def get_statement(name: str) -> dict:
 
     statement = rows[0]
     document = frappe.get_doc("Bond Statement", name)
+    document.check_permission("read")
     statement["bond_statement_details"] = [
         {field: row.get(field) for field in STATEMENT_HOLDING_FIELDS}
         for row in document.bond_statement_details
@@ -575,6 +576,7 @@ def get_market_date(name: str) -> dict:
 
     market_date = rows[0]
     document = frappe.get_doc("Bond Market Date", name)
+    document.check_permission("read")
     market_date["bond_market_prices"] = [
         {field: row.get(field) for field in MARKET_PRICE_FIELDS} for row in document.bond_market_prices
     ]
