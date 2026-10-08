@@ -28,12 +28,25 @@ def redirect_investor_to_workspace(login_manager) -> None:
     frappe.local.response.pop("redirect_to", None)
 
 
+def is_investor_user(user: str, *, for_update: bool = False) -> bool:
+    if not user or user in {"Administrator", "Guest"}:
+        return False
+    # This administrative role lookup owns the investor authorization boundary.
+    # User role caches can be repopulated before a concurrent role save commits.
+    return bool(
+        frappe.qb.get_query(
+            "Has Role",
+            fields=["name"],
+            filters={"parenttype": "User", "parent": user, "role": INVESTOR_ROLE},
+            ignore_permissions=True,
+            for_update=for_update,
+        ).run(pluck=True)
+    )
+
+
 def _get_allowed_portfolios(user: str) -> list[str] | None:
     """Return assigned portfolios, or None when the user is not an investor."""
-    if user == "Administrator":
-        return None
-
-    if INVESTOR_ROLE not in frappe.get_roles(user):
+    if not is_investor_user(user):
         return None
 
     # User Permission is the administrative boundary for investor portfolios.

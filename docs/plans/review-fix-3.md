@@ -1,0 +1,85 @@
+# Review fix 3: strict investor sharing boundary
+
+Investors remain read-only and may read only assigned portfolios, including
+when another role or a Frappe DocShare grants broader rights. Administrator and
+users without the investor role retain the standard permission model.
+
+## Implementation and compatibility
+
+Frappe applies its share fallback after permission hooks and includes shares in
+list queries. Supported document mixins enforce direct-document permissions;
+financial mutation hooks independently reject investor actors. Always-run
+DocShare hooks reject incompatible recipients and investor actors, including
+combined investor/manager roles and supported server callers using internal
+validation flags. HTTP dispatch strips those flags; no remote flag-injection
+exploit is claimed.
+
+Portfolio data cannot be shared with everyone. Global app documents may have
+read shares, but investor/everyone recipients cannot receive mutating rights.
+The registered cleanup patch and after-install hook remove inaccessible app
+shares, downgrade compatible shares to read-only, and preserve manager and
+other-app shares. Orphans use the supported delete API without target comments.
+Narrow repairs invalidate cached DocShare objects.
+
+Share saves lock the target first, then the actor and recipients in sorted
+User-primary-key order. Role and assignment changes lock recipients before
+mutation; their cleanup does not acquire target locks in the opposite order.
+Current locking reads and persisted Has Role lookups prevent stale snapshots
+or caches from restoring authorization. Assignment-recipient changes clear
+both permission caches. A supported whitelist override preserves core bulk
+clear-user-permissions validation, System Manager access and deleted-row count,
+and repairs shares within the same request transaction.
+
+Hooks never commit or roll back. Frappe rolls conflicts back; callers may retry
+in a fresh request, where authorization is checked again. Administrative direct
+DB writes must invoke invariant cleanup. No schema or response contract changes.
+The domain graph was reviewed and the bulk-clear service flow documented.
+
+## Verification evidence
+
+- Risk classification: permission/lifecycle boundary and registered legacy repair.
+- Required gates: targeted and complete permission/share modules, full server,
+  pre-push-ui, fresh install, registered migration/reruns and concurrency.
+- Commands executed: `bench --site test_site run-tests --app bond_management
+  --module bond_management.bond_management.utils.test_investor_shares` and the
+  corresponding `utils.test_investor_permissions` command;
+  `scripts/verify.sh pre-push-ui`; `scripts/verify.sh pre-push`.
+- Exit statuses: both modules and completed gates exited 0.
+- Tests passed: 23 share tests, 16 permission tests, 346 full-suite server tests
+  and 49 browser tests. Final current-tree `pre-push-ui` exited 0 again on 8 October.
+- Fresh commands: new-site and install-app in an independent temporary bench;
+  fresh-index assertions before migrate; representative legacy PDFs, schedules,
+  FX data and incompatible shares; ordinary migrate running every registered
+  patch; business/share assertions; forced full patch re-execution; normal
+  skipped rerun. Completed checks exited 0. Unassigned shares were deleted and
+  global shares retained as read-only. Migration helpers belong to the separate
+  cleanup slice and ran only in the opted-in temporary database.
+- Concurrent commands: separate `bench execute` calls to
+  `bond_management.bond_management.tests.investor_share_concurrency.seed` and
+  `.run`, with the exact disposable bench and observer login supplied privately
+  through environment variables. Both exited 0. Actual User-primary-lock waits
+  were observed. Assignment revocation denied the grant; role addition caused a
+  framework conflict, then a fresh caller retry was denied. Both left zero
+  conflicting shares. The opt-in test harness has narrow Semgrep transaction
+  annotations and cannot run against the canonical bench.
+- Preparation failures: one removal fixture needed permission-bypass flags to
+  reach the app hook; Ruff reformatted a line; temporary migration fixtures
+  needed File.update's dict argument, File.reload and the nine-place stored
+  years value. Concurrency observation now handles MariaDB optimizer waits
+  omitted from lock views using InnoDB's transaction/primary-lock evidence;
+  its conflict path explicitly asserts fresh retry denial.
+- Tests not run: Linux CI has not been executed locally.
+- Blockers: none in the completed focused, UI, fresh, migration and race checks.
+- Local/CI differences: macOS/MariaDB 12.3.2/socket administrator versus Linux
+  CI. Independent fresh sites reuse the existing source/Python environment via
+  symlinks. Initial install logged a nonfatal icon warning before asset links
+  were configured. No existing site was recreated, restored or dropped.
+- Local evidence: the earlier focused/fresh checks were observed on 7 October;
+  their temporary logs were cleared during interruption. On 8 October,
+  `fix3-final.log` records the repeated full UI gate, and
+  `fix3-oct8-fresh.log` records a new disposable install, all 26 registered
+  patches on legacy shares, forced and skipped reruns, index assertions, and
+  both observed concurrency races. Persistent logs are kept outside the repo.
+  Bootstrap recovery needed `config/pids`; the external check harness needed
+  the sites working directory and direct module import. These failures were
+  corrected; completed checks exited 0.

@@ -83,7 +83,14 @@ flowchart LR
 ```
 
 Desk owns financial writes. The investor app reads fixed, permission-scoped API
-projections.
+projections. Investor role decisions read persisted role assignments rather
+than cached role lists. Frappe DocShare grants cannot expand investor portfolio
+scope or grant financial mutations: shares are validated against recipient
+assignments, and role/assignment changes repair incompatible shares in the same
+request transaction. The app overrides Frappe's bulk User Permission clear
+endpoint to retain its System Manager check and repair shares after the bulk
+delete, which bypasses ordinary document events. The repair patch also runs on
+fresh installation.
 
 ## Important behavior
 

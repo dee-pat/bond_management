@@ -103,6 +103,7 @@ after_install = [
     "bond_management.patches.add_bond_management_report_permission.execute",
     "bond_management.patches.add_bond_exchange_rate_permissions.execute",
     "bond_management.patches.add_bond_exchange_rate_provenance.execute",
+    "bond_management.patches.enforce_investor_share_boundary.execute",
 ]
 
 # Frappe schema sync removes manual indexes when the DocField cannot declare
@@ -169,13 +170,55 @@ has_permission = {
 # ---------------
 # Hook on document methods and events
 
-# doc_events = {
-#     "*": {
-#         "on_update": "method",
-#         "on_cancel": "method",
-#         "on_trash": "method"
-#     }
-# }
+_investor_shares = "bond_management.bond_management.utils.investor_shares"
+_financial_doctypes = (
+    "Bond Portfolio",
+    "Bond Transaction",
+    "Bond Statement",
+    "Bond Master",
+    "Bond Market Date",
+    "Bond Exchange Rate",
+)
+extend_doctype_class = {
+    doctype: [f"{_investor_shares}.InvestorBoundaryMixin"] for doctype in _financial_doctypes
+}
+doc_events = {
+    doctype: {
+        "validate_share": f"{_investor_shares}.validate_share",
+        "before_insert": f"{_investor_shares}.reject_investor_mutation",
+        "before_validate": f"{_investor_shares}.reject_investor_mutation",
+        "before_cancel": f"{_investor_shares}.reject_investor_mutation",
+        "on_trash": f"{_investor_shares}.reject_investor_mutation",
+        "on_update": f"{_investor_shares}.cleanup_document_shares",
+    }
+    for doctype in _financial_doctypes
+}
+doc_events.update(
+    {
+        "User": {
+            "before_validate": f"{_investor_shares}.lock_user_authorization",
+            "on_update": f"{_investor_shares}.cleanup_user_shares",
+        },
+        "DocShare": {
+            "before_insert": f"{_investor_shares}.lock_share_authorization",
+            "before_validate": f"{_investor_shares}.lock_share_authorization",
+            "on_trash": f"{_investor_shares}.reject_investor_share_mutation",
+        },
+        "User Permission": {
+            "before_insert": f"{_investor_shares}.lock_assignment_authorization",
+            "before_validate": f"{_investor_shares}.lock_assignment_authorization",
+            "on_trash": f"{_investor_shares}.lock_assignment_authorization",
+            "on_update": f"{_investor_shares}.cleanup_assignment_shares",
+            "after_delete": f"{_investor_shares}.cleanup_assignment_shares",
+        },
+    }
+)
+
+override_whitelisted_methods = {
+    "frappe.core.doctype.user_permission.user_permission.clear_user_permissions": (
+        f"{_investor_shares}.clear_user_permissions"
+    ),
+}
 
 # Scheduled Tasks
 # ---------------

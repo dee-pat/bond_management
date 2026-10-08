@@ -97,7 +97,7 @@ class TestInvestorPermissions(IntegrationTestCase):
 
     def test_investor_without_an_assigned_portfolio_is_denied(self):
         with (
-            patch.object(frappe, "get_roles", return_value=[investor_permissions.INVESTOR_ROLE]),
+            patch.object(investor_permissions, "is_investor_user", return_value=True),
             patch.object(investor_permissions.frappe.qb, "get_query") as get_query,
         ):
             get_query.return_value.run.return_value = []
@@ -106,7 +106,7 @@ class TestInvestorPermissions(IntegrationTestCase):
 
     def test_investor_query_is_restricted_to_assigned_portfolios(self):
         with (
-            patch.object(frappe, "get_roles", return_value=[investor_permissions.INVESTOR_ROLE]),
+            patch.object(investor_permissions, "is_investor_user", return_value=True),
             patch.object(investor_permissions.frappe.qb, "get_query") as get_query,
             patch.object(investor_permissions.frappe.db, "escape", side_effect=lambda value: f"'{value}'"),
         ):
@@ -118,7 +118,7 @@ class TestInvestorPermissions(IntegrationTestCase):
             )
 
     def test_non_investor_uses_the_standard_permission_model(self):
-        with patch.object(frappe, "get_roles", return_value=[]):
+        with patch.object(investor_permissions, "is_investor_user", return_value=False):
             self.assertIsNone(investor_permissions.portfolio_query_condition("manager@example.com"))
             self.assertTrue(
                 investor_permissions.has_portfolio_permission(
