@@ -646,7 +646,7 @@ def get_exchange_rate(name: str) -> dict:
 
     rows = frappe.qb.get_query(
         "Bond Exchange Rate",
-        fields=list(EXCHANGE_RATE_DETAIL_FIELDS),
+        fields=[field for field in EXCHANGE_RATE_DETAIL_FIELDS if field != "statement"],
         filters={"name": name},
         limit=1,
         ignore_permissions=False,
@@ -655,7 +655,10 @@ def get_exchange_rate(name: str) -> dict:
         frappe.throw(_("You are not permitted to read this exchange rate."), frappe.PermissionError)
 
     exchange_rate = rows[0]
-    exchange_rate.statement = _visible_statement_reference(exchange_rate.statement)
+    # The row is authorized above. Read private provenance only to apply the
+    # linked statement's read boundary before returning this fixed projection.
+    statement = frappe.db.get_value("Bond Exchange Rate", name, "statement")
+    exchange_rate.statement = _visible_statement_reference(statement)
     return set_investor_api_data({"exchange_rate": exchange_rate})
 
 

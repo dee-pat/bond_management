@@ -3,6 +3,9 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 import frappe
+from frappe.api.v1 import read_doc
+from frappe.client import get as get_document
+from frappe.client import get_list
 from frappe.exceptions import FrappeTypeError
 from frappe.tests import IntegrationTestCase
 
@@ -91,6 +94,7 @@ class TestInvestorExchangeRates(IntegrationTestCase):
 
         with self._as_user(investor):
             response = get_exchange_rate(exchange_rate.name)
+            self._assert_generic_apis_hide_statement(exchange_rate.name)
 
         detail = response["exchange_rate"]
         self.assertEqual(detail.source, "Statement PDF")
@@ -105,10 +109,21 @@ class TestInvestorExchangeRates(IntegrationTestCase):
 
         with self._as_user(investor):
             response = get_exchange_rate(exchange_rate.name)
+            self._assert_generic_apis_hide_statement(exchange_rate.name)
 
         detail = response["exchange_rate"]
         self.assertEqual(detail.source, "Statement PDF")
         self.assertIsNone(detail.statement)
+
+    def test_generic_apis_keep_manager_statement_provenance(self):
+        exchange_rate = self._make_statement_exchange_rate(make_portfolio())
+
+        for roles in ([BOND_MANAGER_ROLE], ["System Manager"]):
+            manager = self._make_user(roles)
+            with self.subTest(roles=roles), self._as_user(manager):
+                for api, response in self._generic_api_responses(exchange_rate.name).items():
+                    with self.subTest(api=api):
+                        self.assertEqual(response["statement"], exchange_rate.statement)
 
     def test_unreadable_and_unknown_detail_have_same_failure(self):
         readable = make_exchange_rate()
@@ -189,6 +204,28 @@ class TestInvestorExchangeRates(IntegrationTestCase):
         names = [row.name for row in ascending["data"]]
         self.assertLess(names.index(older.name), names.index(newer.name))
         self.assertEqual({row.name for row in filtered["data"]}, {older.name, newer.name})
+
+    def _assert_generic_apis_hide_statement(self, name):
+        for api, response in self._generic_api_responses(name).items():
+            with self.subTest(api=api):
+                self.assertEqual(response["name"], name)
+                self.assertIsNone(response.get("statement"))
+                if api == "frappe.client.get_list":
+                    self.assertNotIn("statement", response)
+
+    @staticmethod
+    def _generic_api_responses(name):
+        with patch.dict(frappe.form_dict, {}, clear=True):
+            rest_document = read_doc("Bond Exchange Rate", name).as_dict()
+        return {
+            "frappe.client.get": get_document("Bond Exchange Rate", name),
+            "frappe.client.get_list": get_list(
+                "Bond Exchange Rate",
+                fields=["name", "statement"],
+                filters={"name": name},
+            )[0],
+            "frappe.api.v1.read_doc": rest_document,
+        }
 
     @staticmethod
     def _make_statement_exchange_rate(portfolio):

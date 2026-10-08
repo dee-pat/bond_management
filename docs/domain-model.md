@@ -47,7 +47,7 @@ flowchart TB
     BMD -->|"bond_market_prices"| BMP
     BMP -->|"isin"| BM
     BS -.->|"market_price_posting"| BMD
-    BER -.->|"display statement"| BS
+    BER -.->|"private display statement"| BS
     BERS -->|"exchange_rate"| BER
     BERS -->|"statement"| BS
 ```
@@ -79,6 +79,7 @@ flowchart LR
     MARKET --> YIELD
     PP -->|"values + cash-flow availability"| API
     YIELD --> API
+    FX -->|"shared rates + readable statement reference"| API
     API --> SPA
 ```
 
@@ -98,7 +99,10 @@ projections.
   are rejected. Cash amounts retain their separate half-even convention.
 - The canonical `statement` link is a deterministic display projection only,
   not an ownership link. A manual canonical row is retained as fallback data
-  when its last statement source is removed.
+  when its last statement source is removed. The link is private at permission
+  level 1 in generic document/list APIs, readable by managers. Investor detail
+  first authorizes the shared exchange-rate row, then returns the representative
+  reference only when the investor can read the linked statement.
 - Portfolio performance combines all core financial data and exposes actual
   past/future cash-flow availability independently of XIRR solver success.
   Desk and the investor app use those flags for clipboard actions. Yield
