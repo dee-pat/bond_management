@@ -33,7 +33,7 @@ test("derives quantity change from KES and the Kenya day-count convention", asyn
   expect(values.usdQuantityChange).toBe(0);
 });
 
-test("keeps the new currency schedules when an older KES response arrives last", async ({
+test("ignores an old KES response during a pending USD currency update", async ({
   page,
 }) => {
   let releaseKesResponse = () => {};
@@ -97,20 +97,99 @@ test("keeps the new currency schedules when an older KES response arrives last",
     });
     await form.script_manager.trigger("day_count_convention");
   });
+  let usdCalculation: Promise<unknown> | undefined;
+  const readPreviewState = () =>
+    page.evaluate(() => {
+      const form = (window as DeskTestWindow).cur_frm;
+      return {
+        maturityDate: form?.doc.maturity_date ?? null,
+        repaymentPercent:
+          form?.doc.principal_schedule?.[0]?.repayment_percent ?? null,
+        couponDates: (form?.doc.coupon_schedule || []).map(
+          (row) => row.coupon_date
+        ),
+      };
+    });
 
   try {
     await kesRequest;
-    await page.evaluate(async () => {
+    const beforeCurrencyChange = await readPreviewState();
+    await page.evaluate(() => {
+      const form = (window as DeskTestWindow).cur_frm;
+      if (!form) {
+        throw new Error("Bond Master form did not load");
+      }
+
+      const browserWindow = window as DeskTestWindow & {
+        quantityUpdateStarted?: boolean;
+        releaseQuantityUpdate?: () => void;
+      };
+      browserWindow.quantityUpdateStarted = false;
+      let releaseQuantityUpdate = () => {};
+      const quantityUpdateHold = new Promise<void>((resolve) => {
+        releaseQuantityUpdate = resolve;
+      });
+      browserWindow.releaseQuantityUpdate = releaseQuantityUpdate;
+
+      const originalSetValue = form.set_value.bind(form);
+      form.set_value = (...args) => {
+        if (args[0] === "quantity_change" && form.doc.currency === "USD") {
+          const valueUpdate = originalSetValue(...args);
+          browserWindow.quantityUpdateStarted = true;
+          return Promise.resolve(valueUpdate).then(() => quantityUpdateHold);
+        }
+        return originalSetValue(...args);
+      };
+    });
+
+    usdCalculation = page.evaluate(async () => {
       const form = (window as DeskTestWindow).cur_frm;
       if (!form) {
         throw new Error("Bond Master form did not load");
       }
       await form.set_value("currency", "USD");
     });
+    await page.waitForFunction(() => {
+      const browserWindow = window as DeskTestWindow & {
+        quantityUpdateStarted?: boolean;
+      };
+      return browserWindow.quantityUpdateStarted === true;
+    });
+
+    releaseKesResponse();
+    await oldCalculation;
+    expect(await readPreviewState()).toEqual(beforeCurrencyChange);
+    expect(
+      await page.evaluate(
+        () => (window as DeskTestWindow).cur_frm?.doc.quantity_change
+      )
+    ).toBe(0);
+
+    await page.evaluate(async () => {
+      const browserWindow = window as DeskTestWindow & {
+        releaseQuantityUpdate?: () => void;
+      };
+      if (!browserWindow.releaseQuantityUpdate) {
+        throw new Error("USD quantity update was not held");
+      }
+      browserWindow.releaseQuantityUpdate();
+    });
+    await usdCalculation;
     expect(requestCurrencies).toEqual(["KES", "USD"]);
   } finally {
     releaseKesResponse();
-    await oldCalculation;
+    await page
+      .evaluate(() => {
+        const browserWindow = window as DeskTestWindow & {
+          releaseQuantityUpdate?: () => void;
+        };
+        browserWindow.releaseQuantityUpdate?.();
+      })
+      .catch(() => undefined);
+    await Promise.allSettled([
+      oldCalculation,
+      ...(usdCalculation ? [usdCalculation] : []),
+    ]);
   }
 
   const values = await page.evaluate(() => {
