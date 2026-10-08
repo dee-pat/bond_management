@@ -5,7 +5,11 @@ from pathlib import Path
 from unittest import TestCase
 from unittest.mock import patch
 
-from bond_management.bond_management.tests.migration_lifecycle import OPT_IN, validate_environment
+from bond_management.bond_management.tests.migration_lifecycle import (
+    OPT_IN,
+    _snapshot_files,
+    validate_environment,
+)
 from bond_management.bond_management.tests.migration_lifecycle_fixtures import prepare_legacy_rows
 
 
@@ -70,3 +74,73 @@ class TestMigrationLifecycleGuard(TestCase):
         ):
             with self.assertRaisesRegex(RuntimeError, "Disposable bench"):
                 prepare_legacy_rows()
+
+
+class TestMigrationLifecycleSnapshots(TestCase):
+    def test_snapshot_ignores_obsolete_statement_report_queued_for_deletion(self):
+        fixtures = {"statement": "statement-1", "transaction": "transaction-1"}
+        document_values = {
+            ("Bond Statement", "statement-1"): {
+                "attachment": "/private/files/statement.pdf",
+                "quantity_reconciliation_report": "/private/files/QuantityBasis-v8.pdf",
+            },
+            ("Bond Transaction", "transaction-1"): {"attachment": "/private/files/transaction.pdf"},
+        }
+        file_rows = [
+            {
+                "file_url": file_url,
+                "file_name": file_url.rsplit("/", 1)[-1],
+                "is_private": 1,
+                "attached_to_doctype": doctype,
+                "attached_to_name": name,
+                "attached_to_field": field,
+            }
+            for doctype, name, field, file_url in (
+                (
+                    "Bond Statement",
+                    "statement-1",
+                    "attachment",
+                    "/private/files/statement.pdf",
+                ),
+                (
+                    "Bond Statement",
+                    "statement-1",
+                    "quantity_reconciliation_report",
+                    "/private/files/FaceValue-v2.pdf",
+                ),
+                (
+                    "Bond Statement",
+                    "statement-1",
+                    "quantity_reconciliation_report",
+                    "/private/files/QuantityBasis-v8.pdf",
+                ),
+                (
+                    "Bond Transaction",
+                    "transaction-1",
+                    "attachment",
+                    "/private/files/transaction.pdf",
+                ),
+            )
+        ]
+
+        def get_doc(doctype, name):
+            return document_values[(doctype, name)]
+
+        def get_rows(_doctype, fields, filters):
+            return [
+                {field: row[field] for field in fields}
+                for row in file_rows
+                if all(row.get(field) == value for field, value in filters.items())
+            ]
+
+        with (
+            patch(
+                "bond_management.bond_management.tests.migration_lifecycle.frappe.get_doc",
+                side_effect=get_doc,
+            ),
+            patch("bond_management.bond_management.tests.migration_lifecycle._rows", side_effect=get_rows),
+        ):
+            snapshot = _snapshot_files(fixtures)
+
+        report_files = snapshot["Bond Statement:statement-1:quantity_reconciliation_report"]
+        self.assertEqual([file["file_url"] for file in report_files], ["/private/files/QuantityBasis-v8.pdf"])

@@ -150,19 +150,39 @@ def _snapshot(fixtures):
         ["exchange_rate", "statement", "rate", "reverse_rate"],
         {"exchange_rate": fixtures["exchange_rate"]},
     )
-    snapshot["files"] = _rows(
-        "File",
-        [
-            "file_url",
-            "file_name",
-            "is_private",
-            "attached_to_doctype",
-            "attached_to_name",
-            "attached_to_field",
-        ],
-        {"attached_to_name": ["in", [fixtures["statement"], fixtures["transaction"]]]},
-    )
+    snapshot["files"] = _snapshot_files(fixtures)
     return json.loads(frappe.as_json(snapshot))
+
+
+def _snapshot_files(fixtures):
+    """Snapshot only File rows referenced by the fixture documents' current fields."""
+    file_references = (
+        ("Bond Statement", fixtures["statement"], "attachment"),
+        ("Bond Statement", fixtures["statement"], "quantity_reconciliation_report"),
+        ("Bond Transaction", fixtures["transaction"], "attachment"),
+    )
+    file_fields = [
+        "file_url",
+        "file_name",
+        "is_private",
+        "attached_to_doctype",
+        "attached_to_name",
+        "attached_to_field",
+    ]
+    files = {}
+    for doctype, name, field in file_references:
+        document = frappe.get_doc(doctype, name)
+        files[f"{doctype}:{name}:{field}"] = _rows(
+            "File",
+            file_fields,
+            {
+                "file_url": document.get(field),
+                "attached_to_doctype": doctype,
+                "attached_to_name": name,
+                "attached_to_field": field,
+            },
+        )
+    return files
 
 
 def _business_fields(value):

@@ -39,7 +39,8 @@ Kenya schedule/market values, global FX scope/reverse rate/provenance,
 permissions, and manual indexes. It persists a business snapshot beside the
 bench, outside the repository and site configuration. Snapshots omit generated
 child names and timestamps while retaining financial fields, child ordering,
-private attachment relationships, and FX provenance. `requeue()` removes only
+current private File references, and FX provenance. Obsolete reconciliation
+reports queued for asynchronous deletion are excluded. `requeue()` removes only
 the registered app Patch Logs for a forced rerun. The next `verify()` compares
 business results with the first migrated snapshot. A subsequent ordinary
 migration must preserve both the snapshot and Patch Log identities/timestamps.
