@@ -12,6 +12,7 @@ from bond_management.bond_management.utils.financial import DecimalInput, to_dec
 from bond_management.bond_management.utils.market_data import calculate_market_data
 from bond_management.bond_management.utils.validation import optional_string, required_string
 from bond_management.bond_management.utils.xirr import (
+    DEFAULT_XIRR_GUESS,
     create_future_cash_flows,
     get_last_xirr_guesses,
 )
@@ -65,7 +66,7 @@ class BondMarketDate(Document):
                 self.date,
                 row.isin,
                 row.market_price,
-                historical_guess=historical_guesses.get(row.isin),
+                historical_guess=historical_guesses.get(row.isin, DEFAULT_XIRR_GUESS),
             )
             for fieldname, value in values.items():
                 row.set(fieldname, value)
@@ -149,7 +150,7 @@ def get_recalculated_market_data(date: str | None = None, rows: str | list | Non
                     date,
                     isin,
                     market_price,
-                    historical_guess=historical_guesses.get(isin),
+                    historical_guess=historical_guesses.get(isin, DEFAULT_XIRR_GUESS),
                 ),
             }
         )

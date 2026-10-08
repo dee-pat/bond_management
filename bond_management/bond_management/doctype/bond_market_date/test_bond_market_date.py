@@ -1,8 +1,9 @@
 # Copyright (c) 2026, Deepak Patel and Contributors
 # See license.txt
 
-from datetime import timedelta
+from datetime import date, timedelta
 from decimal import ROUND_HALF_UP, Decimal
+from unittest.mock import patch
 
 import frappe
 from frappe.exceptions import FrappeTypeError
@@ -31,6 +32,35 @@ from bond_management.patches.backfill_weighted_avg_repayment import execute as b
 
 
 class TestBondMarketDate(IntegrationTestCase):
+    def test_batched_recalculation_does_not_repeat_missing_history_queries(self):
+        bonds = [make_bond(), make_bond()]
+        valuation_date = date(2095, 1, 1)
+        while frappe.db.exists("Bond Market Date", {"date": valuation_date}):
+            valuation_date -= timedelta(days=1)
+        valuation_date_string = valuation_date.isoformat()
+        rows = [
+            {"name": f"market-row-{index}", "isin": bond.name, "market_price": 100}
+            for index, bond in enumerate(bonds)
+        ]
+
+        with patch(
+            "bond_management.bond_management.utils.xirr.get_last_xirr_guess",
+            side_effect=AssertionError("batch lookup should avoid per-row history queries"),
+        ) as get_last_xirr_guess:
+            calculated_rows = get_recalculated_market_data(valuation_date_string, rows)
+            market_date = frappe.get_doc(
+                {
+                    "doctype": "Bond Market Date",
+                    "date": valuation_date,
+                    "bond_market_prices": [{"isin": bond.name, "market_price": 100} for bond in bonds],
+                }
+            ).insert()
+
+        get_last_xirr_guess.assert_not_called()
+        self.assertEqual(len(calculated_rows), len(bonds))
+        self.assertTrue(all(row["future_xirr_available"] == 0 for row in calculated_rows))
+        self.assertTrue(all(row.future_xirr_available == 0 for row in market_date.bond_market_prices))
+
     def test_updates_market_price_derived_fields_and_cashflows(self):
         bond = make_bond()
         market_date = make_market_date(bond, date="2025-12-29")
