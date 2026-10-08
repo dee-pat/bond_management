@@ -6,6 +6,10 @@ from pypika.analytics import RowNumber
 from pypika.enums import Order
 
 from bond_management.bond_management.utils.exchange_rate import build_exchange_rate_context
+from bond_management.bond_management.utils.xirr import (
+    DEFAULT_XIRR_GUESS,
+    get_last_xirr_guesses,
+)
 
 
 def get_distinct_isins(portfolio=None, valuation_date=None):
@@ -183,10 +187,19 @@ def load_portfolio_performance_context(portfolio, valuation_date):
 
     market_prices = {}
     xirr_guesses = {}
+    unavailable_xirr_isins = set()
     for row in get_latest_market_rows(visible_isins, valuation_date):
         market_prices[row.isin] = row.market_price
         if row.future_xirr_available and row.future_xirr is not None:
             xirr_guesses[row.isin] = row.future_xirr
+        else:
+            unavailable_xirr_isins.add(row.isin)
+
+    if unavailable_xirr_isins:
+        historical_guesses = get_last_xirr_guesses(unavailable_xirr_isins, valuation_date)
+        for isin in unavailable_xirr_isins:
+            # Context values are percentages; the history helper returns decimal rates.
+            xirr_guesses[isin] = historical_guesses.get(isin, DEFAULT_XIRR_GUESS) * 100
 
     native_currencies = sorted(
         {bond.get("currency") for bond in bonds if bond.get("currency") and bond.get("currency") != "USD"}

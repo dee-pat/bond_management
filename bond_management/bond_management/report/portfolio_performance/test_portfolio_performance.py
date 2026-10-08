@@ -29,7 +29,7 @@ from bond_management.bond_management.utils.xirr import create_future_cash_flows
 
 
 class TestPortfolioPerformance(IntegrationTestCase):
-    def test_unavailable_latest_yield_keeps_latest_market_quote_without_guess(self):
+    def test_unavailable_latest_yield_falls_back_to_previous_available_guess(self):
         bond = make_bond(coupon_rate=0)
         portfolio = make_portfolio()
         make_transaction(bond, portfolio)
@@ -45,7 +45,11 @@ class TestPortfolioPerformance(IntegrationTestCase):
         context = load_portfolio_performance_context(portfolio.name, "2025-12-31")
 
         self.assertEqual(context["market_prices"], {bond.name: 110})
-        self.assertEqual(context["xirr_guesses"], {})
+        self.assertAlmostEqual(
+            context["xirr_guesses"][bond.name],
+            earlier.bond_market_prices[0].future_xirr,
+            places=7,
+        )
         self.assertNotEqual(context["market_prices"][bond.name], earlier.bond_market_prices[0].market_price)
         _, rows = execute({"portfolio": portfolio.name, "valuation_date": "2025-12-31"})
         bond_row = next(row for row in rows if row["isin"] == bond.name)
@@ -513,6 +517,13 @@ class TestPortfolioPerformance(IntegrationTestCase):
         for bond in bonds:
             make_transaction(bond, portfolio)
         market_dates = [make_market_date(bond) for bond in bonds]
+        for market_date in market_dates:
+            frappe.db.set_value(
+                "Bond Market Prices",
+                market_date.bond_market_prices[-1].name,
+                {"future_xirr": 99, "future_xirr_available": 0},
+                update_modified=False,
+            )
 
         self.assertEqual(
             [market_date.bond_market_prices[-1].isin for market_date in market_dates],
@@ -527,7 +538,7 @@ class TestPortfolioPerformance(IntegrationTestCase):
             rows, _, _, _, _ = get_data(portfolio.name, "2025-12-31")
 
         self.assertEqual(len(rows), 2)
-        self.assertEqual(get_query.call_count, 5)
+        self.assertEqual(get_query.call_count, 6)
 
     def test_fetch_holdings_batches_ledger_and_bond_queries(self):
         portfolio = make_portfolio()
