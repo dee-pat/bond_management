@@ -1,6 +1,7 @@
 """Regressions for Frappe's share fallback and strict investor access."""
 
 from contextlib import contextmanager
+from unittest.mock import patch
 
 import frappe
 from frappe.api.v1 import read_doc
@@ -199,6 +200,48 @@ class TestInvestorShares(IntegrationTestCase):
             self.assertNotIn(self.other.name, self.visible_portfolios())
             with self.assertRaises(frappe.PermissionError):
                 read_doc("Bond Portfolio", self.other.name)
+
+    def test_role_change_repair_uses_current_transaction_portfolio_for_list_access(self):
+        frappe.get_doc(
+            {
+                "doctype": "User Permission",
+                "user": self.manager.name,
+                "allow": "Bond Portfolio",
+                "for_value": self.assigned.name,
+                "apply_to_all_doctypes": 1,
+            }
+        ).insert(ignore_permissions=True)
+        transaction = make_transaction(make_bond(), self.assigned)
+        share = add_docshare("Bond Transaction", transaction.name, self.manager.name)
+
+        # Model a transaction moved by another request after this request's snapshot.
+        frappe.db.set_value(
+            "Bond Transaction", transaction.name, "portfolio_name", self.other.name, update_modified=False
+        )
+        stale_target = frappe._dict(
+            doctype="Bond Transaction", name=transaction.name, portfolio_name=self.assigned.name
+        )
+        get_doc = frappe.get_doc
+
+        def get_doc_with_stale_target(*args, **kwargs):
+            doctype = args[0] if args else kwargs.get("doctype")
+            name = args[1] if len(args) > 1 else kwargs.get("name")
+            if doctype == "Bond Transaction" and name == transaction.name:
+                return stale_target
+            return get_doc(*args, **kwargs)
+
+        self.manager.append("roles", {"role": INVESTOR_ROLE})
+        with patch.object(frappe, "get_doc", side_effect=get_doc_with_stale_target):
+            self.manager.save(ignore_permissions=True)
+
+        self.assertFalse(frappe.db.exists("DocShare", share.name))
+        with self.as_user(self.manager.name):
+            visible_transactions = frappe.qb.get_query(
+                "Bond Transaction", fields=["name"], ignore_permissions=False
+            ).run(pluck=True)
+            self.assertNotIn(transaction.name, visible_transactions)
+            with self.assertRaises(frappe.PermissionError):
+                frappe.get_doc("Bond Transaction", transaction.name).check_permission("read")
 
     def test_assignment_delete_revokes_share_list_and_direct_access(self):
         share = add_docshare("Bond Portfolio", self.assigned.name, self.investor.name)

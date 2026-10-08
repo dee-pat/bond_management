@@ -73,9 +73,8 @@ def cleanup_incompatible_shares(user=None, doctype=None, name=None):
         "DocShare", fields=["*"], filters=filters, ignore_permissions=True, for_update=True
     ).run(as_dict=True)
     for share in shares:
-        try:
-            target = frappe.get_doc(share.share_doctype, share.share_name)
-        except frappe.DoesNotExistError:
+        target = _lock_share_target(share.share_doctype, share.share_name)
+        if target is None:
             # DocShare.on_trash comments on its target; orphan rows have none.
             frappe.delete_doc("DocShare", share.name, ignore_permissions=True, ignore_on_trash=True)
             continue
@@ -159,14 +158,17 @@ def _investor_document_access(doc, user, permtype):
 def _lock_share_target(doctype, name):
     field = PORTFOLIO_DOCTYPES.get(doctype)
     current = frappe.db.get_value(doctype, name, field or "name", for_update=True)
-    target = frappe._dict(doctype=doctype)
+    if current is None:
+        return None
+
+    target = frappe._dict(doctype=doctype, name=name)
     if field:
         target[field] = current
     return target
 
 
 def _validate_locked_share(target, share):
-    if is_investor_user(frappe.session.user, for_update=True):
+    if target is None or is_investor_user(frappe.session.user, for_update=True):
         _deny()
     if _inaccessible_share(target, share):
         _deny()
