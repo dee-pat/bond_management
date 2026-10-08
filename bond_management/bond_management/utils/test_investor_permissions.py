@@ -312,8 +312,7 @@ class TestInvestorPermissions(IntegrationTestCase):
         frappe.db.set_value(
             "DocPerm",
             {"parent": "Bond Exchange Rate", "role": "System Manager", "permlevel": 1},
-            "read",
-            0,
+            {"read": 0, "write": 1, "create": 1, "delete": 1},
             update_modified=False,
         )
         ensure_exchange_rate_permissions()
