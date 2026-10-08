@@ -89,7 +89,7 @@ def get_last_xirr_guess(isin, date):
 
 
 def get_last_xirr_guesses(isins, date):
-    """Return the latest non-null persisted guess for each requested ISIN."""
+    """Return the latest available persisted guess for each requested ISIN."""
     isins = sorted(set(isins or ()))
     if not isins or not date:
         return {}
@@ -113,6 +113,7 @@ def get_last_xirr_guesses(isins, date):
         filters={
             "date": ["<=", date],
             "bond_market_prices.isin": ["in", isins],
+            "bond_market_prices.future_xirr_available": 1,
         },
         ignore_permissions=False,
     ).where(market_price.future_xirr.isnotnull())

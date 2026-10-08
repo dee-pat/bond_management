@@ -20,12 +20,49 @@ from bond_management.bond_management.tests.factories import (
     make_portfolio,
     make_transaction,
 )
-from bond_management.bond_management.utils.performance import get_latest_market_rows
+from bond_management.bond_management.utils.performance import (
+    get_latest_market_rows,
+    load_portfolio_performance_context,
+)
 from bond_management.bond_management.utils.portfolio import fetch_holdings
 from bond_management.bond_management.utils.xirr import create_future_cash_flows
 
 
 class TestPortfolioPerformance(IntegrationTestCase):
+    def test_unavailable_latest_yield_keeps_latest_market_quote_without_guess(self):
+        bond = make_bond(coupon_rate=0)
+        portfolio = make_portfolio()
+        make_transaction(bond, portfolio)
+        earlier = make_market_date(bond, market_price=90, date="2025-11-26")
+        latest = make_market_date(bond, market_price=110, date="2025-11-27")
+        frappe.db.set_value(
+            "Bond Market Prices",
+            latest.bond_market_prices[0].name,
+            {"future_xirr": 99, "future_xirr_available": 0},
+            update_modified=False,
+        )
+
+        context = load_portfolio_performance_context(portfolio.name, "2025-12-31")
+
+        self.assertEqual(context["market_prices"], {bond.name: 110})
+        self.assertEqual(context["xirr_guesses"], {})
+        self.assertNotEqual(context["market_prices"][bond.name], earlier.bond_market_prices[0].market_price)
+        _, rows = execute({"portfolio": portfolio.name, "valuation_date": "2025-12-31"})
+        bond_row = next(row for row in rows if row["isin"] == bond.name)
+        self.assertEqual(bond_row["market_value"], Decimal("1100"))
+        self.assertLess(bond_row["future_xirr"], 0)
+
+    def test_available_zero_latest_yield_is_a_performance_guess(self):
+        bond = make_bond(coupon_rate=0)
+        portfolio = make_portfolio()
+        make_transaction(bond, portfolio)
+        make_market_date(bond, market_price=100)
+
+        context = load_portfolio_performance_context(portfolio.name, "2025-12-31")
+
+        self.assertEqual(context["market_prices"], {bond.name: 100})
+        self.assertEqual(context["xirr_guesses"], {bond.name: 0})
+
     def test_direct_cashflow_endpoint_rechecks_report_permission(self):
         portfolio = make_portfolio()
 

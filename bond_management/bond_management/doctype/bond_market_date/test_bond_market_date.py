@@ -84,6 +84,7 @@ class TestBondMarketDate(IntegrationTestCase):
                 "name": "row-without-isin",
                 "currency": None,
                 "future_xirr": None,
+                "future_xirr_available": 0,
                 "principal_factor": None,
                 "weighted_avg_repayment_date": None,
                 "weighted_avg_repayment_years": None,
@@ -257,7 +258,7 @@ class TestBondMarketDate(IntegrationTestCase):
         frappe.db.set_value(
             "Bond Market Prices",
             price_row.name,
-            {"principal_factor": 0.5, "future_xirr": -18.771252834},
+            {"principal_factor": 0.5, "future_xirr": -18.771252834, "future_xirr_available": 1},
             update_modified=False,
         )
         expected_future_xirr = calculate_future_xirr(bond.name, market_date.date, 103.248) * 100

@@ -62,6 +62,7 @@ def get_latest_market_rows(isins, valuation_date):
             "bond_market_prices.isin as isin",
             "bond_market_prices.market_price as market_price",
             "bond_market_prices.future_xirr as future_xirr",
+            "bond_market_prices.future_xirr_available as future_xirr_available",
             price_rank,
         ],
         filters={
@@ -78,6 +79,7 @@ def get_latest_market_rows(isins, valuation_date):
             ranked_market["isin"],
             ranked_market["market_price"],
             ranked_market["future_xirr"],
+            ranked_market["future_xirr_available"],
             ranked_market["price_rank"],
         )
         .where(ranked_market["price_rank"] == 1)
@@ -183,7 +185,7 @@ def load_portfolio_performance_context(portfolio, valuation_date):
     xirr_guesses = {}
     for row in get_latest_market_rows(visible_isins, valuation_date):
         market_prices[row.isin] = row.market_price
-        if row.future_xirr is not None:
+        if row.future_xirr_available and row.future_xirr is not None:
             xirr_guesses[row.isin] = row.future_xirr
 
     native_currencies = sorted(

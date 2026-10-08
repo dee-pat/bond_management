@@ -183,7 +183,7 @@ class TestInvestorBondYieldComparison(IntegrationTestCase):
         frappe.db.set_value(
             "Bond Market Prices",
             market_row.name,
-            {"market_price": "104.625", "future_xirr": "13.875"},
+            {"market_price": "104.625", "future_xirr": "13.875", "future_xirr_available": 1},
             update_modified=False,
         )
         investor = self._make_user([INVESTOR_ROLE])

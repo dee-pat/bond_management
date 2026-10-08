@@ -191,6 +191,7 @@ export interface MarketPriceRow {
   market_price: number;
   currency: string;
   future_xirr: number | null;
+  future_xirr_available: number;
   weighted_avg_repayment_date: string | null;
   weighted_avg_repayment_years: number | null;
   maturity_date: string;

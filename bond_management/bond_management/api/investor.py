@@ -118,6 +118,7 @@ MARKET_PRICE_FIELDS = (
     "market_price",
     "currency",
     "future_xirr",
+    "future_xirr_available",
     "weighted_avg_repayment_date",
     "weighted_avg_repayment_years",
     "maturity_date",
@@ -577,6 +578,9 @@ def get_market_date(name: str) -> dict:
     market_date["bond_market_prices"] = [
         {field: row.get(field) for field in MARKET_PRICE_FIELDS} for row in document.bond_market_prices
     ]
+    for row in market_date["bond_market_prices"]:
+        if not row["future_xirr_available"]:
+            row["future_xirr"] = None
     return set_investor_api_data({"market_date": market_date})
 
 
