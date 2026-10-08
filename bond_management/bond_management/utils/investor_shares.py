@@ -62,6 +62,7 @@ def cleanup_incompatible_shares(user=None, doctype=None, name=None):
         filters["user"] = user
     if doctype:
         filters.update(share_doctype=doctype, share_name=name)
+    targets = _lock_share_targets(filters)
     if user:
         _lock_users([user])
     else:
@@ -73,7 +74,7 @@ def cleanup_incompatible_shares(user=None, doctype=None, name=None):
         "DocShare", fields=["*"], filters=filters, ignore_permissions=True, for_update=True
     ).run(as_dict=True)
     for share in shares:
-        target = _lock_share_target(share.share_doctype, share.share_name)
+        target = targets[(share.share_doctype, share.share_name)]
         if target is None:
             # DocShare.on_trash comments on its target; orphan rows have none.
             frappe.delete_doc("DocShare", share.name, ignore_permissions=True, ignore_on_trash=True)
@@ -92,12 +93,15 @@ def cleanup_incompatible_shares(user=None, doctype=None, name=None):
 
 
 def lock_user_authorization(doc, method=None):
+    _lock_user_share_targets([doc.name])
     _lock_users([doc.name])
 
 
 def lock_assignment_authorization(doc, method=None):
     previous = doc.get_doc_before_save()
-    _lock_users([doc.user, previous.user if previous else None])
+    users = [doc.user, previous.user if previous else None]
+    _lock_user_share_targets(users)
+    _lock_users(users)
 
 
 def lock_share_authorization(doc, method=None):
@@ -119,6 +123,7 @@ def clear_user_permissions(user: str, for_doctype: str):
     if not isinstance(user, str) or not isinstance(for_doctype, str):
         frappe.throw(_("User and DocType must be strings."), frappe.ValidationError)
     frappe.only_for("System Manager")
+    _lock_user_share_targets([user])
     _lock_users([user])
     result = clear_permissions(user, for_doctype)
     if for_doctype == "Bond Portfolio":
@@ -165,6 +170,29 @@ def _lock_share_target(doctype, name):
     if field:
         target[field] = current
     return target
+
+
+def _lock_share_targets(filters):
+    references = frappe.qb.get_query(
+        "DocShare",
+        fields=["share_doctype", "share_name"],
+        filters=filters,
+        ignore_permissions=True,
+    ).run(as_dict=True)
+    keys = sorted({(share.share_doctype, share.share_name) for share in references})
+    return {key: _lock_share_target(*key) for key in keys}
+
+
+def _lock_user_share_targets(users):
+    users = sorted({user for user in users if user})
+    if not users:
+        return
+    _lock_share_targets(
+        {
+            "share_doctype": ["in", FINANCIAL_DOCTYPES],
+            "user": ["in", users],
+        }
+    )
 
 
 def _validate_locked_share(target, share):

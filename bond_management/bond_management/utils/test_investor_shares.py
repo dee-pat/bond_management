@@ -21,6 +21,7 @@ from bond_management.bond_management.tests.factories import (
     make_transaction,
     unique_name,
 )
+from bond_management.bond_management.utils import investor_shares
 from bond_management.bond_management.utils.investor_permissions import (
     BOND_MANAGER_ROLE,
     INVESTOR_ROLE,
@@ -190,6 +191,35 @@ class TestInvestorShares(IntegrationTestCase):
         self.assertTrue(updated.read)
         self.assertFalse(updated.write)
         self.assertFalse(updated.share)
+
+    def test_assignment_cleanup_and_compatible_grant_lock_target_before_recipient(self):
+        share = add_docshare("Bond Portfolio", self.assigned.name, self.investor.name)
+        events = []
+        lock_target = investor_shares._lock_share_target
+        lock_users = investor_shares._lock_users
+
+        def trace_target(*args, **kwargs):
+            events.append("target")
+            return lock_target(*args, **kwargs)
+
+        def trace_users(*args, **kwargs):
+            events.append("recipient")
+            return lock_users(*args, **kwargs)
+
+        with (
+            patch.object(investor_shares, "_lock_share_target", side_effect=trace_target),
+            patch.object(investor_shares, "_lock_users", side_effect=trace_users),
+        ):
+            self.assignment.save(ignore_permissions=True)
+            assignment_events = events.copy()
+            events.clear()
+            add_docshare("Bond Portfolio", self.assigned.name, self.investor.name)
+            grant_events = events.copy()
+
+        expected_order = ["target", "recipient", "target", "recipient"]
+        self.assertEqual(assignment_events, expected_order)
+        self.assertEqual(grant_events, expected_order)
+        self.assertTrue(frappe.db.exists("DocShare", share.name))
 
     def test_role_change_repairs_existing_shares(self):
         share = add_docshare("Bond Portfolio", self.other.name, self.manager.name, write=1)

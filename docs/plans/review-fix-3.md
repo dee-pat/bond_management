@@ -22,11 +22,12 @@ other-app shares. Orphans use the supported delete API without target comments.
 Narrow repairs invalidate cached DocShare objects.
 
 Share saves lock the target first, then the actor and recipients in sorted
-User-primary-key order. Role and assignment changes lock recipients before
-mutation; their cleanup does not acquire target locks in the opposite order.
-Current locking reads and persisted Has Role lookups prevent stale snapshots
-or caches from restoring authorization. Assignment-recipient changes clear
-both permission caches. A supported whitelist override preserves core bulk
+User-primary-key order. Role, assignment, bulk-clear, and repair paths pre-lock
+the targets of affected shares in stable order before locking recipients, so a
+compatible grant cannot form a target/User lock cycle with cleanup. Current
+locking reads and persisted Has Role lookups prevent stale snapshots or caches
+from restoring authorization. Assignment-recipient changes clear both
+permission caches. A supported whitelist override preserves core bulk
 clear-user-permissions validation, System Manager access and deleted-row count,
 and repairs shares within the same request transaction.
 
