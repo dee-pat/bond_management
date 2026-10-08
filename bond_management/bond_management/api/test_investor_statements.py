@@ -139,9 +139,14 @@ class TestInvestorStatements(IntegrationTestCase):
         readable = make_bond()
         restricted = make_bond()
         portfolio = make_portfolio()
-        for bond in (readable, restricted):
-            make_transaction(bond, portfolio)
-        statement = make_statement(portfolio)
+        make_transaction(readable, portfolio)
+        readable_statement = make_statement(portfolio)
+        make_transaction(restricted, portfolio, settlement_date="2026-01-01")
+        statement = make_statement(portfolio, statement_date="2026-01-02")
+        self.assertEqual(
+            {row.isin for row in readable_statement.bond_statement_details},
+            {readable.name},
+        )
         self.assertEqual(
             {row.isin for row in statement.bond_statement_details},
             {readable.name, restricted.name},
@@ -158,6 +163,11 @@ class TestInvestorStatements(IntegrationTestCase):
         ).insert(ignore_permissions=True)
 
         with self._as_user(investor):
+            response = get_statement(readable_statement.name)
+            self.assertEqual(
+                {row["isin"] for row in response["statement"].bond_statement_details},
+                {readable.name},
+            )
             with self.assertRaises(frappe.PermissionError):
                 get_statement(statement.name)
 
