@@ -315,6 +315,60 @@ class TestBondTransaction(IntegrationTestCase):
             self.assertEqual(len(attachment_files), 1)
         self.assertEqual(sorted(quantities.values()), [5, 7])
 
+    def test_identical_multi_transaction_pdf_uploads_share_private_url_and_preserve_bytes(self):
+        bond = self._make_pdf_bond()
+        portfolio = make_portfolio()
+        references = [self._numeric_reference("U"), self._numeric_reference("U")]
+        pdf_bytes = make_text_pdf(
+            "\n".join(
+                self._confirmation_text(
+                    portfolio.transaction_account_no,
+                    reference,
+                    bond.name,
+                    quantity=quantity,
+                )
+                for reference, quantity in zip(references, ("5.000000", "7.000000"), strict=True)
+            ),
+            "test-password",
+        )
+        uploads = [
+            self._upload_transaction_pdf(pdf_bytes, preserve_duplicate_content=True) for _ in references
+        ]
+        self.assertEqual(len(set(uploads)), 2)
+        expected_url = self._expected_pdf_attachment(uploads[0], portfolio)
+
+        transactions = [
+            frappe.get_doc(
+                {
+                    "doctype": "Bond Transaction",
+                    "attachment": attachment,
+                    "transaction_reference": reference,
+                }
+            ).insert()
+            for reference, attachment in zip(references, uploads, strict=True)
+        ]
+
+        self.assertCountEqual([transaction.name for transaction in transactions], references)
+        self.assertEqual({transaction.attachment for transaction in transactions}, {expected_url})
+        for transaction in transactions:
+            with self.subTest(transaction=transaction.name):
+                file_rows = frappe.qb.get_query(
+                    "File",
+                    fields=["name"],
+                    filters={
+                        "file_url": expected_url,
+                        "attached_to_doctype": "Bond Transaction",
+                        "attached_to_name": transaction.name,
+                        "attached_to_field": "attachment",
+                    },
+                    ignore_permissions=False,
+                ).run(pluck=True)
+                self.assertEqual(len(file_rows), 1)
+                file_doc = frappe.get_doc("File", file_rows[0])
+                self.assertTrue(file_doc.is_private)
+                self.assertEqual(file_doc.file_url, expected_url)
+                self.assertEqual(file_doc.get_content(encodings=()), pdf_bytes)
+
     def test_multi_transaction_creation_rejects_non_text_selection_values(self):
         staging = frappe.get_doc({"doctype": "Bond Transaction"})
 
@@ -840,14 +894,23 @@ class TestBondTransaction(IntegrationTestCase):
         return f"{prefix}{int(frappe.generate_hash(length=8), 36)}"
 
     def _attach_transaction_pdf(self, text, password):
+        return self._upload_transaction_pdf(make_text_pdf(text, password))
+
+    def _upload_transaction_pdf(self, content, *, preserve_duplicate_content=False):
         file_doc = frappe.get_doc(
             {
                 "doctype": "File",
                 "file_name": f"{unique_name('transaction-confirmation')}.pdf",
-                "content": make_text_pdf(text, password),
+                "content": content,
                 "is_private": 1,
             }
-        ).insert()
+        )
+        if preserve_duplicate_content:
+            # Frappe normally shares a File URL for identical private uploads.
+            file_doc.save_file(content=content, ignore_existing_file_check=True)
+            file_doc.flags.copy_from_existing_file = True
+            file_doc.flags.ignore_duplicate_entry_error = True
+        file_doc.insert()
         self.addCleanup(Path(file_doc.get_full_path()).unlink, missing_ok=True)
         return file_doc.file_url
 
