@@ -31,13 +31,17 @@ def execute():
     _upsert_permission(INVESTOR_ROLE, INVESTOR_PERMISSIONS)
     _upsert_permission(MANAGER_ROLE, MANAGER_PERMISSIONS)
     _upsert_permission(SYSTEM_MANAGER_ROLE, MANAGER_PERMISSIONS)
+    provenance_permissions = {field: 0 for field in MANAGER_PERMISSIONS}
+    provenance_permissions["read"] = 1
+    _upsert_permission(MANAGER_ROLE, provenance_permissions, permlevel=1)
+    _upsert_permission(SYSTEM_MANAGER_ROLE, provenance_permissions, permlevel=1)
 
 
-def _upsert_permission(role, permissions):
+def _upsert_permission(role, permissions, *, permlevel=0):
     permission_name = frappe.db.get_value(
-        "DocPerm", {"parent": DOCTYPENAME, "role": role, "permlevel": 0}, "name"
+        "DocPerm", {"parent": DOCTYPENAME, "role": role, "permlevel": permlevel}, "name"
     )
-    values = {"permlevel": 0, **permissions}
+    values = {"permlevel": permlevel, **permissions}
     if permission_name:
         frappe.db.set_value("DocPerm", permission_name, values, update_modified=False)
         return
