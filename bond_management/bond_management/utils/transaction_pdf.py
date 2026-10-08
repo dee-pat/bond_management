@@ -37,6 +37,15 @@ FIELD_PATTERN = re.compile(
     r"Commission(?:\s*%|\s+Amount)?|Transaction\s+Reference)\s*:",
     re.IGNORECASE,
 )
+DECIMAL_FIELD_LABELS = {
+    "Quantity",
+    "Quantity / Face Value",
+    "Face Value",
+    "Price",
+    "Principal",
+    "Settlement Amount",
+    "Accrued Interest",
+}
 
 
 class TransactionPdfError(ValueError):
@@ -464,10 +473,26 @@ def _parse_row_fields(text: str) -> dict[str, str]:
         label = label.removesuffix(" In Currency")
         end = matches[index + 1].start() if index + 1 < len(matches) else len(text)
         value = text[match.end() : end].strip()
-        if label in fields and fields[label] != value:
+        if label in fields and not _same_field_value(label, fields[label], value):
             raise TransactionPdfError(f"The transaction PDF contains conflicting {label} values.")
         fields[label] = value
     return fields
+
+
+def _same_field_value(label: str, first: str, second: str) -> bool:
+    if label == "Isin":
+        return first.upper() == second.upper()
+    if label in {"Commission Amount", "Commission"}:
+        return _parse_commission_amount(first, label) == _parse_commission_amount(second, label)
+    if label in DECIMAL_FIELD_LABELS:
+        return _parse_decimal(first, label) == _parse_decimal(second, label)
+    if label == "Commission %":
+        return _parse_commission_percent(first) == _parse_commission_percent(second)
+    if label in {"Trade Date", "Settlement Date"}:
+        return _parse_date(first, label) == _parse_date(second, label)
+    if label in {"Currency", "Transaction Reference"}:
+        return first.upper() == second.upper()
+    return first == second
 
 
 def _parse_isin(fields: dict[str, str]) -> str:
@@ -539,24 +564,11 @@ def _parse_commission(fields: dict[str, str]) -> tuple[Decimal | None, Decimal |
     percent = None
     amount = None
     if "Commission %" in fields:
-        value = fields["Commission %"]
-        if value == "%":
-            raise TransactionPdfError("The transaction PDF contains an invalid Commission %.")
-        value = value.removesuffix("%").strip()
-        if value:
-            percent = (
-                Decimal("0")
-                if re.fullmatch(r"N/?A", value, re.IGNORECASE)
-                else _parse_decimal(value, "Commission %")
-            )
+        percent = _parse_commission_percent(fields["Commission %"])
     for label in ("Commission Amount", "Commission"):
         if label in fields:
             value = fields[label]
-            parsed_amount = (
-                Decimal("0")
-                if not value or re.fullmatch(r"N/?A", value, re.IGNORECASE)
-                else _parse_decimal(value, label)
-            )
+            parsed_amount = _parse_commission_amount(value, label)
             if parsed_amount < 0:
                 raise TransactionPdfError("Commission Amount must be zero or greater.")
             if amount is not None and amount != parsed_amount:
@@ -577,6 +589,23 @@ def _parse_commission(fields: dict[str, str]) -> tuple[Decimal | None, Decimal |
     if "Commission %" in fields:
         return Decimal("0"), None
     raise TransactionPdfError("Could not find Commission in a transaction PDF row.")
+
+
+def _parse_commission_percent(value: str) -> Decimal | None:
+    if value == "%":
+        raise TransactionPdfError("The transaction PDF contains an invalid Commission %.")
+    value = value.removesuffix("%").strip()
+    if not value:
+        return None
+    if re.fullmatch(r"N/?A", value, re.IGNORECASE):
+        return Decimal("0")
+    return _parse_decimal(value, "Commission %")
+
+
+def _parse_commission_amount(value: str, label: str) -> Decimal:
+    if not value or re.fullmatch(r"N/?A", value, re.IGNORECASE):
+        return Decimal("0")
+    return _parse_decimal(value, label)
 
 
 def _validate_transaction_row_values(row: ParsedTransactionPdfRow) -> None:

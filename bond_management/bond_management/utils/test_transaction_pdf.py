@@ -299,6 +299,16 @@ class TestTransactionPdf(UnitTestCase):
                 with self.assertRaises(TransactionPdfError):
                     parse_transaction_pdf_text(invalid)
 
+    def test_accepts_repeated_fields_with_equal_parsed_values(self):
+        text = _current_transaction_text("U1999155")
+        text = text.replace("Price : 100.350000", "Price : 100.350000 Price : 100.35")
+        text = text.replace("ISIN : XS3196101201", "ISIN : xs3196101201")
+
+        row = parse_transaction_pdf_text(text).transactions[0]
+
+        self.assertEqual(row.price, Decimal("100.350000"))
+        self.assertEqual(row.isin, "XS3196101201")
+
     def test_blank_amount_only_commission_retains_zero_percent_convention(self):
         row = parse_transaction_pdf_text(
             _current_transaction_text("U1999155", commission=None, commission_amount="")

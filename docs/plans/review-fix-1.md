@@ -24,6 +24,10 @@ Failures raise TransactionPdfError before financial values are returned. No
 migration is required. Correctly formed current, legacy, encrypted, and
 positioned PDFs retain the existing input/output contracts.
 
+Repeated labels are compared by parsed meaning: numeric fields use Decimal,
+dates use parsed calendar dates, ISINs and codes use case-insensitive values,
+and malformed or semantically conflicting repeats remain errors.
+
 ## Verification and progress
 
 - Risk classification: backend shared parsing utility; financial validation.
@@ -55,3 +59,25 @@ positioned PDFs retain the existing input/output contracts.
 
 Reviewed docs/domain-model.md: no DocType, field ownership, attachment
 relationship, or data-flow edge changes are introduced.
+
+### Review correction (2026-10-08)
+
+- Risk classification: backend shared parsing utility; financial input validation.
+- Required gates: targeted regression, complete transaction PDF module, and the
+  shared `pre-push` gate.
+- Commands executed: targeted `test_accepts_repeated_fields_with_equal_parsed_values`
+  (exit 0, 1 test); complete `test_transaction_pdf` module (exit 0, 24 tests);
+  `apps/bond_management-validate-complete-pdf-fields/scripts/verify.sh pre-push`
+  from the bench root (exit 0: 48 unit, 282 integration, and 3 unspecified tests).
+- Tests passed: all targeted and module tests, plus the final full server gate.
+- Tests failed: an earlier full server run hit two transaction fixture insert
+  deadlocks while other pre-push runs were using `test_site`. Two later gate
+  attempts stopped at migration because the test site's `bench_migrate` lock was
+  held; migration and the full gate passed after it cleared.
+- Tests not run: browser and fresh-install gates are not applicable.
+- Blockers: none.
+- Unverified local/CI differences: verification used an isolated worktree on the
+  requested existing branch, placed under a temporary sibling path in `apps/`
+  because the shared checkout was being switched concurrently. `PYTHONPATH`
+  pointed bench tests at that worktree. The same `verify.sh` script was used.
+- Domain model review: no mapped relationship or data-flow changes.
