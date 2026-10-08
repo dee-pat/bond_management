@@ -111,3 +111,9 @@ projections.
 - [Statement-derived data](../bond_management/bond_management/doctype/bond_statement/bond_statement.py)
 - [Performance inputs](../bond_management/bond_management/utils/performance.py)
 - [Investor API](../bond_management/bond_management/api/investor.py)
+
+The cleanup review preserves all mapped relationships. Investor list and report
+APIs share the same permission-aware portfolio access check; list queries keep
+explicit field projections and filter/sort allowlists. Transaction validation
+reuses one authoritative Bond Master for snapshot and accrued-interest amounts,
+with unchanged coupon/principal factors and Decimal quantization.

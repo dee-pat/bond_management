@@ -21,12 +21,17 @@ Implementation and test paths beginning with `doctype/`, `api/`, `report/`, or
 | Investor API permissions and visible projections                | `api/investor.py`, `utils/investor_permissions.py`, `report/portfolio_performance/portfolio_performance.py`, permission patches in `patches/`                                                              | `api/test_investor_transactions.py::test_guest_and_unapproved_role_are_rejected`, `::test_explicit_cross_portfolio_filter_is_denied`; `api/test_investor_statements.py::test_explicit_cross_portfolio_filter_is_denied`; `api/test_investor_performance.py::test_standard_report_role_and_reference_doctype_permissions_are_required`, `::test_unreadable_and_unknown_portfolios_have_same_failure`; `utils/test_investor_permissions.py::test_real_user_permissions_isolate_lists_documents_and_reports`                                                                                                                                                                                                                                                                        | `e2e/investor/transactions.spec.ts`, `e2e/investor/statements.spec.ts`, `e2e/investor/performance.spec.ts`                                                                  |
 | Migration ordering, uniqueness, and indexes                     | `patches/add_bond_query_indexes.py`, `patches/remove_duplicate_bond_statements.py`, `patches.txt`, `hooks.py`; document validation in Bond Market Date, Bond Statement, and Bond Exchange Rate controllers | `doctype/bond_market_date/test_bond_market_date.py::test_database_indexes_enforce_market_dates_and_support_hot_queries`; `doctype/bond_statement/test_bond_statement.py::test_rejects_duplicate_attachment_in_controller_and_database`, `::test_duplicate_cleanup_runs_before_unique_index_patch`; `doctype/bond_exchange_rate/test_bond_exchange_rate.py::test_rejects_duplicate_rows_at_document_and_database_boundaries`; individual migration behavior: `patches/test_add_bond_exchange_rate_provenance.py::test_rerun_preserves_manual_fallback_for_existing_provenance`                                                                                                                                                                                                    | No browser test; database and migration behavior belongs in server/fresh-site gates.                                                                                        |
 
-## Coverage gap to track
+## Registered migration and fresh-install lifecycle
 
-The repository tests index installation directly and checks duplicate-cleanup
-patch ordering, but no regression test was found that runs the complete
-registered patch sequence against representative legacy data or exercises the
-index `after_install` hook on a fresh site. Permission bootstrap hooks have
-separate tests; that coverage does not establish index bootstrap coverage. Use
-the fresh-site and migration gates in [verification.md](verification.md) for
-those lifecycle paths.
+The opt-in `tests/migration_lifecycle.py` CLI helper verifies manual index and
+permission bootstrap immediately after fresh installation, then runs the real
+registered patch sequence via `bench migrate` over representative legacy
+financial, private attachment, duplicate-statement, Kenya schedule/market, and
+FX scope/provenance fixtures. It compares persisted business results after a
+forced registered-patch rerun and checks that an ordinary migration preserves
+Patch Log identities. `tests/test_migration_lifecycle.py` covers its four safety
+guards in the normal server suite. See the [lifecycle plan](specs/migration-lifecycle.md)
+for the exact phases and disposable-bench boundary, and
+[verification.md](verification.md) for required gates. Individual patch tests
+remain useful for focused failures; this lifecycle helper owns whole-sequence
+ordering and fresh `after_install` index coverage.

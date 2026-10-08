@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { onMounted, ref } from "vue";
 import { RouterLink } from "vue-router";
 import { Button } from "frappe-ui";
 import { ListCell } from "frappe-ui/list";
@@ -9,96 +8,31 @@ import ListFilterBar from "../components/ListFilterBar.vue";
 import ListPagination from "../components/ListPagination.vue";
 import SortableColumn from "../components/SortableColumn.vue";
 import SurfaceState from "../components/SurfaceState.vue";
-import { InvestorApiError, redirectToLogin, useInvestorApi } from "../lib/api";
-import { toFilterValue } from "../lib/list";
+import { useInvestorApi } from "../lib/api";
+import { usePagedList } from "../lib/list";
 import { formatDate, formatNumber } from "../lib/format";
-import type { ActiveListFilter, ExchangeRateListRow, ExchangeRatePage, SortOrder } from "../types";
+import type { ExchangeRateListRow } from "../types";
 
-const exchangeRates = ref<ExchangeRateListRow[]>([]);
-const activeFilter = ref<ActiveListFilter | null>(null);
-const sortBy = ref("rate_date");
-const sortOrder = ref<SortOrder>("desc");
-const pagination = ref<ExchangeRatePage["pagination"]>({
-	start: 0,
-	page_length: 20,
-	has_more: false,
-});
-const loading = ref(true);
-const error = ref<string | null>(null);
 const api = useInvestorApi();
-let latestRequest = 0;
-
-async function loadExchangeRates(
-	start = 0,
-	append = false,
-	pageLength = pagination.value.page_length
-): Promise<void> {
-	if (append && (loading.value || !pagination.value.has_more)) return;
-
-	const requestId = ++latestRequest;
-	loading.value = true;
-	error.value = null;
-	if (!append) {
-		exchangeRates.value = [];
-		pagination.value = { start: 0, page_length: pageLength, has_more: false };
-	}
-
-	try {
-		const response = await api.fetchExchangeRates({
-			start,
-			pageLength,
-			sortBy: sortBy.value || undefined,
-			sortOrder: sortBy.value ? sortOrder.value : undefined,
-			filterField: activeFilter.value?.field,
-			filterValue: activeFilter.value?.value,
-		});
-		if (requestId !== latestRequest) return;
-		exchangeRates.value = append ? [...exchangeRates.value, ...response.data] : response.data;
-		pagination.value = response.pagination;
-	} catch (caughtError) {
-		if (requestId !== latestRequest) return;
-		if (caughtError instanceof InvestorApiError && caughtError.status === 401) {
-			redirectToLogin();
-			return;
-		}
-		error.value = "Exchange rates could not be loaded. Please retry.";
-	} finally {
-		if (requestId === latestRequest) loading.value = false;
-	}
-}
-
-function applyFilter(field: string, label: string, value: unknown): void {
-	const filterValue = toFilterValue(value);
-	if (!filterValue) return;
-	activeFilter.value = { field, label, value: filterValue };
-	void loadExchangeRates(0);
-}
-
-function clearFilter(): void {
-	activeFilter.value = null;
-	void loadExchangeRates(0);
-}
-
-function changeSort(field: string, order: SortOrder): void {
-	sortBy.value = field;
-	sortOrder.value = order;
-	void loadExchangeRates(0);
-}
-
-function loadMoreExchangeRates(): void {
-	void loadExchangeRates(pagination.value.start + pagination.value.page_length, true);
-}
-
-function changePageLength(pageLength: number): void {
-	if (pageLength === pagination.value.page_length) return;
-	void loadExchangeRates(0, false, pageLength);
-}
-
-function retryExchangeRates(): void {
-	void loadExchangeRates(0, false);
-}
-
-onMounted(() => void loadExchangeRates());
+const {
+	rows: exchangeRates,
+	activeFilter,
+	sortBy,
+	sortOrder,
+	pagination,
+	loading,
+	error,
+	applyFilter,
+	clearFilter,
+	changeSort,
+	loadMore: loadMoreExchangeRates,
+	changePageLength,
+	retry: retryExchangeRates,
+} = usePagedList<ExchangeRateListRow>({
+	fetchPage: api.fetchExchangeRates,
+	sortBy: "rate_date",
+	errorMessage: "Exchange rates could not be loaded. Please retry.",
+});
 </script>
 
 <template>

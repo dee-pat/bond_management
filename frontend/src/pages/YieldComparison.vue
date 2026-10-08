@@ -3,6 +3,7 @@ import { computed, nextTick, onMounted, ref, watch } from "vue";
 import { Button, ErrorMessage, FormControl } from "frappe-ui";
 
 import { InvestorApiError, redirectToLogin, useInvestorApi } from "../lib/api";
+import { sanitizeClipboardText } from "../lib/clipboard";
 import SurfaceState from "../components/SurfaceState.vue";
 import type { BondYieldComparisonReport, YieldComparisonFieldname } from "../report-types";
 import BondYieldComparisonChart from "./BondYieldComparisonChart.vue";
@@ -153,16 +154,15 @@ function columnPrecision(fieldname: YieldComparisonFieldname, fallback: number):
 }
 
 function auditTsv(currentReport: BondYieldComparisonReport): string {
-	const header = currentReport.columns.map((column) => auditCell(column.label)).join("\t");
+	const header = currentReport.columns
+		.map((column) => sanitizeClipboardText(column.label))
+		.join("\t");
 	const rows = currentReport.rows.map((row) =>
-		currentReport.columns.map((column) => auditCell(row[column.fieldname])).join("\t")
+		currentReport.columns
+			.map((column) => sanitizeClipboardText(row[column.fieldname]))
+			.join("\t")
 	);
 	return [header, ...rows].join("\n");
-}
-
-function auditCell(value: unknown): string {
-	const text = String(value ?? "").replace(/\p{Cc}/gu, " ");
-	return /^[=+\-@]/.test(text) ? `'${text}` : text;
 }
 
 function numericValue(value: unknown): number | null {

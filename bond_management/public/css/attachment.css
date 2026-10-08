@@ -1,0 +1,15 @@
+.bond-pdf-attachment {
+	min-height: 56px;
+	padding: 8px 10px;
+	gap: 8px;
+	align-items: flex-start;
+}
+
+.bond-pdf-attachment .ellipsis,
+.bond-pdf-attachment .attached-file-link {
+	white-space: normal;
+	overflow: visible;
+	text-overflow: clip;
+	overflow-wrap: anywhere;
+	line-height: 1.35;
+}
