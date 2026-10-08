@@ -272,6 +272,21 @@ class TestTransactionPdf(UnitTestCase):
                     with self.assertRaisesRegex(TransactionPdfError, "invalid Commission"):
                         parse_transaction_pdf_text(_current_transaction_text("U1999155", **{field: value}))
 
+    def test_rejects_conflicting_quantity_labels(self):
+        text = _current_transaction_text("U1999155").replace(
+            "Currency : USD Quantity : 20,000.000000",
+            "Currency : USD Quantity : 20,000.000000 Quantity / Face Value : 19,000.000000",
+        )
+        with self.assertRaisesRegex(TransactionPdfError, "conflicting Quantity / Face Value"):
+            parse_transaction_pdf_text(text)
+
+        matching_text = _current_transaction_text("U1999155").replace(
+            "Currency : USD Quantity : 20,000.000000",
+            "Currency : USD Quantity : 20,000.000000 Quantity / Face Value : 20,000.00",
+        )
+        row = parse_transaction_pdf_text(matching_text).transactions[0]
+        self.assertEqual(row.quantity_face_value, Decimal("20000.000000"))
+
     def test_rejects_conflicting_repeated_fields_and_incomplete_references(self):
         text = _current_transaction_text("U1999155")
         for invalid in (

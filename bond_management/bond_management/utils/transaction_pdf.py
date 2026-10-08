@@ -137,14 +137,13 @@ def parse_transaction_pdf_text(text: str) -> ParsedTransactionPdf:
         settlement_date = _required_date(fields, "Settlement Date")
         trade_date = _optional_date(fields, "Trade Date") or settlement_date
         commission_percent, commission_amount = _parse_commission(fields)
-        quantity_label = "Quantity / Face Value" if "Quantity / Face Value" in fields else "Quantity"
         row = ParsedTransactionPdfRow(
             transaction_reference=reference,
             transaction_type="Sale" if reference.startswith("R") else "Purchase",
             isin=_parse_isin(fields),
             trade_date=trade_date,
             settlement_date=settlement_date,
-            quantity_face_value=_required_decimal(fields, quantity_label),
+            quantity_face_value=_parse_quantity_face_value(fields),
             price=_required_decimal(fields, "Price"),
             accrued_interest_paid=_required_decimal(fields, "Accrued Interest"),
             commission_percent=commission_percent,
@@ -496,6 +495,19 @@ def _parse_decimal(value: str, label: str) -> Decimal:
     if not re.fullmatch(NUMBER_PATTERN, value):
         raise TransactionPdfError(f"The transaction PDF contains an invalid {label}: {value}.")
     return Decimal(value.replace(",", ""))
+
+
+def _parse_quantity_face_value(fields: dict[str, str]) -> Decimal:
+    values = [
+        _parse_decimal(fields[label], "Quantity / Face Value")
+        for label in ("Quantity", "Quantity / Face Value")
+        if label in fields
+    ]
+    if not values:
+        raise TransactionPdfError("Could not find Quantity / Face Value in a transaction PDF row.")
+    if len(set(values)) > 1:
+        raise TransactionPdfError("The transaction PDF contains conflicting Quantity / Face Value values.")
+    return values[0]
 
 
 def _required_decimal(fields: dict[str, str], label: str) -> Decimal:
