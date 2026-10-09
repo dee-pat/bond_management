@@ -33,6 +33,193 @@ test("derives quantity change from KES and the Kenya day-count convention", asyn
   expect(values.usdQuantityChange).toBe(0);
 });
 
+test("ignores an old KES response during a pending USD currency update", async ({
+  page,
+}) => {
+  let releaseKesResponse = () => {};
+  const kesResponseReady = new Promise<void>((resolve) => {
+    releaseKesResponse = resolve;
+  });
+  const requestCurrencies: string[] = [];
+  await page.route(`**/api/method/${scheduleMethod}`, async (route) => {
+    const requestData = new URLSearchParams(route.request().postData() ?? "");
+    const document = JSON.parse(requestData.get("doc") ?? "{}");
+    requestCurrencies.push(document.currency);
+    const isKes = document.currency === "KES";
+    if (isKes) {
+      await kesResponseReady;
+    }
+    await route.fulfill({
+      json: {
+        message: {
+          quantity_change: isKes ? 1 : 0,
+          maturity_date: isKes ? "2027-01-01" : "2027-01-02",
+          first_coupon_date: "2025-07-02",
+          principal_schedule: document.principal_schedule.map(
+            (row: { name: string; idx: number }) => ({
+              name: row.name,
+              idx: row.idx,
+              repayment_percent: isKes ? 50 : 100,
+            })
+          ),
+          coupon_schedule: [
+            {
+              coupon_date: isKes ? "2025-07-01" : "2025-07-02",
+              period_start: "2025-01-01",
+              period_end: "2025-07-01",
+              coupon_factor: 0.5,
+            },
+          ],
+        },
+      },
+    });
+  });
+
+  await openDeskForm(page, "/desk/bond-master/new", "Bond Master");
+  const kesRequest = page.waitForRequest((request) =>
+    request.url().includes(scheduleMethod)
+  );
+  // Trigger the real hook without awaiting its held transport response.
+  const oldCalculation = page.evaluate(async () => {
+    const form = (window as DeskTestWindow).cur_frm;
+    if (!form) {
+      throw new Error("Bond Master form did not load");
+    }
+    form.doc.currency = "KES";
+    form.doc.day_count_convention = "Actual/364(Kenya)";
+    form.doc.issue_date = "2025-01-01";
+    form.doc.first_coupon_date = "2025-07-02";
+    form.doc.face_value_per_unit = 100;
+    form.doc.coupon_frequency = "2";
+    form.add_child("principal_schedule", {
+      repayment_date: "2027-01-01",
+      principal_units: 100,
+    });
+    await form.script_manager.trigger("day_count_convention");
+  });
+  let usdCalculation: Promise<unknown> | undefined;
+  const readPreviewState = () =>
+    page.evaluate(() => {
+      const form = (window as DeskTestWindow).cur_frm;
+      return {
+        maturityDate: form?.doc.maturity_date ?? null,
+        repaymentPercent:
+          form?.doc.principal_schedule?.[0]?.repayment_percent ?? null,
+        couponDates: (form?.doc.coupon_schedule || []).map(
+          (row) => row.coupon_date
+        ),
+      };
+    });
+
+  try {
+    await kesRequest;
+    const beforeCurrencyChange = await readPreviewState();
+    await page.evaluate(() => {
+      const form = (window as DeskTestWindow).cur_frm;
+      if (!form) {
+        throw new Error("Bond Master form did not load");
+      }
+
+      const browserWindow = window as DeskTestWindow & {
+        quantityUpdateStarted?: boolean;
+        releaseQuantityUpdate?: () => void;
+      };
+      browserWindow.quantityUpdateStarted = false;
+      let releaseQuantityUpdate = () => {};
+      const quantityUpdateHold = new Promise<void>((resolve) => {
+        releaseQuantityUpdate = resolve;
+      });
+      browserWindow.releaseQuantityUpdate = releaseQuantityUpdate;
+
+      const originalSetValue = form.set_value.bind(form);
+      let hasHeldUsdQuantityUpdate = false;
+      form.set_value = (...args) => {
+        if (
+          !hasHeldUsdQuantityUpdate &&
+          args[0] === "quantity_change" &&
+          form.doc.currency === "USD"
+        ) {
+          hasHeldUsdQuantityUpdate = true;
+          const valueUpdate = originalSetValue(...args);
+          browserWindow.quantityUpdateStarted = true;
+          return Promise.resolve(valueUpdate).then(() => quantityUpdateHold);
+        }
+        return originalSetValue(...args);
+      };
+    });
+
+    usdCalculation = page.evaluate(async () => {
+      const form = (window as DeskTestWindow).cur_frm;
+      if (!form) {
+        throw new Error("Bond Master form did not load");
+      }
+      await form.set_value("currency", "USD");
+    });
+    await page.waitForFunction(() => {
+      const browserWindow = window as DeskTestWindow & {
+        quantityUpdateStarted?: boolean;
+      };
+      return browserWindow.quantityUpdateStarted === true;
+    });
+
+    releaseKesResponse();
+    await oldCalculation;
+    expect(await readPreviewState()).toEqual(beforeCurrencyChange);
+    expect(
+      await page.evaluate(
+        () => (window as DeskTestWindow).cur_frm?.doc.quantity_change
+      )
+    ).toBe(0);
+
+    await page.evaluate(async () => {
+      const browserWindow = window as DeskTestWindow & {
+        releaseQuantityUpdate?: () => void;
+      };
+      if (!browserWindow.releaseQuantityUpdate) {
+        throw new Error("USD quantity update was not held");
+      }
+      browserWindow.releaseQuantityUpdate();
+    });
+    await usdCalculation;
+    expect(requestCurrencies).toEqual(["KES", "USD"]);
+  } finally {
+    releaseKesResponse();
+    await page
+      .evaluate(() => {
+        const browserWindow = window as DeskTestWindow & {
+          releaseQuantityUpdate?: () => void;
+        };
+        browserWindow.releaseQuantityUpdate?.();
+      })
+      .catch(() => undefined);
+    await Promise.allSettled([
+      oldCalculation,
+      ...(usdCalculation ? [usdCalculation] : []),
+    ]);
+  }
+
+  const values = await page.evaluate(() => {
+    const form = (window as DeskTestWindow).cur_frm;
+    return {
+      currency: form?.doc.currency,
+      quantityChange: form?.doc.quantity_change,
+      maturityDate: form?.doc.maturity_date,
+      principal: form?.doc.principal_schedule,
+      coupons: form?.doc.coupon_schedule,
+    };
+  });
+  expect(values).toMatchObject({
+    currency: "USD",
+    quantityChange: 0,
+    maturityDate: "2027-01-02",
+    principal: [{ repayment_percent: 100 }],
+    coupons: [{ coupon_date: "2025-07-02" }],
+  });
+  await expect(
+    page.locator('[data-fieldname="quantity_change"] input[type="checkbox"]')
+  ).not.toBeChecked();
+});
+
 test("exposes withholding tax as a zero-default percentage", async ({
   page,
 }) => {

@@ -123,6 +123,12 @@ class TestInvestorPermissions(IntegrationTestCase):
         finally:
             frappe.set_user(previous_user)
 
+    def test_exchange_rate_query_condition_is_registered(self):
+        self.assertEqual(
+            app_hooks.permission_query_conditions["Bond Exchange Rate"],
+            "bond_management.bond_management.utils.investor_permissions.exchange_rate_query_condition",
+        )
+
     def test_read_only_permission_patch_is_idempotent_and_clears_mutating_access(self):
         ensure_investor_access()
         ensure_investor_access()
@@ -152,6 +158,25 @@ class TestInvestorPermissions(IntegrationTestCase):
             get_query.return_value.run.return_value = []
 
             self.assertEqual(investor_permissions.transaction_query_condition("investor@example.com"), "1=0")
+
+    def test_exchange_rate_query_condition_hides_unreadable_statement_links(self):
+        statement_condition = "`tabBond Statement`.`portfolio_name` in ('Assigned')"
+        with patch.object(
+            investor_permissions,
+            "statement_query_condition",
+            return_value=statement_condition,
+        ):
+            condition = investor_permissions.exchange_rate_query_condition("investor@example.com")
+            self.assertIn("`tabBond Exchange Rate`.`statement` is null", condition)
+            self.assertIn("select `tabBond Statement`.`name`", condition)
+            self.assertIn(statement_condition, condition)
+
+            with investor_permissions.include_shared_exchange_rates_in_safe_projection():
+                self.assertIsNone(investor_permissions.exchange_rate_query_condition("investor@example.com"))
+            self.assertIn(
+                statement_condition,
+                investor_permissions.exchange_rate_query_condition("investor@example.com"),
+            )
 
     def test_investor_query_is_restricted_to_assigned_portfolios(self):
         with (
@@ -312,6 +337,52 @@ class TestInvestorPermissions(IntegrationTestCase):
             frappe.set_user(previous_user)
 
         self.assertFalse(frappe.db.exists("Bond Exchange Rate", exchange_rate.name))
+
+    def test_exchange_rate_provenance_permissions_repair_only_owned_rows(self):
+        managers = [investor_permissions.BOND_MANAGER_ROLE, "System Manager"]
+        frappe.db.delete(
+            "DocPerm",
+            {"parent": "Bond Exchange Rate", "role": ["in", managers], "permlevel": 1},
+        )
+        unrelated = frappe.get_doc(
+            {
+                "doctype": "DocPerm",
+                "parent": "Bond Exchange Rate",
+                "parenttype": "DocType",
+                "parentfield": "permissions",
+                "role": investor_permissions.INVESTOR_ROLE,
+                "permlevel": 2,
+                "read": 1,
+            }
+        ).insert(ignore_permissions=True)
+        unrelated_before = unrelated.reload().as_dict()
+
+        ensure_exchange_rate_permissions()
+        frappe.db.set_value(
+            "DocPerm",
+            {"parent": "Bond Exchange Rate", "role": "System Manager", "permlevel": 1},
+            {"read": 0, "write": 1, "create": 1, "delete": 1},
+            update_modified=False,
+        )
+        ensure_exchange_rate_permissions()
+        ensure_exchange_rate_permissions()
+        frappe.clear_cache(doctype="Bond Exchange Rate")
+
+        permissions = frappe.qb.get_query(
+            "DocPerm",
+            fields=["role", "read", "write", "create", "delete"],
+            filters={"parent": "Bond Exchange Rate", "permlevel": 1},
+            ignore_permissions=True,
+        ).run(as_dict=True)
+        self.assertEqual(len(permissions), 2)
+        self.assertEqual({permission.role for permission in permissions}, set(managers))
+        for permission in permissions:
+            self.assertTrue(permission.read)
+            self.assertFalse(permission.write)
+            self.assertFalse(permission.create)
+            self.assertFalse(permission.delete)
+        self.assertEqual(unrelated.reload().as_dict(), unrelated_before)
+        self.assertEqual(frappe.get_meta("Bond Exchange Rate").get_field("statement").permlevel, 1)
 
     def test_manager_can_run_portfolio_performance_report(self):
         report = frappe.get_doc("Report", "Portfolio Performance")

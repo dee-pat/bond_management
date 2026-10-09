@@ -20,9 +20,13 @@ test("syncs the canonical rate from reverse rate input", async ({ page }) => {
     return {
       rate: Number(form.doc.rate),
       reverseRate: Number(form.doc.reverse_rate),
+      statementPermlevel: Number(form.get_field("statement").df.permlevel),
+      statementReadOnly: Number(form.get_field("statement").df.read_only),
     };
   });
 
+  expect(rates.statementPermlevel).toBe(1);
+  expect(rates.statementReadOnly).toBe(1);
   expect(rates.rate).toBeCloseTo(1 / 129.45, 12);
   expect(rates.reverseRate).toBe(129.45);
 });

@@ -116,3 +116,36 @@ report access. The domain graph was reviewed; no mapped relationships changed.
 - Unverified local/CI differences: the fresh database used the existing local
   bench/Python environment on macOS with MariaDB, while CI uses a newly created
   Linux bench. The complete application/browser gates passed locally.
+
+## PR #18 merge-conflict refresh against main
+
+The existing PR branch was behind `main` at `3acdd5d`. The merge had one
+content conflict in `utils/test_investor_permissions.py`; both the legacy-share
+scope regression and the exchange-rate query-hook registration test are kept.
+The domain graph was reviewed after the merge; its relationship and investor
+data-flow notes include the latest `main` changes, and the conflict resolution
+adds no further mapped relationship.
+
+- Risk classification: permission boundary, lifecycle hooks, and Desk behavior
+  from the merged base.
+- Required gates: `pre-push`, `pre-push-ui`, and fresh-site install because the
+  merged tree includes hook, permission, metadata, and Desk changes.
+- Commands and results: `apps/bond_management/scripts/verify.sh pre-push`
+  exited 0; the server suite ran 322 integration tests and 3
+  unspecified-category tests. `apps/bond_management/scripts/verify.sh
+  pre-push-ui` exited 0; 48 unit tests, 322 integration tests, 3
+  unspecified-category tests, and 50 Playwright tests passed. Frontend lint,
+  typecheck, build, pre-commit, and blocking Semgrep checks passed.
+- Fresh install: a new `codex_pr18_fresh_20261009d` site was created and the
+  app installed from this branch. `bench --site codex_pr18_fresh_20261009d
+  list-apps` exited 0 and reported the app on
+  `codex/enforce-investor-share-boundary`. Fresh-site `frappe.get_hooks` checks
+  exited 0 and confirmed the share repair after-install hook and financial
+  mutation hooks.
+- Tests failed: the first pre-push attempt could not initialize Semgrep under
+  the restricted cache/network environment; the required rerun with temporary
+  Semgrep paths and network access passed.
+- Tests not run: Linux CI.
+- Blockers: none in local verification.
+- Unverified local/CI differences: local macOS/MariaDB and browser environment
+  versus the Linux CI runner.

@@ -158,6 +158,7 @@ permission_query_conditions = {
     "Bond Portfolio": "bond_management.bond_management.utils.investor_permissions.portfolio_query_condition",
     "Bond Transaction": "bond_management.bond_management.utils.investor_permissions.transaction_query_condition",
     "Bond Statement": "bond_management.bond_management.utils.investor_permissions.statement_query_condition",
+    "Bond Exchange Rate": "bond_management.bond_management.utils.investor_permissions.exchange_rate_query_condition",
 }
 
 has_permission = {

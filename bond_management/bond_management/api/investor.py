@@ -15,6 +15,7 @@ from bond_management.bond_management.utils.investor_permissions import (
     BOND_MANAGER_ROLE,
     INVESTOR_ROLE,
     _get_allowed_portfolios,
+    include_shared_exchange_rates_in_safe_projection,
 )
 from bond_management.bond_management.utils.investor_ui import (
     require_investor_ui_access,
@@ -406,6 +407,7 @@ def get_statement(name: str) -> dict:
 
     statement = rows[0]
     document = frappe.get_doc("Bond Statement", name)
+    document.check_permission("read")
     statement["bond_statement_details"] = [
         {field: row.get(field) for field in STATEMENT_HOLDING_FIELDS}
         for row in document.bond_statement_details
@@ -574,6 +576,7 @@ def get_market_date(name: str) -> dict:
 
     market_date = rows[0]
     document = frappe.get_doc("Bond Market Date", name)
+    document.check_permission("read")
     market_date["bond_market_prices"] = [
         {field: row.get(field) for field in MARKET_PRICE_FIELDS} for row in document.bond_market_prices
     ]
@@ -615,15 +618,16 @@ def get_exchange_rates(
         minimum=1,
         maximum=MAX_PAGE_LENGTH,
     )
-    rows = frappe.qb.get_query(
-        "Bond Exchange Rate",
-        fields=list(EXCHANGE_RATE_LIST_FIELDS),
-        filters=filters,
-        order_by=order_by,
-        offset=start_value,
-        limit=page_length_value + 1,
-        ignore_permissions=False,
-    ).run(as_dict=True)
+    with include_shared_exchange_rates_in_safe_projection():
+        rows = frappe.qb.get_query(
+            "Bond Exchange Rate",
+            fields=list(EXCHANGE_RATE_LIST_FIELDS),
+            filters=filters,
+            order_by=order_by,
+            offset=start_value,
+            limit=page_length_value + 1,
+            ignore_permissions=False,
+        ).run(as_dict=True)
     has_more = len(rows) > page_length_value
 
     return set_investor_api_data(
@@ -644,18 +648,22 @@ def get_exchange_rate(name: str) -> dict:
     require_investor_ui_access()
     name = required_string(name, "Exchange rate")
 
-    rows = frappe.qb.get_query(
-        "Bond Exchange Rate",
-        fields=list(EXCHANGE_RATE_DETAIL_FIELDS),
-        filters={"name": name},
-        limit=1,
-        ignore_permissions=False,
-    ).run(as_dict=True)
+    with include_shared_exchange_rates_in_safe_projection():
+        rows = frappe.qb.get_query(
+            "Bond Exchange Rate",
+            fields=[field for field in EXCHANGE_RATE_DETAIL_FIELDS if field != "statement"],
+            filters={"name": name},
+            limit=1,
+            ignore_permissions=False,
+        ).run(as_dict=True)
     if not rows:
         frappe.throw(_("You are not permitted to read this exchange rate."), frappe.PermissionError)
 
     exchange_rate = rows[0]
-    exchange_rate.statement = _visible_statement_reference(exchange_rate.statement)
+    # The row is authorized above. Read private provenance only to apply the
+    # linked statement's read boundary before returning this fixed projection.
+    statement = frappe.db.get_value("Bond Exchange Rate", name, "statement")
+    exchange_rate.statement = _visible_statement_reference(statement)
     return set_investor_api_data({"exchange_rate": exchange_rate})
 
 

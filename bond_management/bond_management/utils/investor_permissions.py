@@ -6,6 +6,9 @@ their portfolio values. These hooks make that boundary explicit for list,
 report, and direct-document access.
 """
 
+from collections.abc import Iterator
+from contextlib import contextmanager
+
 import frappe
 from frappe import _
 
@@ -107,6 +110,44 @@ def transaction_query_condition(user: str) -> str | None:
 
 def statement_query_condition(user: str) -> str | None:
     return _portfolio_condition("Bond Statement", "portfolio_name", user)
+
+
+_SHARED_EXCHANGE_RATE_PROJECTION_FLAG = "include_shared_exchange_rates_in_safe_projection"
+
+
+@contextmanager
+def include_shared_exchange_rates_in_safe_projection() -> Iterator[None]:
+    """Keep shared rate history visible to a fixed projection without exposing its private link."""
+    flag_was_set = _SHARED_EXCHANGE_RATE_PROJECTION_FLAG in frappe.flags
+    previous_value = frappe.flags.get(_SHARED_EXCHANGE_RATE_PROJECTION_FLAG)
+    frappe.flags[_SHARED_EXCHANGE_RATE_PROJECTION_FLAG] = True
+    try:
+        yield
+    finally:
+        if flag_was_set:
+            frappe.flags[_SHARED_EXCHANGE_RATE_PROJECTION_FLAG] = previous_value
+        else:
+            frappe.flags.pop(_SHARED_EXCHANGE_RATE_PROJECTION_FLAG, None)
+
+
+def exchange_rate_query_condition(user: str | None = None) -> str | None:
+    """Hide rows linked to statements the caller cannot read, including filter probes."""
+    if frappe.flags.get(_SHARED_EXCHANGE_RATE_PROJECTION_FLAG):
+        return None
+
+    user = user or frappe.session.user
+    statement_condition = statement_query_condition(user)
+    if statement_condition is None:
+        return None
+
+    # Keep the privacy boundary at query level too, so generic list paths that
+    # accept a protected-field filter cannot use an unreadable link as an oracle.
+    return (
+        "(`tabBond Exchange Rate`.`statement` is null or "
+        "`tabBond Exchange Rate`.`statement` in ("
+        "select `tabBond Statement`.`name` from `tabBond Statement` "
+        f"where {statement_condition}))"
+    )
 
 
 def _has_portfolio_access(portfolio: str | None, user: str, ptype: str) -> bool | None:

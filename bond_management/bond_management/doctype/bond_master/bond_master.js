@@ -10,9 +10,8 @@ frappe.ui.form.on("Bond Master", {
 	first_coupon_date: recalculate_schedules,
 	coupon_frequency: recalculate_schedules,
 	coupon_rate: recalculate_schedules,
-	currency: update_quantity_change,
-	day_count_convention: (frm) =>
-		update_quantity_change(frm).then(() => recalculate_schedules(frm)),
+	currency: update_quantity_change_and_schedules,
+	day_count_convention: update_quantity_change_and_schedules,
 });
 
 frappe.ui.form.on("Bond Principal Schedule", {
@@ -72,6 +71,15 @@ function recalculate_schedules(frm) {
 
 			return apply_recalculated_schedules(frm, state, request_id, response.message);
 		});
+}
+
+async function update_quantity_change_and_schedules(frm) {
+	const state = get_schedule_state(frm);
+	const request_id = ++state.request_id;
+	await update_quantity_change(frm);
+	if (request_id === state.request_id) {
+		return recalculate_schedules(frm);
+	}
 }
 
 function update_quantity_change(frm) {
