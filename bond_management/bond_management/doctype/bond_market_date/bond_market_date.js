@@ -40,6 +40,9 @@ frappe.ui.form.on("Bond Market Prices", {
 
 function set_future_xirr_formatter(frm) {
 	const formatter = (value, df, options, row) => {
+		if (!Number(row?.future_xirr_available)) {
+			return __("Unavailable");
+		}
 		const formatted_value = frappe.form.formatters.Percent(
 			value,
 			df,
@@ -195,6 +198,7 @@ function apply_market_calculation(frm, calculated_rows) {
 	const derived_fields = [
 		"currency",
 		"future_xirr",
+		"future_xirr_available",
 		"principal_factor",
 		"weighted_avg_repayment_date",
 		"weighted_avg_repayment_years",
@@ -471,7 +475,9 @@ function get_yield_curve_data(frm) {
 				repayment_date,
 				years,
 				yield_percent:
-					row.future_xirr === null || row.future_xirr === undefined
+					!Number(row.future_xirr_available) ||
+					row.future_xirr === null ||
+					row.future_xirr === undefined
 						? NaN
 						: Number(row.future_xirr),
 			};

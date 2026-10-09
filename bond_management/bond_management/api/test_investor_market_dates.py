@@ -74,6 +74,30 @@ class TestInvestorMarketDates(IntegrationTestCase):
         self.assertNotIn("parent", str(response))
         self.assertNotIn("modified", str(response))
 
+    def test_detail_masks_unavailable_stale_yield_and_keeps_available_zero(self):
+        unavailable = make_bond(coupon_rate=0)
+        available = make_bond(coupon_rate=0)
+        snapshot = make_market_date(unavailable, date="2025-11-24")
+        make_market_date(available, market_date=snapshot)
+        snapshot.reload()
+        stale_row = next(row for row in snapshot.bond_market_prices if row.isin == unavailable.name)
+        frappe.db.set_value(
+            "Bond Market Prices",
+            stale_row.name,
+            {"future_xirr": 17.125, "future_xirr_available": 0},
+            update_modified=False,
+        )
+        investor = self._make_user([INVESTOR_ROLE])
+
+        with self._as_user(investor):
+            detail = get_market_date(snapshot.name)["market_date"]
+
+        rows = {row["isin"]: row for row in detail.bond_market_prices}
+        self.assertIsNone(rows[unavailable.name]["future_xirr"])
+        self.assertEqual(rows[unavailable.name]["future_xirr_available"], 0)
+        self.assertEqual(rows[available.name]["future_xirr"], 0)
+        self.assertEqual(rows[available.name]["future_xirr_available"], 1)
+
     def test_detail_rejects_children_outside_bond_user_permissions(self):
         readable = make_bond()
         restricted = make_bond()

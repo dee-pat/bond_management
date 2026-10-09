@@ -50,8 +50,7 @@ class TestBondYieldComparison(IntegrationTestCase):
         frappe.db.set_value(
             "Bond Market Prices",
             price_row.name,
-            "future_xirr",
-            "17.125",
+            {"future_xirr": "17.125", "future_xirr_available": 1},
             update_modified=False,
         )
 
@@ -59,6 +58,27 @@ class TestBondYieldComparison(IntegrationTestCase):
 
         self.assertEqual(len(rows), 1)
         self.assertEqual(Decimal(str(rows[0].future_xirr)), Decimal("17.125"))
+
+    def test_report_masks_unavailable_stale_yield_and_keeps_available_zero(self):
+        unavailable = make_bond(coupon_rate=0)
+        available = make_bond(coupon_rate=0)
+        snapshot = make_market_date(unavailable, date="2025-11-25")
+        make_market_date(available, market_date=snapshot)
+        snapshot.reload()
+        stale_row = next(row for row in snapshot.bond_market_prices if row.isin == unavailable.name)
+        frappe.db.set_value(
+            "Bond Market Prices",
+            stale_row.name,
+            {"future_xirr": -17.125, "future_xirr_available": 0},
+            update_modified=False,
+        )
+
+        rows = {row.isin: row for row in execute({"bonds": [unavailable.name, available.name]})[1]}
+
+        self.assertIsNone(rows[unavailable.name].future_xirr)
+        self.assertNotIn("future_xirr_available", rows[unavailable.name])
+        self.assertEqual(rows[available.name].future_xirr, 0)
+        self.assertNotIn("future_xirr_available", rows[available.name])
 
     def test_empty_selection_returns_all_readable_bonds(self):
         existing_isins = {row.isin for row in execute({"bonds": []})[1]}

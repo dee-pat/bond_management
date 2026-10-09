@@ -222,6 +222,7 @@ def _ensure_yield_market_date(market_date: str, values: tuple[tuple[str, str, st
             {
                 "market_price": Decimal(market_price),
                 "future_xirr": Decimal(future_xirr),
+                "future_xirr_available": 1,
             },
             update_modified=False,
         )
