@@ -172,7 +172,8 @@ def calculate_interest_difference_days(row: dict, schedules: dict | None) -> Dec
             row.coupon_frequency,
             reference_end_date=period.coupon_date,
         )
-        daily_per_unit = coupon_rate / Decimal(100) * face_value * daily_fraction
+        principal_factor = calculate_principal_factor_from_bond(bond, settlement_date)
+        daily_per_unit = coupon_rate / Decimal(100) * face_value * daily_fraction * principal_factor
         quantity_factor = calculate_quantity_factor_from_bond(bond, settlement_date)
     else:
         daily_fraction = (

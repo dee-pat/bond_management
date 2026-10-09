@@ -114,6 +114,34 @@ class TestInterestDifferenceByPortfolio(IntegrationTestCase):
         self.assertEqual(updated_row.interest_difference_days, Decimal("-52.00"))
         self.assertEqual(frappe.db.get_value("Bond Transaction", transaction.name, "coupon_rate"), 7)
 
+    def test_kenya_day_conversion_applies_principal_factor_to_non_kes_bond(self):
+        portfolio = make_portfolio()
+        bond = make_bond(
+            currency="USD",
+            day_count_convention="Actual/364(Kenya)",
+            coupon_rate=7,
+            principal_schedule=[
+                {"repayment_date": "2025-07-04", "principal_units": 50},
+                {"repayment_date": "2027-01-01", "principal_units": 50},
+            ],
+        )
+        transaction = make_transaction(
+            bond,
+            portfolio,
+            trade_date="2025-07-04",
+            settlement_date="2025-07-05",
+            accrued_interest_paid="10.00",
+        )
+        frappe.db.set_value("Bond Transaction", transaction.name, "accrued_interest_calculated", "0")
+
+        row = next(
+            row
+            for row in execute({"portfolio_name": portfolio.name})[1]
+            if row.transaction_reference == transaction.name
+        )
+
+        self.assertEqual(row.interest_difference_days, Decimal("-104.00"))
+
     def test_settlement_date_and_portfolio_filters_are_inclusive(self):
         portfolio = make_portfolio()
         other_portfolio = make_portfolio()
