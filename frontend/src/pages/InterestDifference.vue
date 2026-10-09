@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from "vue";
+import { computed, nextTick, ref, watch } from "vue";
 import { Button, FormControl } from "frappe-ui";
 
 import SurfaceState from "../components/SurfaceState.vue";
@@ -24,9 +24,7 @@ const error = ref<string | null>(null);
 const dateRangeInvalid = computed(() =>
 	Boolean(fromDate.value && toDate.value && fromDate.value > toDate.value)
 );
-const canRun = computed(
-	() => Boolean(selectedPortfolio.value) && !dateRangeInvalid.value && !loading.value
-);
+const canRun = computed(() => Boolean(selectedPortfolio.value) && !loading.value);
 const portfolioOptions = computed(() => [
 	{ label: "Select portfolio", value: "" },
 	...props.bootstrap.portfolios.map((portfolio) => ({
@@ -39,7 +37,13 @@ let latestRequest = 0;
 watch([selectedPortfolio, fromDate, toDate], invalidateResults);
 
 async function runReport(): Promise<void> {
+	// DatePicker commits typed text on blur. Let those model updates settle before
+	// validating, so Run stays available while a user replaces both dates.
+	await nextTick();
 	if (!canRun.value) {
+		return;
+	}
+	if (dateRangeInvalid.value) {
 		return;
 	}
 

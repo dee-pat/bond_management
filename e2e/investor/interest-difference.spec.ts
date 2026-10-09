@@ -4,6 +4,54 @@ import { selectFrappeOption } from "./helpers/controls";
 
 const PORTFOLIO = "UI Test Portfolio";
 
+test("submits the latest dates when replacing an existing range", async ({
+  page,
+}) => {
+  let requestedFilters: Record<string, unknown> | undefined;
+  const report = {
+    filters: { portfolio: PORTFOLIO, from_date: null, to_date: null },
+    columns: [],
+    rows: [],
+    chart: null,
+  };
+
+  await page.route(
+    "**/api/method/bond_management.bond_management.api.investor.get_interest_difference_by_portfolio*",
+    async (route) => {
+      const params = new URL(route.request().url()).searchParams;
+      requestedFilters = {
+        portfolio: params.get("portfolio"),
+        from_date: params.get("from_date"),
+        to_date: params.get("to_date"),
+      };
+      await route.fulfill({
+        json: { message: { report }, data: { report } },
+      });
+    },
+  );
+
+  await page.goto("/bond-investor/interest-difference");
+  await selectFrappeOption(page, "Portfolio (required)", PORTFOLIO);
+
+  const fromDate = page.getByLabel("From Settlement Date");
+  const toDate = page.getByLabel("To Settlement Date");
+  await fromDate.fill("2025-01-01");
+  await toDate.fill("2025-02-01");
+  await fromDate.fill("2025-03-01");
+  await toDate.fill("2025-04-01");
+
+  const runButton = page.getByRole("button", { name: "Run", exact: true });
+  await expect(runButton).toBeEnabled();
+  await runButton.click();
+
+  await expect(page.getByTestId("interest-difference-empty")).toBeVisible();
+  expect(requestedFilters).toMatchObject({
+    portfolio: PORTFOLIO,
+    from_date: "2025-03-01",
+    to_date: "2025-04-01",
+  });
+});
+
 test("runs interest difference for the selected portfolio", async ({
   page,
 }) => {
