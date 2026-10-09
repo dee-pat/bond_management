@@ -154,7 +154,7 @@ export interface InterestDifferenceColumn {
 export type InterestDifferenceRow = Record<
   InterestDifferenceFieldname,
   string | number | null
->;
+> & { is_total_row: boolean };
 
 export interface InterestDifferenceReport {
   filters: {

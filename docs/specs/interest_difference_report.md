@@ -26,7 +26,9 @@ portfolio, with the same optional settlement-date range and currency totals.
   convention-specific daily accrual when converting the difference to days.
 - Append a total row for each portfolio/currency group with summed monetary
   amounts/difference. Leave equivalent days blank on totals
-  because days from different bonds or conventions are not additive.
+  because days from different bonds or conventions are not additive. Include a
+  language-independent `is_total_row` marker in investor rows so the UI does not
+  infer row type from the translated transaction reference.
 - Use existing Frappe permission-aware query APIs and portfolio access rules.
 
 ## Permissions and consistency

@@ -83,6 +83,37 @@ class TestInterestDifferenceByPortfolio(IntegrationTestCase):
         self.assertEqual(days_by_currency["USD"], Decimal("-51.71"))
         self.assertEqual(days_by_currency["KES"], Decimal("-52.00"))
 
+    def test_kenya_day_conversion_uses_saved_transaction_coupon_rate(self):
+        portfolio = make_portfolio()
+        bond = make_bond(currency="KES", day_count_convention="Actual/364(Kenya)", coupon_rate=7)
+        transaction = make_transaction(
+            bond,
+            portfolio,
+            trade_date="2025-06-29",
+            settlement_date="2025-06-30",
+            accrued_interest_paid="10.00",
+        )
+        frappe.db.set_value("Bond Transaction", transaction.name, "accrued_interest_calculated", "0")
+
+        original_row = next(
+            row
+            for row in execute({"portfolio_name": portfolio.name})[1]
+            if row.transaction_reference == transaction.name
+        )
+        self.assertEqual(original_row.interest_difference_days, Decimal("-52.00"))
+        self.assertEqual(frappe.db.get_value("Bond Transaction", transaction.name, "coupon_rate"), 7)
+
+        bond.coupon_rate = 14
+        bond.save()
+
+        updated_row = next(
+            row
+            for row in execute({"portfolio_name": portfolio.name})[1]
+            if row.transaction_reference == transaction.name
+        )
+        self.assertEqual(updated_row.interest_difference_days, Decimal("-52.00"))
+        self.assertEqual(frappe.db.get_value("Bond Transaction", transaction.name, "coupon_rate"), 7)
+
     def test_settlement_date_and_portfolio_filters_are_inclusive(self):
         portfolio = make_portfolio()
         other_portfolio = make_portfolio()

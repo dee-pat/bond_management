@@ -189,12 +189,12 @@ function isNumericColumn(column: InterestDifferenceColumn): boolean {
 						v-for="(row, index) in report.rows"
 						:key="`${row.transaction_reference}:${row.currency}:${index}`"
 						:data-testid="
-							row.transaction_reference === 'Total'
+							row.is_total_row
 								? 'interest-difference-total-row'
 								: 'interest-difference-row'
 						"
 						:class="{
-							'interest-difference-total-row': row.transaction_reference === 'Total',
+							'interest-difference-total-row': row.is_total_row,
 						}"
 					>
 						<td

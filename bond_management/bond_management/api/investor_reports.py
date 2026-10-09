@@ -43,6 +43,7 @@ INTEREST_DIFFERENCE_FIELDS = (
     "interest_difference",
     "interest_difference_days",
 )
+INTEREST_DIFFERENCE_ROW_FIELDS = (*INTEREST_DIFFERENCE_FIELDS, "is_total_row")
 PORTFOLIO_PERFORMANCE_COLUMN_FIELDS = (
     "isin",
     "currency",
@@ -206,7 +207,13 @@ def get_interest_difference_by_portfolio(
                     for column in columns
                     if column.get("fieldname") in INTEREST_DIFFERENCE_FIELDS
                 ],
-                "rows": [_project_fields(row, INTEREST_DIFFERENCE_FIELDS) for row in rows],
+                "rows": [
+                    _project_fields(
+                        {**row, "is_total_row": bool(row.get("is_total_row"))},
+                        INTEREST_DIFFERENCE_ROW_FIELDS,
+                    )
+                    for row in rows
+                ],
                 "chart": None,
             }
         }

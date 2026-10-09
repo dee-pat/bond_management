@@ -112,7 +112,7 @@ def load_bond_schedules(rows: list[dict]) -> dict[str, dict]:
         (
             "Bond Coupon Schedule",
             "coupon_schedule",
-            ["parent", "coupon_date", "period_start", "period_end", "coupon_factor"],
+            ["parent", "coupon_date", "period_start", "period_end"],
             "coupon_date asc",
         ),
         (
@@ -165,15 +165,14 @@ def calculate_interest_difference_days(row: dict, schedules: dict | None) -> Dec
     quantity = to_decimal(row.quantity_face_value)
     convention = row.day_count_convention
     if is_kenya_day_count_convention(convention):
-        period_days = (getdate(period.coupon_date) - getdate(period.period_start)).days
-        if period_days <= 0:
-            return None
-        coupon_factor = to_decimal(
-            period.coupon_factor
-            if period.coupon_factor is not None
-            else coupon_rate / to_decimal(row.coupon_frequency)
+        daily_fraction = year_fraction(
+            convention,
+            settlement_date - timedelta(days=1),
+            settlement_date,
+            row.coupon_frequency,
+            reference_end_date=period.coupon_date,
         )
-        daily_per_unit = coupon_factor / Decimal(100) * face_value / to_decimal(period_days)
+        daily_per_unit = coupon_rate / Decimal(100) * face_value * daily_fraction
         quantity_factor = calculate_quantity_factor_from_bond(bond, settlement_date)
     else:
         daily_fraction = (

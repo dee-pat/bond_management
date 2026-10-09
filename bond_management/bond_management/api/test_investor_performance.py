@@ -8,6 +8,7 @@ from frappe.tests import IntegrationTestCase
 from bond_management.bond_management.api import investor as investor_api
 from bond_management.bond_management.api.investor_reports import (
     INTEREST_DIFFERENCE_FIELDS,
+    INTEREST_DIFFERENCE_ROW_FIELDS,
     PORTFOLIO_CASHFLOW_FIELDS,
     PORTFOLIO_PERFORMANCE_COLUMN_FIELDS,
     PORTFOLIO_PERFORMANCE_ROW_FIELDS,
@@ -183,7 +184,9 @@ class TestInvestorPortfolioPerformance(IntegrationTestCase):
         self.assertEqual(
             [row["transaction_reference"] for row in report["rows"]], [transaction.name, "Total"]
         )
-        self.assertTrue(all(set(row) == set(INTEREST_DIFFERENCE_FIELDS) for row in report["rows"]))
+        self.assertTrue(all(set(row) == set(INTEREST_DIFFERENCE_ROW_FIELDS) for row in report["rows"]))
+        self.assertFalse(report["rows"][0]["is_total_row"])
+        self.assertTrue(report["rows"][1]["is_total_row"])
         self.assertEqual(report["rows"][0]["interest_difference"], -2.25)
         self.assertEqual(report["rows"][1]["interest_difference"], -2.25)
         self.assertTrue(all("portfolio_name" not in row for row in report["rows"]))

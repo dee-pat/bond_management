@@ -81,7 +81,7 @@ flowchart LR
     DATA -->|"stored interest comparison and DCC-equivalent days; totals by selected portfolio/currency"| INTEREST
     PP -->|"values + cash-flow availability"| API
     YIELD --> API
-    INTEREST -->|"fixed investor projection"| API
+    INTEREST -->|"fixed investor projection with total-row marker"| API
     FX -->|"shared rates + readable statement reference"| API
     API --> SPA
 ```
