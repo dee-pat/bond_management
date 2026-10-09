@@ -30,15 +30,13 @@ class TestXirr(IntegrationTestCase):
         frappe.db.set_value(
             "Bond Market Prices",
             previous.bond_market_prices[0].name,
-            "future_xirr",
-            12.5,
+            {"future_xirr": 12.5, "future_xirr_available": 1},
             update_modified=False,
         )
         frappe.db.set_value(
             "Bond Market Prices",
             latest.bond_market_prices[0].name,
-            "future_xirr",
-            13.5,
+            {"future_xirr": 13.5, "future_xirr_available": 1},
             update_modified=False,
         )
 
@@ -54,8 +52,16 @@ class TestXirr(IntegrationTestCase):
 
         previous = make_market_date(bond, date=market_date)
         latest = make_market_date(bond, date=market_date + timedelta(days=1))
-        frappe.db.set_value("Bond Market Prices", previous.bond_market_prices[0].name, "future_xirr", 12.5)
-        frappe.db.set_value("Bond Market Prices", latest.bond_market_prices[0].name, "future_xirr", 0)
+        frappe.db.set_value(
+            "Bond Market Prices",
+            previous.bond_market_prices[0].name,
+            {"future_xirr": 12.5, "future_xirr_available": 1},
+        )
+        frappe.db.set_value(
+            "Bond Market Prices",
+            latest.bond_market_prices[0].name,
+            {"future_xirr": 0, "future_xirr_available": 1},
+        )
 
         self.assertEqual(get_last_xirr_guesses({bond.name}, previous.date), {bond.name: 0.125})
         self.assertEqual(get_last_xirr_guesses({bond.name}, latest.date), {bond.name: 0.0})
@@ -67,10 +73,47 @@ class TestXirr(IntegrationTestCase):
             market_date += timedelta(days=1)
 
         snapshot = make_market_date(bond, date=market_date)
-        frappe.db.set_value("Bond Market Prices", snapshot.bond_market_prices[0].name, "future_xirr", -12.5)
+        frappe.db.set_value(
+            "Bond Market Prices",
+            snapshot.bond_market_prices[0].name,
+            {"future_xirr": -12.5, "future_xirr_available": 1},
+        )
 
         self.assertEqual(get_last_xirr_guesses({bond.name}, market_date - timedelta(days=1)), {})
         self.assertEqual(get_last_xirr_guesses({bond.name}, snapshot.date), {bond.name: -0.125})
+
+    def test_last_guess_skips_unavailable_snapshot_and_retains_older_zero(self):
+        for older_yield, start_date in ((12.5, date(2093, 1, 1)), (0, date(2094, 1, 1))):
+            with self.subTest(older_yield=older_yield):
+                bond = make_bond()
+                while frappe.db.exists("Bond Market Date", {"date": start_date}):
+                    start_date += timedelta(days=2)
+                previous = make_market_date(bond, date=start_date)
+                latest = make_market_date(bond, date=start_date + timedelta(days=1))
+                frappe.db.set_value(
+                    "Bond Market Prices",
+                    previous.bond_market_prices[0].name,
+                    {"future_xirr": older_yield, "future_xirr_available": 1},
+                    update_modified=False,
+                )
+                frappe.db.set_value(
+                    "Bond Market Prices",
+                    latest.bond_market_prices[0].name,
+                    {"future_xirr": 99, "future_xirr_available": 0},
+                    update_modified=False,
+                )
+
+                self.assertEqual(
+                    get_last_xirr_guesses({bond.name}, latest.date), {bond.name: older_yield / 100}
+                )
+                frappe.db.set_value(
+                    "Bond Market Prices",
+                    previous.bond_market_prices[0].name,
+                    "future_xirr_available",
+                    0,
+                    update_modified=False,
+                )
+                self.assertEqual(get_last_xirr_guesses({bond.name}, latest.date), {})
 
     def test_returns_none_for_cashflows_without_both_signs(self):
         self.assertIsNone(calculate_xirr({date(2025, 1, 1): 100, date(2026, 1, 1): 110}))

@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { onMounted, ref } from "vue";
 import { RouterLink } from "vue-router";
 import { Button } from "frappe-ui";
 import { ListCell } from "frappe-ui/list";
@@ -9,96 +8,31 @@ import ListFilterBar from "../components/ListFilterBar.vue";
 import ListPagination from "../components/ListPagination.vue";
 import SortableColumn from "../components/SortableColumn.vue";
 import SurfaceState from "../components/SurfaceState.vue";
-import { InvestorApiError, redirectToLogin, useInvestorApi } from "../lib/api";
-import { toFilterValue } from "../lib/list";
+import { useInvestorApi } from "../lib/api";
+import { usePagedList } from "../lib/list";
 import { formatDate } from "../lib/format";
-import type { ActiveListFilter, MarketDateListRow, MarketDatePage, SortOrder } from "../types";
+import type { MarketDateListRow } from "../types";
 
-const marketDates = ref<MarketDateListRow[]>([]);
-const activeFilter = ref<ActiveListFilter | null>(null);
-const sortBy = ref("date");
-const sortOrder = ref<SortOrder>("desc");
-const pagination = ref<MarketDatePage["pagination"]>({
-	start: 0,
-	page_length: 20,
-	has_more: false,
-});
-const loading = ref(true);
-const error = ref<string | null>(null);
 const api = useInvestorApi();
-let latestRequest = 0;
-
-async function loadMarketDates(
-	start = 0,
-	append = false,
-	pageLength = pagination.value.page_length
-): Promise<void> {
-	if (append && (loading.value || !pagination.value.has_more)) return;
-
-	const requestId = ++latestRequest;
-	loading.value = true;
-	error.value = null;
-	if (!append) {
-		marketDates.value = [];
-		pagination.value = { start: 0, page_length: pageLength, has_more: false };
-	}
-
-	try {
-		const response = await api.fetchMarketDates({
-			start,
-			pageLength,
-			sortBy: sortBy.value || undefined,
-			sortOrder: sortBy.value ? sortOrder.value : undefined,
-			filterField: activeFilter.value?.field,
-			filterValue: activeFilter.value?.value,
-		});
-		if (requestId !== latestRequest) return;
-		marketDates.value = append ? [...marketDates.value, ...response.data] : response.data;
-		pagination.value = response.pagination;
-	} catch (caughtError) {
-		if (requestId !== latestRequest) return;
-		if (caughtError instanceof InvestorApiError && caughtError.status === 401) {
-			redirectToLogin();
-			return;
-		}
-		error.value = "Market dates could not be loaded. Please retry.";
-	} finally {
-		if (requestId === latestRequest) loading.value = false;
-	}
-}
-
-function applyFilter(field: string, label: string, value: unknown): void {
-	const filterValue = toFilterValue(value);
-	if (!filterValue) return;
-	activeFilter.value = { field, label, value: filterValue };
-	void loadMarketDates(0);
-}
-
-function clearFilter(): void {
-	activeFilter.value = null;
-	void loadMarketDates(0);
-}
-
-function changeSort(field: string, order: SortOrder): void {
-	sortBy.value = field;
-	sortOrder.value = order;
-	void loadMarketDates(0);
-}
-
-function loadMoreMarketDates(): void {
-	void loadMarketDates(pagination.value.start + pagination.value.page_length, true);
-}
-
-function changePageLength(pageLength: number): void {
-	if (pageLength === pagination.value.page_length) return;
-	void loadMarketDates(0, false, pageLength);
-}
-
-function retryMarketDates(): void {
-	void loadMarketDates(0, false);
-}
-
-onMounted(() => void loadMarketDates());
+const {
+	rows: marketDates,
+	activeFilter,
+	sortBy,
+	sortOrder,
+	pagination,
+	loading,
+	error,
+	applyFilter,
+	clearFilter,
+	changeSort,
+	loadMore: loadMoreMarketDates,
+	changePageLength,
+	retry: retryMarketDates,
+} = usePagedList<MarketDateListRow>({
+	fetchPage: api.fetchMarketDates,
+	sortBy: "date",
+	errorMessage: "Market dates could not be loaded. Please retry.",
+});
 </script>
 
 <template>

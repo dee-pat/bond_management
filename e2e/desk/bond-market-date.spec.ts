@@ -17,6 +17,7 @@ const marketData = {
   [targetIsin]: {
     currency: "KES",
     future_xirr: 8.75,
+    future_xirr_available: 1,
     principal_factor: 1,
     weighted_avg_repayment_date: weightedDate,
     weighted_avg_repayment_years: 2,
@@ -24,6 +25,7 @@ const marketData = {
   [referenceIsin]: {
     currency: "USD",
     future_xirr: 9.25,
+    future_xirr_available: 1,
     principal_factor: 1,
     weighted_avg_repayment_date: "2029-01-01",
     weighted_avg_repayment_years: 1461 / 365,
@@ -194,6 +196,83 @@ test("renders one yield-curve line per currency", async ({ page }) => {
   await expect(
     page.locator('.bond-yield-legend [role="listitem"]')
   ).toHaveCount(2);
+});
+
+test("shows unavailable yields separately from zero in the market grid and curve", async ({
+  page,
+}) => {
+  await page.route(
+    "**/api/method/**.get_recalculated_market_data",
+    async (route) => {
+      const requestData = parsePostData(route.request().postData());
+      const rows =
+        typeof requestData.rows === "string"
+          ? JSON.parse(requestData.rows)
+          : requestData.rows;
+      await route.fulfill({
+        json: {
+          message: rows.map((row: { name: string; isin: string }) => ({
+            name: row.name,
+            ...marketData[row.isin as keyof typeof marketData],
+            future_xirr: row.isin === targetIsin ? null : 0,
+            future_xirr_available: row.isin === targetIsin ? 0 : 1,
+          })),
+        },
+      });
+    }
+  );
+  await openDeskForm(page, "/desk/bond-market-date/new", "Bond Market Date");
+  const recalculation = page.waitForResponse((response) =>
+    response.url().includes("get_recalculated_market_data")
+  );
+  // The client-script smoke isolates recalculation rendering from native grid entry.
+  await page.evaluate(
+    async ({ marketDate, targetIsin, referenceIsin }) => {
+      const form = (window as DeskTestWindow).cur_frm;
+      if (!form) throw new Error("Bond Market Date form did not load");
+      form.clear_table("bond_market_prices");
+      form.doc.date = marketDate;
+      const target = form.add_child("bond_market_prices", {
+        isin: targetIsin,
+        market_price: 100,
+      });
+      form.add_child("bond_market_prices", {
+        isin: referenceIsin,
+        market_price: 100,
+      });
+      form.refresh_field("date");
+      form.refresh_field("bond_market_prices");
+      await form.script_manager.trigger(
+        "market_price",
+        target.doctype,
+        target.name
+      );
+    },
+    { marketDate, targetIsin, referenceIsin }
+  );
+  await recalculation;
+
+  const unavailableRow = page
+    .locator(".grid-body .grid-row")
+    .filter({ hasText: targetIsin });
+  await expect(
+    unavailableRow.locator('[data-fieldname="future_xirr"]')
+  ).toContainText("Unavailable");
+  await expect(
+    page.getByRole("button", {
+      name: `Copy cash flows for ${targetIsin}`,
+      exact: true,
+    })
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole("button", {
+      name: `Copy cash flows for ${referenceIsin}`,
+      exact: true,
+    })
+  ).toContainText(/^0(?:\.0+)?%$/);
+  const curve = page.locator(".bond-yield-curve");
+  await expect(curve).toContainText(referenceIsin);
+  await expect(curve).not.toContainText(targetIsin);
 });
 
 function parsePostData(postData: string | null): Record<string, unknown> {

@@ -31,7 +31,7 @@ website_route_rules = [
 # ------------------
 
 # include js, css files in header of desk.html
-# app_include_css = "/assets/bond_management/css/bond_management.css"
+app_include_css = ["/assets/bond_management/css/attachment.css"]
 # app_include_js = "/assets/bond_management/js/bond_management.js"
 
 # include js, css files in header of web template

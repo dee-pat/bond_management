@@ -51,7 +51,7 @@ def get_data(filters: dict) -> list[dict]:
     elif filters["to_date"]:
         market_filters["date"] = ["<=", filters["to_date"]]
 
-    return frappe.qb.get_query(
+    rows = frappe.qb.get_query(
         "Bond Market Date",
         fields=[
             "date",
@@ -59,11 +59,16 @@ def get_data(filters: dict) -> list[dict]:
             "bond_market_prices.currency as currency",
             "bond_market_prices.market_price as market_price",
             "bond_market_prices.future_xirr as future_xirr",
+            "bond_market_prices.future_xirr_available as future_xirr_available",
         ],
         filters=market_filters,
         order_by="date asc, bond_market_prices.isin asc",
         ignore_permissions=False,
     ).run(as_dict=True)
+    for row in rows:
+        if not row.pop("future_xirr_available"):
+            row.future_xirr = None
+    return rows
 
 
 def get_readable_isins(selected_isins: list[str] | None) -> list[str]:

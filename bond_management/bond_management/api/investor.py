@@ -11,6 +11,9 @@ from bond_management.bond_management.api.investor_reports import (
     get_portfolio_performance_cashflows,
     get_yield_comparison_defaults,
 )
+from bond_management.bond_management.utils.investor_access import (
+    require_readable_portfolio as _require_readable_portfolio,
+)
 from bond_management.bond_management.utils.investor_permissions import (
     BOND_MANAGER_ROLE,
     INVESTOR_ROLE,
@@ -119,6 +122,7 @@ MARKET_PRICE_FIELDS = (
     "market_price",
     "currency",
     "future_xirr",
+    "future_xirr_available",
     "weighted_avg_repayment_date",
     "weighted_avg_repayment_years",
     "maturity_date",
@@ -254,20 +258,7 @@ def get_transactions(
         filter_fields=TRANSACTION_FILTER_FIELDS,
         default_order="settlement_date desc, name desc",
     )
-    start_value = _integer_argument(
-        start,
-        "Start",
-        default=0,
-        minimum=0,
-        maximum=MAX_PAGE_START,
-    )
-    page_length_value = _integer_argument(
-        page_length,
-        "Page length",
-        default=DEFAULT_PAGE_LENGTH,
-        minimum=1,
-        maximum=MAX_PAGE_LENGTH,
-    )
+    start_value, page_length_value = _pagination_arguments(start, page_length)
     filters = {}
     if portfolio:
         _require_readable_portfolio(portfolio)
@@ -283,18 +274,7 @@ def get_transactions(
         limit=page_length_value + 1,
         ignore_permissions=False,
     ).run(as_dict=True)
-    has_more = len(rows) > page_length_value
-
-    return set_investor_api_data(
-        {
-            "data": rows[:page_length_value],
-            "pagination": {
-                "start": start_value,
-                "page_length": page_length_value,
-                "has_more": has_more,
-            },
-        }
-    )
+    return set_investor_api_data(_page_result(rows, start_value, page_length_value))
 
 
 @frappe.whitelist(methods=["GET"])
@@ -344,20 +324,7 @@ def get_statements(
     if reconciliation_status and reconciliation_status not in STATEMENT_RECONCILIATION_STATUSES:
         frappe.throw(_("Reconciliation status must be Matched or Mismatched."))
 
-    start_value = _integer_argument(
-        start,
-        "Start",
-        default=0,
-        minimum=0,
-        maximum=MAX_PAGE_START,
-    )
-    page_length_value = _integer_argument(
-        page_length,
-        "Page length",
-        default=DEFAULT_PAGE_LENGTH,
-        minimum=1,
-        maximum=MAX_PAGE_LENGTH,
-    )
+    start_value, page_length_value = _pagination_arguments(start, page_length)
     filters = {}
     if portfolio:
         _require_readable_portfolio(portfolio)
@@ -375,18 +342,7 @@ def get_statements(
         limit=page_length_value + 1,
         ignore_permissions=False,
     ).run(as_dict=True)
-    has_more = len(rows) > page_length_value
-
-    return set_investor_api_data(
-        {
-            "data": rows[:page_length_value],
-            "pagination": {
-                "start": start_value,
-                "page_length": page_length_value,
-                "has_more": has_more,
-            },
-        }
-    )
+    return set_investor_api_data(_page_result(rows, start_value, page_length_value))
 
 
 @frappe.whitelist(methods=["GET"])
@@ -436,20 +392,7 @@ def get_bonds(
         default_order="issue_date desc, name desc",
     )
 
-    start_value = _integer_argument(
-        start,
-        "Start",
-        default=0,
-        minimum=0,
-        maximum=MAX_PAGE_START,
-    )
-    page_length_value = _integer_argument(
-        page_length,
-        "Page length",
-        default=DEFAULT_PAGE_LENGTH,
-        minimum=1,
-        maximum=MAX_PAGE_LENGTH,
-    )
+    start_value, page_length_value = _pagination_arguments(start, page_length)
     rows = frappe.qb.get_query(
         "Bond Master",
         fields=list(BOND_LIST_FIELDS),
@@ -459,18 +402,7 @@ def get_bonds(
         limit=page_length_value + 1,
         ignore_permissions=False,
     ).run(as_dict=True)
-    has_more = len(rows) > page_length_value
-
-    return set_investor_api_data(
-        {
-            "data": rows[:page_length_value],
-            "pagination": {
-                "start": start_value,
-                "page_length": page_length_value,
-                "has_more": has_more,
-            },
-        }
-    )
+    return set_investor_api_data(_page_result(rows, start_value, page_length_value))
 
 
 @frappe.whitelist(methods=["GET"])
@@ -521,20 +453,7 @@ def get_market_dates(
         default_order="date desc, name desc",
     )
 
-    start_value = _integer_argument(
-        start,
-        "Start",
-        default=0,
-        minimum=0,
-        maximum=MAX_PAGE_START,
-    )
-    page_length_value = _integer_argument(
-        page_length,
-        "Page length",
-        default=DEFAULT_PAGE_LENGTH,
-        minimum=1,
-        maximum=MAX_PAGE_LENGTH,
-    )
+    start_value, page_length_value = _pagination_arguments(start, page_length)
     rows = frappe.qb.get_query(
         "Bond Market Date",
         fields=list(MARKET_DATE_LIST_FIELDS),
@@ -544,18 +463,7 @@ def get_market_dates(
         limit=page_length_value + 1,
         ignore_permissions=False,
     ).run(as_dict=True)
-    has_more = len(rows) > page_length_value
-
-    return set_investor_api_data(
-        {
-            "data": rows[:page_length_value],
-            "pagination": {
-                "start": start_value,
-                "page_length": page_length_value,
-                "has_more": has_more,
-            },
-        }
-    )
+    return set_investor_api_data(_page_result(rows, start_value, page_length_value))
 
 
 @frappe.whitelist(methods=["GET"])
@@ -580,6 +488,9 @@ def get_market_date(name: str) -> dict:
     market_date["bond_market_prices"] = [
         {field: row.get(field) for field in MARKET_PRICE_FIELDS} for row in document.bond_market_prices
     ]
+    for row in market_date["bond_market_prices"]:
+        if not row["future_xirr_available"]:
+            row["future_xirr"] = None
     return set_investor_api_data({"market_date": market_date})
 
 
@@ -604,20 +515,7 @@ def get_exchange_rates(
         default_order="rate_date desc, name desc",
     )
 
-    start_value = _integer_argument(
-        start,
-        "Start",
-        default=0,
-        minimum=0,
-        maximum=MAX_PAGE_START,
-    )
-    page_length_value = _integer_argument(
-        page_length,
-        "Page length",
-        default=DEFAULT_PAGE_LENGTH,
-        minimum=1,
-        maximum=MAX_PAGE_LENGTH,
-    )
+    start_value, page_length_value = _pagination_arguments(start, page_length)
     with include_shared_exchange_rates_in_safe_projection():
         rows = frappe.qb.get_query(
             "Bond Exchange Rate",
@@ -628,18 +526,7 @@ def get_exchange_rates(
             limit=page_length_value + 1,
             ignore_permissions=False,
         ).run(as_dict=True)
-    has_more = len(rows) > page_length_value
-
-    return set_investor_api_data(
-        {
-            "data": rows[:page_length_value],
-            "pagination": {
-                "start": start_value,
-                "page_length": page_length_value,
-                "has_more": has_more,
-            },
-        }
-    )
+    return set_investor_api_data(_page_result(rows, start_value, page_length_value))
 
 
 @frappe.whitelist(methods=["GET"])
@@ -679,18 +566,6 @@ def _visible_statement_reference(statement: str | None) -> str | None:
         ignore_permissions=False,
     ).run(pluck=True)
     return statement if readable else None
-
-
-def _require_readable_portfolio(portfolio: str) -> None:
-    readable = frappe.qb.get_query(
-        "Bond Portfolio",
-        fields=["name"],
-        filters={"name": portfolio},
-        limit=1,
-        ignore_permissions=False,
-    ).run(pluck=True)
-    if not readable:
-        frappe.throw(_("You are not permitted to read this portfolio."), frappe.PermissionError)
 
 
 def _list_controls(
@@ -753,3 +628,18 @@ def _integer_argument(
     if maximum is not None and parsed > maximum:
         frappe.throw(_("{0} cannot exceed {1}.").format(label, maximum))
     return parsed
+
+
+def _pagination_arguments(start, page_length) -> tuple[int, int]:
+    start_value = _integer_argument(start, "Start", default=0, minimum=0, maximum=MAX_PAGE_START)
+    page_length_value = _integer_argument(
+        page_length, "Page length", default=DEFAULT_PAGE_LENGTH, minimum=1, maximum=MAX_PAGE_LENGTH
+    )
+    return start_value, page_length_value
+
+
+def _page_result(rows, start: int, page_length: int) -> dict:
+    return {
+        "data": rows[:page_length],
+        "pagination": {"start": start, "page_length": page_length, "has_more": len(rows) > page_length},
+    }

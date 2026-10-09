@@ -12,6 +12,7 @@ def calculate_market_data(date, isin, market_price, *, historical_guess=None):
     values = {
         "currency": None,
         "future_xirr": None,
+        "future_xirr_available": 0,
         "principal_factor": None,
         "weighted_avg_repayment_date": None,
         "weighted_avg_repayment_years": None,
@@ -44,4 +45,5 @@ def calculate_market_data(date, isin, market_price, *, historical_guess=None):
         historical_guess=historical_guess,
     )
     values["future_xirr"] = future_xirr * 100 if future_xirr is not None else None
+    values["future_xirr_available"] = int(future_xirr is not None)
     return values

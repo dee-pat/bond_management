@@ -74,19 +74,7 @@ function is_attachment_request_current(state, request_id) {
 
 function make_transaction_attachment_filename_readable(frm) {
 	const attachment = frm.get_field("attachment");
-	attachment?.$value?.css({
-		"min-height": "56px",
-		padding: "8px 10px",
-		gap: "8px",
-		"align-items": "flex-start",
-	});
-	attachment?.$value?.find(".ellipsis, .attached-file-link").css({
-		"white-space": "normal",
-		overflow: "visible",
-		"text-overflow": "clip",
-		"overflow-wrap": "anywhere",
-		"line-height": "1.35",
-	});
+	attachment?.$value?.addClass("bond-pdf-attachment");
 }
 
 function is_pdf_attachment(attachment) {

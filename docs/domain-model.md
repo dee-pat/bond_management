@@ -76,7 +76,7 @@ flowchart LR
     SPA["Investor app"]
 
     DATA --> PP
-    MARKET --> YIELD
+    MARKET -->|"persisted yield + availability"| YIELD
     PP -->|"values + cash-flow availability"| API
     YIELD --> API
     FX -->|"shared rates + readable statement reference"| API
@@ -117,8 +117,15 @@ fresh installation.
 - Portfolio performance combines all core financial data and exposes actual
   past/future cash-flow availability independently of XIRR solver success.
   Desk and the investor app use those flags for clipboard actions. Yield
-  comparison reads persisted market snapshots; historical solver guesses
-  retain zero yields and skip only null values.
+  comparison reads persisted market snapshots. `future_xirr_available`
+  distinguishes solver failure from a real zero in the non-null numeric column;
+  custom APIs and reports mask unavailable stored values to `None`. Historical
+  guesses retain zero yields and skip unavailable rows. Performance keeps the
+  latest quote even when its yield is unavailable, batch-loads the latest earlier
+  available yield, and uses the default guess when no history exists. A
+  registered data patch preserves non-zero legacy yields and marks them
+  available; it recalculates ambiguous legacy zero yields with the default guess
+  and preserves other fields.
 
 ## Source anchors
 
@@ -126,3 +133,9 @@ fresh installation.
 - [Statement-derived data](../bond_management/bond_management/doctype/bond_statement/bond_statement.py)
 - [Performance inputs](../bond_management/bond_management/utils/performance.py)
 - [Investor API](../bond_management/bond_management/api/investor.py)
+
+The cleanup review preserves all mapped relationships. Investor list and report
+APIs share the same permission-aware portfolio access check; list queries keep
+explicit field projections and filter/sort allowlists. Transaction validation
+reuses one authoritative Bond Master for snapshot and accrued-interest amounts,
+with unchanged coupon/principal factors and Decimal quantization.

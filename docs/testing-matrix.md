@@ -27,12 +27,22 @@ Additional transaction attachment filename regressions are covered by
 `::test_new_transaction_does_not_reuse_an_existing_legacy_attachment_url`, and
 `::test_attachment_backfill_accepts_historical_pdf_above_current_upload_limit`.
 
-## Coverage gap to track
+## Registered migration and fresh-install lifecycle
 
-The repository tests index installation directly and checks duplicate-cleanup
-patch ordering, but no regression test was found that runs the complete
-registered patch sequence against representative legacy data or exercises the
-index `after_install` hook on a fresh site. Permission bootstrap hooks have
-separate tests; that coverage does not establish index bootstrap coverage. Use
-the fresh-site and migration gates in [verification.md](verification.md) for
-those lifecycle paths.
+The opt-in `tests/migration_lifecycle.py` CLI helper verifies manual index and
+permission bootstrap immediately after fresh installation, then runs the real
+registered patch sequence via `bench migrate` over representative legacy
+financial, private attachment, duplicate-statement, Kenya schedule/market, and
+FX scope/provenance fixtures. It compares persisted business results after a
+forced registered-patch rerun and checks that an ordinary migration preserves
+Patch Log identities. `tests/test_migration_lifecycle.py` covers its four safety
+guards in the normal server suite. See the [lifecycle plan](specs/migration-lifecycle.md)
+for the exact phases and disposable-bench boundary, and
+[verification.md](verification.md) for required gates. Individual patch tests
+remain useful for focused failures; this lifecycle helper owns whole-sequence
+ordering and fresh `after_install` index coverage.
+
+Quantity reconciliation cleanup checks the statement's current report field
+before deleting a queued File. `doctype/bond_statement/test_bond_statement.py::test_report_cleanup_preserves_current_file_and_deletes_after_statement_removal`
+covers both preserving a report still in use and deleting it after its statement
+is removed.

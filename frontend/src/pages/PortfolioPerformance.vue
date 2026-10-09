@@ -3,6 +3,7 @@ import { computed, ref, watch } from "vue";
 import { Button, ErrorMessage, FormControl, LoadingText } from "frappe-ui";
 
 import { InvestorApiError, redirectToLogin, useInvestorApi } from "../lib/api";
+import { sanitizeClipboardText } from "../lib/clipboard";
 import type {
 	PerformanceCashflow,
 	PerformanceCashflowSelection,
@@ -159,21 +160,16 @@ function cashflowsToTsv(cashflows: PerformanceCashflow[]): string {
 		"isin\ttransaction_type\tdate\tcurrency\tamount\tquantity\trate",
 		...cashflows.map((cashflow) =>
 			[
-				sanitizedText(cashflow.isin),
-				sanitizedText(cashflow.transaction_type),
-				sanitizedText(cashflow.date),
-				sanitizedText(cashflow.currency),
+				sanitizeClipboardText(cashflow.isin),
+				sanitizeClipboardText(cashflow.transaction_type),
+				sanitizeClipboardText(cashflow.date),
+				sanitizeClipboardText(cashflow.currency),
 				String(cashflow.amount),
 				String(cashflow.quantity),
 				String(cashflow.rate),
 			].join("\t")
 		),
 	].join("\n");
-}
-
-function sanitizedText(value: string): string {
-	const text = String(value ?? "").replace(/\p{Cc}/gu, " ");
-	return /^[=+\-@]/.test(text) ? `'${text}` : text;
 }
 </script>
 

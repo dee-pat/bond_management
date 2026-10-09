@@ -36,6 +36,17 @@ test("omits unavailable yields while preserving a genuine zero yield", async ({
   await expect(page.getByTestId("market-prices")).toContainText(
     "MISSING-YIELD"
   );
+  const prices = page.getByTestId("market-prices");
+  const missingRow = prices
+    .getByRole("row")
+    .filter({ hasText: "MISSING-YIELD" });
+  const zeroRow = prices.getByRole("row").filter({ hasText: "ZERO-YIELD" });
+  await expect(missingRow.locator('[data-label="Future XIRR"]')).toHaveText(
+    "—"
+  );
+  await expect(zeroRow.locator('[data-label="Future XIRR"]')).toHaveText(
+    "0.00%"
+  );
   const curve = page.getByTestId("yield-curve");
   await expect(curve.getByTestId("yield-curve-description")).toContainText(
     /^ZERO-YIELD, USD, 0\.00%/
@@ -240,6 +251,7 @@ function marketPrice(
     principal_factor: 1,
     market_price: 100,
     future_xirr: futureXirr,
+    future_xirr_available: futureXirr === null ? 0 : 1,
     weighted_avg_repayment_date: "2029-01-01",
     weighted_avg_repayment_years: options.years ?? 3,
     maturity_date: "2029-01-01",
