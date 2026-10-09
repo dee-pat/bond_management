@@ -79,10 +79,11 @@ rows whose old stored zero is ambiguous.
   cases passed. The first browser attempt used a server started before the SPA
   entry existed in the PR app copy; after building that entry into the served
   copy, the full browser suite passed.
-- Fresh-site validation is still outstanding. The new-site bootstrap failed
-  before app installation because local MariaDB rejected the CI root password
-  (`1045 Access denied for user 'root'@'localhost'`); its incomplete site
-  directory was removed. No existing site was recreated or dropped.
+- Fresh-site validation is still outstanding. The command `bench new-site
+  --db-root-password root --admin-password admin test_site` failed before app
+  installation because local MariaDB rejected the CI root password (`1045
+  Access denied for user 'root'@'localhost'`); its incomplete site directory
+  was removed. No existing site was recreated or dropped.
 - `git diff --check` passed. Domain-model links reviewed; this patch changes no
   mapped DocType or API/report relationship.
 
