@@ -15,7 +15,7 @@ test("renders the investor shell within the Pixel 7 viewport", async ({
   });
   await expect(page.getByTestId("investor-shell")).toBeVisible();
   await expect(page.locator(".investor-mobile-navigation")).toBeVisible();
-  await expect(navigation.getByRole("link")).toHaveCount(7);
+  await expect(navigation.getByRole("link")).toHaveCount(8);
   await expect(navigation.getByRole("button", { name: "Home" })).toHaveCount(1);
   await navigation.getByRole("link", { name: "Bond Statements" }).click();
   await expect(

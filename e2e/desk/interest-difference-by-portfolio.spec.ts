@@ -3,7 +3,7 @@ import { expect, test } from "@playwright/test";
 const reportRoute =
   "/desk/query-report/Interest%20Difference%20by%20Portfolio?portfolio_name=UI%20Test%20Portfolio";
 
-test("requires a portfolio first and shows equivalent interest days", async ({
+test("shows the portfolio first and equivalent interest days", async ({
   page,
 }) => {
   await page.route(
@@ -77,7 +77,28 @@ test("requires a portfolio first and shows equivalent interest days", async ({
                 fieldtype: "Float",
               },
             ],
-            result: [],
+            result: [
+              {
+                transaction_reference: "TEST-INTEREST-001",
+                settlement_date: "2025-01-02",
+                currency: "USD",
+                isin: "TEST-BOND-001",
+                transaction_type: "Purchase",
+                accrued_interest_calculated: 8,
+                accrued_interest_paid: 10,
+                interest_difference: -2,
+                interest_difference_days: -1.25,
+              },
+              {
+                transaction_reference: "Total",
+                currency: "USD",
+                accrued_interest_calculated: 8,
+                accrued_interest_paid: 10,
+                interest_difference: -2,
+                interest_difference_days: null,
+                is_total_row: 1,
+              },
+            ],
             execution_time: 0.01,
           },
         },
@@ -90,7 +111,9 @@ test("requires a portfolio first and shows equivalent interest days", async ({
     '.page-form .form-group[data-fieldname="portfolio_name"]',
   );
   await expect(portfolioFilter).toBeVisible();
-  await expect(portfolioFilter.locator(".reqd")).toBeVisible();
+  await expect(
+    portfolioFilter.getByRole("combobox", { name: "Portfolio" }),
+  ).toBeVisible();
 
   const filterOrder = await page
     .locator(".page-form .form-group[data-fieldname]")
@@ -99,9 +122,10 @@ test("requires a portfolio first and shows equivalent interest days", async ({
     );
   expect(filterOrder[0]).toBe("portfolio_name");
 
-  const headers = await page
-    .locator(".dt-cell--header .dt-cell__content")
-    .allTextContents();
-  expect(headers).toContain("Difference (Days, DCC)");
-  expect(headers).not.toContain("Portfolio");
+  const headers = page.locator(".dt-cell--header");
+  await expect(
+    headers.filter({ hasText: "Difference (Days, DCC)" }),
+  ).toHaveCount(1);
+  await expect(headers.filter({ hasText: "Portfolio" })).toHaveCount(0);
+  await expect(headers.filter({ hasText: "Transactions" })).toHaveCount(0);
 });

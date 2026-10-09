@@ -19,7 +19,6 @@ from bond_management.bond_management.utils.coupon_schedule import (
     year_fraction,
 )
 from bond_management.bond_management.utils.financial import to_decimal
-from bond_management.bond_management.utils.investor_permissions import investor_portfolio_access
 from bond_management.bond_management.utils.validation import optional_string, required_string
 
 
@@ -41,8 +40,6 @@ def validate_filters(filters: dict | None) -> dict:
         frappe.throw(_("From Date must be on or before To Date"))
 
     portfolio_name = required_string(filters.get("portfolio_name"), "Portfolio")
-    if investor_portfolio_access(frappe.session.user, portfolio_name) is False:
-        frappe.throw(_("Not permitted"), frappe.PermissionError)
     frappe.has_permission("Bond Portfolio", "read", doc=portfolio_name, throw=True)
     if not frappe.db.exists("Bond Portfolio", portfolio_name):
         frappe.throw(_("Portfolio does not exist"))
