@@ -1,0 +1,73 @@
+name: PR Agent (manual)
+
+on:
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: Open pull request number to review
+        required: true
+        type: string
+  issue_comment:
+    types: [created]
+
+permissions: {}
+
+jobs:
+  review:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (
+        github.event.issue.pull_request &&
+        github.event.comment.body == '/review' &&
+        github.event.sender.type != 'Bot' &&
+        contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association)
+      )
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    concurrency:
+      group: pr-agent-${{ github.event.issue.number || inputs.pr_number }}
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
+
+    steps:
+      - name: Validate review request
+        id: request
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          OPENAI_KEY: ${{ secrets.OPENAI_KEY }}
+          PR_NUMBER: ${{ github.event.issue.number || inputs.pr_number }}
+        run: |
+          if [[ ! "$PR_NUMBER" =~ ^[1-9][0-9]*$ ]]; then
+            echo "::error::Provide a positive pull request number."
+            exit 1
+          fi
+          if [[ -z "$OPENAI_KEY" ]]; then
+            echo "::error::Add the OPENAI_KEY repository Actions secret before requesting a review."
+            exit 1
+          fi
+          state="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" --jq '.state')"
+          if [[ "$state" != "open" ]]; then
+            echo "::error::PR-Agent reviews open pull requests only."
+            exit 1
+          fi
+          echo "url=${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/pull/${PR_NUMBER}" >> "$GITHUB_OUTPUT"
+
+      # PR-Agent fetches the diff and trusted configuration through GitHub's API.
+      - name: Review with Frappe guidance
+        uses: docker://pragent/pr-agent@sha256:31b9aac6ab067bada9a0c1b001d30ebc500ea4487e00a93c18c59b9ef5fa66db # v0.47.0-github_action
+        with:
+          entrypoint: python
+          args: -m pr_agent.cli --pr_url ${{ steps.request.outputs.url }} review
+        env:
+          OPENAI__KEY: ${{ secrets.OPENAI_KEY }}
+          GITHUB__USER_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB__BASE_URL: ${{ github.api_url }}
+          CONFIG__GIT_PROVIDER: github
+          CONFIG__MODEL: ${{ vars.PR_AGENT_MODEL || 'gpt-5.6' }}
+          CONFIG__PROPAGATE_TOOL_ERRORS: "true"
+          CONFIG__RESTRICTED_MODE: "true"
+          CONFIG__ENABLE_AUTO_APPROVAL: "false"
+          LOG_LEVEL: INFO
