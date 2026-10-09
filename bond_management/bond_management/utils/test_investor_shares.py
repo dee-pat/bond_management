@@ -250,6 +250,72 @@ class TestInvestorShares(IntegrationTestCase):
             )
         )
 
+    def test_locked_target_created_after_snapshot_is_retried_without_deleting_share(self):
+        lock_users = investor_shares._lock_users
+        lock_target = investor_shares._lock_share_target
+        original_get_value = frappe.db.get_value
+        created = {}
+        stale_reads = []
+
+        def create_target_after_discovery(users):
+            if not created:
+                target = make_bond()
+                created["target"] = target
+                created["share"] = self.legacy_share(target, self.manager.name)
+            lock_users(users)
+
+        def timeout_locked_target(doctype, name, *, wait=True):
+            if (
+                not wait
+                and created
+                and (doctype, name)
+                == (
+                    created["target"].doctype,
+                    created["target"].name,
+                )
+            ):
+                raise frappe.QueryTimeoutError
+            return lock_target(doctype, name, wait=wait)
+
+        def read_old_snapshot(doctype, name=None, fieldname=None, **kwargs):
+            if (
+                created
+                and (doctype, name)
+                == (
+                    created["target"].doctype,
+                    created["target"].name,
+                )
+                and not kwargs.get("for_update")
+            ):
+                stale_reads.append((doctype, name))
+                return None
+            return original_get_value(doctype, name, fieldname, **kwargs)
+
+        with (
+            patch.object(investor_shares, "_lock_users", side_effect=create_target_after_discovery),
+            patch.object(investor_shares, "_lock_share_target", side_effect=timeout_locked_target),
+            patch.object(frappe.db, "get_value", side_effect=read_old_snapshot),
+            patch("frappe.enqueue") as enqueue,
+        ):
+            investor_shares.cleanup_incompatible_shares(user=self.manager.name)
+
+        share = created["share"]
+        self.assertTrue(frappe.db.exists("DocShare", share.name))
+        self.assertEqual(stale_reads, [])
+        enqueue.assert_called_once_with(
+            investor_shares.cleanup_incompatible_shares,
+            doctype=created["target"].doctype,
+            name=created["target"].name,
+            enqueue_after_commit=True,
+        )
+
+        # A fresh target-scoped pass keeps the compatible grant intact.
+        investor_shares.cleanup_incompatible_shares(
+            doctype=created["target"].doctype,
+            name=created["target"].name,
+        )
+        self.assertTrue(frappe.db.exists("DocShare", share.name))
+
     def test_role_change_repairs_existing_shares(self):
         share = add_docshare("Bond Portfolio", self.other.name, self.manager.name, write=1)
         self.manager.append("roles", {"role": INVESTOR_ROLE})

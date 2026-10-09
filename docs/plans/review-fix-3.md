@@ -149,3 +149,30 @@ adds no further mapped relationship.
 - Blockers: none in local verification.
 - Unverified local/CI differences: local macOS/MariaDB and browser environment
   versus the Linux CI runner.
+
+## PR #18 review: stale target snapshot during share repair
+
+When cleanup cannot take a nonblocking target lock, a regular fallback read can
+use an older repeatable-read snapshot. Its missing-target result is not proof
+that a DocShare is orphaned. Keep the share and enqueue a target-scoped repair
+after commit so it retries in a fresh transaction. The regression inserts a
+target and compatible share after cleanup's discovery read, simulates the lock
+timeout and stale fallback, and verifies the share survives and a retry is
+scheduled. The domain graph was reviewed; this repair changes no mapped
+relationships or data flow.
+
+- Risk classification: investor share integrity and transaction concurrency.
+- Required gates: focused share module, full server suite, and `pre-push`.
+- Commands and exit statuses: `bench --site test_site set-config allow_tests
+  true` (0); `bench --site test_site migrate` (0); focused share module (0);
+  `apps/bond_management/scripts/verify.sh pre-push` first stopped at Ruff
+  formatting (1), then passed after formatting (0).
+- Tests passed: 27 focused share tests; full gate ran 48 unit, 323 integration,
+  and 3 unspecified-category tests; all passed. Pre-commit, blocking and
+  advisory Semgrep scans, and Semgrep rule tests passed.
+- Tests failed: none after formatting.
+- Tests not run: UI and fresh-site gates were not applicable; Linux CI was not
+  run locally.
+- Blockers: none.
+- Unverified local/CI differences: Linux CI remains unverified; this change
+  affects server-side locking and cleanup only.

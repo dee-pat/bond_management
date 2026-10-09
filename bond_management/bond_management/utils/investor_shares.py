@@ -16,6 +16,7 @@ PORTFOLIO_DOCTYPES = {
 FINANCIAL_DOCTYPES = (*PORTFOLIO_DOCTYPES, "Bond Master", "Bond Market Date", "Bond Exchange Rate")
 READ_PERMISSION_TYPES = {"read", "report", "print", "email", "select"}
 MUTATING_SHARE_FIELDS = ("write", "submit", "share")
+_DEFERRED_SHARE_TARGET = object()
 
 
 class InvestorBoundaryMixin:
@@ -86,6 +87,8 @@ def cleanup_incompatible_shares(user=None, doctype=None, name=None):
             target = targets[key]
         else:
             target = _lock_unseen_share_target(*key)
+        if target is _DEFERRED_SHARE_TARGET:
+            continue
         if target is None:
             # DocShare.on_trash comments on its target; orphan rows have none.
             frappe.delete_doc("DocShare", share.name, ignore_permissions=True, ignore_on_trash=True)
@@ -188,21 +191,15 @@ def _lock_unseen_share_target(doctype, name):
         return _lock_share_target(doctype, name, wait=False)
     except (frappe.QueryDeadlockError, frappe.QueryTimeoutError):
         # A concurrent target save may hold this row while waiting for the
-        # recipient User lock. Do not form the inverse wait; its own on_update
-        # cleanup will recheck the target after this transaction releases User.
-        return _read_share_target(doctype, name)
-
-
-def _read_share_target(doctype, name):
-    field = PORTFOLIO_DOCTYPES.get(doctype)
-    current = frappe.db.get_value(doctype, name, field or "name")
-    if current is None:
-        return None
-
-    target = frappe._dict(doctype=doctype, name=name)
-    if field:
-        target[field] = current
-    return target
+        # recipient User lock. A normal read can use an older snapshot and
+        # mistake a newly committed target for an orphan, so retry after commit.
+        frappe.enqueue(
+            cleanup_incompatible_shares,
+            doctype=doctype,
+            name=name,
+            enqueue_after_commit=True,
+        )
+        return _DEFERRED_SHARE_TARGET
 
 
 def _lock_share_targets(filters):
