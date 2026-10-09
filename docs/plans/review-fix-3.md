@@ -199,8 +199,9 @@ transaction commits. A database deadlock rolls back the whole current
 transaction, so it must propagate instead of being treated as a target-local
 timeout. The handler now defers only `QueryTimeoutError`; the new regression
 asserts that `QueryDeadlockError` aborts cleanup without queueing a partial
-retry. No mapped relationship or report/API data flow changed; the domain graph
-was reviewed.
+retry. The timeout and deadlock assertions share one integration test to avoid
+extra user creation and Frappe's test-suite user-creation throttle. No mapped
+relationship or report/API data flow changed; the domain graph was reviewed.
 
 ### Verification evidence
 
@@ -208,10 +209,10 @@ was reviewed.
 - Required gates: focused regression, complete share module, and the shared
   server gate.
 - Commands executed:
-  `bench --site test_site run-tests --module bond_management.bond_management.utils.test_investor_shares --test test_deadlock_while_locking_unseen_target_aborts_cleanup_without_retry`
+  `bench --site test_site run-tests --module bond_management.bond_management.utils.test_investor_shares --test test_target_lock_timeout_defers_and_deadlock_aborts_cleanup`
   (exit 0); `bench --site test_site run-tests --module bond_management.bond_management.utils.test_investor_shares`
   (exit 0); `apps/bond_management/scripts/verify.sh pre-push` (exit 0).
-- Tests passed: focused regression (1), share module (29), full server suite.
+- Tests passed: focused regression (1), share module (28), full server suite.
 - Tests failed: none.
 - Tests not run: browser and fresh-install gates; this change touches only
   server-side exception handling and tests, with no hooks, schema, or indexes.

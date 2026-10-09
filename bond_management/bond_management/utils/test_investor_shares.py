@@ -275,7 +275,7 @@ class TestInvestorShares(IntegrationTestCase):
             )
         )
 
-    def test_locked_target_created_after_snapshot_is_retried_without_deleting_share(self):
+    def test_target_lock_timeout_defers_and_deadlock_aborts_cleanup(self):
         lock_users = investor_shares._lock_users
         lock_target = investor_shares._lock_share_target
         original_get_value = frappe.db.get_value
@@ -302,7 +302,9 @@ class TestInvestorShares(IntegrationTestCase):
                 raise frappe.QueryTimeoutError
             return lock_target(doctype, name, wait=wait)
 
-        def read_old_snapshot(doctype, name=None, fieldname=None, **kwargs):
+        def read_old_snapshot(*args, **kwargs):
+            doctype = args[0] if args else kwargs.get("doctype")
+            name = args[1] if len(args) > 1 else kwargs.get("name")
             if (
                 created
                 and (doctype, name)
@@ -314,7 +316,7 @@ class TestInvestorShares(IntegrationTestCase):
             ):
                 stale_reads.append((doctype, name))
                 return None
-            return original_get_value(doctype, name, fieldname, **kwargs)
+            return original_get_value(*args, **kwargs)
 
         with (
             patch.object(investor_shares, "_lock_users", side_effect=create_target_after_discovery),
@@ -340,9 +342,6 @@ class TestInvestorShares(IntegrationTestCase):
             name=created["target"].name,
         )
         self.assertTrue(frappe.db.exists("DocShare", share.name))
-
-    def test_deadlock_while_locking_unseen_target_aborts_cleanup_without_retry(self):
-        share = self.legacy_share(self.assigned, self.manager.name)
 
         with (
             patch.object(investor_shares, "_lock_share_targets", return_value={}),
