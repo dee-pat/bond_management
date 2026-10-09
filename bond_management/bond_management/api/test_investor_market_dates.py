@@ -98,6 +98,32 @@ class TestInvestorMarketDates(IntegrationTestCase):
         self.assertEqual(rows[available.name]["future_xirr"], 0)
         self.assertEqual(rows[available.name]["future_xirr_available"], 1)
 
+    def test_detail_rejects_children_outside_bond_user_permissions(self):
+        readable = make_bond()
+        restricted = make_bond()
+        readable_market_date = make_market_date(readable)
+        market_date = make_market_date(readable)
+        make_market_date(restricted, market_date=market_date)
+        investor = self._make_user([INVESTOR_ROLE])
+        frappe.get_doc(
+            {
+                "doctype": "User Permission",
+                "user": investor,
+                "allow": "Bond Master",
+                "for_value": readable.name,
+                "apply_to_all_doctypes": 1,
+            }
+        ).insert(ignore_permissions=True)
+
+        with self._as_user(investor):
+            response = get_market_date(readable_market_date.name)
+            self.assertEqual(
+                {row["isin"] for row in response["market_date"].bond_market_prices},
+                {readable.name},
+            )
+            with self.assertRaises(frappe.PermissionError):
+                get_market_date(market_date.name)
+
     def test_unreadable_and_unknown_detail_have_same_failure(self):
         readable = make_market_date(make_bond())
         unreadable = make_market_date(make_bond())

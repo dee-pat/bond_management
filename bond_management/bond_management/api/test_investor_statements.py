@@ -135,6 +135,42 @@ class TestInvestorStatements(IntegrationTestCase):
             set(STATEMENT_HOLDING_FIELDS),
         )
 
+    def test_detail_rejects_holdings_outside_bond_user_permissions(self):
+        readable = make_bond()
+        restricted = make_bond()
+        portfolio = make_portfolio()
+        make_transaction(readable, portfolio)
+        readable_statement = make_statement(portfolio)
+        make_transaction(restricted, portfolio, settlement_date="2026-01-01")
+        statement = make_statement(portfolio, statement_date="2026-01-02")
+        self.assertEqual(
+            {row.isin for row in readable_statement.bond_statement_details},
+            {readable.name},
+        )
+        self.assertEqual(
+            {row.isin for row in statement.bond_statement_details},
+            {readable.name, restricted.name},
+        )
+        investor = self._make_investor(portfolio.name)
+        frappe.get_doc(
+            {
+                "doctype": "User Permission",
+                "user": investor,
+                "allow": "Bond Master",
+                "for_value": readable.name,
+                "apply_to_all_doctypes": 1,
+            }
+        ).insert(ignore_permissions=True)
+
+        with self._as_user(investor):
+            response = get_statement(readable_statement.name)
+            self.assertEqual(
+                {row["isin"] for row in response["statement"].bond_statement_details},
+                {readable.name},
+            )
+            with self.assertRaises(frappe.PermissionError):
+                get_statement(statement.name)
+
     def test_unreadable_and_unknown_detail_have_the_same_failure(self):
         assigned_portfolio = make_portfolio()
         other_portfolio = make_portfolio()
