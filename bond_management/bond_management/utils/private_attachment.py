@@ -15,13 +15,13 @@ from frappe import _
 def read_private_pdf_attachment(
     attachment,
     *,
-    max_bytes: int,
+    max_bytes: int | None,
     missing_message: str,
     extension_message: str,
     private_message: str,
     size_message: str,
 ) -> tuple[bytes, str]:
-    """Read a private PDF through Frappe's File storage API."""
+    """Read a private PDF through Frappe's File storage API, with an optional size limit."""
     attachment = _required_attachment_url(attachment, missing_message)
     if not attachment.lower().endswith(".pdf"):
         frappe.throw(extension_message)
@@ -35,7 +35,7 @@ def read_private_pdf_attachment(
     if not file_doc.is_private:
         frappe.throw(private_message)
 
-    if file_doc.file_size and int(file_doc.file_size) > max_bytes:
+    if max_bytes is not None and file_doc.file_size and int(file_doc.file_size) > max_bytes:
         frappe.throw(size_message)
 
     try:
@@ -48,7 +48,7 @@ def read_private_pdf_attachment(
         content = content.encode()
     if not isinstance(content, bytes):
         frappe.throw(_("The attached private PDF could not be read from storage."))
-    if len(content) > max_bytes:
+    if max_bytes is not None and len(content) > max_bytes:
         frappe.throw(size_message)
 
     return content, file_doc.file_name
