@@ -143,9 +143,10 @@ See [`docs/verification.md`](docs/verification.md) for the required gates, test-
 
 ### Manual PR reviews
 
-PR-Agent provides advisory reviews with Frappe v16 and Bond Management guidance.
-Request one with an exact `/review` PR comment or the **PR Agent (manual)** Actions
-workflow. See [`docs/pr-agent.md`](docs/pr-agent.md) for activation and usage.
+Request a Codex review with an `@codex review` PR comment. Reviews follow the
+Frappe v16 and Bond Management rules in `AGENTS.md` and use subscription usage
+when connected through your ChatGPT account. See [`docs/code-review.md`](docs/code-review.md)
+for setup and manual review instructions.
 
 ## Design and security principles
 
