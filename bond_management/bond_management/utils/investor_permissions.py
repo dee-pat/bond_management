@@ -112,6 +112,110 @@ def statement_query_condition(user: str) -> str | None:
     return _portfolio_condition("Bond Statement", "portfolio_name", user)
 
 
+def exchange_rate_source_query_condition(user: str | None = None) -> str | None:
+    """Limit provenance lists to explicitly shared rows in assigned portfolios."""
+    user = user or frappe.session.user
+    portfolios = _get_allowed_portfolios(user)
+    if portfolios is None:
+        return None
+
+    shared_names = _reject_incompatible_exchange_rate_source_shares(user, portfolios)
+    if not portfolios or not shared_names:
+        return "1=0"
+
+    values = ", ".join(frappe.db.escape(portfolio) for portfolio in portfolios)
+    return (
+        "`tabBond Exchange Rate Source`.`name` in ("
+        "select `tabDocShare`.`share_name` from `tabDocShare` "
+        f"where `tabDocShare`.`share_doctype` = {frappe.db.escape('Bond Exchange Rate Source')} "
+        f"and `tabDocShare`.`user` = {frappe.db.escape(user)} "
+        "and `tabDocShare`.`read` = 1 and `tabDocShare`.`everyone` = 0) "
+        "and `tabBond Exchange Rate Source`.`statement` in ("
+        "select `tabBond Statement`.`name` from `tabBond Statement` "
+        f"where `tabBond Statement`.`portfolio_name` in ({values}))"
+    )
+
+
+def has_exchange_rate_source_permission(doc, user=None, ptype=None, **_kwargs):
+    user = user or frappe.session.user
+    portfolios = _get_allowed_portfolios(user)
+    if portfolios is None:
+        return True
+
+    portfolio = _get_statement_portfolio(doc.get("statement"))
+    if (
+        ptype not in _ALLOWED_PERMISSION_TYPES
+        or not portfolio
+        or portfolio not in portfolios
+        or not _has_explicit_exchange_rate_source_share(user, doc.name)
+    ):
+        frappe.throw(_("Not permitted"), frappe.PermissionError)
+    return True
+
+
+def _reject_incompatible_exchange_rate_source_shares(user, portfolios):
+    """Prevent DocShare's list-query OR from bypassing provenance scope."""
+    shared_names = frappe.share.get_shared("Bond Exchange Rate Source", user)
+    if not shared_names:
+        return []
+
+    everyone_names = frappe.share.get_shared(
+        "Bond Exchange Rate Source",
+        user,
+        filters=[["everyone", "=", 1]],
+    )
+    if everyone_names:
+        frappe.throw(_("Not permitted"), frappe.PermissionError)
+
+    # This permission service must inspect the linked statement even when the
+    # caller has no direct permission to read provenance or statement records.
+    sources = frappe.qb.get_query(
+        "Bond Exchange Rate Source",
+        fields=["name", "statement"],
+        filters={"name": ["in", shared_names]},
+        ignore_permissions=True,
+    ).run(as_dict=True)
+    statement_names = {source.statement for source in sources if source.statement}
+    statements = []
+    if statement_names:
+        statements = frappe.qb.get_query(
+            "Bond Statement",
+            fields=["name", "portfolio_name"],
+            filters={"name": ["in", list(statement_names)]},
+            ignore_permissions=True,
+        ).run(as_dict=True)
+    portfolio_by_statement = {statement.name: statement.portfolio_name for statement in statements}
+
+    if any(portfolio_by_statement.get(source.statement) not in portfolios for source in sources):
+        frappe.throw(_("Not permitted"), frappe.PermissionError)
+    return shared_names
+
+
+def _has_explicit_exchange_rate_source_share(user, source_name):
+    if not source_name:
+        return False
+    return bool(
+        frappe.share.get_shared(
+            "Bond Exchange Rate Source",
+            user,
+            filters=[["share_name", "=", source_name], ["everyone", "=", 0]],
+            limit=1,
+        )
+    )
+
+
+def _get_statement_portfolio(statement_name, *, for_update=False, wait=True):
+    if not statement_name:
+        return None
+    return frappe.db.get_value(
+        "Bond Statement",
+        statement_name,
+        "portfolio_name",
+        for_update=for_update,
+        wait=wait,
+    )
+
+
 _SHARED_EXCHANGE_RATE_PROJECTION_FLAG = "include_shared_exchange_rates_in_safe_projection"
 
 

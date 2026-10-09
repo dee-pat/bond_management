@@ -104,6 +104,7 @@ after_install = [
     "bond_management.patches.add_bond_exchange_rate_permissions.execute",
     "bond_management.patches.add_bond_exchange_rate_provenance.execute",
     "bond_management.patches.enforce_investor_share_boundary.execute",
+    "bond_management.patches.add_bond_exchange_rate_source_permission.execute",
 ]
 
 # Frappe schema sync removes manual indexes when the DocField cannot declare
@@ -114,6 +115,7 @@ after_migrate = [
     "bond_management.patches.add_bond_management_manager_access.execute",
     "bond_management.patches.add_bond_exchange_rate_permissions.execute",
     "bond_management.patches.add_bond_yield_comparison_report_permission.execute",
+    "bond_management.patches.add_bond_exchange_rate_source_permission.ensure_permission",
 ]
 
 # Uninstallation
@@ -159,12 +161,14 @@ permission_query_conditions = {
     "Bond Transaction": "bond_management.bond_management.utils.investor_permissions.transaction_query_condition",
     "Bond Statement": "bond_management.bond_management.utils.investor_permissions.statement_query_condition",
     "Bond Exchange Rate": "bond_management.bond_management.utils.investor_permissions.exchange_rate_query_condition",
+    "Bond Exchange Rate Source": "bond_management.bond_management.utils.investor_permissions.exchange_rate_source_query_condition",
 }
 
 has_permission = {
     "Bond Portfolio": "bond_management.bond_management.utils.investor_permissions.has_portfolio_permission",
     "Bond Transaction": "bond_management.bond_management.utils.investor_permissions.has_transaction_permission",
     "Bond Statement": "bond_management.bond_management.utils.investor_permissions.has_statement_permission",
+    "Bond Exchange Rate Source": "bond_management.bond_management.utils.investor_permissions.has_exchange_rate_source_permission",
 }
 
 # Document Events
@@ -179,6 +183,7 @@ _financial_doctypes = (
     "Bond Master",
     "Bond Market Date",
     "Bond Exchange Rate",
+    "Bond Exchange Rate Source",
 )
 extend_doctype_class = {
     doctype: [f"{_investor_shares}.InvestorBoundaryMixin"] for doctype in _financial_doctypes

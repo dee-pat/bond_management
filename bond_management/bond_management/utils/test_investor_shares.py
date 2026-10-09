@@ -1,6 +1,7 @@
 """Regressions for Frappe's share fallback and strict investor access."""
 
 from contextlib import contextmanager
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import frappe
@@ -27,6 +28,11 @@ from bond_management.bond_management.utils.investor_permissions import (
     INVESTOR_ROLE,
 )
 from bond_management.bond_management.utils.investor_shares import FINANCIAL_DOCTYPES
+from bond_management.bond_management.utils.statement_exchange_rates import (
+    SOURCE_DOCTYPE,
+    sync_statement_exchange_rates,
+)
+from bond_management.patches.add_bond_exchange_rate_source_permission import execute as repair_source_shares
 from bond_management.patches.enforce_investor_share_boundary import execute
 
 
@@ -62,6 +68,66 @@ class TestInvestorShares(IntegrationTestCase):
         self.assertTrue(share.read)
         with self.assertRaises(frappe.PermissionError):
             add_docshare("Bond Master", bond.name, everyone=1, write=1)
+        source = self.make_statement_source(make_statement(self.assigned, statement_date="2091-04-03"))
+        with self.assertRaises(frappe.PermissionError):
+            add_docshare(SOURCE_DOCTYPE, source.name, everyone=1)
+
+    def test_exchange_rate_source_shares_follow_linked_statement_portfolio(self):
+        assigned_source = self.make_statement_source(
+            make_statement(self.assigned, statement_date="2091-04-04")
+        )
+        other_source = self.make_statement_source(make_statement(self.other, statement_date="2091-04-05"))
+
+        with self.as_user(self.investor.name):
+            self.assertEqual(
+                frappe.qb.get_query(
+                    SOURCE_DOCTYPE,
+                    fields=["name"],
+                    ignore_permissions=False,
+                ).run(pluck=True),
+                [],
+            )
+            with self.assertRaises(frappe.PermissionError):
+                read_doc(SOURCE_DOCTYPE, assigned_source.name)
+
+        share = add_docshare(SOURCE_DOCTYPE, assigned_source.name, self.investor.name)
+        self.assertTrue(share.read)
+        with self.assertRaises(frappe.PermissionError):
+            add_docshare(SOURCE_DOCTYPE, other_source.name, self.investor.name)
+
+        with self.as_user(self.investor.name):
+            self.assertTrue(frappe.get_doc(SOURCE_DOCTYPE, assigned_source.name).has_permission("read"))
+            with self.assertRaises(frappe.PermissionError):
+                read_doc(SOURCE_DOCTYPE, other_source.name)
+            visible_sources = frappe.qb.get_query(
+                SOURCE_DOCTYPE,
+                fields=["name"],
+                ignore_permissions=False,
+            ).run(pluck=True)
+            self.assertIn(assigned_source.name, visible_sources)
+            self.assertNotIn(other_source.name, visible_sources)
+
+        legacy_share = self.legacy_share(other_source, self.investor.name)
+        with self.as_user(self.investor.name):
+            with self.assertRaises(frappe.PermissionError):
+                frappe.qb.get_query(
+                    SOURCE_DOCTYPE,
+                    fields=["name"],
+                    ignore_permissions=False,
+                ).run(pluck=True)
+            with self.assertRaises(frappe.PermissionError):
+                client_get(SOURCE_DOCTYPE, other_source.name)
+
+        repair_source_shares()
+        repair_source_shares()
+        self.assertFalse(frappe.db.exists("DocShare", legacy_share.name))
+        self.assertTrue(frappe.db.exists("DocShare", share.name))
+        permission = frappe.db.get_value(
+            "DocPerm",
+            {"parent": SOURCE_DOCTYPE, "role": INVESTOR_ROLE, "permlevel": 0},
+            ["read", "write", "create", "delete"],
+        )
+        self.assertEqual(permission, (1, 0, 0, 0))
 
     def test_server_share_flags_cannot_skip_recipient_boundary(self):
         flags = {"ignore_share_permission": True, "ignore_validate": True}
@@ -473,13 +539,16 @@ class TestInvestorShares(IntegrationTestCase):
                 read_doc("Bond Portfolio", self.assigned.name)
 
     def test_statement_portfolio_change_revokes_prior_share(self):
-        statement = make_statement(self.assigned)
+        statement = make_statement(self.assigned, statement_date="2091-04-07")
         share = add_docshare("Bond Statement", statement.name, self.investor.name)
+        source = self.make_statement_source(statement)
+        source_share = add_docshare(SOURCE_DOCTYPE, source.name, self.investor.name)
         # The factory skips PDF parsing; real administrative reassignment still
         # reaches the normal save hooks and must revoke the old recipient.
         statement.portfolio_name = self.other.name
         statement.save()
         self.assertFalse(frappe.db.exists("DocShare", share.name))
+        self.assertFalse(frappe.db.exists("DocShare", source_share.name))
         with self.as_user(self.investor.name):
             visible = frappe.qb.get_query("Bond Statement", fields=["name"], ignore_permissions=False).run(
                 pluck=True
@@ -487,6 +556,8 @@ class TestInvestorShares(IntegrationTestCase):
             self.assertNotIn(statement.name, visible)
             with self.assertRaises(frappe.PermissionError):
                 read_doc("Bond Statement", statement.name)
+            with self.assertRaises(frappe.PermissionError):
+                read_doc(SOURCE_DOCTYPE, source.name)
 
     def test_transaction_portfolio_change_revokes_prior_share(self):
         transaction = make_transaction(make_bond(), self.assigned)
@@ -521,6 +592,7 @@ class TestInvestorShares(IntegrationTestCase):
             bond,
             make_market_date(bond),
             make_exchange_rate(),
+            self.make_statement_source(make_statement(self.assigned, statement_date="2091-04-06")),
         )
         self.assertEqual({doc.doctype for doc in documents}, set(FINANCIAL_DOCTYPES))
         for document in documents:
@@ -530,7 +602,12 @@ class TestInvestorShares(IntegrationTestCase):
                     self.assertFalse(document.has_permission("write"))
                     with self.assertRaises(frappe.PermissionError):
                         document.save(ignore_permissions=True)
-                    with self.assertRaises(frappe.PermissionError):
+                    delete_error = (
+                        frappe.ValidationError
+                        if document.doctype == SOURCE_DOCTYPE
+                        else frappe.PermissionError
+                    )
+                    with self.assertRaises(delete_error):
                         document.delete(ignore_permissions=True)
                     new_document = frappe.new_doc(document.doctype)
                     with self.assertRaises(frappe.PermissionError):
@@ -564,11 +641,18 @@ class TestInvestorShares(IntegrationTestCase):
 
     def test_fresh_install_bootstrap_runs_the_same_rerunnable_cleanup(self):
         path = "bond_management.patches.enforce_investor_share_boundary.execute"
+        source_path = "bond_management.patches.add_bond_exchange_rate_source_permission.execute"
         self.assertIn(path, hooks.after_install)
+        self.assertIn(source_path, hooks.after_install)
         share = self.legacy_share(self.other, self.investor.name)
+        source = self.make_statement_source(make_statement(self.other, statement_date="2091-04-08"))
+        source_share = self.legacy_share(source, self.investor.name)
         frappe.get_attr(path)()
         frappe.get_attr(path)()
+        frappe.get_attr(source_path)()
+        frappe.get_attr(source_path)()
         self.assertFalse(frappe.db.exists("DocShare", share.name))
+        self.assertFalse(frappe.db.exists("DocShare", source_share.name))
 
     def clear_portfolio_assignments(self):
         original = "frappe.core.doctype.user_permission.user_permission.clear_user_permissions"
@@ -597,6 +681,14 @@ class TestInvestorShares(IntegrationTestCase):
         )
         share.db_insert()
         return share
+
+    def make_statement_source(self, statement):
+        sync_statement_exchange_rates(
+            statement,
+            [SimpleNamespace(from_currency="EUR", to_currency="USD", rate="0.91")],
+        )
+        source_name = frappe.db.get_value(SOURCE_DOCTYPE, {"statement": statement.name}, "name")
+        return frappe.get_doc(SOURCE_DOCTYPE, source_name)
 
     def make_user(self, roles):
         return frappe.get_doc(

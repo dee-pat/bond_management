@@ -5,15 +5,24 @@ from frappe import _
 
 from bond_management.bond_management.utils.investor_permissions import (
     _get_allowed_portfolios,
+    _get_statement_portfolio,
+    _has_explicit_exchange_rate_source_share,
     is_investor_user,
 )
 
+SOURCE_DOCTYPE = "Bond Exchange Rate Source"
 PORTFOLIO_DOCTYPES = {
     "Bond Portfolio": "name",
     "Bond Transaction": "portfolio_name",
     "Bond Statement": "portfolio_name",
 }
-FINANCIAL_DOCTYPES = (*PORTFOLIO_DOCTYPES, "Bond Master", "Bond Market Date", "Bond Exchange Rate")
+FINANCIAL_DOCTYPES = (
+    *PORTFOLIO_DOCTYPES,
+    "Bond Master",
+    "Bond Market Date",
+    "Bond Exchange Rate",
+    SOURCE_DOCTYPE,
+)
 READ_PERMISSION_TYPES = {"read", "report", "print", "email", "select"}
 MUTATING_SHARE_FIELDS = ("write", "submit", "share")
 _DEFERRED_SHARE_TARGET = object()
@@ -34,7 +43,7 @@ def reject_investor_mutation(doc, method=None):
     recipients = []
     if not doc.is_new():
         _lock_share_target(doc.doctype, doc.name)
-        if doc.doctype in PORTFOLIO_DOCTYPES:
+        if doc.doctype in PORTFOLIO_DOCTYPES or doc.doctype == SOURCE_DOCTYPE:
             recipients = frappe.qb.get_query(
                 "DocShare",
                 fields=["user"],
@@ -68,7 +77,7 @@ def validate_share(doc, method, share):
     _validate_locked_share(target, share)
 
 
-def cleanup_incompatible_shares(user=None, doctype=None, name=None):
+def cleanup_incompatible_shares(user=None, doctype=None, name=None, names=None):
     """Administrative invariant repair; the caller owns the request transaction.
 
     The service reads shares and assignment data without investor permissions
@@ -79,7 +88,13 @@ def cleanup_incompatible_shares(user=None, doctype=None, name=None):
     if user:
         filters["user"] = user
     if doctype:
-        filters.update(share_doctype=doctype, share_name=name)
+        filters["share_doctype"] = doctype
+        if name:
+            filters["share_name"] = name
+        elif names is not None:
+            if not names:
+                return
+            filters["share_name"] = ["in", names]
     targets = _lock_share_targets(filters)
     if user:
         _lock_users([user])
@@ -170,8 +185,22 @@ def cleanup_assignment_shares(doc, method=None):
 
 
 def cleanup_document_shares(doc, method=None):
-    if doc.doctype in PORTFOLIO_DOCTYPES:
-        cleanup_incompatible_shares(doctype=doc.doctype, name=doc.name)
+    if doc.doctype not in PORTFOLIO_DOCTYPES:
+        return
+
+    cleanup_incompatible_shares(doctype=doc.doctype, name=doc.name)
+    if doc.doctype != "Bond Statement":
+        return
+
+    previous = doc.get_doc_before_save()
+    if previous and previous.portfolio_name != doc.portfolio_name:
+        source_names = frappe.qb.get_query(
+            SOURCE_DOCTYPE,
+            fields=["name"],
+            filters={"statement": doc.name},
+            ignore_permissions=True,
+        ).run(pluck=True)
+        cleanup_incompatible_shares(doctype=SOURCE_DOCTYPE, names=source_names)
 
 
 def _investor_document_access(doc, user, permtype):
@@ -181,10 +210,22 @@ def _investor_document_access(doc, user, permtype):
     if permtype not in READ_PERMISSION_TYPES:
         return False
     field = PORTFOLIO_DOCTYPES.get(doc.doctype)
-    return field is None or doc.get(field) in portfolios
+    if field:
+        portfolio = doc.get(field)
+    elif doc.doctype == SOURCE_DOCTYPE:
+        portfolio = _document_portfolio(doc)
+        return bool(
+            portfolio and portfolio in portfolios and _has_explicit_exchange_rate_source_share(user, doc.name)
+        )
+    else:
+        return True
+    return bool(portfolio and portfolio in portfolios)
 
 
 def _lock_share_target(doctype, name, *, wait=True):
+    if doctype == SOURCE_DOCTYPE:
+        return _lock_exchange_rate_source_target(name, wait=wait)
+
     field = PORTFOLIO_DOCTYPES.get(doctype)
     current = frappe.db.get_value(doctype, name, field or "name", for_update=True, wait=wait)
     if current is None:
@@ -194,6 +235,40 @@ def _lock_share_target(doctype, name, *, wait=True):
     if field:
         target[field] = current
     return target
+
+
+def _lock_exchange_rate_source_target(name, *, wait=True):
+    statement_name = frappe.db.get_value(SOURCE_DOCTYPE, name, "statement")
+    if not statement_name:
+        return None
+
+    # Statement saves lock their row before synchronizing provenance rows.
+    # Keep the same parent-before-child order when validating a source share.
+    portfolio = _get_statement_portfolio(statement_name, for_update=True, wait=wait)
+    if portfolio is None:
+        return None
+
+    current_statement = frappe.db.get_value(
+        SOURCE_DOCTYPE,
+        name,
+        "statement",
+        for_update=True,
+        wait=wait,
+    )
+    if not current_statement:
+        return None
+    if current_statement != statement_name:
+        frappe.throw(
+            _("The statement for exchange-rate provenance changed while access was being checked."),
+            frappe.ValidationError,
+        )
+
+    return frappe._dict(
+        doctype=SOURCE_DOCTYPE,
+        name=name,
+        statement=statement_name,
+        portfolio_name=portfolio,
+    )
 
 
 def _lock_unseen_share_target(doctype, name):
@@ -246,13 +321,21 @@ def _validate_locked_share(target, share):
 
 
 def _inaccessible_share(doc, share):
-    field = PORTFOLIO_DOCTYPES.get(doc.doctype)
-    if field is None:
+    if doc.doctype not in PORTFOLIO_DOCTYPES and doc.doctype != SOURCE_DOCTYPE:
         return False
     if share.everyone:
         return True
     portfolios = _recipient_portfolios(share.user)
-    return portfolios is not None and doc.get(field) not in portfolios
+    return portfolios is not None and _document_portfolio(doc) not in portfolios
+
+
+def _document_portfolio(doc):
+    field = PORTFOLIO_DOCTYPES.get(doc.doctype)
+    if field:
+        return doc.get(field)
+    if doc.doctype == SOURCE_DOCTYPE:
+        return doc.get("portfolio_name") or _get_statement_portfolio(doc.get("statement"))
+    return None
 
 
 def _restricted_recipient(share):

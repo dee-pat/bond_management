@@ -95,7 +95,10 @@ assignments, and role/assignment changes repair incompatible shares in the same
 request transaction. The app overrides Frappe's bulk User Permission clear
 endpoint to retain its System Manager check and repair shares after the bulk
 delete, which bypasses ordinary document events. The repair patch also runs on
-fresh installation.
+fresh installation. Exchange-rate provenance shares resolve scope through the
+linked Bond Statement. Investors can read only explicitly shared provenance
+rows, and list queries enforce that same scope. Migration and fresh-install
+bootstraps repair incompatible legacy source shares.
 
 ## Important behavior
 
