@@ -1,12 +1,14 @@
 # Review fix 8: transaction confirmation filename collisions
 
 Different confirmation PDFs for one product account and settlement date currently
-compete for one private filename. New canonical names will append the SHA-256 of
-the uploaded PDF bytes, read through Frappe's private File API after confirmation
-parsing. Identical bytes share one canonical URL, including multiple transaction
-rows from the same PDF. A currently attached legacy account/date canonical URL
-remains valid and is reused on save. No new data migration will rename historical
-canonical files.
+compete for one private filename. New canonical names append the SHA-256 of the
+uploaded PDF bytes, read through Frappe's private File API after confirmation
+parsing. Long account numbers use a bounded readable filename component, with the
+full account number included in the digest so truncation cannot merge accounts.
+Identical bytes share one canonical URL, including multiple transaction rows from
+the same PDF. A legacy account/date URL is reused only when it is already the
+persisted attachment of that transaction. No new data migration will rename
+historical canonical files.
 
 File read/write permissions, private storage, locking, and rollback behavior stay
 in the existing standardization service. A different file cannot overwrite an
@@ -57,14 +59,18 @@ apps/bond_management/scripts/verify.sh pre-push
 - Risk classification: backend attachment naming and persistence.
 - Required gates: complete transaction module with targeted regressions; shared
   pre-push gate.
-- Commands executed: `bench --site test_site run-tests --app bond_management
-  --module bond_management.bond_management.doctype.bond_transaction.test_bond_transaction`;
+- Commands executed: focused runs for
+  `test_long_account_confirmation_filename_fits_file_limit_without_account_collisions`
+  and `test_new_transaction_does_not_reuse_an_existing_legacy_attachment_url`;
+  `bench --site test_site run-tests --module bond_management.bond_management.doctype.bond_transaction.test_bond_transaction`;
   `apps/bond_management/scripts/verify.sh pre-push`.
-- Exit statuses: both 0.
-- Tests passed: 32 transaction tests, including distinct same-day PDF bytes,
-  legacy URL reuse and multi-row sharing; 325 tests in the full server suite.
-- Tests failed: none in coordinator verification.
+- Exit statuses: both focused runs, the 35-test transaction module, and the final
+  pre-push run exited 0. The first pre-push attempt exited 1 on an unused test
+  variable; after correcting it, lint and formatting passed.
+- Tests passed: both new regressions; 35 transaction tests; full gate: 38 unit,
+  287 integration, and 3 unspecified-category tests (328 total).
+- Tests failed: no test failures.
 - Tests not run: browser and fresh-install gates are not applicable.
 - Blockers: none.
-- Unverified local/CI differences: macOS local runtime; Linux CI runs the same
-  shared gate. Logs: local `fix8-module.log` and `fix8-gate.log`.
+- Unverified local/CI differences: local verification used macOS; CI uses Linux.
+  The domain graph was reviewed and attachment ownership/data flow are unchanged.

@@ -14,6 +14,7 @@ from bond_management.bond_management.utils.transaction_pdf import MAX_TRANSACTIO
 
 TRANSACTION_FILENAME_PREFIX = "Transaction-"
 SAFE_ACCOUNT_PATTERN = re.compile(r"^[A-Za-z0-9_-]+$")
+FILE_NAME_MAX_LENGTH = 140
 
 
 def get_standard_transaction_filename(
@@ -24,16 +25,39 @@ def get_standard_transaction_filename(
     if not normalized_account or not SAFE_ACCOUNT_PATTERN.fullmatch(normalized_account):
         frappe.throw(_("Product Account No. contains characters that cannot be used in a filename."))
 
-    stem = f"{TRANSACTION_FILENAME_PREFIX}{normalized_account}-{getdate(settlement_date).strftime('%Y%m%d')}"
+    settlement_date_component = getdate(settlement_date).strftime("%Y%m%d")
     if content is not None:
-        stem += f"-{hashlib.sha256(content).hexdigest()}"
-    return f"{stem}.pdf"
+        content_digest = hashlib.sha256(content).hexdigest()
+        static_length = (
+            len(TRANSACTION_FILENAME_PREFIX)
+            + 1
+            + len(settlement_date_component)
+            + 1
+            + len(content_digest)
+            + len(".pdf")
+        )
+        max_account_length = FILE_NAME_MAX_LENGTH - static_length
+        if len(normalized_account) > max_account_length:
+            content_digest = hashlib.sha256(normalized_account.encode("ascii") + b"\0" + content).hexdigest()
+            normalized_account = normalized_account[:max_account_length]
+
+        return (
+            f"{TRANSACTION_FILENAME_PREFIX}{normalized_account}-{settlement_date_component}"
+            f"-{content_digest}.pdf"
+        )
+
+    return f"{TRANSACTION_FILENAME_PREFIX}{normalized_account}-{settlement_date_component}.pdf"
 
 
 def standardize_transaction_attachment(transaction, account_no: str, settlement_date) -> str:
     """Rename a transaction's private PDF and attach it to the transaction document."""
     legacy_filename = get_standard_transaction_filename(account_no, settlement_date)
-    if transaction.attachment == f"/private/files/{legacy_filename}":
+    legacy_url = f"/private/files/{legacy_filename}"
+    existing_attachment = None
+    if transaction.name and not transaction.is_new():
+        existing_attachment = frappe.db.get_value("Bond Transaction", transaction.name, "attachment")
+
+    if transaction.attachment == legacy_url and existing_attachment == legacy_url:
         # Keep links to previously standardized confirmations stable.
         return standardize_private_pdf_attachment(transaction, legacy_filename)
 
