@@ -10,6 +10,15 @@ This file records execution state and evidence. Product, architecture and accept
 Browser-runner evidence in entries dated before 2026-09-25 records historical
 activity. Current browser tests, local gates, and CI use Playwright only.
 
+Review cleanup follow-up, 2026-10-08: the five investor lists now share paged
+loading, stale-response protection, sorting, filtering and retry state; list
+APIs share pagination shaping and permission-aware portfolio checks. Both
+reports share the Desk clipboard sanitizer while preserving SPA Unicode-control
+handling. Public contracts and presentation remain stable. Local
+`pre-push-ui` exited 0 with 328 server and 49 browser tests; fresh migration
+and rerun evidence is in [review-cleanup.md](review-cleanup.md). Linux CI has
+not been observed for this slice; pilot acceptance remains pending.
+
 ## Status legend
 
 - `Pending`: no implementation started.

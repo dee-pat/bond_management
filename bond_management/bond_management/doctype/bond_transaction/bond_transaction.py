@@ -9,7 +9,7 @@ from frappe import _
 from frappe.model.document import Document
 from frappe.utils import escape_html, getdate
 
-from bond_management.bond_management.utils.accrual import get_accrued_interest
+from bond_management.bond_management.utils.accrual import get_accrued_interest_from_bond
 from bond_management.bond_management.utils.financial import (
     DecimalInput,
     quantize_money,
@@ -83,8 +83,8 @@ def _calculate_amount_values(
     commission_amount = quantize_money(commission_amount)
     settlement_amount = quantize_money(principal + to_decimal(accrued_interest_paid))
     transaction_amount = quantize_money(settlement_amount - commission_amount)
-    accrued_interest_calculated = get_accrued_interest(
-        isin=bond.name,
+    accrued_interest_calculated = get_accrued_interest_from_bond(
+        bond,
         settlement_date=settlement_date,
         quantity_face_value=quantity_face_value,
     )
@@ -152,10 +152,10 @@ class BondTransaction(Document):
 
     def validate(self):
         self.validate_required_inputs()
-        self.set_authoritative_bond_snapshot()
+        bond = self.set_authoritative_bond_snapshot()
         self.validate_financial_terms()
         self.validate_transaction_dates()
-        calculated_amounts = self.calculate_amounts()
+        calculated_amounts = self.calculate_amounts(bond=bond)
         self.validate_pdf_amounts(calculated_amounts)
         self.validate_portfolio_ledger()
 
@@ -422,6 +422,7 @@ class BondTransaction(Document):
         bond.check_permission("read")
         for fieldname in BOND_SNAPSHOT_FIELDS:
             self.set(fieldname, bond.get(fieldname))
+        return bond
 
     def validate_financial_terms(self):
         if to_decimal(self.quantity_face_value) <= 0:
@@ -450,8 +451,9 @@ class BondTransaction(Document):
         if trade_date > settlement_date:
             frappe.throw(_("Trade Date must be on or before Settlement Date"))
 
-    def calculate_amounts(self):
-        bond = frappe.get_doc("Bond Master", self.isin)
+    def calculate_amounts(self, bond=None):
+        if bond is None:
+            bond = frappe.get_doc("Bond Master", self.isin)
         values = _calculate_amount_values(
             bond,
             self.settlement_date,

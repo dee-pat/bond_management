@@ -1,7 +1,6 @@
 """Stable report projections for the investor SPA."""
 
 import frappe
-from frappe import _
 from frappe.desk.query_report import get_report_doc
 from frappe.model.meta import get_field_precision
 from frappe.utils import getdate, today
@@ -17,6 +16,9 @@ from bond_management.bond_management.report.portfolio_performance.portfolio_perf
 )
 from bond_management.bond_management.report.portfolio_performance.portfolio_performance import (
     get_xirr_cashflows,
+)
+from bond_management.bond_management.utils.investor_access import (
+    require_readable_portfolio as _require_readable_portfolio,
 )
 from bond_management.bond_management.utils.investor_ui import (
     require_investor_ui_access,
@@ -209,18 +211,6 @@ def _oldest_readable_yield_date() -> str | None:
         ignore_permissions=False,
     ).run(pluck=True)
     return getdate(dates[0]).isoformat() if dates else None
-
-
-def _require_readable_portfolio(portfolio: str) -> None:
-    readable = frappe.qb.get_query(
-        "Bond Portfolio",
-        fields=["name"],
-        filters={"name": portfolio},
-        limit=1,
-        ignore_permissions=False,
-    ).run(pluck=True)
-    if not readable:
-        frappe.throw(_("You are not permitted to read this portfolio."), frappe.PermissionError)
 
 
 def _project_columns(columns: list[dict]) -> list[dict]:

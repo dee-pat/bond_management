@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, ref } from "vue";
 import { RouterLink } from "vue-router";
 import { Button, Select } from "frappe-ui";
 import { ListCell } from "frappe-ui/list";
@@ -9,32 +9,36 @@ import ListFilterBar from "../components/ListFilterBar.vue";
 import ListPagination from "../components/ListPagination.vue";
 import SortableColumn from "../components/SortableColumn.vue";
 import SurfaceState from "../components/SurfaceState.vue";
-import { InvestorApiError, redirectToLogin, useInvestorApi } from "../lib/api";
-import { toFilterValue } from "../lib/list";
+import { useInvestorApi } from "../lib/api";
+import { toFilterValue, usePagedList } from "../lib/list";
 import { formatDate, formatNumber } from "../lib/format";
-import type {
-	ActiveListFilter,
-	InvestorBootstrap,
-	SortOrder,
-	TransactionListRow,
-	TransactionPage,
-} from "../types";
+import type { ActiveListFilter, InvestorBootstrap, TransactionListRow } from "../types";
 
 const props = defineProps<{ bootstrap: InvestorBootstrap }>();
 const api = useInvestorApi();
 const selectedPortfolio = ref("");
-const activeFilter = ref<ActiveListFilter | null>(null);
-const sortBy = ref("settlement_date");
-const sortOrder = ref<SortOrder>("desc");
-const transactions = ref<TransactionListRow[]>([]);
-const pagination = ref<TransactionPage["pagination"]>({
-	start: 0,
-	page_length: 20,
-	has_more: false,
+const {
+	rows: transactions,
+	activeFilter,
+	sortBy,
+	sortOrder,
+	pagination,
+	loading,
+	error,
+	load: loadTransactions,
+	changeSort,
+	loadMore: loadMoreTransactions,
+	changePageLength,
+	retry: retryTransactions,
+} = usePagedList<TransactionListRow>({
+	fetchPage: (parameters) =>
+		api.fetchTransactions({
+			...parameters,
+			portfolio: selectedPortfolio.value || undefined,
+		}),
+	sortBy: "settlement_date",
+	errorMessage: "Transactions could not be loaded. Please retry.",
 });
-const loading = ref(true);
-const error = ref<string | null>(null);
-let latestRequest = 0;
 
 const hasAssignments = computed(() => props.bootstrap.portfolios.length > 0);
 const portfolioOptions = computed(() => [
@@ -59,46 +63,6 @@ const activeFilters = computed<ActiveListFilter[]>(() => {
 	if (activeFilter.value) filters.push(activeFilter.value);
 	return filters;
 });
-
-async function loadTransactions(
-	start = 0,
-	append = false,
-	pageLength = pagination.value.page_length
-): Promise<void> {
-	if (append && (loading.value || !pagination.value.has_more)) return;
-
-	const requestId = ++latestRequest;
-	loading.value = true;
-	error.value = null;
-	if (!append) {
-		transactions.value = [];
-		pagination.value = { start: 0, page_length: pageLength, has_more: false };
-	}
-
-	try {
-		const response = await api.fetchTransactions({
-			portfolio: selectedPortfolio.value || undefined,
-			start,
-			pageLength,
-			sortBy: sortBy.value || undefined,
-			sortOrder: sortBy.value ? sortOrder.value : undefined,
-			filterField: activeFilter.value?.field,
-			filterValue: activeFilter.value?.value,
-		});
-		if (requestId !== latestRequest) return;
-		transactions.value = append ? [...transactions.value, ...response.data] : response.data;
-		pagination.value = response.pagination;
-	} catch (caughtError) {
-		if (requestId !== latestRequest) return;
-		if (caughtError instanceof InvestorApiError && caughtError.status === 401) {
-			redirectToLogin();
-			return;
-		}
-		error.value = "Transactions could not be loaded. Please retry.";
-	} finally {
-		if (requestId === latestRequest) loading.value = false;
-	}
-}
 
 function changePortfolio(): void {
 	void loadTransactions(0);
@@ -126,27 +90,6 @@ function clearAllFilters(): void {
 	activeFilter.value = null;
 	void loadTransactions(0);
 }
-
-function changeSort(field: string, order: SortOrder): void {
-	sortBy.value = field;
-	sortOrder.value = order;
-	void loadTransactions(0);
-}
-
-function loadMoreTransactions(): void {
-	void loadTransactions(pagination.value.start + pagination.value.page_length, true);
-}
-
-function changePageLength(pageLength: number): void {
-	if (pageLength === pagination.value.page_length) return;
-	void loadTransactions(0, false, pageLength);
-}
-
-function retryTransactions(): void {
-	void loadTransactions(0, false);
-}
-
-onMounted(() => void loadTransactions());
 </script>
 
 <template>

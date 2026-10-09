@@ -252,9 +252,15 @@ def unit_accrued_interest(isin=None, settlement_date=None):
 def get_accrued_interest(isin=None, settlement_date=None, quantity_face_value=None):
     if not isin or not settlement_date or not quantity_face_value:
         return to_decimal(0)
-    settlement_date = getdate(settlement_date)
-
     bond_doc = frappe.get_doc("Bond Master", isin)
+    return get_accrued_interest_from_bond(bond_doc, settlement_date, quantity_face_value)
+
+
+def get_accrued_interest_from_bond(bond_doc, settlement_date=None, quantity_face_value=None):
+    """Calculate from the same authoritative bond used for the transaction snapshot."""
+    if not settlement_date or not quantity_face_value:
+        return to_decimal(0)
+    settlement_date = getdate(settlement_date)
     quantity_factor = calculate_effective_quantity_factor_from_bond(bond_doc, settlement_date)
     return (
         unit_accrued_interest_from_bond(bond_doc, settlement_date)

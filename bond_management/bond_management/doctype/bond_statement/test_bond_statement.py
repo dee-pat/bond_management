@@ -907,7 +907,7 @@ class TestBondStatement(IntegrationTestCase):
         ).run(pluck=True)
         self.assertEqual(len(report_files), 1)
 
-    def test_statement_delete_cleans_up_quantity_reconciliation_report(self):
+    def test_report_cleanup_preserves_current_file_and_deletes_after_statement_removal(self):
         portfolio = make_portfolio()
         bond = self._make_long_dated_bond()
         make_transaction(bond, portfolio, quantity_face_value=15)
@@ -922,6 +922,10 @@ class TestBondStatement(IntegrationTestCase):
         statement = frappe.get_doc({"doctype": "Bond Statement", "attachment": attachment}).insert()
         report_url = statement.quantity_reconciliation_report
         report_name = frappe.db.get_value("File", {"file_url": report_url}, "name")
+
+        # A stale queued job can run after a later patch has reused this report.
+        delete_quantity_reconciliation_report_file(report_name)
+        self.assertTrue(frappe.db.exists("File", report_name))
 
         with patch(
             "bond_management.bond_management.utils.statement_quantity_report.frappe.enqueue"
