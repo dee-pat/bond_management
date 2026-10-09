@@ -238,6 +238,101 @@ class TestTransactionPdf(UnitTestCase):
                 with self.assertRaisesRegex(TransactionPdfError, message):
                     parse_transaction_pdf_text(_current_transaction_text("U1999155", **values))
 
+    def test_rejects_conflicting_or_malformed_isins(self):
+        text = _current_transaction_text("U1999155")
+        for invalid in (
+            text.replace("ISIN : XS3196101201", "ISIN : XS1781710543"),
+            text.replace("ISIN : XS3196101201", "ISIN : XS3196101201suffix"),
+            text.replace("ISIN : XS3196101201", "ISIN :"),
+            text.replace("- XS3196101201", "- XS3196101201 / XS1781710543"),
+        ):
+            with self.subTest(text=invalid):
+                with self.assertRaisesRegex(TransactionPdfError, "ISIN"):
+                    parse_transaction_pdf_text(invalid)
+
+    def test_rejects_malformed_complete_financial_values(self):
+        for field in ("quantity", "price", "accrued_interest", "principal", "settlement_amount"):
+            for value in ("2,00", "100.00suffix", "100.00.25", "NaN", "", "100 200"):
+                with self.subTest(field=field, value=value):
+                    with self.assertRaisesRegex(TransactionPdfError, "invalid"):
+                        parse_transaction_pdf_text(_current_transaction_text("U1999155", **{field: value}))
+
+    def test_rejects_malformed_present_trade_and_settlement_dates(self):
+        text = _current_transaction_text("U1999155")
+        for original in ("02/06/2026", "03/06/2026"):
+            for value in ("2026-06-02", "02/06/2026suffix", "31/02/2026", ""):
+                with self.subTest(original=original, value=value):
+                    with self.assertRaisesRegex(TransactionPdfError, "invalid .*Date"):
+                        parse_transaction_pdf_text(text.replace(original, value))
+
+    def test_rejects_malformed_commission_even_when_percent_is_primary(self):
+        for field in ("commission", "commission_amount"):
+            for value in ("2,00", "invalid", "NaN", "0.45suffix"):
+                with self.subTest(field=field, value=value):
+                    with self.assertRaisesRegex(TransactionPdfError, "invalid Commission"):
+                        parse_transaction_pdf_text(_current_transaction_text("U1999155", **{field: value}))
+
+    def test_rejects_conflicting_quantity_labels(self):
+        text = _current_transaction_text("U1999155").replace(
+            "Currency : USD Quantity : 20,000.000000",
+            "Currency : USD Quantity : 20,000.000000 Quantity / Face Value : 19,000.000000",
+        )
+        with self.assertRaisesRegex(TransactionPdfError, "conflicting Quantity / Face Value"):
+            parse_transaction_pdf_text(text)
+
+        matching_text = _current_transaction_text("U1999155").replace(
+            "Currency : USD Quantity : 20,000.000000",
+            "Currency : USD Quantity : 20,000.000000 Quantity / Face Value : 20,000.00",
+        )
+        row = parse_transaction_pdf_text(matching_text).transactions[0]
+        self.assertEqual(row.quantity_face_value, Decimal("20000.000000"))
+
+    def test_rejects_conflicting_repeated_fields_and_incomplete_references(self):
+        text = _current_transaction_text("U1999155")
+        for invalid in (
+            text.replace("Price : 100.350000", "Price : 100.350000 Price : 110.00"),
+            text.replace("Transaction Reference : U1999155", "Transaction Reference : U1999155suffix"),
+            text.replace("Commission % : 0.45%", "Commission % : %"),
+            text.replace("Commission Amount : 9,000.00", "Commission Amount : -1"),
+        ):
+            with self.subTest(text=invalid):
+                with self.assertRaises(TransactionPdfError):
+                    parse_transaction_pdf_text(invalid)
+
+    def test_accepts_repeated_fields_with_equal_parsed_values(self):
+        text = _current_transaction_text("U1999155")
+        text = text.replace("Price : 100.350000", "Price : 100.350000 Price : 100.35")
+        text = text.replace("ISIN : XS3196101201", "ISIN : xs3196101201")
+
+        row = parse_transaction_pdf_text(text).transactions[0]
+
+        self.assertEqual(row.price, Decimal("100.350000"))
+        self.assertEqual(row.isin, "XS3196101201")
+
+    def test_blank_amount_only_commission_retains_zero_percent_convention(self):
+        row = parse_transaction_pdf_text(
+            _current_transaction_text("U1999155", commission=None, commission_amount="")
+        ).transactions[0]
+
+        self.assertEqual(row.commission_percent, Decimal("0"))
+        self.assertIsNone(row.commission_amount)
+
+    def test_blank_percent_uses_a_valid_amount_when_present(self):
+        text = _current_transaction_text("U1999155").replace("Commission % : 0.45%", "Commission % :")
+        row = parse_transaction_pdf_text(text).transactions[0]
+
+        self.assertIsNone(row.commission_percent)
+        self.assertEqual(row.commission_amount, Decimal("9000.00"))
+
+    def test_absent_optional_financial_values_remain_supported(self):
+        text = _current_transaction_text("U1999155")
+        text = text.replace("Principal : 2,000,000.00", "")
+        text = text.replace("Settlement Amount in Currency : 2,031,062.50", "")
+        row = parse_transaction_pdf_text(text).transactions[0]
+
+        self.assertIsNone(row.principal)
+        self.assertIsNone(row.settlement_amount)
+
     def test_valid_password_does_not_mask_a_format_error(self):
         content = make_text_pdf(
             "Account No: 1110700351101\nNo transaction rows",

@@ -6,6 +6,9 @@ from pypika.analytics import RowNumber
 from pypika.enums import Order
 
 from bond_management.bond_management.utils.exchange_rate import build_exchange_rate_context
+from bond_management.bond_management.utils.investor_permissions import (
+    include_shared_exchange_rates_in_safe_projection,
+)
 
 
 def get_distinct_isins(portfolio=None, valuation_date=None):
@@ -191,17 +194,18 @@ def load_portfolio_performance_context(portfolio, valuation_date):
     )
     exchange_rate_rows = []
     if native_currencies:
-        exchange_rate_rows = frappe.qb.get_query(
-            "Bond Exchange Rate",
-            fields=["rate_date", "from_currency", "to_currency", "rate"],
-            filters={
-                "rate_date": ["<=", valuation_date],
-                "from_currency": ["in", native_currencies],
-                "to_currency": "USD",
-            },
-            order_by="rate_date asc, from_currency asc, name asc",
-            ignore_permissions=False,
-        ).run(as_dict=True)
+        with include_shared_exchange_rates_in_safe_projection():
+            exchange_rate_rows = frappe.qb.get_query(
+                "Bond Exchange Rate",
+                fields=["rate_date", "from_currency", "to_currency", "rate"],
+                filters={
+                    "rate_date": ["<=", valuation_date],
+                    "from_currency": ["in", native_currencies],
+                    "to_currency": "USD",
+                },
+                order_by="rate_date asc, from_currency asc, name asc",
+                ignore_permissions=False,
+            ).run(as_dict=True)
 
     return {
         "isins": visible_isins,

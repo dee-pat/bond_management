@@ -81,6 +81,7 @@
    "fieldtype": "Link",
    "label": "Representative Statement",
    "options": "Bond Statement",
+   "permlevel": 1,
    "read_only": 1
   },
   {
@@ -116,6 +117,11 @@
    "role": "Bond Management Manager"
   },
   {
+   "permlevel": 1,
+   "read": 1,
+   "role": "Bond Management Manager"
+  },
+  {
    "email": 1,
    "print": 1,
    "read": 1,
@@ -133,6 +139,11 @@
    "report": 1,
    "share": 1,
    "write": 1,
+   "role": "System Manager"
+  },
+  {
+   "permlevel": 1,
+   "read": 1,
    "role": "System Manager"
   }
  ],

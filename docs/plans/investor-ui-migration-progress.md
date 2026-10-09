@@ -1576,3 +1576,9 @@ an isolated MariaDB 12.3 server because the shared MariaDB root credential is
 intentionally unavailable; they did not touch or recreate an existing site.
 
 When implementation changes a settled decision, record the reason here during the slice and update the specification before marking that slice complete.
+
+## Verified locally: review fix 4 — child permissions
+
+Statement and market-date detail APIs deny whole documents containing
+restricted child Links. Scope and current verification evidence are recorded
+in [review-fix-4.md](review-fix-4.md). No API response shape changes.
