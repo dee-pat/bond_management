@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 import frappe
 from frappe.tests import IntegrationTestCase
 
@@ -6,6 +8,36 @@ from bond_management.patches.backfill_market_xirr_availability import execute
 
 
 class TestBackfillMarketXirrAvailability(IntegrationTestCase):
+    def test_backfill_preserves_nonzero_legacy_yield_after_bond_terms_change(self):
+        bond = make_bond(coupon_rate=0)
+        snapshot = make_market_date(bond, market_price=90)
+        market_row = snapshot.bond_market_prices[0]
+        historical_yield = Decimal(
+            str(frappe.db.get_value("Bond Market Prices", market_row.name, "future_xirr"))
+        )
+        self.assertNotEqual(historical_yield, Decimal("0"))
+
+        frappe.db.set_value(
+            "Bond Market Prices",
+            market_row.name,
+            "future_xirr_available",
+            0,
+            update_modified=False,
+        )
+        bond.coupon_rate = 11
+        bond.save()
+
+        execute()
+        migrated_row = frappe.get_doc("Bond Market Prices", market_row.name)
+
+        self.assertEqual(Decimal(str(migrated_row.future_xirr)), historical_yield)
+        self.assertEqual(migrated_row.future_xirr_available, 1)
+
+        execute()
+        migrated_row.reload()
+        self.assertEqual(Decimal(str(migrated_row.future_xirr)), historical_yield)
+        self.assertEqual(migrated_row.future_xirr_available, 1)
+
     def test_legacy_backfill_distinguishes_all_yields_and_preserves_other_fields_on_rerun(self):
         snapshot = None
         cases = []

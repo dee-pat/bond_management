@@ -12,15 +12,18 @@ quote regardless of its yield availability and uses only an available yield
 from that quote as the batched guess. Existing permissions, cash-flow signs,
 solver behavior and price conventions remain unchanged.
 
-The registered post-model-sync migration recalculates legacy yields with
-`DEFAULT_XIRR_GUESS` and updates only yield and availability, preserving row
-metadata and unrelated derived values. It is safe to rerun; fresh installations
+The registered post-model-sync migration preserves non-zero legacy yields and
+marks them available. It recalculates only ambiguous legacy zero yields with
+`DEFAULT_XIRR_GUESS`, updating yield and availability while preserving row
+metadata and unrelated derived values. Rows already marked available are
+skipped, making forced reruns safe for genuine zero results. Fresh installations
 have no legacy rows and normal controller validation derives the flag.
 
 Acceptance covers real persisted zero, positive, negative and matured results;
 stale numeric values masked by the flag; recalculation responses; historical
 fallback; latest performance quotes; registered migration ordering and rerun;
-and one Desk rendering smoke for unavailable versus zero.
+preservation of a non-zero historical yield after Bond Master terms change; and
+one Desk rendering smoke for unavailable versus zero.
 
 The market-detail response adds availability; the yield-comparison report keeps
 its existing five-field projection and expresses unavailable yield as null.
@@ -62,3 +65,26 @@ its existing five-field projection and expresses unavailable yield as null.
   Existing sites/databases were preserved.
 - Persistent local evidence outside repo: `fix6-module-*.log`, `fix6-gate.log`
   and `fix6-oct8-fresh.log`.
+
+## Review follow-up
+
+The migration now leaves non-zero legacy yields unchanged and recalculates only
+rows whose old stored zero is ambiguous.
+
+- `bench --site test_site migrate` completed successfully against the PR source.
+- The focused migration module passed (2 tests), and the full app server suite
+  passed (334 tests). `scripts/verify.sh pre-push` also exited 0.
+- `scripts/verify.sh pre-push-ui` exited 0: pre-commit, Semgrep, all 334 server
+  tests, frontend lint/typecheck/build, and all 50 authenticated Playwright
+  cases passed. The first browser attempt used a server started before the SPA
+  entry existed in the PR app copy; after building that entry into the served
+  copy, the full browser suite passed.
+- Fresh-site validation is still outstanding. The new-site bootstrap failed
+  before app installation because local MariaDB rejected the CI root password
+  (`1045 Access denied for user 'root'@'localhost'`); its incomplete site
+  directory was removed. No existing site was recreated or dropped.
+- `git diff --check` passed. Domain-model links reviewed; this patch changes no
+  mapped DocType or API/report relationship.
+
+Remaining verification: rerun the fresh-site install with valid local database
+administrator credentials and run Linux CI.

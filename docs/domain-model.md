@@ -108,8 +108,9 @@ projections.
   guesses retain zero yields and skip unavailable rows. Performance keeps the
   latest quote even when its yield is unavailable, batch-loads the latest earlier
   available yield, and uses the default guess when no history exists. A
-  registered data patch recalculates legacy yields with the default guess and
-  preserves other fields.
+  registered data patch preserves non-zero legacy yields and marks them
+  available; it recalculates ambiguous legacy zero yields with the default guess
+  and preserves other fields.
 
 ## Source anchors
 
