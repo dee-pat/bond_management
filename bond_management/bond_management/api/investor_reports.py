@@ -11,6 +11,9 @@ from bond_management.bond_management.report.bond_yield_comparison.bond_yield_com
 from bond_management.bond_management.report.bond_yield_comparison.bond_yield_comparison import (
     get_readable_isins,
 )
+from bond_management.bond_management.report.interest_difference_by_portfolio.interest_difference_by_portfolio import (
+    execute as execute_interest_difference,
+)
 from bond_management.bond_management.report.portfolio_performance.portfolio_performance import (
     execute as execute_portfolio_performance,
 )
@@ -28,6 +31,18 @@ from bond_management.bond_management.utils.validation import optional_string, re
 
 PORTFOLIO_PERFORMANCE_REPORT = "Portfolio Performance"
 BOND_YIELD_COMPARISON_REPORT = "Bond Yield Comparison"
+INTEREST_DIFFERENCE_REPORT = "Interest Difference by Portfolio"
+INTEREST_DIFFERENCE_FIELDS = (
+    "transaction_reference",
+    "settlement_date",
+    "currency",
+    "isin",
+    "transaction_type",
+    "accrued_interest_calculated",
+    "accrued_interest_paid",
+    "interest_difference",
+    "interest_difference_days",
+)
 PORTFOLIO_PERFORMANCE_COLUMN_FIELDS = (
     "isin",
     "currency",
@@ -155,6 +170,44 @@ def get_bond_yield_comparison(
                 "columns": [_project_yield_column(column) for column in columns],
                 "rows": [_project_fields(row, BOND_YIELD_COMPARISON_FIELDS) for row in rows],
                 "chart": dict(YIELD_COMPARISON_CHART),
+            }
+        }
+    )
+
+
+@frappe.whitelist(methods=["GET"])
+def get_interest_difference_by_portfolio(
+    portfolio: str,
+    from_date: str | None = None,
+    to_date: str | None = None,
+) -> dict:
+    """Return interest differences for one portfolio through a fixed projection."""
+    require_investor_ui_access()
+    get_report_doc(INTEREST_DIFFERENCE_REPORT)
+    portfolio = required_string(portfolio, "Portfolio")
+    _require_readable_portfolio(portfolio)
+
+    filters = {
+        "portfolio_name": portfolio,
+        "from_date": optional_string(from_date, "From Date"),
+        "to_date": optional_string(to_date, "To Date"),
+    }
+    columns, rows = execute_interest_difference(filters)
+    return set_investor_api_data(
+        {
+            "report": {
+                "filters": {
+                    "portfolio": filters["portfolio_name"],
+                    "from_date": getdate(filters["from_date"]).isoformat() if filters["from_date"] else None,
+                    "to_date": getdate(filters["to_date"]).isoformat() if filters["to_date"] else None,
+                },
+                "columns": [
+                    _project_yield_column(column)
+                    for column in columns
+                    if column.get("fieldname") in INTEREST_DIFFERENCE_FIELDS
+                ],
+                "rows": [_project_fields(row, INTEREST_DIFFERENCE_FIELDS) for row in rows],
+                "chart": None,
             }
         }
     )

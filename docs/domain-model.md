@@ -72,19 +72,23 @@ flowchart LR
     DATA["Portfolios + transactions<br/>+ bonds + market data + FX"]
     PP["Portfolio Performance"]
     YIELD["Bond Yield Comparison"]
+    INTEREST["Interest Difference by Portfolio"]
     API["Read-only investor API"]
     SPA["Investor app"]
 
     DATA --> PP
     MARKET -->|"persisted yield + availability"| YIELD
+    DATA -->|"stored interest comparison and DCC-equivalent days; totals by selected portfolio/currency"| INTEREST
     PP -->|"values + cash-flow availability"| API
     YIELD --> API
+    INTEREST -->|"fixed investor projection"| API
     FX -->|"shared rates + readable statement reference"| API
     API --> SPA
 ```
 
 Desk owns financial writes. The investor app reads fixed, permission-scoped API
-projections.
+projections for portfolio performance, yield comparison, and interest
+difference.
 
 ## Important behavior
 

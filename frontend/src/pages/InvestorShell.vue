@@ -27,6 +27,7 @@ import BondDetail from "./BondDetail.vue";
 import BondList from "./BondList.vue";
 import ExchangeRateDetail from "./ExchangeRateDetail.vue";
 import ExchangeRateList from "./ExchangeRateList.vue";
+import InterestDifference from "./InterestDifference.vue";
 import MarketDateDetail from "./MarketDateDetail.vue";
 import MarketDateList from "./MarketDateList.vue";
 import PortfolioPerformance from "./PortfolioPerformance.vue";
@@ -68,6 +69,7 @@ const isMarketDateDetail = computed(() => route.name === "market-date-detail");
 const isExchangeRateList = computed(() => route.name === "exchange-rates");
 const isExchangeRateDetail = computed(() => route.name === "exchange-rate-detail");
 const isPortfolioPerformance = computed(() => route.name === "performance");
+const isInterestDifference = computed(() => route.name === "interest-difference");
 const isYieldComparison = computed(() => route.name === "yield-comparison");
 const isDetail = computed(() => typeof route.name === "string" && route.name.endsWith("-detail"));
 const activeNavigationName = computed(() => {
@@ -348,6 +350,11 @@ onBeforeUnmount(() => window.removeEventListener("resize", updateMobileLayout));
 
 			<PortfolioPerformance
 				v-else-if="isPortfolioPerformance && bootstrap"
+				:bootstrap="bootstrap"
+			/>
+
+			<InterestDifference
+				v-else-if="isInterestDifference && bootstrap"
 				:bootstrap="bootstrap"
 			/>
 
