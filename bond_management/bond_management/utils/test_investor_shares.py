@@ -341,6 +341,20 @@ class TestInvestorShares(IntegrationTestCase):
         )
         self.assertTrue(frappe.db.exists("DocShare", share.name))
 
+    def test_deadlock_while_locking_unseen_target_aborts_cleanup_without_retry(self):
+        share = self.legacy_share(self.assigned, self.manager.name)
+
+        with (
+            patch.object(investor_shares, "_lock_share_targets", return_value={}),
+            patch.object(investor_shares, "_lock_share_target", side_effect=frappe.QueryDeadlockError),
+            patch("frappe.enqueue") as enqueue,
+        ):
+            with self.assertRaises(frappe.QueryDeadlockError):
+                investor_shares.cleanup_incompatible_shares(user=self.manager.name)
+
+        enqueue.assert_not_called()
+        self.assertTrue(frappe.db.exists("DocShare", share.name))
+
     def test_role_change_repairs_existing_shares(self):
         share = add_docshare("Bond Portfolio", self.other.name, self.manager.name, write=1)
         self.manager.append("roles", {"role": INVESTOR_ROLE})

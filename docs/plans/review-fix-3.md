@@ -191,3 +191,30 @@ the latest interest-difference report documentation from `main`.
 The merge preserves both the investor share boundary and interest-difference
 notes in `docs/domain-model.md`, and both regression rows in
 `docs/testing-matrix.md`.
+
+## PR #18 review: deadlocks abort share cleanup
+
+The unseen-target retry handles a lock timeout by queueing cleanup after the
+transaction commits. A database deadlock rolls back the whole current
+transaction, so it must propagate instead of being treated as a target-local
+timeout. The handler now defers only `QueryTimeoutError`; the new regression
+asserts that `QueryDeadlockError` aborts cleanup without queueing a partial
+retry. No mapped relationship or report/API data flow changed; the domain graph
+was reviewed.
+
+### Verification evidence
+
+- Risk classification: backend concurrency and investor authorization.
+- Required gates: focused regression, complete share module, and the shared
+  server gate.
+- Commands executed:
+  `bench --site test_site run-tests --module bond_management.bond_management.utils.test_investor_shares --test test_deadlock_while_locking_unseen_target_aborts_cleanup_without_retry`
+  (exit 0); `bench --site test_site run-tests --module bond_management.bond_management.utils.test_investor_shares`
+  (exit 0); `apps/bond_management/scripts/verify.sh pre-push` (exit 0).
+- Tests passed: focused regression (1), share module (29), full server suite.
+- Tests failed: none.
+- Tests not run: browser and fresh-install gates; this change touches only
+  server-side exception handling and tests, with no hooks, schema, or indexes.
+- Blockers: none.
+- Unverified local/CI differences: local verification uses macOS and
+  MariaDB 12.3.2; GitHub CI remains the Linux platform check.

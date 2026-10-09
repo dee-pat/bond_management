@@ -199,10 +199,11 @@ def _lock_share_target(doctype, name, *, wait=True):
 def _lock_unseen_share_target(doctype, name):
     try:
         return _lock_share_target(doctype, name, wait=False)
-    except (frappe.QueryDeadlockError, frappe.QueryTimeoutError):
+    except frappe.QueryTimeoutError:
         # A concurrent target save may hold this row while waiting for the
         # recipient User lock. A normal read can use an older snapshot and
         # mistake a newly committed target for an orphan, so retry after commit.
+        # Deadlocks must escape so Frappe rolls back the whole request transaction.
         frappe.enqueue(
             cleanup_incompatible_shares,
             doctype=doctype,
