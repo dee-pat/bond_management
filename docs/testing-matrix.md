@@ -35,3 +35,8 @@ for the exact phases and disposable-bench boundary, and
 [verification.md](verification.md) for required gates. Individual patch tests
 remain useful for focused failures; this lifecycle helper owns whole-sequence
 ordering and fresh `after_install` index coverage.
+
+Quantity reconciliation cleanup checks the statement's current report field
+before deleting a queued File. `doctype/bond_statement/test_bond_statement.py::test_report_cleanup_preserves_current_file_and_deletes_after_statement_removal`
+covers both preserving a report still in use and deleting it after its statement
+is removed.

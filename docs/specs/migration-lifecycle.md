@@ -40,10 +40,13 @@ permissions, and manual indexes. It persists a business snapshot beside the
 bench, outside the repository and site configuration. Snapshots omit generated
 child names and timestamps while retaining financial fields, child ordering,
 current private File references, and FX provenance. Obsolete reconciliation
-reports queued for asynchronous deletion are excluded. `requeue()` removes only
-the registered app Patch Logs for a forced rerun. The next `verify()` compares
-business results with the first migrated snapshot. A subsequent ordinary
-migration must preserve both the snapshot and Patch Log identities/timestamps.
+reports queued for asynchronous deletion are excluded. The cleanup worker
+checks the statement's current report field before deleting a queued File, so a
+report reused by a later patch survives a stale cleanup job. `requeue()` removes
+only the registered app Patch Logs for a forced rerun. The next `verify()`
+compares business results with the first migrated snapshot. A subsequent
+ordinary migration must preserve both the snapshot and Patch Log
+identities/timestamps.
 
 ## Execution and recovery
 

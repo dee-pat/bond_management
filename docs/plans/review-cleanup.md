@@ -60,3 +60,27 @@ dependency was added.
 - Unverified local/CI differences: macOS socket-authenticated MariaDB 12.3
   and local Chromium versus Linux CI's run-scoped services/browser setup.
   CI automation for the explicitly invoked lifecycle helper is follow-up work.
+
+## Async report cleanup follow-up (2026-10-09)
+
+- Risk classification: queued generated-report cleanup could remove a File after
+  a forced migration rerun had made it the statement's current report.
+- Fix: the cleanup worker checks the statement's current report field before
+  deleting. The regression test verifies that an in-use report survives and is
+  deleted after its statement is removed.
+- Required gates: focused Bond Statement integration module and the shared
+  `pre-push` gate.
+- Commands executed: `apps/bond_management/scripts/verify.sh pre-push` first
+  stopped with exit 1 because Ruff formatted the changed utility; the rerun
+  exited 0. `apps/bond_management/scripts/verify.sh lint` exited 0 after this
+  evidence was added. `bench --site test_site run-tests --app bond_management --module
+  bond_management.bond_management.doctype.bond_statement.test_bond_statement`
+  exited 0.
+- Tests passed: the shared gate ran 282 primary and 9 unspecified server tests;
+  the focused Bond Statement module ran 35 tests.
+- Tests failed: none. The initial formatting stop occurred before test setup.
+- Tests not run: UI, browser, and fresh-install lifecycle gates were not
+  applicable to this server utility change.
+- Blockers: none. The domain graph was reviewed; no mapped relationship or
+  financial convention changed.
+- Unverified local/CI differences: Linux CI has not run for this new commit.

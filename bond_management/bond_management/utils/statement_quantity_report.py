@@ -152,6 +152,13 @@ def _schedule_file_deletion(file_name: str) -> None:
 def delete_quantity_reconciliation_report_file(file_name: str) -> None:
     """Delete an obsolete generated report in a worker-owned transaction."""
     try:
+        if not frappe.db.exists("File", file_name):
+            return
+
+        file_doc = frappe.get_doc("File", file_name)
+        if _is_current_quantity_reconciliation_report(file_doc):
+            return
+
         if frappe.db.exists("File", file_name):
             # Scheduling happens only after the statement permission boundary.
             frappe.delete_doc("File", file_name, ignore_permissions=True)
@@ -161,6 +168,20 @@ def delete_quantity_reconciliation_report_file(file_name: str) -> None:
             file_name,
         )
         raise
+
+
+def _is_current_quantity_reconciliation_report(file_doc) -> bool:
+    if file_doc.attached_to_doctype != "Bond Statement" or file_doc.attached_to_field != REPORT_FIELD:
+        return False
+    return bool(
+        frappe.db.exists(
+            "Bond Statement",
+            {
+                "name": file_doc.attached_to_name,
+                REPORT_FIELD: file_doc.file_url,
+            },
+        )
+    )
 
 
 def build_quantity_reconciliation_pdf(
