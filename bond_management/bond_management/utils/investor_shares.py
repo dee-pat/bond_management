@@ -31,9 +31,19 @@ def reject_investor_mutation(doc, method=None):
     user = frappe.session.user
     if user in {"Administrator", "Guest"}:
         return
+    recipients = []
     if not doc.is_new():
         _lock_share_target(doc.doctype, doc.name)
-    _lock_users([user])
+        if doc.doctype in PORTFOLIO_DOCTYPES:
+            recipients = frappe.qb.get_query(
+                "DocShare",
+                fields=["user"],
+                filters={"share_doctype": doc.doctype, "share_name": doc.name},
+                ignore_permissions=True,
+                for_update=True,
+            ).run(pluck=True)
+    # The target lock prevents new shares; the locking read sees late commits.
+    _lock_users([user, *recipients])
     if is_investor_user(user, for_update=True):
         _deny()
 

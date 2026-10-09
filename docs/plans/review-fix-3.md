@@ -176,3 +176,18 @@ relationships or data flow.
 - Blockers: none.
 - Unverified local/CI differences: Linux CI remains unverified; this change
   affects server-side locking and cleanup only.
+
+## PR #18 review: mutual manager share locks
+
+Two managers can save different documents shared to each other at the same
+time. The mutation hook previously locked only its actor before document-share
+cleanup locked the recipient, allowing opposite User lock orders and a
+deadlock. The hook now locks the document target, reads current share recipients,
+and locks the actor and recipients together in sorted order. A focused test
+checks the order for both save directions. This changes no DocType, mapped
+relationship, or report/API flow; the domain graph was reviewed while merging
+the latest interest-difference report documentation from `main`.
+
+The merge preserves both the investor share boundary and interest-difference
+notes in `docs/domain-model.md`, and both regression rows in
+`docs/testing-matrix.md`.

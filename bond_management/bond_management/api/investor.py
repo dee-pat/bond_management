@@ -7,6 +7,7 @@ from frappe.utils import get_fullname
 # Keep established dotted API paths while report adapters live in a focused module.
 from bond_management.bond_management.api.investor_reports import (
     get_bond_yield_comparison,
+    get_interest_difference_by_portfolio,
     get_portfolio_performance,
     get_portfolio_performance_cashflows,
     get_yield_comparison_defaults,

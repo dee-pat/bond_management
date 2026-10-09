@@ -141,6 +141,13 @@ apps/bond_management/scripts/verify.sh pre-push-ui
 
 See [`docs/verification.md`](docs/verification.md) for the required gates, test-site rules, Playwright setup, and completion evidence format.
 
+### Manual PR reviews
+
+Request a Codex review with an `@codex review` PR comment. Reviews follow the
+Frappe v16 and Bond Management rules in `AGENTS.md` and use subscription usage
+when connected through your ChatGPT account. See [`docs/code-review.md`](docs/code-review.md)
+for setup and manual review instructions.
+
 ## Design and security principles
 
 - Server-side calculations are authoritative; the browser formats and presents returned values.

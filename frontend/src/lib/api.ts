@@ -17,6 +17,7 @@ import type {
 import type {
 	BondYieldComparisonResponse,
 	CashflowCurrency,
+	InterestDifferenceResponse,
 	PerformanceCashflowsResponse,
 	PortfolioPerformanceResponse,
 	YieldComparisonDefaultsResponse,
@@ -108,6 +109,9 @@ export function useInvestorApi() {
 	);
 	const portfolioPerformanceCashflows = useInvestorRequest<PerformanceCashflowsResponse>(
 		"get_portfolio_performance_cashflows"
+	);
+	const interestDifference = useInvestorRequest<InterestDifferenceResponse>(
+		"get_interest_difference_by_portfolio"
 	);
 	const bondYieldComparison = useInvestorRequest<BondYieldComparisonResponse>(
 		"get_bond_yield_comparison"
@@ -216,6 +220,16 @@ export function useInvestorApi() {
 			portfolioPerformance.request({
 				portfolio: options.portfolio,
 				valuation_date: options.valuationDate,
+			}),
+		fetchInterestDifference: (options: {
+			portfolio: string;
+			fromDate?: string;
+			toDate?: string;
+		}) =>
+			interestDifference.request({
+				portfolio: options.portfolio,
+				from_date: options.fromDate,
+				to_date: options.toDate,
 			}),
 		fetchPortfolioPerformanceCashflows: (options: {
 			portfolio: string;

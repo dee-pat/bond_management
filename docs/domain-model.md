@@ -72,20 +72,24 @@ flowchart LR
     DATA["Portfolios + transactions<br/>+ bonds + market data + FX"]
     PP["Portfolio Performance"]
     YIELD["Bond Yield Comparison"]
+    INTEREST["Interest Difference by Portfolio"]
     API["Read-only investor API"]
     SPA["Investor app"]
 
     DATA --> PP
     MARKET -->|"persisted yield + availability"| YIELD
+    DATA -->|"stored interest comparison and DCC-equivalent days; totals by selected portfolio/currency"| INTEREST
     PP -->|"values + cash-flow availability"| API
     YIELD --> API
+    INTEREST -->|"fixed investor projection with total-row marker"| API
     FX -->|"shared rates + readable statement reference"| API
     API --> SPA
 ```
 
 Desk owns financial writes. The investor app reads fixed, permission-scoped API
-projections. Investor role decisions read persisted role assignments rather
-than cached role lists. Frappe DocShare grants cannot expand investor portfolio
+projections for portfolio performance, yield comparison, and interest
+difference. Investor role decisions read persisted role assignments rather than
+cached role lists. Frappe DocShare grants cannot expand investor portfolio
 scope or grant financial mutations: shares are validated against recipient
 assignments, and role/assignment changes repair incompatible shares in the same
 request transaction. The app overrides Frappe's bulk User Permission clear

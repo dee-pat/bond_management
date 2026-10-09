@@ -223,6 +223,31 @@ class TestInvestorShares(IntegrationTestCase):
         self.assertEqual(grant_events, expected_order)
         self.assertTrue(frappe.db.exists("DocShare", share.name))
 
+    def test_mutual_manager_shares_lock_actors_and_recipients_in_one_order(self):
+        other_manager = self.make_user([BOND_MANAGER_ROLE])
+        add_docshare("Bond Portfolio", self.assigned.name, other_manager.name)
+        add_docshare("Bond Portfolio", self.other.name, self.manager.name)
+        lock_users = investor_shares._lock_users
+
+        def save_and_trace(document, actor):
+            locked_users = []
+
+            def trace(users):
+                locked_users.extend(sorted({user for user in users if user}))
+                return lock_users(users)
+
+            with self.as_user(actor), patch.object(investor_shares, "_lock_users", side_effect=trace):
+                document.save(ignore_permissions=True)
+            return locked_users
+
+        expected_first_locks = sorted((self.manager.name, other_manager.name))
+        for document, actor in (
+            (self.assigned, self.manager.name),
+            (self.other, other_manager.name),
+        ):
+            with self.subTest(actor=actor):
+                self.assertEqual(save_and_trace(document, actor)[:2], expected_first_locks)
+
     def test_cleanup_handles_a_compatible_grant_committed_after_target_discovery(self):
         add_grant = add_docshare
         lock_users = investor_shares._lock_users
