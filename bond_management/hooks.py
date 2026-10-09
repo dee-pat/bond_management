@@ -188,6 +188,7 @@ doc_events = {
         "before_insert": f"{_investor_shares}.reject_investor_mutation",
         "before_validate": f"{_investor_shares}.reject_investor_mutation",
         "before_cancel": f"{_investor_shares}.reject_investor_mutation",
+        "before_update_after_submit": f"{_investor_shares}.reject_investor_mutation",
         "on_trash": f"{_investor_shares}.reject_investor_mutation",
         "on_update": f"{_investor_shares}.cleanup_document_shares",
     }

@@ -20,6 +20,7 @@ from bond_management.bond_management.utils.exchange_rate import (
     get_rate_for_date,
 )
 from bond_management.bond_management.utils.financial import quantize_money, to_decimal
+from bond_management.bond_management.utils.investor_permissions import investor_portfolio_access
 from bond_management.bond_management.utils.performance import load_portfolio_performance_context
 from bond_management.bond_management.utils.portfolio import get_ledger_position_from_transactions
 from bond_management.bond_management.utils.validation import optional_string, required_string
@@ -180,6 +181,8 @@ def get_xirr_cashflows(
 def validate_report_inputs(portfolio, valuation_date):
     portfolio = required_string(portfolio, "Portfolio")
     valuation_date = required_string(valuation_date, "Valuation Date")
+    if investor_portfolio_access(frappe.session.user, portfolio) is False:
+        frappe.throw(_("Not permitted"), frappe.PermissionError)
     if not frappe.has_permission("Bond Portfolio", "read", doc=portfolio):
         frappe.throw(_("Not permitted"), frappe.PermissionError)
     if not frappe.db.exists("Bond Portfolio", portfolio):

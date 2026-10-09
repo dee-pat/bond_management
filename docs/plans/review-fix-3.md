@@ -84,3 +84,35 @@ The domain graph was reviewed and the bulk-clear service flow documented.
   Bootstrap recovery needed `config/pids`; the external check harness needed
   the sites working directory and direct module import. These failures were
   corrected; completed checks exited 0.
+
+## PR #18 review follow-up: share locking and legacy-share bypass
+
+The follow-up fixes the inversion between target and recipient locks, handles
+compatible shares committed after cleanup's target discovery, and rejects
+legacy DocShare grants before Frappe's share fallback can widen direct, list, or
+report access. The domain graph was reviewed; no mapped relationships changed.
+
+- Risk classification: permission boundary and transaction concurrency; app
+  lifecycle hook coverage also changed.
+- Required gates: focused share/permission modules, complete server suite,
+  `pre-push-ui`, and a fresh MariaDB install because `hooks.py` changed.
+- Commands and results: both focused modules passed (26 share tests and 17
+  permission tests); `BASE_URL=http://localhost:8001 scripts/verify.sh
+  pre-push-ui` passed, including 350 server tests, frontend lint/typecheck/build,
+  and 49 Playwright tests. Browser credentials were one-run environment values
+  and were not persisted.
+- Fresh MariaDB install: `bench new-site --admin-password admin
+  codex_pr18_fresh_20261009c` and `bench --site
+  codex_pr18_fresh_20261009c install-app bond_management` both succeeded after
+  entering the local root credential at the secure prompt. `list-apps` showed
+  the app from `codex/enforce-investor-share-boundary`; `frappe.get_hooks` on
+  the fresh site confirmed the updated mutation hook on the financial DocTypes.
+  No existing site was recreated, dropped, or restored.
+- Tests failed: the first UI-gate attempt targeted the default port's wrong
+  site and both login setups failed. The documented explicit `test_site`
+  server on port 8001 corrected this; the complete rerun passed.
+- Tests not run: Linux CI.
+- Blockers: none.
+- Unverified local/CI differences: the fresh database used the existing local
+  bench/Python environment on macOS with MariaDB, while CI uses a newly created
+  Linux bench. The complete application/browser gates passed locally.

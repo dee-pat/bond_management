@@ -129,19 +129,21 @@ class TestInvestorShares(IntegrationTestCase):
         share = add_docshare("Bond Portfolio", self.assigned.name, self.investor.name)
         other_app = add_docshare("User", self.manager.name, self.investor.name)
         with self.as_user(self.investor.name):
-            with self.assertRaises(frappe.PermissionError):
+            with patch.object(investor_shares, "_lock_users") as lock_users:
+                with self.assertRaises(frappe.PermissionError):
+                    remove(
+                        "Bond Portfolio",
+                        self.assigned.name,
+                        self.investor.name,
+                        flags={"ignore_share_permission": True, "ignore_permissions": True},
+                    )
                 remove(
-                    "Bond Portfolio",
-                    self.assigned.name,
+                    "User",
+                    self.manager.name,
                     self.investor.name,
                     flags={"ignore_share_permission": True, "ignore_permissions": True},
                 )
-            remove(
-                "User",
-                self.manager.name,
-                self.investor.name,
-                flags={"ignore_share_permission": True, "ignore_permissions": True},
-            )
+                lock_users.assert_not_called()
         self.assertTrue(frappe.db.exists("DocShare", share.name))
         self.assertFalse(frappe.db.exists("DocShare", other_app.name))
 
@@ -220,6 +222,33 @@ class TestInvestorShares(IntegrationTestCase):
         self.assertEqual(assignment_events, expected_order)
         self.assertEqual(grant_events, expected_order)
         self.assertTrue(frappe.db.exists("DocShare", share.name))
+
+    def test_cleanup_handles_a_compatible_grant_committed_after_target_discovery(self):
+        add_grant = add_docshare
+        lock_users = investor_shares._lock_users
+        grant_created = False
+
+        def grant_before_recipient_lock(users):
+            nonlocal grant_created
+            if not grant_created:
+                grant_created = True
+                add_grant("Bond Portfolio", self.assigned.name, self.investor.name)
+            lock_users(users)
+
+        with patch.object(investor_shares, "_lock_users", side_effect=grant_before_recipient_lock):
+            investor_shares.cleanup_incompatible_shares(user=self.investor.name)
+
+        self.assertTrue(grant_created)
+        self.assertTrue(
+            frappe.db.exists(
+                "DocShare",
+                {
+                    "share_doctype": "Bond Portfolio",
+                    "share_name": self.assigned.name,
+                    "user": self.investor.name,
+                },
+            )
+        )
 
     def test_role_change_repairs_existing_shares(self):
         share = add_docshare("Bond Portfolio", self.other.name, self.manager.name, write=1)

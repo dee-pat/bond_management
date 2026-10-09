@@ -27,7 +27,13 @@ class InvestorBoundaryMixin:
 
 
 def reject_investor_mutation(doc, method=None):
-    if is_investor_user(frappe.session.user):
+    user = frappe.session.user
+    if user in {"Administrator", "Guest"}:
+        return
+    if not doc.is_new():
+        _lock_share_target(doc.doctype, doc.name)
+    _lock_users([user])
+    if is_investor_user(user, for_update=True):
         _deny()
 
 
@@ -37,8 +43,9 @@ def reject_investor_share_mutation(doc, method=None):
     user = frappe.session.user
     if user in {"Administrator", "Guest"}:
         return
-    _lock_users([user])
-    if is_investor_user(user, for_update=True):
+    # delete_doc locks DocShare before on_trash, so this check must not wait on
+    # User: cleanup and share saves acquire User before the DocShare row.
+    if is_investor_user(user):
         _deny()
 
 
@@ -74,7 +81,11 @@ def cleanup_incompatible_shares(user=None, doctype=None, name=None):
         "DocShare", fields=["*"], filters=filters, ignore_permissions=True, for_update=True
     ).run(as_dict=True)
     for share in shares:
-        target = targets[(share.share_doctype, share.share_name)]
+        key = (share.share_doctype, share.share_name)
+        if key in targets:
+            target = targets[key]
+        else:
+            target = _lock_unseen_share_target(*key)
         if target is None:
             # DocShare.on_trash comments on its target; orphan rows have none.
             frappe.delete_doc("DocShare", share.name, ignore_permissions=True, ignore_on_trash=True)
@@ -160,9 +171,31 @@ def _investor_document_access(doc, user, permtype):
     return field is None or doc.get(field) in portfolios
 
 
-def _lock_share_target(doctype, name):
+def _lock_share_target(doctype, name, *, wait=True):
     field = PORTFOLIO_DOCTYPES.get(doctype)
-    current = frappe.db.get_value(doctype, name, field or "name", for_update=True)
+    current = frappe.db.get_value(doctype, name, field or "name", for_update=True, wait=wait)
+    if current is None:
+        return None
+
+    target = frappe._dict(doctype=doctype, name=name)
+    if field:
+        target[field] = current
+    return target
+
+
+def _lock_unseen_share_target(doctype, name):
+    try:
+        return _lock_share_target(doctype, name, wait=False)
+    except (frappe.QueryDeadlockError, frappe.QueryTimeoutError):
+        # A concurrent target save may hold this row while waiting for the
+        # recipient User lock. Do not form the inverse wait; its own on_update
+        # cleanup will recheck the target after this transaction releases User.
+        return _read_share_target(doctype, name)
+
+
+def _read_share_target(doctype, name):
+    field = PORTFOLIO_DOCTYPES.get(doctype)
+    current = frappe.db.get_value(doctype, name, field or "name")
     if current is None:
         return None
 
