@@ -35,6 +35,8 @@ def execute(transaction_names=None):
                 transaction,
                 portfolio.account_no,
                 transaction.settlement_date,
+                # Historical files predate the upload cap applied to new entries.
+                max_bytes=None,
             )
             if new_attachment != row.attachment:
                 transaction.db_set("attachment", new_attachment, update_modified=False)

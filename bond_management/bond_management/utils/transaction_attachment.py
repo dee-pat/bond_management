@@ -49,8 +49,14 @@ def get_standard_transaction_filename(
     return f"{TRANSACTION_FILENAME_PREFIX}{normalized_account}-{settlement_date_component}.pdf"
 
 
-def standardize_transaction_attachment(transaction, account_no: str, settlement_date) -> str:
-    """Rename a transaction's private PDF and attach it to the transaction document."""
+def standardize_transaction_attachment(
+    transaction,
+    account_no: str,
+    settlement_date,
+    *,
+    max_bytes: int | None = MAX_TRANSACTION_PDF_BYTES,
+) -> str:
+    """Rename a private PDF; legacy backfills may omit the new-upload size limit."""
     legacy_filename = get_standard_transaction_filename(account_no, settlement_date)
     legacy_url = f"/private/files/{legacy_filename}"
     existing_attachment = None
@@ -63,7 +69,7 @@ def standardize_transaction_attachment(transaction, account_no: str, settlement_
 
     content, _original_filename = read_private_pdf_attachment(
         transaction.attachment,
-        max_bytes=MAX_TRANSACTION_PDF_BYTES,
+        max_bytes=max_bytes,
         missing_message=_("Attach a PDF before standardizing its filename."),
         extension_message=_("Automatic Bond Transaction entry requires a PDF attachment."),
         private_message=_("Bond Transaction PDFs must be uploaded as private files."),

@@ -28,6 +28,7 @@ from bond_management.bond_management.utils.portfolio import (
 )
 from bond_management.bond_management.utils.private_attachment import standardize_private_pdf_attachment
 from bond_management.bond_management.utils.transaction_attachment import get_standard_transaction_filename
+from bond_management.bond_management.utils.transaction_pdf import MAX_TRANSACTION_PDF_BYTES
 from bond_management.patches.backfill_transaction_amounts import (
     execute as backfill_transaction_amounts,
 )
@@ -570,6 +571,35 @@ class TestBondTransaction(IntegrationTestCase):
         standardize_existing_transaction_attachments([transaction.name])
         transaction.reload()
         self.assertEqual(transaction.attachment, expected_attachment)
+
+    def test_attachment_backfill_accepts_historical_pdf_above_current_upload_limit(self):
+        bond = self._make_pdf_bond()
+        portfolio = make_portfolio()
+        pdf_bytes = make_text_pdf("Historical confirmation", "test-password")
+        pdf_bytes += b" " * (MAX_TRANSACTION_PDF_BYTES + 1 - len(pdf_bytes))
+        with patch(
+            "frappe.core.api.file.get_max_file_size",
+            return_value=MAX_TRANSACTION_PDF_BYTES + 2,
+        ):
+            attachment = self._upload_transaction_pdf(pdf_bytes)
+        transaction = make_transaction(bond, portfolio)
+        transaction.db_set("attachment", attachment, update_modified=False)
+
+        standardize_existing_transaction_attachments([transaction.name])
+        transaction.reload()
+
+        expected_filename = get_standard_transaction_filename(
+            portfolio.account_no,
+            transaction.settlement_date,
+            content=pdf_bytes,
+        )
+        expected_url = f"/private/files/{expected_filename}"
+        self.assertEqual(transaction.attachment, expected_url)
+        file_name = frappe.db.get_value("File", {"file_url": expected_url}, "name")
+        file_doc = frappe.get_doc("File", file_name)
+        self.assertTrue(file_doc.is_private)
+        self.assertEqual(file_doc.file_name, expected_filename)
+        self.assertEqual(file_doc.get_content(encodings=()), pdf_bytes)
 
     def test_one_selected_row_from_multi_transaction_pdf_populates_current_document(self):
         bond = self._make_pdf_bond()

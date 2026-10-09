@@ -10,6 +10,10 @@ the same PDF. A legacy account/date URL is reused only when it is already the
 persisted attachment of that transaction. No new data migration will rename
 historical canonical files.
 
+The registered backfill must hash historical files larger than the current
+10 MB upload limit. Normal transaction saves retain that limit; only the legacy
+filename backfill omits it.
+
 File read/write permissions, private storage, locking, and rollback behavior stay
 in the existing standardization service. A different file cannot overwrite an
 existing canonical target. Server regressions will save two distinct valid PDFs
@@ -61,16 +65,21 @@ apps/bond_management/scripts/verify.sh pre-push
   pre-push gate.
 - Commands executed: focused runs for
   `test_long_account_confirmation_filename_fits_file_limit_without_account_collisions`
-  and `test_new_transaction_does_not_reuse_an_existing_legacy_attachment_url`;
+  `test_new_transaction_does_not_reuse_an_existing_legacy_attachment_url`, and
+  `test_attachment_backfill_accepts_historical_pdf_above_current_upload_limit`;
   `bench --site test_site run-tests --module bond_management.bond_management.doctype.bond_transaction.test_bond_transaction`;
-  `apps/bond_management/scripts/verify.sh pre-push`.
-- Exit statuses: both focused runs, the 35-test transaction module, and the final
-  pre-push run exited 0. The first pre-push attempt exited 1 on an unused test
-  variable; after correcting it, lint and formatting passed.
-- Tests passed: both new regressions; 35 transaction tests; full gate: 38 unit,
-  287 integration, and 3 unspecified-category tests (328 total).
+  `apps/bond_management/scripts/verify.sh pre-push` against the isolated PR
+  checkout and canonical `test_site`.
+- Exit statuses: all three focused tests, the 36-test transaction module, and
+  the final pre-push run exited 0. The first gate attempt exited 2 because
+  Semgrep rejects a symlinked scan root; rerunning with the physical worktree
+  path passed.
+- Tests passed: 36 transaction tests; full gate: 38 unit, 288 integration, and
+  3 unspecified-category tests (329 total). Pre-commit and all Semgrep scans
+  passed.
 - Tests failed: no test failures.
-- Tests not run: browser and fresh-install gates are not applicable.
+- Tests not run: browser and fresh-install gates are not applicable; no UI,
+  schema, installation, or migration-order changes were made.
 - Blockers: none.
 - Unverified local/CI differences: local verification used macOS; CI uses Linux.
   The domain graph was reviewed and attachment ownership/data flow are unchanged.

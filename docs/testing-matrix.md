@@ -23,7 +23,8 @@ Implementation and test paths beginning with `doctype/`, `api/`, `report/`, or
 
 Additional transaction attachment filename regressions are covered by
 `doctype/bond_transaction/test_bond_transaction.py::test_long_account_confirmation_filename_fits_file_limit_without_account_collisions`
-and `::test_new_transaction_does_not_reuse_an_existing_legacy_attachment_url`.
+`::test_new_transaction_does_not_reuse_an_existing_legacy_attachment_url`, and
+`::test_attachment_backfill_accepts_historical_pdf_above_current_upload_limit`.
 
 ## Coverage gap to track
 
