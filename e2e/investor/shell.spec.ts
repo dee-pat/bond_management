@@ -27,7 +27,7 @@ test("renders the authenticated investor compatibility shell", async ({
     page
       .getByRole("navigation", { name: "Investor navigation" })
       .getByRole("link")
-  ).toHaveCount(8);
+  ).toHaveCount(9);
   await expect(page.getByTestId("investor-shell")).not.toContainText("Create");
 });
 

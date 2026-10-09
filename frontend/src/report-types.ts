@@ -80,18 +80,13 @@ export interface PerformanceCashflowsResponse {
   cashflows: PerformanceCashflow[];
 }
 
-export interface PerformanceCashflowSelection
-  extends PerformanceCashflowAction {
+export interface PerformanceCashflowSelection extends PerformanceCashflowAction {
   isin: string;
   key: string;
 }
 
 export type YieldComparisonFieldname =
-  | "date"
-  | "isin"
-  | "currency"
-  | "market_price"
-  | "future_xirr";
+  "date" | "isin" | "currency" | "market_price" | "future_xirr";
 
 export interface YieldComparisonColumn {
   fieldname: YieldComparisonFieldname;
@@ -134,4 +129,44 @@ export interface YieldComparisonDefaultsResponse {
     from_date: string | null;
     to_date: string;
   };
+}
+
+export type InterestDifferenceFieldname =
+  | "transaction_reference"
+  | "settlement_date"
+  | "currency"
+  | "isin"
+  | "transaction_type"
+  | "accrued_interest_calculated"
+  | "accrued_interest_paid"
+  | "interest_difference"
+  | "interest_difference_days";
+
+export interface InterestDifferenceColumn {
+  fieldname: InterestDifferenceFieldname;
+  label: string;
+  fieldtype: "Data" | "Date" | "Link" | "Currency" | "Float";
+  options: string | null;
+  description: string | null;
+  precision: number | null;
+}
+
+export type InterestDifferenceRow = Record<
+  InterestDifferenceFieldname,
+  string | number | null
+> & { is_total_row: boolean };
+
+export interface InterestDifferenceReport {
+  filters: {
+    portfolio: string;
+    from_date: string | null;
+    to_date: string | null;
+  };
+  columns: InterestDifferenceColumn[];
+  rows: InterestDifferenceRow[];
+  chart: null;
+}
+
+export interface InterestDifferenceResponse {
+  report: InterestDifferenceReport;
 }

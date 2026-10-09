@@ -23,6 +23,60 @@
 	border-radius: 5px;
 }
 
+.interest-difference-filters {
+	display: grid;
+	grid-template-columns: repeat(3, minmax(0, 16rem)) auto;
+	align-items: end;
+	gap: 10px;
+	margin-bottom: 16px;
+}
+
+.interest-difference-error {
+	margin: -4px 0 16px;
+	color: var(--desk-danger);
+	font-size: 12px;
+}
+
+.interest-difference-table-wrap {
+	max-width: 100%;
+	overflow-x: auto;
+	background: var(--desk-surface);
+	border: 1px solid var(--desk-border);
+	border-radius: 5px;
+}
+
+.interest-difference-table {
+	width: 100%;
+	min-width: 68rem;
+	border-collapse: collapse;
+	font-size: 12px;
+}
+
+.interest-difference-table th,
+.interest-difference-table td {
+	padding: 10px 12px;
+	border-bottom: 1px solid var(--desk-border);
+	text-align: left;
+	white-space: nowrap;
+	font-variant-numeric: tabular-nums;
+}
+
+.interest-difference-table th {
+	color: var(--desk-muted);
+	background: var(--desk-table-header);
+	font-weight: 600;
+}
+
+.interest-difference-table .interest-difference-numeric {
+	text-align: right;
+}
+
+.interest-difference-table .interest-difference-total-row td {
+	border-top: 2px solid var(--desk-border-dark);
+	background: var(--desk-table-header);
+	font-weight: 600;
+}
+
 .performance-table {
 	width: max-content;
 	min-width: 100%;
@@ -127,6 +181,10 @@
 
 	.performance-run-button {
 		width: 100%;
+	}
+
+	.interest-difference-filters {
+		grid-template-columns: minmax(0, 1fr);
 	}
 
 	.performance-table-wrap {

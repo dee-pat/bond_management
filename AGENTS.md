@@ -138,6 +138,10 @@ the two files conflict, this app-level file governs.
 - Reuse an existing local `test_site`. Do not recreate, drop, or restore it
   without explicit user approval. Do not record site credentials or
   machine-specific database configuration in repository files.
+- Local browser-test credentials are stored outside the app in
+  `$HOME/.config/bond_management/test-browser.env`. Load them with
+  `set -a; source "$HOME/.config/bond_management/test-browser.env"; set +a`.
+  Never copy the file contents into repository files or logs.
 - Factories may use collision-safe generated names, but test outcomes must not
   depend on their random suffixes. Tests must be deterministic, independent,
   and rerunnable. Attachment parsers need current, supported legacy,

@@ -7,9 +7,12 @@ from frappe.tests import IntegrationTestCase
 
 from bond_management.bond_management.api import investor as investor_api
 from bond_management.bond_management.api.investor_reports import (
+    INTEREST_DIFFERENCE_FIELDS,
+    INTEREST_DIFFERENCE_ROW_FIELDS,
     PORTFOLIO_CASHFLOW_FIELDS,
     PORTFOLIO_PERFORMANCE_COLUMN_FIELDS,
     PORTFOLIO_PERFORMANCE_ROW_FIELDS,
+    get_interest_difference_by_portfolio,
     get_portfolio_performance,
     get_portfolio_performance_cashflows,
 )
@@ -44,14 +47,16 @@ VALUATION_DATE = "2025-12-31"
 
 
 class TestInvestorPortfolioPerformance(IntegrationTestCase):
-    def test_common_access_gate_protects_both_endpoints(self):
+    def test_common_access_gate_protects_report_endpoints(self):
         portfolio = make_portfolio()
         report_args = (portfolio.name, VALUATION_DATE)
         cashflow_args = (*report_args, "TOTAL", "past")
+        interest_difference_args = (portfolio.name,)
 
         for endpoint, args in (
             (get_portfolio_performance, report_args),
             (get_portfolio_performance_cashflows, cashflow_args),
+            (get_interest_difference_by_portfolio, interest_difference_args),
         ):
             with self.subTest(endpoint=endpoint.__name__), self._as_user("Guest"):
                 with self.assertRaises(frappe.AuthenticationError):
@@ -79,6 +84,14 @@ class TestInvestorPortfolioPerformance(IntegrationTestCase):
                 self.assertRaisesRegex(frappe.PermissionError, "access to Report"),
             ):
                 get_portfolio_performance(portfolio.name, VALUATION_DATE)
+            with (
+                patch(
+                    "frappe.core.doctype.report.report.Report.is_permitted",
+                    return_value=False,
+                ),
+                self.assertRaisesRegex(frappe.PermissionError, "access to Report"),
+            ):
+                get_interest_difference_by_portfolio(portfolio.name)
 
             original_has_permission = frappe.has_permission
 
@@ -92,6 +105,11 @@ class TestInvestorPortfolioPerformance(IntegrationTestCase):
                 self.assertRaisesRegex(frappe.PermissionError, "report on: Bond Portfolio"),
             ):
                 get_portfolio_performance(portfolio.name, VALUATION_DATE)
+            with (
+                patch.object(frappe, "has_permission", side_effect=deny_report_permission),
+                self.assertRaisesRegex(frappe.PermissionError, "report on: Bond Portfolio"),
+            ):
+                get_interest_difference_by_portfolio(portfolio.name)
 
     def test_unreadable_and_unknown_portfolios_have_same_failure(self):
         assigned = make_portfolio()
@@ -102,6 +120,7 @@ class TestInvestorPortfolioPerformance(IntegrationTestCase):
         for endpoint, suffix in (
             (get_portfolio_performance, ()),
             (get_portfolio_performance_cashflows, ("TOTAL", "past")),
+            (get_interest_difference_by_portfolio, ()),
         ):
             messages = []
             with self._as_user(investor):
@@ -118,9 +137,11 @@ class TestInvestorPortfolioPerformance(IntegrationTestCase):
 
         for user in (manager, "Administrator"):
             with self.subTest(user=user), self._as_user(user):
-                response = get_portfolio_performance(portfolio.name, VALUATION_DATE)
+                performance = get_portfolio_performance(portfolio.name, VALUATION_DATE)
+                interest_difference = get_interest_difference_by_portfolio(portfolio.name)
 
-            self.assertEqual(response["report"]["rows"], [])
+            self.assertEqual(performance["report"]["rows"], [])
+            self.assertEqual(interest_difference["report"]["rows"], [])
 
     def test_assigned_empty_portfolio_has_no_rows_or_total(self):
         portfolio = make_portfolio()
@@ -130,6 +151,55 @@ class TestInvestorPortfolioPerformance(IntegrationTestCase):
             response = get_portfolio_performance(portfolio.name, VALUATION_DATE)
 
         self.assertEqual(response["report"]["rows"], [])
+
+    def test_interest_difference_has_a_fixed_permission_scoped_projection(self):
+        portfolio = make_portfolio()
+        bond = make_bond()
+        transaction = make_transaction(
+            bond,
+            portfolio,
+            trade_date="2025-02-14",
+            settlement_date="2025-02-15",
+            accrued_interest_paid="12.25",
+        )
+        frappe.db.set_value("Bond Transaction", transaction.name, "accrued_interest_calculated", "10.00")
+        investor = self._make_investor(portfolio.name)
+
+        with self._as_user(investor):
+            response = get_interest_difference_by_portfolio(
+                portfolio.name,
+                from_date="2025-02-15",
+                to_date="2025-02-15",
+            )
+
+        report = response["report"]
+        self.assertEqual(
+            report["filters"],
+            {
+                "portfolio": portfolio.name,
+                "from_date": "2025-02-15",
+                "to_date": "2025-02-15",
+            },
+        )
+        self.assertEqual(
+            [row["transaction_reference"] for row in report["rows"]], [transaction.name, "Total"]
+        )
+        self.assertTrue(all(set(row) == set(INTEREST_DIFFERENCE_ROW_FIELDS) for row in report["rows"]))
+        self.assertFalse(report["rows"][0]["is_total_row"])
+        self.assertTrue(report["rows"][1]["is_total_row"])
+        self.assertEqual(report["rows"][0]["interest_difference"], -2.25)
+        self.assertEqual(report["rows"][1]["interest_difference"], -2.25)
+        self.assertTrue(all("portfolio_name" not in row for row in report["rows"]))
+        self.assertEqual(
+            [column["fieldname"] for column in report["columns"]],
+            list(INTEREST_DIFFERENCE_FIELDS),
+        )
+        self.assertTrue(all("cashflow_action" not in column for column in report["columns"]))
+        self.assertIs(investor_api.get_interest_difference_by_portfolio, get_interest_difference_by_portfolio)
+        self.assertEqual(
+            frappe.allowed_http_methods_for_whitelisted_func[get_interest_difference_by_portfolio],
+            ["GET"],
+        )
 
     def test_usd_report_has_exact_normalized_projection(self):
         portfolio, _, investor = self._make_usd_report()
@@ -298,6 +368,8 @@ class TestInvestorPortfolioPerformance(IntegrationTestCase):
         investor = self._make_investor(portfolio.name)
 
         with self._as_user(investor):
+            with self.assertRaisesRegex(frappe.ValidationError, "Portfolio is required"):
+                get_interest_difference_by_portfolio("")
             with self.assertRaisesRegex(frappe.ValidationError, "Portfolio is required"):
                 get_portfolio_performance("", VALUATION_DATE)
             with self.assertRaisesRegex(frappe.ValidationError, "Valuation Date is required"):
