@@ -129,6 +129,24 @@ class TestInvestorShares(IntegrationTestCase):
         )
         self.assertEqual(permission, (1, 0, 0, 0))
 
+    def test_zero_read_legacy_source_share_does_not_grant_direct_access(self):
+        source = self.make_statement_source(make_statement(self.assigned, statement_date="2091-04-09"))
+        share = self.legacy_share(source, self.investor.name, read=0, write=1)
+
+        repair_source_shares()
+
+        self.assertTrue(frappe.db.exists("DocShare", share.name))
+        self.assertEqual(frappe.db.get_value("DocShare", share.name, ["read", "write"]), (0, 0))
+        with self.as_user(self.investor.name):
+            with self.assertRaises(frappe.PermissionError):
+                read_doc(SOURCE_DOCTYPE, source.name)
+            visible_sources = frappe.qb.get_query(
+                SOURCE_DOCTYPE,
+                fields=["name"],
+                ignore_permissions=False,
+            ).run(pluck=True)
+            self.assertNotIn(source.name, visible_sources)
+
     def test_server_share_flags_cannot_skip_recipient_boundary(self):
         flags = {"ignore_share_permission": True, "ignore_validate": True}
         cases = (
@@ -288,6 +306,34 @@ class TestInvestorShares(IntegrationTestCase):
         self.assertEqual(assignment_events, expected_order)
         self.assertEqual(grant_events, expected_order)
         self.assertTrue(frappe.db.exists("DocShare", share.name))
+
+    def test_cleanup_locks_all_source_statements_before_any_source_row(self):
+        statements = [
+            make_statement(self.assigned, statement_date="2091-04-10"),
+            make_statement(self.assigned, statement_date="2091-04-10"),
+        ]
+        sources = [self.make_statement_source(statement) for statement in statements]
+        self.assertEqual(sources[0].exchange_rate, sources[1].exchange_rate)
+        for source in sources:
+            add_docshare(SOURCE_DOCTYPE, source.name, self.investor.name)
+
+        locked_targets = []
+        get_value = frappe.db.get_value
+
+        def trace_locked_target(doctype, name, fieldname=None, *args, **kwargs):
+            if kwargs.get("for_update") and doctype == "Bond Statement":
+                locked_targets.append(("statement", name))
+            elif kwargs.get("for_update") and doctype == SOURCE_DOCTYPE and fieldname == "statement":
+                locked_targets.append(("source", name))
+            return get_value(doctype, name, fieldname, *args, **kwargs)
+
+        with patch.object(frappe.db, "get_value", side_effect=trace_locked_target):
+            investor_shares.cleanup_incompatible_shares(user=self.investor.name)
+
+        expected_order = [
+            ("statement", statement.name) for statement in sorted(statements, key=lambda row: row.name)
+        ] + [("source", source.name) for source in sorted(sources, key=lambda row: row.name)]
+        self.assertEqual(locked_targets, expected_order)
 
     def test_mutual_manager_shares_lock_actors_and_recipients_in_one_order(self):
         other_manager = self.make_user([BOND_MANAGER_ROLE])
@@ -691,7 +737,7 @@ class TestInvestorShares(IntegrationTestCase):
         return frappe.get_doc(SOURCE_DOCTYPE, source_name)
 
     def make_user(self, roles):
-        return frappe.get_doc(
+        user = frappe.get_doc(
             {
                 "doctype": "User",
                 "email": f"{unique_name('share-user').lower()}@example.com",
@@ -699,7 +745,11 @@ class TestInvestorShares(IntegrationTestCase):
                 "send_welcome_email": 0,
                 "roles": [{"role": role} for role in roles],
             }
-        ).insert(ignore_permissions=True)
+        )
+        # Frappe's production signup throttle is unrelated to test fixtures and
+        # can reject later tests after the full app suite creates many users.
+        with patch.object(frappe.db, "get_creation_count", return_value=0):
+            return user.insert(ignore_permissions=True)
 
     @contextmanager
     def as_user(self, user):

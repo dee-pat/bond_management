@@ -155,13 +155,14 @@ def has_exchange_rate_source_permission(doc, user=None, ptype=None, **_kwargs):
 
 def _reject_incompatible_exchange_rate_source_shares(user, portfolios):
     """Prevent DocShare's list-query OR from bypassing provenance scope."""
-    shared_names = frappe.share.get_shared("Bond Exchange Rate Source", user)
+    shared_names = frappe.share.get_shared("Bond Exchange Rate Source", user, rights=["read"])
     if not shared_names:
         return []
 
     everyone_names = frappe.share.get_shared(
         "Bond Exchange Rate Source",
         user,
+        rights=["read"],
         filters=[["everyone", "=", 1]],
     )
     if everyone_names:
@@ -198,6 +199,7 @@ def _has_explicit_exchange_rate_source_share(user, source_name):
         frappe.share.get_shared(
             "Bond Exchange Rate Source",
             user,
+            rights=["read"],
             filters=[["share_name", "=", source_name], ["everyone", "=", 0]],
             limit=1,
         )

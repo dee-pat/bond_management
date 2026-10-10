@@ -248,6 +248,13 @@ def _lock_exchange_rate_source_target(name, *, wait=True):
     if portfolio is None:
         return None
 
+    return _lock_exchange_rate_source_row(name, statement_name, portfolio, wait=wait)
+
+
+def _lock_exchange_rate_source_row(name, statement_name, portfolio, *, wait=True):
+    if not statement_name or portfolio is None:
+        return None
+
     current_statement = frappe.db.get_value(
         SOURCE_DOCTYPE,
         name,
@@ -296,7 +303,48 @@ def _lock_share_targets(filters):
         ignore_permissions=True,
     ).run(as_dict=True)
     keys = sorted({(share.share_doctype, share.share_name) for share in references})
-    return {key: _lock_share_target(*key) for key in keys}
+    source_names = sorted(name for doctype, name in keys if doctype == SOURCE_DOCTYPE)
+    source_links = {}
+    if source_names:
+        source_links = {
+            source.name: source.statement
+            for source in frappe.qb.get_query(
+                SOURCE_DOCTYPE,
+                fields=["name", "statement"],
+                filters={"name": ["in", source_names]},
+                ignore_permissions=True,
+            ).run(as_dict=True)
+        }
+
+    statement_names = {name for doctype, name in keys if doctype == "Bond Statement"}
+    statement_names.update(statement for statement in source_links.values() if statement)
+    statement_portfolios = {
+        statement_name: _get_statement_portfolio(statement_name, for_update=True)
+        for statement_name in sorted(statement_names)
+    }
+
+    targets = {}
+    for doctype, name in keys:
+        if doctype == "Bond Statement":
+            portfolio = statement_portfolios[name]
+            if portfolio is None:
+                targets[(doctype, name)] = None
+            else:
+                target = frappe._dict(doctype=doctype, name=name)
+                target[PORTFOLIO_DOCTYPES[doctype]] = portfolio
+                targets[(doctype, name)] = target
+        elif doctype != SOURCE_DOCTYPE:
+            targets[(doctype, name)] = _lock_share_target(doctype, name)
+
+    for name in source_names:
+        statement_name = source_links.get(name)
+        targets[(SOURCE_DOCTYPE, name)] = _lock_exchange_rate_source_row(
+            name,
+            statement_name,
+            statement_portfolios.get(statement_name),
+        )
+
+    return targets
 
 
 def _lock_user_share_targets(users):
