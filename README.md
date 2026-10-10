@@ -19,7 +19,7 @@ Financial calculations and permissions are enforced on the server. Uploaded stat
 | Statements           | Extract statement identity, holdings, prices, and exchange rates from private PDFs; reconcile statement quantities with calculated portfolio positions; generate a reconciliation report. | Bond Statement, Bond Statement Details                     |
 | Market data          | Maintain dated market prices, principal factors, weighted repayment dates, future XIRR values, and yield-curve data.                                                                      | Bond Market Date, Bond Market Prices                       |
 | Exchange rates       | Store statement-sourced and manually maintained currency rates, including reverse rates.                                                                                                  | Bond Exchange Rate                                         |
-| Analytics            | Review portfolio value, proceeds, gains, past and future XIRR, and historical stored bond yields.                                                                                         | Portfolio Performance, Bond Yield Comparison               |
+| Analytics            | Review portfolio value, proceeds, gains, past and future XIRR, historical stored bond yields, and settlement interest differences.                                                        | Portfolio Performance, Interest Difference, Bond Yield Comparison |
 
 The normal operating flow is:
 
@@ -47,6 +47,7 @@ Available investor surfaces:
 - Bond Market Dates: dated market prices and yield-curve details.
 - Bond Exchange Rates: dated currency-rate history.
 - Portfolio Performance: valuation-date portfolio values, gains, native/reporting-currency XIRR, and copyable cash flows.
+- Interest Difference: transaction-level comparison of calculated and charged interest, investor gain or loss, and equivalent difference days with currency totals.
 - Bond Yield Comparison: date-range comparison of persisted Future XIRR values with currency-aware chart series and audit-data export.
 
 Access is controlled by the existing Frappe roles and portfolio permissions:
@@ -61,6 +62,8 @@ These screenshots use synthetic records from the local `test_site`; they do not 
 
 ![Permission-scoped bond transactions](docs/screenshots/investor-transactions.png)
 
+![Interest Difference report with transaction and currency totals](docs/screenshots/investor-interest-difference.png)
+
 ![Historical Future XIRR comparison](docs/screenshots/investor-yield-comparison.png)
 
 ## Internal Desk workspace
@@ -73,6 +76,7 @@ Internal users work from the **Bond Investor** workspace at `/desk/bond-investor
 - Bond Market Dates
 - Bond Exchange Rates
 - Portfolio Performance
+- Interest Difference
 - Bond Yield Comparison
 
 The Desk workflow remains the source for financial mutations, attachment parsing, reconciliation, and market-data maintenance. The investor application presents the server-authoritative result of those workflows.
@@ -119,7 +123,10 @@ yarn typecheck
 
 The frontend source is under [`frontend/`](frontend/). The Python controllers, reports, APIs, utilities, DocTypes, and tests are under [`bond_management/bond_management/`](bond_management/bond_management/).
 
-For local Frappe development, use `dev.local` for interactive work and `test_site` for automated tests. The frontend dev server can be started with:
+For local Frappe development, use the existing configured bench and keep all
+sites under it. Use `dev.local` for interactive work and reuse `test_site` for
+automated tests. Do not create temporary or copied bench directories. Start
+the frontend dev server with:
 
 ```bash
 yarn dev
