@@ -7,6 +7,7 @@ READ_ONLY_DOCTYPES = (
     "Bond Statement",
     "Bond Master",
     "Bond Market Date",
+    "Bond Exchange Rate Source",
 )
 PRINTABLE_DOCTYPES = {
     "Bond Transaction",
@@ -29,7 +30,7 @@ def execute():
         ).insert(ignore_permissions=True)
 
     for doctype in READ_ONLY_DOCTYPES:
-        _ensure_docperm(doctype)
+        ensure_investor_read_only_docperm(doctype)
 
     report = frappe.get_doc("Report", "Portfolio Performance")
     if ROLE not in {row.role for row in report.roles}:
@@ -37,7 +38,7 @@ def execute():
         report.save(ignore_permissions=True)
 
 
-def _ensure_docperm(doctype: str) -> None:
+def ensure_investor_read_only_docperm(doctype: str) -> None:
     """Create or update only the investor DocPerm, without saving its parent DocType.
 
     Saving the parent can validate unrelated legacy field definitions during a

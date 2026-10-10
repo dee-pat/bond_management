@@ -75,6 +75,54 @@ class TestInvestorPermissions(IntegrationTestCase):
         finally:
             frappe.set_user(previous_user)
 
+    def test_legacy_share_cannot_override_investor_report_or_list_scope(self):
+        assigned_portfolio = make_portfolio()
+        other_portfolio = make_portfolio()
+        email = f"{unique_name('investor').lower()}@example.com"
+        frappe.get_doc(
+            {
+                "doctype": "User",
+                "email": email,
+                "first_name": "Investor",
+                "send_welcome_email": 0,
+                "roles": [{"role": investor_permissions.INVESTOR_ROLE}],
+            }
+        ).insert(ignore_permissions=True)
+        frappe.get_doc(
+            {
+                "doctype": "User Permission",
+                "user": email,
+                "allow": "Bond Portfolio",
+                "for_value": assigned_portfolio.name,
+                "apply_to_all_doctypes": 1,
+            }
+        ).insert(ignore_permissions=True)
+        frappe.get_doc(
+            {
+                "doctype": "DocShare",
+                "name": unique_name("legacy-share"),
+                "share_doctype": "Bond Portfolio",
+                "share_name": other_portfolio.name,
+                "user": email,
+                "read": 1,
+                "owner": "Administrator",
+            }
+        ).db_insert()
+
+        previous_user = frappe.session.user
+        try:
+            frappe.set_user(email)
+            with self.assertRaises(frappe.PermissionError):
+                frappe.has_permission("Bond Portfolio", "read", doc=other_portfolio.name)
+            with self.assertRaises(frappe.PermissionError):
+                validate_report_inputs(other_portfolio.name, "2025-12-31")
+            with self.assertRaises(frappe.PermissionError):
+                frappe.qb.get_query("Bond Portfolio", fields=["name"], ignore_permissions=False).run(
+                    pluck=True
+                )
+        finally:
+            frappe.set_user(previous_user)
+
     def test_exchange_rate_query_condition_is_registered(self):
         self.assertEqual(
             app_hooks.permission_query_conditions["Bond Exchange Rate"],
@@ -103,8 +151,9 @@ class TestInvestorPermissions(IntegrationTestCase):
 
     def test_investor_without_an_assigned_portfolio_is_denied(self):
         with (
-            patch.object(frappe, "get_roles", return_value=[investor_permissions.INVESTOR_ROLE]),
+            patch.object(investor_permissions, "is_investor_user", return_value=True),
             patch.object(investor_permissions.frappe.qb, "get_query") as get_query,
+            patch.object(investor_permissions, "_reject_incompatible_shared_documents"),
         ):
             get_query.return_value.run.return_value = []
 
@@ -131,9 +180,10 @@ class TestInvestorPermissions(IntegrationTestCase):
 
     def test_investor_query_is_restricted_to_assigned_portfolios(self):
         with (
-            patch.object(frappe, "get_roles", return_value=[investor_permissions.INVESTOR_ROLE]),
+            patch.object(investor_permissions, "is_investor_user", return_value=True),
             patch.object(investor_permissions.frappe.qb, "get_query") as get_query,
             patch.object(investor_permissions.frappe.db, "escape", side_effect=lambda value: f"'{value}'"),
+            patch.object(investor_permissions, "_reject_incompatible_shared_documents"),
         ):
             get_query.return_value.run.return_value = ["Nanda Portfolio", "Joint Portfolio"]
 
@@ -143,7 +193,7 @@ class TestInvestorPermissions(IntegrationTestCase):
             )
 
     def test_non_investor_uses_the_standard_permission_model(self):
-        with patch.object(frappe, "get_roles", return_value=[]):
+        with patch.object(investor_permissions, "is_investor_user", return_value=False):
             self.assertIsNone(investor_permissions.portfolio_query_condition("manager@example.com"))
             self.assertTrue(
                 investor_permissions.has_portfolio_permission(
@@ -155,13 +205,12 @@ class TestInvestorPermissions(IntegrationTestCase):
 
     def test_investor_permission_hook_denies_unassigned_portfolio(self):
         with patch.object(investor_permissions, "_get_allowed_portfolios", return_value=["Other"]):
-            self.assertFalse(
+            with self.assertRaises(frappe.PermissionError):
                 investor_permissions.has_transaction_permission(
                     SimpleNamespace(portfolio_name="Nanda"),
                     "investor@example.com",
                     "read",
                 )
-            )
 
     def test_administrator_is_not_restricted_by_the_investor_role(self):
         with patch.object(frappe, "get_roles", return_value=[investor_permissions.INVESTOR_ROLE]):

@@ -88,7 +88,17 @@ flowchart LR
 
 Desk owns financial writes. The investor app reads fixed, permission-scoped API
 projections for portfolio performance, yield comparison, and interest
-difference.
+difference. Investor role decisions read persisted role assignments rather than
+cached role lists. Frappe DocShare grants cannot expand investor portfolio
+scope or grant financial mutations: shares are validated against recipient
+assignments, and role/assignment changes repair incompatible shares in the same
+request transaction. The app overrides Frappe's bulk User Permission clear
+endpoint to retain its System Manager check and repair shares after the bulk
+delete, which bypasses ordinary document events. The repair patch also runs on
+fresh installation. Exchange-rate provenance shares resolve scope through the
+linked Bond Statement. Investors can read only explicitly shared provenance
+rows, and list queries enforce that same scope. Migration and fresh-install
+bootstraps repair incompatible legacy source shares.
 
 ## Important behavior
 
