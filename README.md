@@ -58,7 +58,7 @@ Access is controlled by the existing Frappe roles and portfolio permissions:
 
 ### Screenshots
 
-These screenshots use synthetic records from the local `test_site`; they do not contain production or real investor data.
+These screenshots use synthetic records from the local `bond-management-test.localhost`; they do not contain production or real investor data.
 
 ![Permission-scoped bond transactions](docs/screenshots/investor-transactions.png)
 
@@ -124,7 +124,7 @@ yarn typecheck
 The frontend source is under [`frontend/`](frontend/). The Python controllers, reports, APIs, utilities, DocTypes, and tests are under [`bond_management/bond_management/`](bond_management/bond_management/).
 
 For local Frappe development, use the existing configured bench and keep all
-sites under it. Use `dev.local` for interactive work and reuse `test_site` for
+sites under it. Use `bond-management-dev.localhost` for interactive work and reuse `bond-management-test.localhost` for
 automated tests. Do not create temporary or copied bench directories. Start
 the frontend dev server with:
 

@@ -6,10 +6,10 @@ Exercise fresh installation and the complete registered Bond Management patch
 sequence against representative legacy data, then verify both a forced patch
 rerun and the ordinary skip path. This is an opt-in administrative CLI helper;
 it never creates, drops, restores, or migrates a site itself. Canonical bench
-sites are outside its allowed scope, including canonical `test_site`.
+sites are outside its allowed scope, including canonical `bond-management-test.localhost`.
 
 The helper resolves the bench and active site paths and requires a bench under
-the system temporary directory, its own `test_site`, Administrator,
+the system temporary directory, its own `bond-management-test.localhost`, Administrator,
 `allow_tests=true`, and `bond_migration_lifecycle_test=true`. Flags are parsed as
 booleans; strings such as `false` cannot enable mutation. A symlink under the
 temporary directory cannot disguise a bench elsewhere. Guard unit tests run in
@@ -55,16 +55,16 @@ bootstrap in [verification.md](../verification.md). Set both test flags before
 installing the app. In that bench, execute these phases in order:
 
 ```sh
-bench --site test_site install-app bond_management
-bench --site test_site execute bond_management.bond_management.tests.migration_lifecycle.fresh
-bench --site test_site execute bond_management.bond_management.tests.migration_lifecycle.prepare
-bench --site test_site migrate
-bench --site test_site execute bond_management.bond_management.tests.migration_lifecycle.verify
-bench --site test_site execute bond_management.bond_management.tests.migration_lifecycle.requeue
-bench --site test_site migrate
-bench --site test_site execute bond_management.bond_management.tests.migration_lifecycle.verify
-bench --site test_site migrate
-bench --site test_site execute bond_management.bond_management.tests.migration_lifecycle.verify
+bench --site bond-management-test.localhost install-app bond_management
+bench --site bond-management-test.localhost execute bond_management.bond_management.tests.migration_lifecycle.fresh
+bench --site bond-management-test.localhost execute bond_management.bond_management.tests.migration_lifecycle.prepare
+bench --site bond-management-test.localhost migrate
+bench --site bond-management-test.localhost execute bond_management.bond_management.tests.migration_lifecycle.verify
+bench --site bond-management-test.localhost execute bond_management.bond_management.tests.migration_lifecycle.requeue
+bench --site bond-management-test.localhost migrate
+bench --site bond-management-test.localhost execute bond_management.bond_management.tests.migration_lifecycle.verify
+bench --site bond-management-test.localhost migrate
+bench --site bond-management-test.localhost execute bond_management.bond_management.tests.migration_lifecycle.verify
 ```
 
 A failed migration leaves its exact traceback and external evidence available

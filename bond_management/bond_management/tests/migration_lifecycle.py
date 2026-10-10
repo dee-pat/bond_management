@@ -47,7 +47,7 @@ def prepare():
     state.update(phase="prepared", fixtures=prepare_legacy_rows())
     _remove_app_patch_logs()
     _write_state(state_path, state)
-    return {"phase": "prepared", "next": "bench --site test_site migrate"}
+    return {"phase": "prepared", "next": "bench --site bond-management-test.localhost migrate"}
 
 
 def verify():
@@ -77,7 +77,7 @@ def requeue():
     _remove_app_patch_logs()
     state["phase"] = "requeued"
     _write_state(state_path, state)
-    return {"phase": "requeued", "next": "bench --site test_site migrate"}
+    return {"phase": "requeued", "next": "bench --site bond-management-test.localhost migrate"}
 
 
 def validate_environment(*, bench_path, site_path, site, user, config):
@@ -86,8 +86,11 @@ def validate_environment(*, bench_path, site_path, site, user, config):
     temporary_roots = {Path(tempfile.gettempdir()).resolve(), Path("/tmp").resolve()}
     if not any(bench.is_relative_to(root) and bench != root for root in temporary_roots):
         raise RuntimeError("Lifecycle helper requires a disposable bench under a temporary directory")
-    if Path(site_path).resolve() != bench / "sites" / "test_site" or site != "test_site":
-        raise RuntimeError("Lifecycle helper requires the disposable bench's test_site")
+    if (
+        Path(site_path).resolve() != bench / "sites" / "bond-management-test.localhost"
+        or site != "bond-management-test.localhost"
+    ):
+        raise RuntimeError("Lifecycle helper requires the disposable bench's bond-management-test.localhost")
     if user != "Administrator":
         raise RuntimeError("Lifecycle helper requires Administrator")
     if not _true(config.get("allow_tests")) or not _true(config.get(OPT_IN)):

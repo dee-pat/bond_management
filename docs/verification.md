@@ -5,7 +5,9 @@ Commands below run from the bench directory unless stated otherwise.
 
 ## Verification evidence
 
-Before committing, pushing, or reporting completion, record:
+Before committing or pushing, record local verification evidence. Before
+reporting completion, include final CI results for any required remote checks.
+Record:
 
 - Risk classification:
 - Required gates:
@@ -23,6 +25,11 @@ differences in the final field.
 
 ## Required gates
 
+- Prefer the existing `bond-management-test.localhost` and configured bench for local verification.
+  Routine server and UI gates migrate and reuse `bond-management-test.localhost`; do not create a
+  separate local site for ordinary test runs. `bond-management-dev.localhost` and `bond-management-test.localhost` are
+  Bond Management's persistent development/test pair; do not install another
+  app on either site.
 - Match verification to the risk of the change: documentation, agent-guidance,
   and test-only edits need formatting/lint plus the affected test; backend
   business, permission, migration, hook, or shared utility changes need the
@@ -31,7 +38,7 @@ differences in the final field.
   when they change a shared runtime or critical user journey.
 - From the bench directory, run
   `apps/bond_management/scripts/verify.sh pre-push`. This shared gate runs
-  pre-commit, migrates `test_site`, and runs the complete server suite. GitHub
+  pre-commit, migrates `bond-management-test.localhost`, and runs the complete server suite. GitHub
   Actions must call the same script so local and CI commands cannot drift.
 - Changes to JavaScript, reports, DocType metadata, permissions, workspaces, or
   other Desk behavior must run
@@ -43,9 +50,16 @@ differences in the final field.
   `BASE_URL` (or `PLAYWRIGHT_BASE_URL`) when the test server is not at its
   default address.
 - Changes to patches, schema, hooks, dependencies, installation, or manual
-  indexes must also be validated against a freshly installed site matching the
-  GitHub Actions setup. Obtain approval before recreating or dropping a local
-  site.
+  indexes must also pass a fresh-install check matching the GitHub Actions
+  setup. A successful CI clean install on the exact commit satisfies this
+  check. Create a local fresh site only when CI cannot cover it or local
+  diagnosis needs one; keep it under the configured bench and use a unique
+  temporary site name. After the check completes, capture the needed logs and
+  results, then drop that temporary site with
+  `bench drop-site <temporary-site> --no-backup`, including after a failed
+  check. This returns the app to its two persistent sites. Obtain approval
+  before recreating, dropping, or restoring either persistent site, or before
+  dropping/restoring any other pre-existing local site.
 
 ## Completion and failure handling
 
@@ -61,7 +75,7 @@ differences in the final field.
 
 ## Playwright browser setup and recovery
 
-- Use `test_site` for automated browser tests. The browser gate migrates it,
+- Use `bond-management-test.localhost` for automated browser tests. The browser gate migrates it,
   enables the investor app, and runs the idempotent investor-data seed helper
   before Playwright. It does not create, drop, or restore a site.
 - When bootstrapping a fresh site, enable the investor app and seed its browser
@@ -71,7 +85,7 @@ differences in the final field.
   `yarn playwright install chromium` from the app root. CI installs Chromium
   and its system dependencies in its run-scoped bench.
 - Start the intended local site explicitly so the browser cannot land on a
-  different default site: `bench --site test_site serve --port 8001 --noreload`.
+  different default site: `bench --site bond-management-test.localhost serve --port 8001 --noreload`.
   Set `BASE_URL=http://localhost:8001` for the browser gate in that case.
 - Keep investor credentials separate from Administrator credentials. The
   investor seed helper uses `FRAPPE_USER` and `FRAPPE_PASSWORD`; the Desk
@@ -79,9 +93,9 @@ differences in the final field.
   write either password to repository files. In CI, the fresh site uses
   `Administrator` with the one-run site password `admin`, while the investor
   password is generated and masked for that job.
-- If login fails, verify each credential against `test_site` and reset only the
-  local test Administrator with `bench --site test_site set-admin-password`.
-  Never run destructive credential or cache recovery against `dev.local` or a
+- If login fails, verify each credential against `bond-management-test.localhost` and reset only the
+  local test Administrator with `bench --site bond-management-test.localhost set-admin-password`.
+  Never run destructive credential or cache recovery against `bond-management-dev.localhost` or a
   non-test site. Do not repeatedly rerun browser tests while an account is
   locked.
 - Playwright preserves traces on the first CI retry, screenshots on failure,
