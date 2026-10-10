@@ -21,8 +21,8 @@ class TestMigrationLifecycleGuard(TestCase):
         self.bench.mkdir()
         self.arguments = {
             "bench_path": self.bench,
-            "site_path": self.bench / "sites" / "test_site",
-            "site": "test_site",
+            "site_path": self.bench / "sites" / "bond-management-test.localhost",
+            "site": "bond-management-test.localhost",
             "user": "Administrator",
             "config": {"allow_tests": True, OPT_IN: True},
         }
@@ -40,24 +40,26 @@ class TestMigrationLifecycleGuard(TestCase):
 
     def test_rejects_the_canonical_bench_even_with_both_flags_enabled(self):
         self.arguments.update(
-            bench_path="/Users/example/frappe-bench", site_path="/Users/example/frappe-bench/sites/test_site"
+            bench_path="/Users/example/frappe-bench",
+            site_path="/Users/example/frappe-bench/sites/bond-management-test.localhost",
         )
         with self.assertRaisesRegex(RuntimeError, "temporary"):
             validate_environment(**self.arguments)
         link = Path(self.temporary.name) / "canonical-link"
         link.symlink_to("/Users/example/frappe-bench")
-        self.arguments.update(bench_path=link, site_path=link / "sites" / "test_site")
+        self.arguments.update(bench_path=link, site_path=link / "sites" / "bond-management-test.localhost")
         with self.assertRaisesRegex(RuntimeError, "temporary"):
             validate_environment(**self.arguments)
 
     def test_rejects_non_test_sites_and_a_site_resolved_outside_the_bench(self):
-        self.arguments["site"] = "dev.local"
-        with self.assertRaisesRegex(RuntimeError, "test_site"):
+        self.arguments["site"] = "bond-management-dev.localhost"
+        with self.assertRaisesRegex(RuntimeError, "bond-management-test.localhost"):
             validate_environment(**self.arguments)
         self.arguments.update(
-            site="test_site", site_path=Path(self.temporary.name) / "other-bench" / "sites" / "test_site"
+            site="bond-management-test.localhost",
+            site_path=Path(self.temporary.name) / "other-bench" / "sites" / "bond-management-test.localhost",
         )
-        with self.assertRaisesRegex(RuntimeError, "test_site"):
+        with self.assertRaisesRegex(RuntimeError, "bond-management-test.localhost"):
             validate_environment(**self.arguments)
 
     def test_rejects_callers_other_than_administrator(self):

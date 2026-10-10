@@ -34,7 +34,7 @@ use separate authentication setup because their browser permissions differ.
 
 ## Accounts and fixture lifecycle
 
-The Playwright gate migrates the canonical `test_site`, enables the investor
+The Playwright gate migrates the canonical `bond-management-test.localhost`, enables the investor
 SPA, then calls
 `bond_management.bond_management.tests.investor_ui_seed.seed_investor_ui_browser_test_data`
 as Administrator. The idempotent helper ensures deterministic synthetic
@@ -49,7 +49,7 @@ configuration, and fixture seeding before each Playwright run.
 The investor authentication setup logs in as that investor, confirms the
 investor route, and saves Playwright storage state under the ignored
 `e2e/.auth/` directory. The separate Desk setup saves Administrator state for
-Desk specs. Seeded investor records remain on `test_site` after the run; there
+Desk specs. Seeded investor records remain on `bond-management-test.localhost` after the run; there
 is no teardown. The seed helper ensures the same named fixture records on later
 runs. Administrator and Manager access matrices are covered by server route
 and API tests; the investor account is never elevated to Administrator.

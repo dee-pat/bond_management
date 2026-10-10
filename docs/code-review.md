@@ -56,6 +56,11 @@ GitHub's stored secret and the provider key are separate objects.
 
 ## Verification evidence — 2026-10-09
 
+The command evidence below records the site names in use at the time
+(`dev.local` and `test_site`). The current Bond Management pair is
+`bond-management-dev.localhost` and `bond-management-test.localhost`; use
+`docs/verification.md` for current commands.
+
 - Risk classification: review configuration and agent guidance only; no app
   runtime, schema, or financial behavior change.
 - Required gates: scoped formatting, diff checks, and the shared pre-push gate.

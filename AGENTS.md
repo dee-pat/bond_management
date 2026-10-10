@@ -12,8 +12,12 @@ the two files conflict, this app-level file governs.
   or reporting completion, read [verification.md](docs/verification.md). It owns
   the detailed gate commands, evidence format, fresh-site checks, and runtime
   recovery procedures.
-- Run every applicable verification gate before committing, pushing, or
-  reporting completion.
+- Run every applicable local verification gate before committing or pushing;
+  wait for required CI checks before reporting completion. For changes that
+  require a fresh-install check, a successful CI clean install on the exact
+  commit satisfies that check. Create a local fresh site only when CI cannot
+  cover it or local diagnosis needs one; follow
+  [verification.md](docs/verification.md).
 - A gate passes only when its command was executed for the current change and
   observed to exit with status zero; never fabricate or infer command output or
   exit statuses.
@@ -129,17 +133,26 @@ the two files conflict, this app-level file governs.
 
 ## Test site and app tests
 
-- `test_site` is the canonical site for automated server and UI tests. Use
-  `dev.local` for interactive development; never run destructive tests against
-  `dev.local` or another non-test site.
-- Before testing, ensure `bond_management` is installed on `test_site`, migrate
+- This app's persistent site pair is `bond-management-dev.localhost` for interactive development
+  and `bond-management-test.localhost` for automated server and UI tests. Keep both sites exclusive
+  to Bond Management; each other installable app in the bench owns its own
+  development and test sites.
+- Before testing, ensure `bond_management` is installed on `bond-management-test.localhost`, migrate
   it, and enable tests with
-  `bench --site test_site set-config allow_tests true`.
-- Reuse an existing local `test_site`. Do not recreate, drop, or restore it
+  `bench --site bond-management-test.localhost set-config allow_tests true`.
+- Reuse the existing local `bond-management-test.localhost` for routine gates; do not create another
+  site just to rerun server or UI tests. Do not recreate, drop, or restore it
   without explicit user approval. Do not record site credentials or
   machine-specific database configuration in repository files.
+- When a test genuinely needs an additional local site, create a uniquely named
+  temporary site under the configured bench. After the test finishes, capture
+  its required logs and results, then drop that temporary site with
+  `bench drop-site <temporary-site> --no-backup`, whether the test passed or
+  failed. This also applies to local fresh-install checks and keeps the
+  persistent pair at two sites for this app. Never drop the persistent pair
+  under this rule.
 - Use the existing configured bench for all app development and verification.
-  Keep every site under that bench and use its existing `test_site` for routine
+  Keep every site under that bench and use its existing `bond-management-test.localhost` for routine
   gates. Do not create temporary or copied bench directories.
 - Local browser-test credentials are stored outside the app in
   `$HOME/.config/bond_management/test-browser.env`. Load them with

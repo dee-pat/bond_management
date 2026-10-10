@@ -1,6 +1,6 @@
 """Opt-in, disposable-bench verification of real share authorization races.
 
-Run seed() and run() in separate `bench --site test_site execute` calls so
+Run seed() and run() in separate `bench --site bond-management-test.localhost execute` calls so
 the framework commits fixtures before the independent request connections.
 Require BOND_SHARE_RACE_BENCH, BOND_SHARE_RACE_TOKEN (12 lowercase hex digits),
 BOND_SHARE_LOCK_SOCKET and BOND_SHARE_LOCK_USER in the private environment.
@@ -144,7 +144,7 @@ class Race:
 
     def request(self, name):
         try:
-            frappe.init("test_site", sites_path=self.sites_path, force=True)
+            frappe.init("bond-management-test.localhost", sites_path=self.sites_path, force=True)
             frappe.connect()
             _guard()
             frappe.db.sql("SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ")
@@ -268,11 +268,13 @@ def _guard():
     if expected != actual or not any(actual.is_relative_to(root) for root in temporary_roots):
         raise AssertionError("Run only in the explicitly opted-in disposable temporary bench")
     if (
-        frappe.local.site != "test_site"
+        frappe.local.site != "bond-management-test.localhost"
         or frappe.session.user != "Administrator"
         or not frappe.conf.allow_tests
     ):
-        raise AssertionError("Requires Administrator on opted-in test_site with allow_tests")
+        raise AssertionError(
+            "Requires Administrator on opted-in bond-management-test.localhost with allow_tests"
+        )
     _names()
 
 
