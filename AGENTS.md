@@ -138,6 +138,9 @@ the two files conflict, this app-level file governs.
 - Reuse an existing local `test_site`. Do not recreate, drop, or restore it
   without explicit user approval. Do not record site credentials or
   machine-specific database configuration in repository files.
+- Use the existing configured bench for all app development and verification.
+  Keep every site under that bench and use its existing `test_site` for routine
+  gates. Do not create temporary or copied bench directories.
 - Local browser-test credentials are stored outside the app in
   `$HOME/.config/bond_management/test-browser.env`. Load them with
   `set -a; source "$HOME/.config/bond_management/test-browser.env"; set +a`.
