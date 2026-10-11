@@ -238,7 +238,7 @@ Desk browser specs exercise focused form hooks and report interactions, includin
 Desk and investor specs live under their own E2E domains, with separate
 Administrator and investor sessions. Test doubles stay on narrow API or
 clipboard boundaries where the user-visible client behavior needs deterministic
-data; real Frappe routes and the seeded `test_site` are used wherever practical.
+data; real Frappe routes and the seeded `bond-management-test.localhost` are used wherever practical.
 
 ### Playwright baseline
 
@@ -249,7 +249,7 @@ data; real Frappe routes and the seeded `test_site` are used wherever practical.
   plain `*.spec.ts` files beside each domain.
 - One worker initially for deterministic Frappe fixtures; add sharding only when runtime justifies it.
 - CI retries of two, trace on first retry, screenshot on failure and retained video on failure.
-- Real `test_site`, real investor permissions and real investor APIs. Mocking is limited to third-party boundaries that cannot be made deterministic locally.
+- Real `bond-management-test.localhost`, real investor permissions and real investor APIs. Mocking is limited to third-party boundaries that cannot be made deterministic locally.
 - Stable role/name locators first; stable `data-testid` values where accessible names are ambiguous.
 - Idempotent test-data seeding through a dedicated server helper. Credentials remain in local environment or CI secrets, never repository files.
 
@@ -275,7 +275,7 @@ Prove the smallest production-shaped stack:
 5. Playwright authentication setup plus one desktop and mobile shell test.
 6. A Playwright CI job and local verification mode covering both E2E domains.
 
-Complete when the scaffold works on `test_site`, `bench build --app bond_management`, a fresh CI-shaped site, and the Playwright desktop/mobile and Desk projects.
+Complete when the scaffold works on `bond-management-test.localhost`, `bench build --app bond_management`, a fresh CI-shaped site, and the Playwright desktop/mobile and Desk projects.
 
 ### Phase 2 — Coexistence shell
 
@@ -346,7 +346,7 @@ one separate Playwright job against its own run-scoped fresh site.
 ## Rollback
 
 - Pilot rollback: disable `bond_investor_spa_enabled`; the `/bond-investor` login target temporarily redirects to the unchanged Desk route.
-- A local `test_site` rollback rehearsal proves the fallback mechanics only; pilot-site flag state, acceptance and the approving person remain separate pilot evidence.
+- A local rollback rehearsal on the then-named `test_site` (now `bond-management-test.localhost`) proves the fallback mechanics only; pilot-site flag state, acceptance and the approving person remain separate pilot evidence.
 - Cutover rollback: restore the Apps screen route to `/desk/bond-investor`; the workspace remains installed.
 - API rollback: explicit endpoints are additive until retirement and do not change existing DocType or report contracts.
 - Data rollback: no migration phase changes investor financial data, so rollback requires no data transformation.

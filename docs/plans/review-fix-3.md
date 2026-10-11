@@ -219,3 +219,17 @@ relationship or report/API data flow changed; the domain graph was reviewed.
 - Blockers: none.
 - Unverified local/CI differences: local verification uses macOS and
   MariaDB 12.3.2; GitHub CI remains the Linux platform check.
+
+## Current concurrency harness site policy (2026-10-11)
+
+The historical disposable-bench command above records how the race was first
+verified. Current runs create a uniquely named
+`bond-management-race-<32-hex-id>.localhost` site under the configured bench,
+install Bond Management there, and enable `allow_tests`. Set
+`BOND_SHARE_RACE_BENCH` to that bench path and provide the observer credentials
+privately as described at the top of
+`bond_management/bond_management/tests/investor_share_concurrency.py`. Run
+`seed` and then `run` against the temporary site. Capture the results and drop
+the site with `bench drop-site <temporary-site> --no-backup` after the run,
+including when a phase fails. The helper rejects both persistent Bond
+Management sites and sites outside the configured bench.

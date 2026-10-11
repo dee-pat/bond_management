@@ -5,15 +5,16 @@
 Exercise fresh installation and the complete registered Bond Management patch
 sequence against representative legacy data, then verify both a forced patch
 rerun and the ordinary skip path. This is an opt-in administrative CLI helper;
-it never creates, drops, restores, or migrates a site itself. Canonical bench
-sites are outside its allowed scope, including canonical `test_site`.
+it never creates, drops, restores, or migrates a site itself. The persistent
+Bond Management sites are outside its allowed scope.
 
-The helper resolves the bench and active site paths and requires a bench under
-the system temporary directory, its own `test_site`, Administrator,
-`allow_tests=true`, and `bond_migration_lifecycle_test=true`. Flags are parsed as
-booleans; strings such as `false` cannot enable mutation. A symlink under the
-temporary directory cannot disguise a bench elsewhere. Guard unit tests run in
-the normal app suite without enabling this fixture helper.
+The helper resolves the configured bench and active site paths and requires a
+uniquely named `bond-management-lifecycle-<32-hex-id>.localhost` site directly
+under that bench, Administrator, `allow_tests=true`, and
+`bond_migration_lifecycle_test=true`. Flags are parsed as booleans; strings such
+as `false` cannot enable mutation. A symlinked `sites` directory cannot move the
+test site outside the configured bench. Guard unit tests run in the normal app
+suite without enabling this fixture helper.
 
 ## Contract and representative data
 
@@ -31,7 +32,7 @@ PDFs; a duplicate statement sharing a private File; and a statement-derived FX
 rate with the obsolete portfolio column/scoped index and stale reverse rate.
 They use synthetic identities rather than impersonating the known correction
 patch's real records. Direct database/schema writes reproduce legacy states
-only after the helper has enforced its disposable administrative boundary.
+only after the helper has enforced its temporary-site administrative boundary.
 
 `verify()` asserts financial values, statement quantity/nominal conversion,
 private attachment ownership and canonical filenames, v8 reconciliation,
@@ -50,37 +51,46 @@ identities/timestamps.
 
 ## Execution and recovery
 
-Create an explicitly authorized fresh disposable bench/site following the CI
-bootstrap in [verification.md](../verification.md). Set both test flags before
-installing the app. In that bench, execute these phases in order:
+Create a uniquely named temporary site under the configured bench and follow
+the fresh-site bootstrap in [verification.md](../verification.md). Set
+`allow_tests` and `bond_migration_lifecycle_test` to true before installing the
+app. Use the same `$TEMP_SITE` for every phase below:
 
 ```sh
-bench --site test_site install-app bond_management
-bench --site test_site execute bond_management.bond_management.tests.migration_lifecycle.fresh
-bench --site test_site execute bond_management.bond_management.tests.migration_lifecycle.prepare
-bench --site test_site migrate
-bench --site test_site execute bond_management.bond_management.tests.migration_lifecycle.verify
-bench --site test_site execute bond_management.bond_management.tests.migration_lifecycle.requeue
-bench --site test_site migrate
-bench --site test_site execute bond_management.bond_management.tests.migration_lifecycle.verify
-bench --site test_site migrate
-bench --site test_site execute bond_management.bond_management.tests.migration_lifecycle.verify
+TEMP_SITE="bond-management-lifecycle-$(python3 -c 'import uuid; print(uuid.uuid4().hex)').localhost"
+bench new-site "$TEMP_SITE"
+bench --site "$TEMP_SITE" set-config allow_tests true
+bench --site "$TEMP_SITE" set-config bond_migration_lifecycle_test true
+bench --site "$TEMP_SITE" install-app bond_management
+bench --site "$TEMP_SITE" execute bond_management.bond_management.tests.migration_lifecycle.fresh
+bench --site "$TEMP_SITE" execute bond_management.bond_management.tests.migration_lifecycle.prepare
+bench --site "$TEMP_SITE" migrate
+bench --site "$TEMP_SITE" execute bond_management.bond_management.tests.migration_lifecycle.verify
+bench --site "$TEMP_SITE" execute bond_management.bond_management.tests.migration_lifecycle.requeue
+bench --site "$TEMP_SITE" migrate
+bench --site "$TEMP_SITE" execute bond_management.bond_management.tests.migration_lifecycle.verify
+bench --site "$TEMP_SITE" migrate
+bench --site "$TEMP_SITE" execute bond_management.bond_management.tests.migration_lifecycle.verify
+# Capture required logs/results before cleanup, including after a failed phase.
+bench drop-site "$TEMP_SITE" --no-backup
 ```
 
 A failed migration leaves its exact traceback and external evidence available
 for inspection. Resolve the failure and rerun the real migrate command before
 verification. Do not re-run `prepare()` or delete fixture evidence to hide a
-failure. Start another authorized disposable bench for a new complete run.
-Frappe manages each CLI transaction; the helper does not commit independently.
+failure. After capturing logs and results, drop the temporary site whether the
+run passed or failed. Use a new temporary site for a new complete run. Frappe
+manages each CLI transaction; the helper does not commit independently.
 
 ## Acceptance and progress
 
-Acceptance requires observed zero exits for formatting/lint, the five guard
-tests, the shared server gate, and every disposable lifecycle command above.
+Acceptance requires observed zero exits for formatting/lint, the eight guard
+tests, the shared server gate, and every temporary-site lifecycle command above.
 No browser test is needed because this change adds server verification only.
 The domain model was reviewed: no production relationship or data flow changes.
-The helper and five guard tests passed locally on 2026-10-08. Fresh installation,
-all 25 registered patches on representative legacy data, forced rerun, and
+The initial helper and five guard tests passed locally on 2026-10-08. The
+current guard suite has eight cases for the temporary-site policy. Fresh
+installation, all 25 registered patches on representative legacy data, forced rerun, and
 ordinary skipped rerun each exited 0. All seven manual indexes, permissions,
 financial values, private attachments and FX provenance were verified. The
 shared `pre-push-ui` gate exited 0 with 328 server and 49 browser tests.

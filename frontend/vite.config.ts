@@ -40,6 +40,6 @@ export default defineConfig({
     ],
   },
   server: {
-    allowedHosts: ["localhost", "127.0.0.1", "test_site"],
+    allowedHosts: ["localhost", "127.0.0.1", "bond-management-test.localhost"],
   },
 });

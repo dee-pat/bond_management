@@ -1,7 +1,7 @@
-"""Opt-in, disposable-bench verification of real share authorization races.
+"""Opt-in verification of real share authorization races on a temporary site.
 
-Run seed() and run() in separate `bench --site test_site execute` calls so
-the framework commits fixtures before the independent request connections.
+Run seed() and run() in separate `bench --site bond-management-race-<uuid>.localhost execute`
+calls so the framework commits fixtures before the independent request connections.
 Require BOND_SHARE_RACE_BENCH, BOND_SHARE_RACE_TOKEN (12 lowercase hex digits),
 BOND_SHARE_LOCK_SOCKET and BOND_SHARE_LOCK_USER in the private environment.
 BOND_SHARE_LOCK_PASSWORD is optional. The observer needs PROCESS privileges;
@@ -10,7 +10,6 @@ it reads information_schema and InnoDB lock diagnostics only. Fixtures remain fo
 
 import os
 import re
-import tempfile
 from contextvars import Context
 from pathlib import Path
 from threading import Event, Thread
@@ -21,6 +20,7 @@ import pymysql
 from frappe.core.doctype.user_permission.user_permission import get_user_permissions
 from frappe.share import add_docshare
 
+from bond_management.bond_management.tests.temporary_site_guard import validate_temporary_site
 from bond_management.bond_management.utils.investor_permissions import (
     BOND_MANAGER_ROLE,
     INVESTOR_ROLE,
@@ -74,13 +74,15 @@ def run():
         connect_timeout=5,
         read_timeout=5,
     ) as observer:
-        results = [Race(kind, names, sites_path).run(observer) for kind in ("assignment", "role")]
+        results = [
+            Race(kind, names, sites_path, frappe.local.site).run(observer) for kind in ("assignment", "role")
+        ]
     return {"races": results, "fixtures": names}
 
 
 class Race:
-    def __init__(self, kind, names, sites_path):
-        self.kind, self.names, self.sites_path = kind, names, sites_path
+    def __init__(self, kind, names, sites_path, site):
+        self.kind, self.names, self.sites_path, self.site = kind, names, sites_path, site
         self.user = names["investor" if kind == "assignment" else "manager"]
         self.warmed, self.changed, self.release = Event(), Event(), Event()
         self.errors, self.connections = [], {}
@@ -144,7 +146,7 @@ class Race:
 
     def request(self, name):
         try:
-            frappe.init("test_site", sites_path=self.sites_path, force=True)
+            frappe.init(self.site, sites_path=self.sites_path, force=True)
             frappe.connect()
             _guard()
             frappe.db.sql("SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ")
@@ -264,15 +266,19 @@ class Race:
 def _guard():
     expected = Path(_required("BOND_SHARE_RACE_BENCH")).resolve()
     actual = Path(frappe.local.sites_path).resolve().parent
-    temporary_roots = (Path(tempfile.gettempdir()).resolve(), Path("/tmp").resolve())
-    if expected != actual or not any(actual.is_relative_to(root) for root in temporary_roots):
-        raise AssertionError("Run only in the explicitly opted-in disposable temporary bench")
-    if (
-        frappe.local.site != "test_site"
-        or frappe.session.user != "Administrator"
-        or not frappe.conf.allow_tests
-    ):
-        raise AssertionError("Requires Administrator on opted-in test_site with allow_tests")
+    if expected != actual:
+        raise AssertionError("BOND_SHARE_RACE_BENCH must match the configured bench")
+    try:
+        validate_temporary_site(
+            bench_path=actual,
+            site_path=frappe.get_site_path(),
+            site=frappe.local.site,
+            user=frappe.session.user,
+            config=frappe.conf,
+            site_prefix="bond-management-race-",
+        )
+    except RuntimeError as error:
+        raise AssertionError(str(error)) from error
     _names()
 
 

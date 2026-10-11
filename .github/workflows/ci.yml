@@ -89,8 +89,8 @@ jobs:
           test -f sites/common_site_config.json
           bench get-app bond_management "file://$GITHUB_WORKSPACE"
           bench setup requirements --dev
-          bench new-site --db-root-password root --admin-password admin test_site
-          bench --site test_site install-app bond_management
+          bench new-site --db-root-password root --admin-password admin bond-management-test.localhost
+          bench --site bond-management-test.localhost install-app bond_management
           bench build
         env:
           CI: "Yes"
@@ -190,10 +190,10 @@ jobs:
           test -f sites/common_site_config.json
           bench get-app bond_management "file://$GITHUB_WORKSPACE"
           bench setup requirements --dev
-          bench new-site --db-root-password root --admin-password admin test_site
-          bench --site test_site set-config allow_tests true
-          bench --site test_site set-config host_name "http://test_site:8000"
-          bench --site test_site install-app bond_management
+          bench new-site --db-root-password root --admin-password admin bond-management-test.localhost
+          bench --site bond-management-test.localhost set-config allow_tests true
+          bench --site bond-management-test.localhost set-config host_name "http://bond-management-test.localhost:8000"
+          bench --site bond-management-test.localhost install-app bond_management
           bench build
           apps/bond_management/scripts/verify.sh frontend
         env:
@@ -202,9 +202,9 @@ jobs:
       - name: Prepare browser site before starting the server
         working-directory: ${{ runner.temp }}/bond-management-playwright-${{ github.run_id }}-${{ github.run_attempt }}
         run: |
-          bench --site test_site set-admin-password admin
-          bench --site test_site set-config bond_investor_spa_enabled 1
-          bench --site test_site execute bond_management.bond_management.tests.investor_ui_seed.seed_investor_ui_browser_test_data
+          bench --site bond-management-test.localhost set-admin-password admin
+          bench --site bond-management-test.localhost set-config bond_investor_spa_enabled 1
+          bench --site bond-management-test.localhost execute bond_management.bond_management.tests.investor_ui_seed.seed_investor_ui_browser_test_data
 
       - name: Install Playwright browser
         working-directory: ${{ runner.temp }}/bond-management-playwright-${{ github.run_id }}-${{ github.run_attempt }}/apps/bond_management
@@ -213,9 +213,9 @@ jobs:
       - name: Start Web Server
         working-directory: ${{ runner.temp }}/bond-management-playwright-${{ github.run_id }}-${{ github.run_attempt }}
         run: |
-          echo "127.0.0.1 test_site" | sudo tee -a /etc/hosts
-          nohup bench --site test_site serve --port 8000 --noreload > "$RUNNER_TEMP/playwright-bench-web.log" 2>&1 &
-          curl --noproxy '*' --fail --silent --show-error --retry 30 --retry-connrefused --retry-delay 2 http://test_site:8000/api/method/ping
+          echo "127.0.0.1 bond-management-test.localhost" | sudo tee -a /etc/hosts
+          nohup bench --site bond-management-test.localhost serve --port 8000 --noreload > "$RUNNER_TEMP/playwright-bench-web.log" 2>&1 &
+          curl --noproxy '*' --fail --silent --show-error --retry 30 --retry-connrefused --retry-delay 2 http://bond-management-test.localhost:8000/api/method/ping
 
       - name: Run Playwright
         working-directory: ${{ runner.temp }}/bond-management-playwright-${{ github.run_id }}-${{ github.run_attempt }}

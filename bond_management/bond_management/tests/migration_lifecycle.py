@@ -1,11 +1,10 @@
-"""Opt-in CLI phases for a real, disposable install/migrate lifecycle.
+"""Opt-in CLI phases for a real, temporary-site install/migrate lifecycle.
 
 Use bench execute for each phase, with actual bench migrate commands between
 phases. This helper never invokes patch functions directly or creates a site.
 """
 
 import json
-import tempfile
 from pathlib import Path
 
 import frappe
@@ -21,15 +20,16 @@ from bond_management.bond_management.tests.migration_lifecycle_fixtures import (
     USD_ISIN,
     prepare_legacy_rows,
 )
+from bond_management.bond_management.tests.temporary_site_guard import validate_temporary_site
 
 OPT_IN = "bond_migration_lifecycle_test"
 
 
 def fresh():
-    """Assert after_install invariants before the disposable site's first migrate."""
+    """Assert after_install invariants before the temporary site's first migrate."""
     state_path = _guard()
     if state_path.exists():
-        raise RuntimeError("Lifecycle evidence already exists; use a new disposable bench.")
+        raise RuntimeError("Lifecycle evidence already exists; use a new temporary lifecycle site.")
     assert_indexes()
     assert_permissions()
     patches = _patch_logs()
@@ -47,7 +47,7 @@ def prepare():
     state.update(phase="prepared", fixtures=prepare_legacy_rows())
     _remove_app_patch_logs()
     _write_state(state_path, state)
-    return {"phase": "prepared", "next": "bench --site test_site migrate"}
+    return {"phase": "prepared", "next": f"bench --site {frappe.local.site} migrate"}
 
 
 def verify():
@@ -77,22 +77,20 @@ def requeue():
     _remove_app_patch_logs()
     state["phase"] = "requeued"
     _write_state(state_path, state)
-    return {"phase": "requeued", "next": "bench --site test_site migrate"}
+    return {"phase": "requeued", "next": f"bench --site {frappe.local.site} migrate"}
 
 
 def validate_environment(*, bench_path, site_path, site, user, config):
-    """Resolve both bench and active site paths before permitting legacy mutation."""
-    bench = Path(bench_path).resolve()
-    temporary_roots = {Path(tempfile.gettempdir()).resolve(), Path("/tmp").resolve()}
-    if not any(bench.is_relative_to(root) and bench != root for root in temporary_roots):
-        raise RuntimeError("Lifecycle helper requires a disposable bench under a temporary directory")
-    if Path(site_path).resolve() != bench / "sites" / "test_site" or site != "test_site":
-        raise RuntimeError("Lifecycle helper requires the disposable bench's test_site")
-    if user != "Administrator":
-        raise RuntimeError("Lifecycle helper requires Administrator")
-    if not _true(config.get("allow_tests")) or not _true(config.get(OPT_IN)):
-        raise RuntimeError(f"Lifecycle helper requires allow_tests and explicit {OPT_IN}=true")
-    return bench
+    """Require an opted-in, uniquely named lifecycle site in the configured bench."""
+    return validate_temporary_site(
+        bench_path=bench_path,
+        site_path=site_path,
+        site=site,
+        user=user,
+        config=config,
+        site_prefix="bond-management-lifecycle-",
+        required_flags=(OPT_IN,),
+    )
 
 
 def _guard():
@@ -103,17 +101,8 @@ def _guard():
         user=frappe.session.user,
         config=frappe.conf,
     )
-    # Evidence belongs beside the disposable bench, outside the checkout/site config.
-    return bench.parent / f"{bench.name}-bond-migration-lifecycle.json"
-
-
-def _true(value):
-    if isinstance(value, str):
-        try:
-            value = json.loads(value)
-        except ValueError:
-            return False
-    return value is True or (type(value) is int and value == 1)
+    # Each temporary site keeps its evidence separate beside the configured bench.
+    return bench.parent / f"{frappe.local.site}-bond-migration-lifecycle.json"
 
 
 def _patch_logs():
@@ -209,7 +198,7 @@ def _business_fields(value):
 
 
 def _rows(doctype, fields, filters):
-    # Every entry point enforces Administrator and a disposable bench first.
+    # Every entry point enforces Administrator and an opted-in temporary site first.
     return frappe.qb.get_query(
         doctype, fields=fields, filters=filters, order_by="name asc", ignore_permissions=True
     ).run(as_dict=True)

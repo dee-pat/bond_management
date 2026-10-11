@@ -6,12 +6,17 @@ creation, and installation commands live in
 
 ## Interactive development
 
-Use `dev.local` for interactive work; automated test-site rules live in
+Use `bond-management-dev.localhost` for interactive work. On an existing bench
+where `dev.local` is dedicated to Bond Management, set `DEV_SITE=dev.local` to
+keep using its data during the transition. Do not use a shared `dev.local` for
+Bond Management; follow the legacy site setup in
+`apps/bond_management/docs/verification.md`. Automated test-site rules live in
 `apps/bond_management/AGENTS.md`.
 
 ```bash
-bench --site dev.local migrate
-bench --site dev.local backup --with-files
+DEV_SITE="${DEV_SITE:-bond-management-dev.localhost}"
+bench --site "$DEV_SITE" migrate
+bench --site "$DEV_SITE" backup --with-files
 ```
 
 ## Local service recovery
@@ -46,7 +51,7 @@ apps/bond_management/scripts/verify.sh pre-push
 apps/bond_management/scripts/verify.sh pre-push-ui
 ```
 
-`ui` expects an already prepared `test_site`; the combined gates prepare the
+`ui` expects an already prepared `bond-management-test.localhost`; the combined gates prepare the
 site as needed. Use `pre-push` for the shared lint/server gate and
 `pre-push-ui` when frontend or browser behavior is in scope.
 
@@ -59,5 +64,5 @@ CYPRESS_SPEC="cypress/integration/portfolio_performance.js" \
 apps/bond_management/scripts/cypress-runtime.sh diagnose
 apps/bond_management/scripts/cypress-runtime.sh prepare
 
-bench --site test_site serve --port 8001 --noreload
+bench --site bond-management-test.localhost serve --port 8001 --noreload
 ```

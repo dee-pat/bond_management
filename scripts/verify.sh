@@ -3,7 +3,7 @@
 set -euo pipefail
 
 MODE="${1:-pre-push}"
-TEST_SITE_NAME="${TEST_SITE:-test_site}"
+TEST_SITE_NAME="${TEST_SITE:-bond-management-test.localhost}"
 APP_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BENCH_ROOT="$(cd "${APP_ROOT}/../.." && pwd)"
 

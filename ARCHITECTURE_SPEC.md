@@ -175,7 +175,7 @@ in browser tests.
 - A concurrent canonicalization cannot publish conflicting metadata or leave a
   partial target.
 - Focused server tests, complete server gate, and (for UI changes) complete UI
-  gate pass on `test_site` and CI fresh-site setup.
+  gate pass on `bond-management-test.localhost` and CI fresh-site setup.
 - The spec's unresolved deployment/storage decisions are approved before the
   next implementation slice starts.
 

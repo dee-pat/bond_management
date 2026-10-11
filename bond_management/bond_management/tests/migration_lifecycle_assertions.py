@@ -6,6 +6,8 @@ import frappe
 from frappe.utils import getdate
 
 from bond_management.bond_management.tests.migration_lifecycle_fixtures import ACCOUNT, KENYA_ISIN, USD_ISIN
+from bond_management.bond_management.utils.private_attachment import read_private_pdf_attachment
+from bond_management.bond_management.utils.transaction_attachment import get_standard_transaction_filename
 from bond_management.patches import add_bond_query_indexes as indexes
 from bond_management.patches.add_bond_investor_read_only_access import READ_ONLY_DOCTYPES
 from bond_management.patches.add_bond_management_manager_access import BOND_DOCTYPES
@@ -86,7 +88,18 @@ def assert_business_data(fixtures):
     assert holding.isin == USD_ISIN and holding.quantity == 10
     assert Decimal(str(holding.quantity)) * Decimal(str(transaction.face_value_per_unit)) == Decimal("1000")
     assert statement.attachment == f"/private/files/PortfolioStatement-{ACCOUNT}-20251231.pdf"
-    assert transaction.attachment == f"/private/files/Transaction-{ACCOUNT}-20251231.pdf"
+    transaction_pdf, _ = read_private_pdf_attachment(
+        transaction.attachment,
+        max_bytes=None,
+        missing_message="Lifecycle transaction attachment is missing.",
+        extension_message="Lifecycle transaction attachment must be a PDF.",
+        private_message="Lifecycle transaction attachment must be private.",
+        size_message="Lifecycle transaction attachment is too large.",
+    )
+    expected_transaction_filename = get_standard_transaction_filename(
+        ACCOUNT, transaction.settlement_date, content=transaction_pdf
+    )
+    assert transaction.attachment == f"/private/files/{expected_transaction_filename}"
     assert "QuantityBasis-v8" in statement.quantity_reconciliation_report
     for document, field in (
         (statement, "attachment"),
@@ -102,7 +115,13 @@ def assert_business_data(fixtures):
     assert getdate(market.weighted_avg_repayment_date) == getdate("2027-01-01")
     assert Decimal(str(market.weighted_avg_repayment_years)) == Decimal("1.008219178")
     assert getdate(market.maturity_date) == getdate("2027-01-01") and market.future_xirr != -999
-    assert not frappe.db.has_column("Bond Exchange Rate", "portfolio_name")
+    legacy_portfolio_columns = frappe.db.sql(
+        """SELECT COLUMN_NAME FROM information_schema.COLUMNS
+        WHERE TABLE_SCHEMA = %s AND TABLE_NAME = %s AND COLUMN_NAME = %s""",
+        (frappe.conf.db_name, "tabBond Exchange Rate", "portfolio_name"),
+        as_dict=True,
+    )
+    assert not legacy_portfolio_columns, legacy_portfolio_columns
     rate = frappe.get_doc("Bond Exchange Rate", fixtures["exchange_rate"])
     assert Decimal(str(rate.rate)) == Decimal("0.008") and Decimal(str(rate.reverse_rate)) == Decimal("125")
     assert rate.manual_fallback == 0 and rate.statement == statement.name
@@ -133,7 +152,7 @@ def _assert_private_file(document, field):
 
 
 def _rows(doctype, fields, filters):
-    # Every entry point enforces Administrator and a disposable bench first.
+    # Every entry point enforces Administrator and an opted-in temporary site first.
     return frappe.qb.get_query(
         doctype, fields=fields, filters=filters, order_by="name asc", ignore_permissions=True
     ).run(as_dict=True)
