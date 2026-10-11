@@ -139,6 +139,67 @@ class TestPrivateAttachment(UnitTestCase):
 
             frappe.db.after_commit.run()
 
+    def test_versioned_conflict_target_equal_to_source_keeps_attachment(self):
+        with TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            private_files = root / "private" / "files"
+            private_files.mkdir(parents=True)
+            source_path = private_files / "PortfolioStatement-1-deadbeef.pdf"
+            source_content = b"%PDF-1.7\nversioned statement"
+            source_path.write_bytes(source_content)
+            (private_files / "PortfolioStatement-1.pdf").write_bytes(b"different canonical file")
+
+            document = Mock()
+            document.doctype = "Bond Statement"
+            document.name = "STATEMENT-1"
+            document.get.return_value = f"/private/files/{source_path.name}"
+            file_doc = Mock(
+                file_name=source_path.name,
+                file_url=f"/private/files/{source_path.name}",
+                is_private=True,
+                is_remote_file=False,
+            )
+            file_doc.get_full_path.return_value = str(source_path)
+            file_doc.get_content.return_value = source_content
+
+            with (
+                patch(
+                    "bond_management.bond_management.utils.private_attachment._get_file_rows",
+                    return_value=[
+                        frappe._dict(
+                            name="FILE-1",
+                            file_url=f"/private/files/{source_path.name}",
+                            attached_to_doctype="Bond Statement",
+                            attached_to_name="STATEMENT-1",
+                            attached_to_field="attachment",
+                        )
+                    ],
+                ),
+                patch(
+                    "bond_management.bond_management.utils.private_attachment.frappe.get_doc",
+                    return_value=file_doc,
+                ),
+                patch(
+                    "bond_management.bond_management.utils.private_attachment.frappe.get_site_path",
+                    side_effect=lambda *parts: str(root.joinpath(*parts)),
+                ),
+                patch(
+                    "bond_management.bond_management.utils.private_attachment._validated_filename",
+                    side_effect=lambda filename: filename,
+                ),
+            ):
+                result = standardize_private_pdf_attachment(
+                    document,
+                    "PortfolioStatement-1.pdf",
+                    conflict_filename=lambda digest: source_path.name,
+                )
+
+            self.assertEqual(result, f"/private/files/{source_path.name}")
+            file_doc.save.assert_called_once_with()
+            frappe.db.after_commit.run()
+            self.assertTrue(source_path.is_file())
+            self.assertEqual(source_path.read_bytes(), source_content)
+
     def test_standardization_rejects_remote_file(self):
         document = Mock()
         document.doctype = "Bond Statement"

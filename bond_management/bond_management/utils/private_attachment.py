@@ -127,11 +127,12 @@ def standardize_private_pdf_attachment(
                 if not target_path.is_relative_to(private_files_path):
                     frappe.throw(_("The versioned filename is outside the private files directory."))
 
-            _place_standardized_file(
-                source_path,
-                target_path,
-                source_is_shared=source_is_shared,
-            )
+            if source_path != target_path:
+                _place_standardized_file(
+                    source_path,
+                    target_path,
+                    source_is_shared=source_is_shared,
+                )
 
         if source_is_attached_elsewhere:
             attachment = frappe.copy_doc(file_doc)
