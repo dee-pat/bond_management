@@ -164,6 +164,12 @@ def get_calculated_amounts(
 
 
 class BondTransaction(Document):
+    @frappe.whitelist(methods=["POST"])
+    def read_transaction_pdf(self):
+        """Keep the existing document RPC available for older clients."""
+        name = self.name if self.name and frappe.db.exists("Bond Transaction", self.name) else None
+        return read_transaction_pdf(name, self.attachment)
+
     def before_naming(self):
         row = self._get_selected_attachment_row()
         if row and not any(self.get(fieldname) for fieldname in PDF_POPULATION_CHECK_FIELDS):

@@ -67,6 +67,12 @@ def read_statement_pdf(name: str | None, attachment: str, portfolio_name: str | 
 
 
 class BondStatement(Document):
+    @frappe.whitelist(methods=["POST"])
+    def read_statement_pdf(self):
+        """Keep the existing document RPC available for older clients."""
+        name = self.name if self.name and frappe.db.exists("Bond Statement", self.name) else None
+        return read_statement_pdf(name, self.attachment, self.portfolio_name)
+
     def before_validate(self):
         if self.flags.ignore_statement_pdf:
             return

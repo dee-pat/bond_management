@@ -203,9 +203,13 @@ class TestBondStatement(IntegrationTestCase):
                 )
 
                 preview = read_statement_pdf(None, attachment, statement.portfolio_name)
+                legacy_preview = statement.read_statement_pdf()
                 self.assertEqual(preview["portfolio_name"], portfolio.name)
                 self.assertEqual(preview["statement_date"].isoformat(), expected_date)
                 self.assertEqual(preview["account_no"], account_no)
+                self.assertEqual(legacy_preview["portfolio_name"], preview["portfolio_name"])
+                self.assertEqual(legacy_preview["statement_date"], preview["statement_date"])
+                self.assertEqual(legacy_preview["account_no"], preview["account_no"])
 
                 statement.insert()
                 self.assertEqual(statement.portfolio_name, portfolio.name)

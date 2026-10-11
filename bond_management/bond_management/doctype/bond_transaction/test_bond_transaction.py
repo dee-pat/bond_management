@@ -278,6 +278,11 @@ class TestBondTransaction(IntegrationTestCase):
             transaction.attachment,
             expected_attachment,
         )
+        legacy_preview = transaction.read_transaction_pdf()
+        self.assertEqual(legacy_preview["portfolio_name"], portfolio.name)
+        self.assertEqual(legacy_preview["account_no"], portfolio.transaction_account_no)
+        self.assertEqual(len(legacy_preview["transactions"]), 1)
+        self.assertEqual(legacy_preview["transactions"][0]["isin"], bond.name)
 
         attachment_files = frappe.qb.get_query(
             "File",
