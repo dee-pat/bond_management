@@ -3,6 +3,16 @@ import { expect, test } from "@playwright/test";
 const reportRoute =
   "/desk/query-report/Interest%20Difference%20by%20Portfolio?portfolio_name=UI%20Test%20Portfolio";
 
+test("lists the report on the Bond Investor workspace", async ({ page }) => {
+  await page.goto("/desk/bond-investor");
+
+  await expect(
+    page
+      .locator(".body-sidebar")
+      .getByRole("link", { name: "Interest Difference by Portfolio", exact: true }),
+  ).toBeVisible();
+});
+
 test("shows the portfolio first and equivalent interest days", async ({
   page,
 }) => {

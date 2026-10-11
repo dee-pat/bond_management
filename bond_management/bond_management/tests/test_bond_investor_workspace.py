@@ -5,6 +5,7 @@ from unittest import TestCase
 ROLE = "Bond Investor Read Only"
 MANAGER_ROLE = "Bond Management Manager"
 WORKSPACE_PATH = Path(__file__).parents[1] / "workspace" / "bond_investor" / "bond_investor.json"
+SIDEBAR_PATH = Path(__file__).parents[1] / "sidebar" / "bond_investor" / "bond_investor.json"
 
 
 class TestBondInvestorWorkspace(TestCase):
@@ -23,5 +24,16 @@ class TestBondInvestorWorkspace(TestCase):
                 "Bond Exchange Rate",
                 "Portfolio Performance",
                 "Bond Yield Comparison",
+                "Interest Difference by Portfolio",
             },
+        )
+
+    def test_interest_difference_report_is_in_investor_sidebar(self):
+        sidebar = json.loads(SIDEBAR_PATH.read_text())
+
+        self.assertTrue(
+            any(
+                item["link_type"] == "Report" and item["link_to"] == "Interest Difference by Portfolio"
+                for item in sidebar["items"]
+            )
         )

@@ -1,73 +1,109 @@
 {
  "app": "bond_management",
- "doctype": "Workspace Sidebar",
+ "doctype": "Sidebar",
  "header_icon": "landmark",
  "items": [
   {
+   "doctype": "Sidebar Item",
    "icon": "home",
    "idx": 1,
    "label": "Home",
    "link_to": "Bond Investor",
    "link_type": "Workspace",
+   "parentfield": "items",
+   "parenttype": "Sidebar",
    "type": "Link"
   },
   {
+   "doctype": "Sidebar Item",
    "icon": "list",
    "idx": 2,
    "label": "Bond Transaction",
    "link_to": "Bond Transaction",
    "link_type": "DocType",
+   "parentfield": "items",
+   "parenttype": "Sidebar",
    "type": "Link"
   },
   {
+   "doctype": "Sidebar Item",
    "icon": "file-text",
    "idx": 3,
    "label": "Bond Statement",
    "link_to": "Bond Statement",
    "link_type": "DocType",
+   "parentfield": "items",
+   "parenttype": "Sidebar",
    "type": "Link"
   },
   {
+   "doctype": "Sidebar Item",
    "icon": "book-open",
    "idx": 4,
    "label": "Bond Master",
    "link_to": "Bond Master",
    "link_type": "DocType",
+   "parentfield": "items",
+   "parenttype": "Sidebar",
    "type": "Link"
   },
   {
+   "doctype": "Sidebar Item",
    "icon": "calendar-days",
    "idx": 5,
    "label": "Bond Market Date",
    "link_to": "Bond Market Date",
    "link_type": "DocType",
+   "parentfield": "items",
+   "parenttype": "Sidebar",
    "type": "Link"
   },
   {
+   "doctype": "Sidebar Item",
    "icon": "arrow-left-right",
    "idx": 6,
    "label": "Bond Exchange Rate",
    "link_to": "Bond Exchange Rate",
    "link_type": "DocType",
+   "parentfield": "items",
+   "parenttype": "Sidebar",
    "type": "Link"
   },
   {
+   "doctype": "Sidebar Item",
    "icon": "chart-line",
    "idx": 7,
    "label": "Portfolio Performance",
    "link_to": "Portfolio Performance",
    "link_type": "Report",
+   "parentfield": "items",
+   "parenttype": "Sidebar",
    "type": "Link"
   },
   {
+   "doctype": "Sidebar Item",
    "icon": "chart-line",
    "idx": 8,
    "label": "Bond Yield Comparison",
    "link_to": "Bond Yield Comparison",
    "link_type": "Report",
+   "parentfield": "items",
+   "parenttype": "Sidebar",
+   "type": "Link"
+  },
+  {
+   "doctype": "Sidebar Item",
+   "icon": "chart-line",
+   "idx": 9,
+   "label": "Interest Difference by Portfolio",
+   "link_to": "Interest Difference by Portfolio",
+   "link_type": "Report",
+   "parentfield": "items",
+   "parenttype": "Sidebar",
    "type": "Link"
   }
  ],
+ "module": "Bond Management",
  "name": "Bond Investor",
  "standard": 1,
  "title": "Bond Investor"

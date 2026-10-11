@@ -60,7 +60,11 @@ def assert_permissions():
             ["read", "write", "create", "delete"],
         )
         assert row == (1, 1, 1, 1), (doctype, row)
-    for report in ("Portfolio Performance", "Bond Yield Comparison"):
+    for report in (
+        "Portfolio Performance",
+        "Bond Yield Comparison",
+        "Interest Difference by Portfolio",
+    ):
         roles = {
             row["role"] for row in _rows("Has Role", ["role"], {"parent": report, "parenttype": "Report"})
         }
