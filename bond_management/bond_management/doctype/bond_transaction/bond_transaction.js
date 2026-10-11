@@ -5,6 +5,8 @@ const transaction_calculation_state = new WeakMap();
 const transaction_attachment_state = new WeakMap();
 const transaction_calculation_method =
 	"bond_management.bond_management.doctype.bond_transaction.bond_transaction.get_calculated_amounts";
+const transaction_pdf_preview_method =
+	"bond_management.bond_management.doctype.bond_transaction.bond_transaction.read_transaction_pdf";
 const pdf_managed_fields = [
 	"transaction_reference",
 	"transaction_type",
@@ -41,16 +43,24 @@ frappe.ui.form.on("Bond Transaction", {
 			return Promise.resolve();
 		}
 
-		return frm.call("read_transaction_pdf").then(({ message }) => {
-			if (!is_attachment_request_current(state, request_id)) {
-				return message;
-			}
-			const transactions = message?.transactions || [];
-			if (transactions.length === 1) {
-				return apply_pdf_transaction(frm, transactions[0], state, request_id);
-			}
-			return show_transaction_selection(frm, transactions, state, request_id);
-		});
+		return frappe
+			.call({
+				method: transaction_pdf_preview_method,
+				args: {
+					name: frm.doc.name,
+					attachment: frm.doc.attachment,
+				},
+			})
+			.then(({ message }) => {
+				if (!is_attachment_request_current(state, request_id)) {
+					return message;
+				}
+				const transactions = message?.transactions || [];
+				if (transactions.length === 1) {
+					return apply_pdf_transaction(frm, transactions[0], state, request_id);
+				}
+				return show_transaction_selection(frm, transactions, state, request_id);
+			});
 	},
 	face_value_per_unit: calculate_all,
 	quantity_face_value: calculate_all,

@@ -14,6 +14,7 @@ from frappe.utils import getdate
 from bond_management.bond_management.doctype.bond_transaction.bond_transaction import (
     _calculate_amount_values,
     get_calculated_amounts,
+    read_transaction_pdf,
 )
 from bond_management.bond_management.tests.factories import (
     make_bond,
@@ -209,8 +210,8 @@ class TestBondTransaction(IntegrationTestCase):
     def test_read_transaction_pdf_rejects_complex_attachment_values(self):
         transaction = frappe.get_doc({"doctype": "Bond Transaction", "attachment": {}})
 
-        with self.assertRaisesRegex(ValidationError, "Attachment must be a string"):
-            transaction.read_transaction_pdf()
+        with self.assertRaisesRegex(FrappeTypeError, "Argument 'attachment'"):
+            read_transaction_pdf(None, transaction.attachment)
 
     def test_principal_backfill_is_price_adjusted_and_idempotent(self):
         bond = make_bond(face_value_per_unit=100)

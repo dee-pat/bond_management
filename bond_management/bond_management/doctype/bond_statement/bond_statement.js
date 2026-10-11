@@ -2,6 +2,8 @@
 // For license information, please see license.txt
 
 const statement_attachment_state = new WeakMap();
+const statement_pdf_preview_method =
+	"bond_management.bond_management.doctype.bond_statement.bond_statement.read_statement_pdf";
 
 frappe.ui.form.on("Bond Statement", {
 	refresh(frm) {
@@ -23,27 +25,36 @@ frappe.ui.form.on("Bond Statement", {
 			});
 		}
 
-		return frm.call("read_statement_pdf").then(({ message }) => {
-			if (request_id !== state.request_id) {
-				return message;
-			}
-			return frm
-				.set_value({
-					portfolio_name: message.portfolio_name,
-					statement_date: message.statement_date,
-				})
-				.then(() => {
-					if (request_id !== state.request_id) {
-						return message;
-					}
-					frappe.show_alert({
-						message: __("Portfolio and statement date read from PDF"),
-						indicator: "green",
-					});
-					set_portfolio_field_read_only(frm);
+		return frappe
+			.call({
+				method: statement_pdf_preview_method,
+				args: {
+					name: frm.doc.name,
+					attachment: frm.doc.attachment,
+					portfolio_name: frm.doc.portfolio_name,
+				},
+			})
+			.then(({ message }) => {
+				if (request_id !== state.request_id) {
 					return message;
-				});
-		});
+				}
+				return frm
+					.set_value({
+						portfolio_name: message.portfolio_name,
+						statement_date: message.statement_date,
+					})
+					.then(() => {
+						if (request_id !== state.request_id) {
+							return message;
+						}
+						frappe.show_alert({
+							message: __("Portfolio and statement date read from PDF"),
+							indicator: "green",
+						});
+						set_portfolio_field_read_only(frm);
+						return message;
+					});
+			});
 	},
 });
 

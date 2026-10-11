@@ -26,6 +26,83 @@ from bond_management.patches.add_bond_yield_comparison_report_permission import 
 
 
 class TestInvestorPermissions(IntegrationTestCase):
+    def test_file_query_condition_is_registered_and_preserves_file_owner_and_share_access(self):
+        self.assertEqual(
+            app_hooks.permission_query_conditions["File"],
+            "bond_management.bond_management.utils.investor_permissions.file_query_condition",
+        )
+
+        with (
+            patch.object(investor_permissions, "_get_allowed_portfolios", return_value=[]),
+            patch.object(investor_permissions.frappe.db, "escape", side_effect=lambda value: f"'{value}'"),
+        ):
+            condition = investor_permissions.file_query_condition("investor@example.com")
+
+        self.assertIn("`tabFile`.`is_private` = 0", condition)
+        self.assertIn("`tabFile`.`owner` = 'investor@example.com'", condition)
+        self.assertIn("`tabDocShare`.`share_name` = `tabFile`.`name`", condition)
+        self.assertIn("`tabDocShare`.`everyone` = 1", condition)
+        self.assertNotIn("attached_to_doctype` IS NULL", condition)
+        self.assertNotIn("attached_to_doctype` NOT IN", condition)
+        self.assertIn("OR (1=0)", condition)
+
+    def test_investor_file_list_is_limited_to_assigned_portfolio_attachments(self):
+        portfolio = make_portfolio()
+        bond = make_bond()
+        transaction = make_transaction(bond, portfolio)
+        assigned_file = self._make_private_file("Bond Transaction", transaction.name)
+        unrelated_file = self._make_private_file("User", "Administrator")
+        unattached_file = self._make_private_file(None, None)
+        email = f"{unique_name('investor').lower()}@example.com"
+        frappe.get_doc(
+            {
+                "doctype": "User",
+                "email": email,
+                "first_name": "Investor",
+                "send_welcome_email": 0,
+                "roles": [{"role": investor_permissions.INVESTOR_ROLE}],
+            }
+        ).insert(ignore_permissions=True)
+        frappe.get_doc(
+            {
+                "doctype": "User Permission",
+                "user": email,
+                "allow": "Bond Portfolio",
+                "for_value": portfolio.name,
+                "apply_to_all_doctypes": 1,
+            }
+        ).insert(ignore_permissions=True)
+
+        previous_user = frappe.session.user
+        try:
+            frappe.set_user(email)
+            visible_files = frappe.qb.get_query(
+                "File",
+                fields=["name"],
+                ignore_permissions=False,
+            ).run(pluck=True)
+
+            self.assertIn(assigned_file.name, visible_files)
+            self.assertNotIn(unrelated_file.name, visible_files)
+            self.assertNotIn(unattached_file.name, visible_files)
+        finally:
+            frappe.set_user(previous_user)
+
+    @staticmethod
+    def _make_private_file(attached_to_doctype, attached_to_name):
+        filename = f"{unique_name('private-attachment')}.txt"
+        return frappe.get_doc(
+            {
+                "doctype": "File",
+                "file_name": filename,
+                "file_url": f"/private/files/{filename}",
+                "content": b"private test attachment",
+                "is_private": 1,
+                "attached_to_doctype": attached_to_doctype,
+                "attached_to_name": attached_to_name,
+            }
+        ).insert(ignore_permissions=True)
+
     def test_real_user_permissions_isolate_lists_documents_and_reports(self):
         assigned_portfolio = make_portfolio()
         other_portfolio = make_portfolio()

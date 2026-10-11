@@ -112,6 +112,45 @@ def statement_query_condition(user: str) -> str | None:
     return _portfolio_condition("Bond Statement", "portfolio_name", user)
 
 
+def file_query_condition(user: str | None = None) -> str | None:
+    """Scope investor-visible private attachment metadata to assigned portfolios."""
+    user = user or frappe.session.user
+    portfolios = _get_allowed_portfolios(user)
+    if portfolios is None:
+        return None
+
+    portfolio_values = ", ".join(frappe.db.escape(portfolio) for portfolio in portfolios)
+    file_owner = frappe.db.escape(user)
+    shared_file = (
+        "EXISTS (SELECT 1 FROM `tabDocShare` "
+        "WHERE `tabDocShare`.`share_doctype` = 'File' "
+        "AND `tabDocShare`.`share_name` = `tabFile`.`name` "
+        f"AND (`tabDocShare`.`user` = {file_owner} OR `tabDocShare`.`everyone` = 1) "
+        "AND `tabDocShare`.`read` = 1)"
+    )
+    visible_portfolio = "1=0"
+    if portfolios:
+        visible_portfolio = (
+            "(`tabFile`.`attached_to_doctype` = 'Bond Portfolio' "
+            f"AND `tabFile`.`attached_to_name` IN ({portfolio_values})) OR "
+            "(`tabFile`.`attached_to_doctype` = 'Bond Statement' AND EXISTS ("
+            "SELECT 1 FROM `tabBond Statement` "
+            "WHERE `tabBond Statement`.`name` = `tabFile`.`attached_to_name` "
+            f"AND `tabBond Statement`.`portfolio_name` IN ({portfolio_values}))) OR "
+            "(`tabFile`.`attached_to_doctype` = 'Bond Transaction' AND EXISTS ("
+            "SELECT 1 FROM `tabBond Transaction` "
+            "WHERE `tabBond Transaction`.`name` = `tabFile`.`attached_to_name` "
+            f"AND `tabBond Transaction`.`portfolio_name` IN ({portfolio_values})))"
+        )
+
+    return (
+        "(`tabFile`.`is_private` = 0 "
+        f"OR `tabFile`.`owner` = {file_owner} "
+        f"OR {shared_file} "
+        f"OR ({visible_portfolio}))"
+    )
+
+
 def exchange_rate_source_query_condition(user: str | None = None) -> str | None:
     """Limit provenance lists to explicitly shared rows in assigned portfolios."""
     user = user or frappe.session.user

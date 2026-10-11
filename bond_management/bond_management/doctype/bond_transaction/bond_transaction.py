@@ -61,6 +61,32 @@ PDF_MONEY_PRECISION = Decimal("0.01")
 PDF_PERCENT_PRECISION = Decimal("0.000000001")
 
 
+@frappe.whitelist(methods=["POST"])
+def read_transaction_pdf(name: str | None, attachment: str):
+    """Preview transaction PDF rows without submitting a document snapshot."""
+    name = optional_string(name, "Bond Transaction")
+    attachment = required_string(attachment, "Attachment")
+    if name and frappe.db.exists("Bond Transaction", name):
+        frappe.get_doc("Bond Transaction", name).check_permission("write")
+    else:
+        frappe.has_permission("Bond Transaction", "create", throw=True)
+
+    details = get_transaction_attachment_details(attachment)
+    return {
+        "portfolio_name": details.portfolio_name,
+        "account_no": details.account_no,
+        "transactions": [serialize_transaction_attachment_row(row) for row in details.transactions],
+    }
+
+
+def serialize_transaction_attachment_row(row: TransactionAttachmentRow):
+    """Serialize a parsed transaction row for the form preview."""
+    values = transaction_attachment_row_values(row)
+    values["trade_date"] = row.trade_date.isoformat()
+    values["settlement_date"] = row.settlement_date.isoformat()
+    return values
+
+
 def calculate_transaction_principal_value(face_value_per_unit, quantity_face_value, price) -> Decimal:
     """Return the unrounded consideration implied by a price quoted per 100."""
     return (
@@ -171,21 +197,6 @@ class BondTransaction(Document):
             portfolio.account_no,
             self.settlement_date,
         )
-
-    @frappe.whitelist(methods=["POST"])
-    def read_transaction_pdf(self):
-        """Return every transaction found so the client can populate or offer a selection."""
-        permission_type = (
-            "write" if self.name and frappe.db.exists("Bond Transaction", self.name) else "create"
-        )
-        self.check_permission(permission_type)
-        attachment = required_string(self.attachment, "Attachment")
-        details = get_transaction_attachment_details(attachment)
-        return {
-            "portfolio_name": details.portfolio_name,
-            "account_no": details.account_no,
-            "transactions": [self._serialize_attachment_row(row) for row in details.transactions],
-        }
 
     @frappe.whitelist(methods=["POST"])
     def create_selected_pdf_transactions(self, transaction_selections: str | list | None):
@@ -367,13 +378,6 @@ class BondTransaction(Document):
     @staticmethod
     def _attachment_row_values(row: TransactionAttachmentRow, portfolio_name: str | None = None) -> dict:
         return transaction_attachment_row_values(row, portfolio_name)
-
-    @classmethod
-    def _serialize_attachment_row(cls, row: TransactionAttachmentRow) -> dict:
-        values = cls._attachment_row_values(row)
-        values["trade_date"] = row.trade_date.isoformat()
-        values["settlement_date"] = row.settlement_date.isoformat()
-        return values
 
     @staticmethod
     def _attachment_values_match(actual, expected, value_type: str) -> bool:

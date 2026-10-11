@@ -52,7 +52,11 @@ LEGACY_MARKET_PRICE_PATTERN = re.compile(
     rf"\d{{2}}/\d{{2}}/\d{{4}}\b"
 )
 ACCOUNT_FILENAME_PATTERN = re.compile(
-    r"\bPortfolioStatement[-_](?P<account_no>[A-Za-z0-9-]+)[-_]\d{8}\.pdf$",
+    r"\bPortfolioStatement[-_](?P<account_no>[A-Za-z0-9-]+)[-_]\d{8}(?:-[0-9a-f]{64})?\.pdf$",
+    re.IGNORECASE,
+)
+COMPACT_ACCOUNT_FILENAME_PATTERN = re.compile(
+    r"^PS-(?P<account_no>[A-Za-z0-9_-]+)-[0-9a-f]{24,64}\.pdf$",
     re.IGNORECASE,
 )
 LEGACY_NAMED_MARKET_PRICE_PATTERN = re.compile(
@@ -494,7 +498,9 @@ def _parse_reader(
 
 
 def _get_filename_account_hint(filename: str) -> str | None:
-    match = ACCOUNT_FILENAME_PATTERN.search(filename or "")
+    match = ACCOUNT_FILENAME_PATTERN.search(filename or "") or COMPACT_ACCOUNT_FILENAME_PATTERN.search(
+        filename or ""
+    )
     return normalize_account_number(match.group("account_no")) if match else None
 
 

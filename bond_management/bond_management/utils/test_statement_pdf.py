@@ -5,11 +5,13 @@ from unittest.mock import patch
 from frappe.tests import UnitTestCase
 
 from bond_management.bond_management.tests.pdf_factory import make_text_pdf
+from bond_management.bond_management.utils.statement_attachment import get_versioned_statement_filename
 from bond_management.bond_management.utils.statement_pdf import (
     MAX_STATEMENT_PDF_PAGES,
     MAX_STATEMENT_PDF_TEXT_CHARS,
     StatementPdfError,
     StatementPdfPasswordError,
+    _get_filename_account_hint,
     extract_statement_pdf,
     parse_statement_exchange_rates,
     parse_statement_market_prices,
@@ -18,6 +20,27 @@ from bond_management.bond_management.utils.statement_pdf import (
 
 
 class TestStatementPdf(UnitTestCase):
+    def test_versioned_filename_length_boundaries_preserve_full_account_hint(self):
+        for account_length in (42, 43, 44, 108):
+            with self.subTest(account_length=account_length):
+                account_no = "A" * account_length
+                filename = get_versioned_statement_filename(account_no, "2026-06-30", "a" * 64)
+
+                self.assertLessEqual(len(filename), 140)
+                self.assertEqual(_get_filename_account_hint(filename), account_no)
+                self.assertEqual(filename.startswith("PS-"), account_length > 43)
+                self.assertNotEqual(
+                    filename,
+                    get_versioned_statement_filename(account_no, "2026-06-30", "b" * 64),
+                )
+                if account_length in (43, 108):
+                    self.assertEqual(len(filename), 140)
+
+    def test_versioned_statement_filename_preserves_account_hint(self):
+        filename = "PortfolioStatement-ACCOUNT-123-20260630-" + "a" * 64 + ".pdf"
+
+        self.assertEqual(_get_filename_account_hint(filename), "ACCOUNT-123")
+
     def test_rejects_pdf_with_too_many_pages_before_extracting_text(self):
         reader = patch("bond_management.bond_management.utils.statement_pdf.PdfReader")
         with reader as pdf_reader:

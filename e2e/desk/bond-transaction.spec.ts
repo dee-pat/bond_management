@@ -25,6 +25,8 @@ const calculatedAmounts = {
 
 const transactionCalculationMethod =
   "bond_management.bond_management.doctype.bond_transaction.bond_transaction.get_calculated_amounts";
+const transactionPdfPreviewMethod =
+  "bond_management.bond_management.doctype.bond_transaction.bond_transaction.read_transaction_pdf";
 
 test("populates and locks one PDF transaction, then unlocks manual entry", async ({
   page,
@@ -40,7 +42,7 @@ test("populates and locks one PDF transaction, then unlocks manual entry", async
   expect(handlerExists).toBe(true);
 
   await page.evaluate(
-    async ({ transaction, calculationMethod, amounts }) => {
+    async ({ transaction, calculationMethod, previewMethod, amounts }) => {
       const testWindow = window as DeskTestWindow;
       const form = testWindow.cur_frm;
       if (!form) {
@@ -48,18 +50,13 @@ test("populates and locks one PDF transaction, then unlocks manual entry", async
       }
 
       testWindow.__testCalls = {};
-      const originalFormCall = form.call.bind(form);
-      form.call = async (...args) => {
-        if (args[0] === "read_transaction_pdf") {
+      const originalFrappeCall = testWindow.frappe.call.bind(testWindow.frappe);
+      testWindow.frappe.call = async (options) => {
+        if (options.method === previewMethod) {
           testWindow.__testCalls!.readTransactionPdf =
             (testWindow.__testCalls!.readTransactionPdf ?? 0) + 1;
           return { message: { transactions: [transaction] } };
         }
-        return originalFormCall(...args);
-      };
-
-      const originalFrappeCall = testWindow.frappe.call.bind(testWindow.frappe);
-      testWindow.frappe.call = async (options) => {
         if (options.method === calculationMethod) {
           return { message: amounts };
         }
@@ -73,6 +70,7 @@ test("populates and locks one PDF transaction, then unlocks manual entry", async
     {
       transaction: singleTransaction,
       calculationMethod: transactionCalculationMethod,
+      previewMethod: transactionPdfPreviewMethod,
       amounts: calculatedAmounts,
     }
   );

@@ -36,7 +36,34 @@ from bond_management.bond_management.utils.statement_quantity_report import (
     attach_quantity_reconciliation_report,
     delete_quantity_reconciliation_reports,
 )
-from bond_management.bond_management.utils.validation import required_string
+from bond_management.bond_management.utils.validation import optional_string, required_string
+
+
+@frappe.whitelist(methods=["POST"])
+def read_statement_pdf(name: str | None, attachment: str, portfolio_name: str | None = None):
+    """Preview statement PDF values without submitting a document snapshot."""
+    name = optional_string(name, "Bond Statement")
+    attachment = required_string(attachment, "Attachment")
+    portfolio_name = optional_string(portfolio_name, "Portfolio Name")
+    if name and frappe.db.exists("Bond Statement", name):
+        frappe.get_doc("Bond Statement", name).check_permission("write")
+    else:
+        frappe.has_permission("Bond Statement", "create", throw=True)
+
+    details = get_statement_attachment_details(attachment, portfolio_name)
+    return {
+        "portfolio_name": details.portfolio_name,
+        "statement_date": details.statement_date,
+        "account_no": details.account_no,
+        "exchange_rates": [
+            {
+                "from_currency": row.from_currency,
+                "to_currency": row.to_currency,
+                "rate": row.rate,
+            }
+            for row in details.exchange_rates
+        ],
+    }
 
 
 class BondStatement(Document):
@@ -153,26 +180,6 @@ class BondStatement(Document):
                 stage,
             )
             raise
-
-    @frappe.whitelist(methods=["POST"])
-    def read_statement_pdf(self):
-        """Preview the portfolio and date extracted from the current attachment."""
-        self.check_permission("create" if self.is_new() else "write")
-        attachment = required_string(self.attachment, "Attachment")
-        details = get_statement_attachment_details(attachment, self.portfolio_name)
-        return {
-            "portfolio_name": details.portfolio_name,
-            "statement_date": details.statement_date,
-            "account_no": details.account_no,
-            "exchange_rates": [
-                {
-                    "from_currency": row.from_currency,
-                    "to_currency": row.to_currency,
-                    "rate": row.rate,
-                }
-                for row in details.exchange_rates
-            ],
-        }
 
     def _set_details_from_attachment(self):
         details = get_statement_attachment_details(self.attachment, self.portfolio_name)

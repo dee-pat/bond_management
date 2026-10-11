@@ -3,7 +3,7 @@ import hashlib
 import os
 import shutil
 import tempfile
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -59,8 +59,9 @@ def standardize_private_pdf_attachment(
     expected_filename: str,
     *,
     fieldname: str = "attachment",
+    conflict_filename: Callable[[str], str] | None = None,
 ) -> str:
-    """Give a local private PDF its canonical name and attach it to the document."""
+    """Standardize a private PDF, optionally hashing distinct content on name conflicts."""
     expected_filename = _validated_filename(expected_filename)
     expected_url = f"/private/files/{expected_filename}"
 
@@ -110,6 +111,22 @@ def standardize_private_pdf_attachment(
 
         source_is_shared = len(current_files) > 1 or source_is_attached_elsewhere
         if source_path != target_path:
+            if (
+                conflict_filename
+                and target_path.is_file()
+                and not filecmp.cmp(
+                    source_path,
+                    target_path,
+                    shallow=False,
+                )
+            ):
+                digest = _private_file_sha256(file_doc)
+                expected_filename = _validated_filename(conflict_filename(digest))
+                expected_url = f"/private/files/{expected_filename}"
+                target_path = (private_files_path / expected_filename).resolve()
+                if not target_path.is_relative_to(private_files_path):
+                    frappe.throw(_("The versioned filename is outside the private files directory."))
+
             _place_standardized_file(
                 source_path,
                 target_path,
@@ -140,6 +157,18 @@ def standardize_private_pdf_attachment(
 
         document.set(fieldname, expected_url)
         return expected_url
+
+
+def _private_file_sha256(file_doc) -> str:
+    try:
+        content = file_doc.get_content(encodings=())
+    except (OSError, TypeError, ValueError):
+        frappe.throw(_("The attached private PDF could not be read from storage."))
+    if isinstance(content, str):
+        content = content.encode()
+    if not isinstance(content, bytes):
+        frappe.throw(_("The attached private PDF could not be read from storage."))
+    return hashlib.sha256(content).hexdigest()
 
 
 def _required_attachment_url(attachment, missing_message: str) -> str:
