@@ -30,6 +30,23 @@ differences in the final field.
   separate local site for ordinary test runs. `bond-management-dev.localhost` and `bond-management-test.localhost` are
   Bond Management's persistent development/test pair; do not install another
   app on either site.
+- For an existing bench that still has the legacy `test_site`, use this transition:
+  - If `test_site` is dedicated to Bond Management, the existing `TEST_SITE`
+    override can run gates there temporarily:
+    `TEST_SITE=test_site apps/bond_management/scripts/verify.sh pre-push`.
+    For the UI gate, start
+    `bench --site test_site serve --port 8001 --noreload`, then run
+    `TEST_SITE=test_site BASE_URL=http://localhost:8001 apps/bond_management/scripts/verify.sh pre-push-ui`.
+  - If `test_site` is shared with another app, do not run Bond Management gates
+    against it. When `bond-management-test.localhost` is absent, provision the
+    dedicated persistent site in the existing bench with
+    `bench new-site bond-management-test.localhost`, then install and prepare
+    Bond Management:
+    `bench --site bond-management-test.localhost install-app bond_management`,
+    `bench --site bond-management-test.localhost set-config allow_tests true`,
+    and `bench --site bond-management-test.localhost migrate`.
+  - Keep the pre-existing `test_site` intact until its owner approves any
+    cleanup. The transition never recreates, drops, or restores it.
 - Match verification to the risk of the change: documentation, agent-guidance,
   and test-only edits need formatting/lint plus the affected test; backend
   business, permission, migration, hook, or shared utility changes need the

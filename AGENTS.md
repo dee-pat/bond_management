@@ -137,9 +137,15 @@ the two files conflict, this app-level file governs.
   and `bond-management-test.localhost` for automated server and UI tests. Keep both sites exclusive
   to Bond Management; each other installable app in the bench owns its own
   development and test sites.
-- Before testing, ensure `bond_management` is installed on `bond-management-test.localhost`, migrate
-  it, and enable tests with
+- Existing benches may still have the legacy `test_site`. Follow the legacy
+  transition steps in [verification.md](docs/verification.md) before running
+  gates; do not assume a legacy site is safe to use if it is shared with other
+  apps.
+- Before routine testing, ensure `bond_management` is installed on
+  `bond-management-test.localhost`, migrate it, and enable tests with
   `bench --site bond-management-test.localhost set-config allow_tests true`.
+  During the legacy transition, prepare the dedicated `test_site` in the same
+  way and select it with the documented `TEST_SITE` override.
 - Reuse the existing local `bond-management-test.localhost` for routine gates; do not create another
   site just to rerun server or UI tests. Do not recreate, drop, or restore it
   without explicit user approval. Do not record site credentials or
