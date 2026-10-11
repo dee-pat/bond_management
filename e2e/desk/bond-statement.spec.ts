@@ -7,6 +7,8 @@ const statement = {
   statement_date: "2026-06-30",
   account_no: "1110700431102",
 };
+const statementPdfPreviewMethod =
+  "bond_management.bond_management.doctype.bond_statement.bond_statement.read_statement_pdf";
 
 test("reads the portfolio and date when a PDF is attached", async ({
   page,
@@ -35,7 +37,7 @@ test("reads the portfolio and date when a PDF is attached", async ({
   expect(initialFields.statementDateReadOnly).toBe(1);
   expect(initialFields.postingReadOnly).toBe(1);
 
-  await page.evaluate(async (statementData) => {
+  await page.evaluate(async ({ statementData, previewMethod }) => {
     const testWindow = window as DeskTestWindow;
     const form = testWindow.cur_frm;
     if (!form) {
@@ -43,20 +45,20 @@ test("reads the portfolio and date when a PDF is attached", async ({
     }
 
     testWindow.__testCalls = {};
-    const originalCall = form.call.bind(form);
-    form.call = async (...args) => {
-      if (args[0] === "read_statement_pdf") {
+    const originalCall = testWindow.frappe.call.bind(testWindow.frappe);
+    testWindow.frappe.call = async (options) => {
+      if (options.method === previewMethod) {
         testWindow.__testCalls!.readStatementPdf =
           (testWindow.__testCalls!.readStatementPdf ?? 0) + 1;
         return { message: statementData };
       }
-      return originalCall(...args);
+      return originalCall(options);
     };
 
     form.doc.attachment = "/private/files/statement.pdf";
     form.refresh_field("attachment");
     await form.script_manager.trigger("attachment");
-  }, statement);
+  }, { statementData: statement, previewMethod: statementPdfPreviewMethod });
 
   const result = await page.evaluate(() => {
     const form = (window as DeskTestWindow).cur_frm;

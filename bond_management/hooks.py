@@ -157,6 +157,7 @@ after_migrate = [
 # Permissions evaluated in scripted ways
 
 permission_query_conditions = {
+    "File": "bond_management.bond_management.utils.investor_permissions.file_query_condition",
     "Bond Portfolio": "bond_management.bond_management.utils.investor_permissions.portfolio_query_condition",
     "Bond Transaction": "bond_management.bond_management.utils.investor_permissions.transaction_query_condition",
     "Bond Statement": "bond_management.bond_management.utils.investor_permissions.statement_query_condition",

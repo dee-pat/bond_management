@@ -8,10 +8,11 @@ from pathlib import Path
 from unittest.mock import patch
 
 import frappe
-from frappe.exceptions import ValidationError
+from frappe.exceptions import FrappeTypeError, ValidationError
 from frappe.tests import IntegrationTestCase
 from pypdf import PdfReader
 
+from bond_management.bond_management.doctype.bond_statement.bond_statement import read_statement_pdf
 from bond_management.bond_management.tests.factories import (
     make_bond,
     make_exchange_rate,
@@ -201,10 +202,14 @@ class TestBondStatement(IntegrationTestCase):
                     }
                 )
 
-                preview = statement.read_statement_pdf()
+                preview = read_statement_pdf(None, attachment, statement.portfolio_name)
+                legacy_preview = statement.read_statement_pdf()
                 self.assertEqual(preview["portfolio_name"], portfolio.name)
                 self.assertEqual(preview["statement_date"].isoformat(), expected_date)
                 self.assertEqual(preview["account_no"], account_no)
+                self.assertEqual(legacy_preview["portfolio_name"], preview["portfolio_name"])
+                self.assertEqual(legacy_preview["statement_date"], preview["statement_date"])
+                self.assertEqual(legacy_preview["account_no"], preview["account_no"])
 
                 statement.insert()
                 self.assertEqual(statement.portfolio_name, portfolio.name)
@@ -238,8 +243,8 @@ class TestBondStatement(IntegrationTestCase):
     def test_read_statement_pdf_rejects_complex_attachment_values(self):
         statement = frappe.get_doc({"doctype": "Bond Statement", "attachment": []})
 
-        with self.assertRaisesRegex(ValidationError, "Attachment must be a string"):
-            statement.read_statement_pdf()
+        with self.assertRaisesRegex(FrappeTypeError, "Argument 'attachment'"):
+            read_statement_pdf(None, statement.attachment)
 
     def test_attachment_upserts_exchange_rates_and_preserves_manual_fallbacks(self):
         account_no = unique_name("FX-ACCOUNT")
@@ -323,6 +328,66 @@ class TestBondStatement(IntegrationTestCase):
             0,
         )
         self.assertFalse(frappe.db.exists(SOURCE_DOCTYPE, {"statement": statement.name}))
+
+    def test_same_account_and_date_keep_distinct_statement_files(self):
+        account_no = unique_name("STATEMENT-COLLISION")
+        password = unique_name("STATEMENT-PASSWORD")
+        make_portfolio(account_no=account_no, statement_pdf_password=password)
+        first_content = f"Portfolio Summary as of 30/06/2026\nProduct Account No.: {account_no}"
+        second_content = f"Portfolio Summary as of 30/06/2026\nProduct Account No.: {account_no}\nRevision: 2"
+        statement = frappe.get_doc(
+            {"doctype": "Bond Statement", "attachment": self._attach_pdf(first_content, password)}
+        ).insert()
+        statement.attachment = self._attach_pdf(second_content, password)
+        statement.save()
+
+        canonical_url = f"/private/files/PortfolioStatement-{account_no}-20260630.pdf"
+        self.assertNotEqual(statement.attachment, canonical_url)
+        self.assertRegex(
+            statement.attachment,
+            rf"^/private/files/PortfolioStatement-{account_no}-20260630-[0-9a-f]{{64}}\.pdf$",
+        )
+        self.assertEqual(self._attachment_content(canonical_url), make_text_pdf(first_content, password))
+        self.assertEqual(
+            self._attachment_content(statement.attachment),
+            make_text_pdf(second_content, password),
+        )
+
+    @staticmethod
+    def _attachment_content(file_url):
+        file_name = frappe.db.get_value("File", {"file_url": file_url}, "name")
+        return frappe.get_doc("File", file_name).get_content(encodings=())
+
+    def test_long_account_statement_revisions_save_and_keep_legacy_filename_identity(self):
+        for account_length in (44, 108):
+            with self.subTest(account_length=account_length):
+                account_no = unique_name("LONG-ACCOUNT").ljust(account_length, "A")
+                password = unique_name("STATEMENT-PASSWORD")
+                portfolio = make_portfolio(account_no=account_no, statement_pdf_password=password)
+                first_content = f"Portfolio Summary as of 30/06/2026\nProduct Account No.: {account_no}"
+                statement = frappe.get_doc(
+                    {"doctype": "Bond Statement", "attachment": self._attach_pdf(first_content, password)}
+                ).insert()
+                canonical_url = statement.attachment
+                canonical_content = self._attachment_content(canonical_url)
+                # Legacy PDFs need the complete filename account after saving.
+                statement.attachment = self._attach_pdf(
+                    "Portfolio Summary as of 30/06/2026\nRevision: 2", password
+                )
+                statement.save()
+                statement.reload()
+
+                file_name = statement.attachment.rsplit("/", 1)[-1]
+                self.assertTrue(file_name.startswith(f"PS-{account_no}-"))
+                self.assertLessEqual(len(file_name), 140)
+                self.assertEqual(self._attachment_content(canonical_url), canonical_content)
+                self.assertNotEqual(self._attachment_content(statement.attachment), canonical_content)
+                self.assertEqual(
+                    read_statement_pdf(statement.name, statement.attachment)["portfolio_name"],
+                    portfolio.name,
+                )
+                statement.save()
+                self.assertEqual(statement.attachment.rsplit("/", 1)[-1], file_name)
 
     def test_deleting_statement_removes_derived_exchange_rates(self):
         account_no = unique_name("FX-DELETE")
@@ -517,7 +582,7 @@ class TestBondStatement(IntegrationTestCase):
             }
         )
 
-        preview = statement.read_statement_pdf()
+        preview = read_statement_pdf(None, attachment, statement.portfolio_name)
 
         self.assertEqual(preview["portfolio_name"], portfolio.name)
         self.assertEqual(preview["account_no"], portfolio.account_no)

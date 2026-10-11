@@ -63,6 +63,10 @@ graph focused.
 flowchart LR
     SPDF["Statement PDF"] --> BS["Bond Statement"]
     TPDF["Transaction PDF"] --> BT["Bond Transaction"]
+    SPDF --> SPREVIEW["Value-only Desk PDF preview APIs"]
+    TPDF --> SPREVIEW
+    SPREVIEW -->|"parsed values"| BS
+    SPREVIEW -->|"parsed values"| BT
 
     BS -->|"holdings"| BSD["Statement Details"]
     BS -->|"prices"| MARKET["Market Date + Prices"]
@@ -103,6 +107,8 @@ bootstraps repair incompatible legacy source shares.
 ## Important behavior
 
 - `Bond Transaction` is the portfolio ledger.
+- Desk PDF previews use value-only APIs so preview requests do not synchronize
+  the form's possibly stale document snapshot before client-side response guards.
 - Saving a `Bond Statement` derives holdings, market prices, exchange rates,
   reconciliation status, and a private reconciliation report.
 - `Bond Exchange Rate` is one global canonical row per date/from/to currency.
