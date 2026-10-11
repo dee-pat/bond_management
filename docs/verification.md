@@ -25,6 +25,17 @@ differences in the final field.
 
 ## Required gates
 
+- For an existing bench that still has `dev.local`:
+  - If the site is dedicated to Bond Management, preserve its data and continue
+    interactive work with `DEV_SITE=dev.local` in the
+    [command examples](../.codex/commands.md) until a separate site-data
+    migration is planned. This transition does not rename, recreate, drop, or
+    restore the existing site.
+  - If the site is shared with another app, do not use it for Bond Management.
+    Provision `bond-management-dev.localhost` in the existing bench with
+    `bench new-site bond-management-dev.localhost`, then install
+    `bond_management` on it. Keep the shared `dev.local` intact; do not copy or
+    delete its data as part of this setup.
 - Prefer the existing `bond-management-test.localhost` and configured bench for local verification.
   Routine server and UI gates migrate and reuse `bond-management-test.localhost`; do not create a
   separate local site for ordinary test runs. `bond-management-dev.localhost` and `bond-management-test.localhost` are
@@ -71,8 +82,10 @@ differences in the final field.
   setup. A successful CI clean install on the exact commit satisfies this
   check. Create a local fresh site only when CI cannot cover it or local
   diagnosis needs one; keep it under the configured bench and use a unique
-  temporary site name. After the check completes, capture the needed logs and
-  results, then drop that temporary site with
+  temporary site name. The migration lifecycle uses
+  `bond-management-lifecycle-<32-hex-id>.localhost`; follow its specification
+  for the opt-in and phase sequence. After the check completes, capture the
+  needed logs and results, then drop that temporary site with
   `bench drop-site <temporary-site> --no-backup`, including after a failed
   check. This returns the app to its two persistent sites. Obtain approval
   before recreating, dropping, or restoring either persistent site, or before

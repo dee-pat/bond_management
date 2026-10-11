@@ -137,6 +137,9 @@ the two files conflict, this app-level file governs.
   and `bond-management-test.localhost` for automated server and UI tests. Keep both sites exclusive
   to Bond Management; each other installable app in the bench owns its own
   development and test sites.
+- Existing benches may still use `dev.local` for Bond Management development.
+  Follow the legacy transition in [verification.md](docs/verification.md), and
+  use that site only if it is dedicated to Bond Management.
 - Existing benches may still have the legacy `test_site`. Follow the legacy
   transition steps in [verification.md](docs/verification.md) before running
   gates; do not assume a legacy site is safe to use if it is shared with other
@@ -157,6 +160,10 @@ the two files conflict, this app-level file governs.
   failed. This also applies to local fresh-install checks and keeps the
   persistent pair at two sites for this app. Never drop the persistent pair
   under this rule.
+- The opt-in migration lifecycle and share-race helpers use uniquely named
+  temporary sites under the configured bench. Follow their site naming and
+  opt-in steps in [migration-lifecycle.md](docs/specs/migration-lifecycle.md)
+  and [review-fix-3.md](docs/plans/review-fix-3.md).
 - Use the existing configured bench for all app development and verification.
   Keep every site under that bench and use its existing `bond-management-test.localhost` for routine
   gates. Do not create temporary or copied bench directories.

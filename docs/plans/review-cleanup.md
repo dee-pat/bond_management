@@ -3,14 +3,14 @@
 Consolidate repeated list pagination, portfolio access checks, clipboard safety,
 attachment presentation, and transaction Bond Master loading while preserving
 public contracts and all financial conventions. Keep the existing linear schedule
-search. Add an opted-in disposable-bench lifecycle check for the whole registered
+search. Add an opted-in temporary-site lifecycle check for the whole registered
 patch sequence and fresh-install indexes.
 
 API endpoints retain explicit field projections, permission-aware queries, and
 sort/filter allowlists. The shared frontend list state must preserve stale-response,
 retry, pagination and failed-filter recovery. Transaction validation reads one Bond
 Master for its snapshot and calculations; standalone calculation methods remain
-compatible. Migration checks must reject the canonical bench, require parsed
+compatible. Migration checks must reject the persistent sites, require parsed
 allow_tests and opt-in configuration, and inspect persisted financial results and
 private attachments through first migrate, forced rerun, and skipped rerun.
 
@@ -23,6 +23,11 @@ linear schedule search remains unchanged. No production data patch or new
 dependency was added.
 
 ## Completion evidence
+
+The original lifecycle run described below used an independent temporary bench.
+The current helper now requires a uniquely named temporary site under the
+configured bench; the eight guard tests cover that boundary. See the lifecycle
+specification for current setup and cleanup instructions.
 
 - Risk classification: shared API/UI refactoring, financial calculation reuse,
   and opt-in administrative migration fixtures.
@@ -84,3 +89,25 @@ dependency was added.
 - Blockers: none. The domain graph was reviewed; no mapped relationship or
   financial convention changed.
 - Unverified local/CI differences: Linux CI has not run for this new commit.
+
+## PR #25 Codex review follow-up (2026-10-11)
+
+- Risk classification: test-helper site boundary and legacy site transition
+  guidance; no production DocType relationship or data flow changed.
+- Fixes: lifecycle and share-race helpers now accept uniquely named temporary
+  sites under the configured bench and reject persistent sites; legacy
+  `dev.local` guidance distinguishes dedicated and shared sites.
+- Commands and results: `apps/bond_management/scripts/verify.sh pre-push`
+  exited 0 after the final edit. The full migration lifecycle passed on a fresh
+  temporary site: install, `fresh`, `prepare`, first migrate/verify, forced
+  rerun/verify, and skipped rerun/verify all exited 0; `drop-site --no-backup`
+  also exited 0. The final run verified all 28 registered patches.
+- Tests passed: 48 unit, 347 integration, and 12 unspecified server tests;
+  all eight temporary-site guard cases passed.
+- Tests failed: two initial lifecycle runs exposed stale attachment-name and
+  cached-schema assertions; both were corrected before the passing final run.
+- Tests not run: the live share-race harness requires private observer
+  credentials that were not present in the environment; UI tests do not apply.
+- Blockers: none locally. GitHub CI remains to be checked on the pushed commit.
+- Unverified local/CI differences: local MariaDB 12.3 and macOS versus Linux CI.
+  The domain graph was reviewed and remains unchanged.

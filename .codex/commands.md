@@ -6,12 +6,17 @@ creation, and installation commands live in
 
 ## Interactive development
 
-Use `bond-management-dev.localhost` for interactive work; automated test-site rules live in
+Use `bond-management-dev.localhost` for interactive work. On an existing bench
+where `dev.local` is dedicated to Bond Management, set `DEV_SITE=dev.local` to
+keep using its data during the transition. Do not use a shared `dev.local` for
+Bond Management; follow the legacy site setup in
+`apps/bond_management/docs/verification.md`. Automated test-site rules live in
 `apps/bond_management/AGENTS.md`.
 
 ```bash
-bench --site bond-management-dev.localhost migrate
-bench --site bond-management-dev.localhost backup --with-files
+DEV_SITE="${DEV_SITE:-bond-management-dev.localhost}"
+bench --site "$DEV_SITE" migrate
+bench --site "$DEV_SITE" backup --with-files
 ```
 
 ## Local service recovery

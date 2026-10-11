@@ -11,7 +11,7 @@ Use the `playwright-cli` skill for browser command syntax. From this app root, i
 yarn playwright-cli -s=bond-management open http://bond-management-dev.localhost --headed
 ```
 
-Follow [docs/verification.md](../../../docs/verification.md) for site startup, test-site setup, and credentials. Use `bond-management-dev.localhost` for read-only interactive development. Use `bond-management-test.localhost` or a disposable test site for an exploration that must save, submit, post, reconcile, delete, upload, or otherwise mutate financial or attachment data. Keep those actions within a repeatable test flow.
+Follow [docs/verification.md](../../../docs/verification.md) for site startup, test-site setup, and credentials. Use `bond-management-dev.localhost` for read-only interactive development; on an existing bench where `dev.local` is dedicated to Bond Management, it remains a supported transition site. Use `bond-management-test.localhost` or a disposable test site for an exploration that must save, submit, post, reconcile, delete, upload, or otherwise mutate financial or attachment data. Keep those actions within a repeatable test flow.
 
 Do not browse production data, save browser profiles or storage state, or put credentials and sensitive financial details in commands, screenshots, notes, or repository files. Prefer visible controls; refresh the accessibility snapshot after interactions and use current element references.
 

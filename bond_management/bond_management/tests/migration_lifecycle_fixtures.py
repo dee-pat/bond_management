@@ -1,4 +1,4 @@
-"""Representative legacy rows for the opt-in disposable migration lifecycle."""
+"""Representative legacy rows for the opt-in temporary-site migration lifecycle."""
 
 import frappe
 from frappe.database.utils import drop_index_if_exists
@@ -30,7 +30,7 @@ def prepare_legacy_rows():
 
     _guard()
     if frappe.db.exists("Bond Master", USD_ISIN):
-        raise RuntimeError("Lifecycle fixtures already exist; use a new disposable bench.")
+        raise RuntimeError("Lifecycle fixtures already exist; use a new temporary lifecycle site.")
     portfolio = make_portfolio(
         portfolio_name="Migration Lifecycle Portfolio",
         account_no=ACCOUNT,

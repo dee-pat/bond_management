@@ -40,9 +40,9 @@ registered patch sequence via `bench migrate` over representative legacy
 financial, private attachment, duplicate-statement, Kenya schedule/market, and
 FX scope/provenance fixtures. It compares persisted business results after a
 forced registered-patch rerun and checks that an ordinary migration preserves
-Patch Log identities. `tests/test_migration_lifecycle.py` covers its four safety
-guards in the normal server suite. See the [lifecycle plan](specs/migration-lifecycle.md)
-for the exact phases and disposable-bench boundary, and
+Patch Log identities. `tests/test_migration_lifecycle.py` covers the temporary
+site safety guards in the normal server suite. See the [lifecycle plan](specs/migration-lifecycle.md)
+for the exact phases and temporary-site boundary, and
 [verification.md](verification.md) for required gates. Individual patch tests
 remain useful for focused failures; this lifecycle helper owns whole-sequence
 ordering and fresh `after_install` index coverage.
