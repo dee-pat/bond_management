@@ -44,15 +44,15 @@ export const INVESTOR_NAVIGATION: InvestorNavigationItem[] = [
 		icon: "lucide-chart-bar",
   },
   {
-    name: "interest-difference",
-    label: "Interest Difference",
-    path: "/interest-difference",
-		icon: "lucide-scale",
-  },
-  {
     name: "yield-comparison",
     label: "Bond Yield Comparison",
     path: "/yield-comparison",
 		icon: "lucide-trending-up",
+  },
+  {
+    name: "interest-difference",
+    label: "Interest Difference",
+    path: "/interest-difference",
+		icon: "lucide-scale",
   },
 ];

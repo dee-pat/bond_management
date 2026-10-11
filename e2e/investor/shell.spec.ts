@@ -23,11 +23,12 @@ test("renders the authenticated investor compatibility shell", async ({
   await expect(page.locator(".investor-shell")).toBeVisible();
   await expect(page.locator(".investor-navigation")).toBeVisible();
   await expect(page.locator(".investor-page-header")).toBeVisible();
-  await expect(
-    page
-      .getByRole("navigation", { name: "Investor navigation" })
-      .getByRole("link")
-  ).toHaveCount(9);
+  const navigationLinks = page
+    .getByRole("navigation", { name: "Investor navigation" })
+    .getByRole("link");
+  await expect(navigationLinks).toHaveCount(9);
+  await expect(navigationLinks.nth(7)).toContainText("Bond Yield Comparison");
+  await expect(navigationLinks.last()).toContainText("Interest Difference");
   await expect(page.getByTestId("investor-shell")).not.toContainText("Create");
 });
 

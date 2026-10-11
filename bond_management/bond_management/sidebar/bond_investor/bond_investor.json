@@ -95,7 +95,7 @@
    "doctype": "Sidebar Item",
    "icon": "chart-line",
    "idx": 9,
-   "label": "Interest Difference by Portfolio",
+   "label": "Interest Difference",
    "link_to": "Interest Difference by Portfolio",
    "link_type": "Report",
    "parentfield": "items",

@@ -9,7 +9,7 @@ test("lists the report on the Bond Investor workspace", async ({ page }) => {
   await expect(
     page
       .locator(".body-sidebar")
-      .getByRole("link", { name: "Interest Difference by Portfolio", exact: true }),
+      .getByRole("link", { name: "Interest Difference", exact: true }),
   ).toBeVisible();
 });
 
