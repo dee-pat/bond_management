@@ -8,9 +8,7 @@ PERSISTENT_SITES = {"bond-management-dev.localhost", "bond-management-test.local
 SITE_SUFFIX = r"[0-9a-f]{32}\.localhost"
 
 
-def validate_temporary_site(
-    *, bench_path, site_path, site, user, config, site_prefix, required_flags=()
-):
+def validate_temporary_site(*, bench_path, site_path, site, user, config, site_prefix, required_flags=()):
     """Require a uniquely named test site directly under the configured bench."""
     bench = Path(bench_path).resolve()
     sites = (bench / "sites").resolve()
@@ -22,11 +20,7 @@ def validate_temporary_site(
         raise RuntimeError("Temporary test site must be directly under the configured bench")
 
     pattern = re.escape(site_prefix) + SITE_SUFFIX
-    if (
-        not isinstance(site, str)
-        or site in PERSISTENT_SITES
-        or re.fullmatch(pattern, site) is None
-    ):
+    if not isinstance(site, str) or site in PERSISTENT_SITES or re.fullmatch(pattern, site) is None:
         raise RuntimeError(f"Use a unique {site_prefix}<32-hex-id>.localhost test site")
     if user != "Administrator":
         raise RuntimeError("Temporary site helper requires Administrator")
