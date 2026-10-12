@@ -56,6 +56,13 @@ PDF_POPULATION_CHECK_FIELDS = (
     "quantity_face_value",
     "price",
 )
+CALCULATED_AMOUNT_FIELDS = (
+    "principal",
+    "commission_amount",
+    "settlement_amount",
+    "transaction_amount",
+    "accrued_interest_calculated",
+)
 PDF_PRICE_PRECISION = Decimal("0.000001")
 PDF_MONEY_PRECISION = Decimal("0.01")
 PDF_PERCENT_PRECISION = Decimal("0.000000001")
@@ -143,13 +150,7 @@ def get_calculated_amounts(
         frappe.has_permission("Bond Transaction", "create", throw=True)
 
     if not isin:
-        return {
-            "principal": Decimal("0"),
-            "commission_amount": Decimal("0"),
-            "settlement_amount": Decimal("0"),
-            "transaction_amount": Decimal("0"),
-            "accrued_interest_calculated": Decimal("0"),
-        }
+        return dict.fromkeys(CALCULATED_AMOUNT_FIELDS, Decimal("0"))
 
     bond = frappe.get_doc("Bond Master", isin)
     bond.check_permission("read")
@@ -191,8 +192,11 @@ class BondTransaction(Document):
         self.validate_pdf_amounts(calculated_amounts)
         self.validate_portfolio_ledger()
 
+    def _has_pdf_attachment(self) -> bool:
+        return bool(self.attachment) and self.attachment.lower().endswith(".pdf")
+
     def before_save(self):
-        if not self.attachment or not self.attachment.lower().endswith(".pdf"):
+        if not self._has_pdf_attachment():
             return
 
         details = self._get_transaction_attachment_details()
@@ -245,7 +249,9 @@ class BondTransaction(Document):
         unknown = sorted(set(references) - set(rows_by_reference))
         if unknown:
             frappe.throw(
-                f"The selected references are not present in the attached PDF: {', '.join(unknown)}."
+                _("The selected references are not present in the attached PDF: {0}.").format(
+                    ", ".join(unknown)
+                )
             )
 
         existing = frappe.qb.get_query(
@@ -256,8 +262,9 @@ class BondTransaction(Document):
         ).run(pluck=True)
         if existing:
             frappe.throw(
-                "Bond Transactions already exist for: "
-                f"{', '.join(sorted(existing))}. No transactions were created."
+                _("Bond Transactions already exist for: {0}. No transactions were created.").format(
+                    ", ".join(sorted(existing))
+                )
             )
 
         selected_rows = [
@@ -296,7 +303,7 @@ class BondTransaction(Document):
                     "doctype": "Bond Transaction",
                     "attachment": attachment,
                     "attachment_portfolio_override": portfolio_override,
-                    **self._attachment_row_values(row, portfolio_name),
+                    **transaction_attachment_row_values(row, portfolio_name),
                 }
             )
             transaction.flags.transaction_attachment_details = details
@@ -309,7 +316,7 @@ class BondTransaction(Document):
     def _get_selected_attachment_row(self) -> TransactionAttachmentRow | None:
         if not self.attachment:
             return None
-        if not self.attachment.lower().endswith(".pdf"):
+        if not self._has_pdf_attachment():
             previous = self.get_doc_before_save()
             if previous and previous.attachment == self.attachment:
                 return None
@@ -325,8 +332,9 @@ class BondTransaction(Document):
             if len(details.transactions) > 1:
                 references = ", ".join(row.transaction_reference for row in details.transactions)
                 frappe.throw(
-                    "This PDF contains multiple transactions. Select one or more references "
-                    f"before saving: {references}."
+                    _(
+                        "This PDF contains multiple transactions. Select one or more references before saving: {0}."
+                    ).format(references)
                 )
             return details.transactions[0]
 
@@ -334,7 +342,9 @@ class BondTransaction(Document):
         matching = [row for row in details.transactions if row.transaction_reference == reference]
         if not matching:
             frappe.throw(
-                f"Transaction Reference {frappe.bold(escape_html(reference))} is not present in the attached PDF."
+                _("Transaction Reference {0} is not present in the attached PDF.").format(
+                    frappe.bold(escape_html(reference))
+                )
             )
         return matching[0]
 
@@ -346,7 +356,7 @@ class BondTransaction(Document):
         return details
 
     def _apply_attachment_row(self, row: TransactionAttachmentRow):
-        for fieldname, value in self._attachment_row_values(row).items():
+        for fieldname, value in transaction_attachment_row_values(row).items():
             self.set(fieldname, value)
 
     def _validate_attachment_row(self, row: TransactionAttachmentRow):
@@ -368,7 +378,7 @@ class BondTransaction(Document):
                     )
                 )
             expected_portfolio = self.portfolio_name
-        expected_values = self._attachment_row_values(row, expected_portfolio)
+        expected_values = transaction_attachment_row_values(row, expected_portfolio)
         for fieldname, label, value_type in PDF_MANAGED_FIELDS:
             actual = self.get(fieldname)
             expected = expected_values[fieldname]
@@ -380,10 +390,6 @@ class BondTransaction(Document):
                 + "<br>".join(f"- {escape_html(mismatch)}" for mismatch in mismatches)
                 + _("<br>Re-read the PDF, or remove the attachment to use manual entry.")
             )
-
-    @staticmethod
-    def _attachment_row_values(row: TransactionAttachmentRow, portfolio_name: str | None = None) -> dict:
-        return transaction_attachment_row_values(row, portfolio_name)
 
     @staticmethod
     def _attachment_values_match(actual, expected, value_type: str) -> bool:
@@ -414,7 +420,7 @@ class BondTransaction(Document):
             ("settlement_date", "Settlement Date"),
         ):
             if not self.get(fieldname):
-                frappe.throw(f"{label} is required")
+                frappe.throw(_("{0} is required").format(label))
         if self.transaction_type not in {"Purchase", "Sale"}:
             frappe.throw(_("Transaction Type must be Purchase or Sale"))
 
@@ -477,7 +483,7 @@ class BondTransaction(Document):
         return values
 
     def validate_pdf_amounts(self, calculated_amounts):
-        if not self.attachment or not self.attachment.lower().endswith(".pdf"):
+        if not self._has_pdf_attachment():
             return
 
         row = self._get_selected_attachment_row()
@@ -508,15 +514,7 @@ class BondTransaction(Document):
 
         self._lock_portfolios({portfolio for _isin, portfolio in groups})
         for isin, portfolio_name in sorted(groups):
-            replacement = (
-                self
-                if (isin, portfolio_name)
-                == (
-                    self.isin,
-                    self.portfolio_name,
-                )
-                else None
-            )
+            replacement = self if (isin, portfolio_name) == (self.isin, self.portfolio_name) else None
             self._validate_ledger_group(
                 isin,
                 portfolio_name,
@@ -563,7 +561,9 @@ class BondTransaction(Document):
         for row in ledger_rows:
             quantity = to_decimal(row.get("quantity_face_value"))
             if quantity <= 0:
-                frappe.throw(f"Transaction {row.get('name') or '(unsaved)'} must have a positive quantity")
+                frappe.throw(
+                    _("Transaction {0} must have a positive quantity").format(row.get("name") or "(unsaved)")
+                )
             direction = 1 if row.get("transaction_type") == "Purchase" else -1
             daily_movements[getdate(row.get("settlement_date"))] += direction * quantity
 
@@ -572,6 +572,7 @@ class BondTransaction(Document):
             position += daily_movements[settlement_date]
             if position < 0:
                 frappe.throw(
-                    "Transactions would make the position negative on "
-                    f"{settlement_date}. Purchases settling that day are included."
+                    _(
+                        "Transactions would make the position negative on {0}. Purchases settling that day are included."
+                    ).format(settlement_date)
                 )

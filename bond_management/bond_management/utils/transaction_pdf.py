@@ -221,33 +221,42 @@ def get_transaction_attachment_details(attachment: str) -> TransactionAttachment
     missing_isins = sorted(set(parsed_isins) - set(face_values))
     if missing_isins:
         frappe.throw(
-            f"No accessible Bond Master exists for the transaction PDF ISINs: {', '.join(missing_isins)}."
+            _("No accessible Bond Master exists for the transaction PDF ISINs: {0}.").format(
+                ", ".join(missing_isins)
+            )
         )
 
     transactions = []
     for row in parsed.transactions:
         if row.quantity_face_value != row.quantity_face_value.to_integral_value():
-            frappe.throw(f"Transaction {row.transaction_reference} has a non-whole Quantity / Face Value.")
+            frappe.throw(
+                _("Transaction {0} has a non-whole Quantity / Face Value.").format(row.transaction_reference)
+            )
         face_value_per_unit = face_values[row.isin]
         if row.principal is not None:
             pdf_face_value_per_unit = row.principal * Decimal("100") / (row.quantity_face_value * row.price)
             if pdf_face_value_per_unit <= 0:
                 frappe.throw(
-                    f"Transaction {row.transaction_reference} has a non-positive PDF Face Value Per Unit."
+                    _("Transaction {0} has a non-positive PDF Face Value Per Unit.").format(
+                        row.transaction_reference
+                    )
                 )
             if pdf_face_value_per_unit.quantize(
                 Decimal("0.0001"), rounding=ROUND_HALF_EVEN
             ) != face_value_per_unit.quantize(Decimal("0.0001"), rounding=ROUND_HALF_EVEN):
                 frappe.throw(
-                    f"Face Value Per Unit for transaction {row.transaction_reference} does not match the PDF. "
-                    f"PDF implies {pdf_face_value_per_unit:.4f}, but Bond Master has {face_value_per_unit:.4f}."
+                    _(
+                        "Face Value Per Unit for transaction {0} does not match the PDF. PDF implies {1:.4f}, but Bond Master has {2:.4f}."
+                    ).format(row.transaction_reference, pdf_face_value_per_unit, face_value_per_unit)
                 )
         commission = row.commission_percent
         if commission is None:
             original_principal = row.quantity_face_value * face_value_per_unit
             if original_principal <= 0:
                 frappe.throw(
-                    f"Transaction {row.transaction_reference} must have a positive original principal."
+                    _("Transaction {0} must have a positive original principal.").format(
+                        row.transaction_reference
+                    )
                 )
             commission = row.commission_amount / original_principal * Decimal("100")
 
@@ -393,14 +402,15 @@ def _resolve_portfolio(
     ]
     if not matching:
         frappe.throw(
-            f"No accessible Bond Portfolio has account number {parsed.account_no}. "
-            "Add it as Account No or Transaction Account No on Bond Portfolio, "
-            "then attach the confirmation again."
+            _(
+                "No accessible Bond Portfolio has account number {0}. Add it as Account No or Transaction Account No on Bond Portfolio, then attach the confirmation again."
+            ).format(parsed.account_no)
         )
     if len(matching) > 1:
         frappe.throw(
-            f"More than one Bond Portfolio uses account number {parsed.account_no}. "
-            "Account No and Transaction Account No values must identify only one portfolio."
+            _(
+                "More than one Bond Portfolio uses account number {0}. Account No and Transaction Account No values must identify only one portfolio."
+            ).format(parsed.account_no)
         )
 
     portfolio = matching[0]
@@ -408,8 +418,9 @@ def _resolve_portfolio(
         not portfolio.password or not hmac.compare_digest(portfolio.password, parsed.unlock_password)
     ):
         frappe.throw(
-            f"The configured PDF password for portfolio {portfolio.portfolio_name} "
-            "does not unlock this transaction confirmation."
+            _(
+                "The configured PDF password for portfolio {0} does not unlock this transaction confirmation."
+            ).format(portfolio.portfolio_name)
         )
     return portfolio
 

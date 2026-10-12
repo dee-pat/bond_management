@@ -366,7 +366,11 @@ def get_statement_attachment_details(
         credential for credential in credentials if credential.portfolio_name == portfolio_name_hint
     ]
     if portfolio_name_hint and not hinted_portfolios:
-        frappe.throw(f"No accessible Bond Portfolio exists for the selected portfolio {portfolio_name_hint}.")
+        frappe.throw(
+            _("No accessible Bond Portfolio exists for the selected portfolio {0}.").format(
+                portfolio_name_hint
+            )
+        )
     hinted_portfolio = hinted_portfolios[0] if hinted_portfolios else None
 
     try:
@@ -393,28 +397,31 @@ def get_statement_attachment_details(
     ]
     if not matching:
         frappe.throw(
-            f"No accessible Bond Portfolio has account number {parsed.account_no}. "
-            "Add it as Account No or Transaction Account No on Bond Portfolio, "
-            "then attach the statement again."
+            _(
+                "No accessible Bond Portfolio has account number {0}. Add it as Account No or Transaction Account No on Bond Portfolio, then attach the statement again."
+            ).format(parsed.account_no)
         )
     if len(matching) > 1:
         frappe.throw(
-            f"More than one Bond Portfolio uses account number {parsed.account_no}. "
-            "Account No and Transaction Account No values must identify only one portfolio."
+            _(
+                "More than one Bond Portfolio uses account number {0}. Account No and Transaction Account No values must identify only one portfolio."
+            ).format(parsed.account_no)
         )
 
     portfolio = matching[0]
     if hinted_portfolio and portfolio.portfolio_name != hinted_portfolio.portfolio_name:
         frappe.throw(
-            f"The attached PDF belongs to Bond Portfolio {portfolio.portfolio_name}, "
-            f"not the selected portfolio {hinted_portfolio.portfolio_name}."
+            _("The attached PDF belongs to Bond Portfolio {0}, not the selected portfolio {1}.").format(
+                portfolio.portfolio_name, hinted_portfolio.portfolio_name
+            )
         )
     if parsed.unlock_password is not None and (
         not portfolio.password or not hmac.compare_digest(portfolio.password, parsed.unlock_password)
     ):
         frappe.throw(
-            f"The configured statement PDF password for portfolio {portfolio.portfolio_name} "
-            "does not unlock this attachment."
+            _(
+                "The configured statement PDF password for portfolio {0} does not unlock this attachment."
+            ).format(portfolio.portfolio_name)
         )
 
     return StatementAttachmentDetails(

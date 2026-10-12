@@ -4,9 +4,10 @@ import frappe
 from frappe import _
 
 from bond_management.bond_management.utils.investor_permissions import (
-    _get_allowed_portfolios,
-    _get_statement_portfolio,
-    _has_explicit_exchange_rate_source_share,
+    READ_PERMISSION_TYPES,
+    get_allowed_portfolios,
+    get_statement_portfolio,
+    has_explicit_exchange_rate_source_share,
     is_investor_user,
 )
 
@@ -23,7 +24,6 @@ FINANCIAL_DOCTYPES = (
     "Bond Exchange Rate",
     SOURCE_DOCTYPE,
 )
-READ_PERMISSION_TYPES = {"read", "report", "print", "email", "select"}
 MUTATING_SHARE_FIELDS = ("write", "submit", "share")
 _DEFERRED_SHARE_TARGET = object()
 
@@ -204,7 +204,7 @@ def cleanup_document_shares(doc, method=None):
 
 
 def _investor_document_access(doc, user, permtype):
-    portfolios = _get_allowed_portfolios(user)
+    portfolios = get_allowed_portfolios(user)
     if portfolios is None:
         return True
     if permtype not in READ_PERMISSION_TYPES:
@@ -215,7 +215,7 @@ def _investor_document_access(doc, user, permtype):
     elif doc.doctype == SOURCE_DOCTYPE:
         portfolio = _document_portfolio(doc)
         return bool(
-            portfolio and portfolio in portfolios and _has_explicit_exchange_rate_source_share(user, doc.name)
+            portfolio and portfolio in portfolios and has_explicit_exchange_rate_source_share(user, doc.name)
         )
     else:
         return True
@@ -244,7 +244,7 @@ def _lock_exchange_rate_source_target(name, *, wait=True):
 
     # Statement saves lock their row before synchronizing provenance rows.
     # Keep the same parent-before-child order when validating a source share.
-    portfolio = _get_statement_portfolio(statement_name, for_update=True, wait=wait)
+    portfolio = get_statement_portfolio(statement_name, for_update=True, wait=wait)
     if portfolio is None:
         return None
 
@@ -319,7 +319,7 @@ def _lock_share_targets(filters):
     statement_names = {name for doctype, name in keys if doctype == "Bond Statement"}
     statement_names.update(statement for statement in source_links.values() if statement)
     statement_portfolios = {
-        statement_name: _get_statement_portfolio(statement_name, for_update=True)
+        statement_name: get_statement_portfolio(statement_name, for_update=True)
         for statement_name in sorted(statement_names)
     }
 
@@ -382,7 +382,7 @@ def _document_portfolio(doc):
     if field:
         return doc.get(field)
     if doc.doctype == SOURCE_DOCTYPE:
-        return doc.get("portfolio_name") or _get_statement_portfolio(doc.get("statement"))
+        return doc.get("portfolio_name") or get_statement_portfolio(doc.get("statement"))
     return None
 
 

@@ -48,7 +48,7 @@ class BondMarketDate(Document):
         ).run(pluck=True)
         if existing:
             frappe.throw(
-                f"Bond Market Date already exists for {self.date}",
+                _("Bond Market Date already exists for {0}").format(self.date),
                 frappe.UniqueValidationError,
             )
 
@@ -77,23 +77,27 @@ class BondMarketDate(Document):
         for row in self.bond_market_prices:
             if not row.isin:
                 if require_complete:
-                    frappe.throw(f"ISIN is required in row {row.idx}")
+                    frappe.throw(_("ISIN is required in row {0}").format(row.idx))
                 continue
 
-            if row.isin in seen_isins:
-                frappe.throw(
-                    f"ISIN {frappe.bold(escape_html(row.isin))} appears more than once in Bond Market Prices"
-                )
-            seen_isins.add(row.isin)
+            _add_unique_isin(row.isin, seen_isins)
 
             if row.market_price is None:
                 if require_complete:
-                    frappe.throw(f"Market Price is required in row {row.idx}")
+                    frappe.throw(_("Market Price is required in row {0}").format(row.idx))
                 continue
 
             if to_decimal(row.market_price, "Market Price") <= 0:
                 row.future_xirr = None
-                frappe.throw(f"Market Price must be greater than zero in row {row.idx}")
+                frappe.throw(_("Market Price must be greater than zero in row {0}").format(row.idx))
+
+
+def _add_unique_isin(isin, seen_isins):
+    if isin in seen_isins:
+        frappe.throw(
+            _("ISIN {0} appears more than once in Bond Market Prices").format(frappe.bold(escape_html(isin)))
+        )
+    seen_isins.add(isin)
 
 
 @frappe.whitelist(methods=["POST"])
@@ -110,25 +114,20 @@ def get_recalculated_market_data(date: str | None = None, rows: str | list | Non
 
     for index, row in enumerate(rows, start=1):
         if not isinstance(row, dict):
-            frappe.throw(f"Row {index} must be an object")
+            frappe.throw(_("Row {0} must be an object").format(index))
 
         row_name = required_string(row.get("name"), f"Row {index} name")
         isin = optional_string(row.get("isin"), f"Row {index} ISIN")
         market_price = row.get("market_price")
 
         if not row_name or row_name in seen_names:
-            frappe.throw(f"Row {index} must have a unique name")
+            frappe.throw(_("Row {0} must have a unique name").format(index))
         seen_names.add(row_name)
 
         if isin:
-            if isin in seen_isins:
-                frappe.throw(
-                    f"ISIN {frappe.bold(escape_html(isin))} appears more than once in Bond Market Prices"
-                )
-            seen_isins.add(isin)
-
+            _add_unique_isin(isin, seen_isins)
         if market_price is not None and to_decimal(market_price, "Market Price") <= 0:
-            frappe.throw(f"Market Price must be greater than zero in row {index}")
+            frappe.throw(_("Market Price must be greater than zero in row {0}").format(index))
         validated_rows.append((row_name, isin, market_price))
 
     if not (

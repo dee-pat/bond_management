@@ -27,6 +27,17 @@ def get_latest_market_rows(isins, valuation_date):
     )
 
 
+def _empty_context(transactions_by_isin):
+    return {
+        "isins": [],
+        "bonds": {},
+        "transactions": transactions_by_isin,
+        "market_prices": {},
+        "xirr_guesses": {},
+        "exchange_rates": {},
+    }
+
+
 def load_portfolio_performance_context(portfolio, valuation_date):
     """Batch-load all permission-aware inputs used by statements and reports."""
     valuation_date = getdate(valuation_date)
@@ -51,14 +62,7 @@ def load_portfolio_performance_context(portfolio, valuation_date):
         transactions_by_isin[transaction.isin].append(transaction)
     isins = sorted(transactions_by_isin)
     if not isins:
-        return {
-            "isins": [],
-            "bonds": {},
-            "transactions": transactions_by_isin,
-            "market_prices": {},
-            "xirr_guesses": {},
-            "exchange_rates": {},
-        }
+        return _empty_context(transactions_by_isin)
 
     bonds = frappe.qb.get_query(
         "Bond Master",
@@ -79,14 +83,7 @@ def load_portfolio_performance_context(portfolio, valuation_date):
     bonds_by_isin = {bond.name: bond for bond in bonds}
     visible_isins = sorted(bonds_by_isin)
     if not visible_isins:
-        return {
-            "isins": [],
-            "bonds": {},
-            "transactions": transactions_by_isin,
-            "market_prices": {},
-            "xirr_guesses": {},
-            "exchange_rates": {},
-        }
+        return _empty_context(transactions_by_isin)
 
     for bond in bonds:
         bond["coupon_schedule"] = []

@@ -24,7 +24,7 @@ from bond_management.bond_management.tests.temporary_site_guard import validate_
 from bond_management.bond_management.utils.investor_permissions import (
     BOND_MANAGER_ROLE,
     INVESTOR_ROLE,
-    _get_allowed_portfolios,
+    get_allowed_portfolios,
     is_investor_user,
 )
 
@@ -205,7 +205,7 @@ class Race:
         self.wait(self.release, "observed User lock wait")
 
     def warm_old_authorization(self):
-        portfolios = _get_allowed_portfolios(self.user)
+        portfolios = get_allowed_portfolios(self.user)
         roles = frappe.get_roles(self.user)
         permissions = get_user_permissions(self.user)
         if self.kind == "assignment":
@@ -300,7 +300,7 @@ def _assert_seeded(names):
     for key in ("investor", "manager"):
         if frappe.get_doc("User", names[key]).first_name != "Share race":
             raise AssertionError("Unowned user fixture")
-    if _get_allowed_portfolios(names["investor"]) != [names["portfolio"]] or is_investor_user(
+    if get_allowed_portfolios(names["investor"]) != [names["portfolio"]] or is_investor_user(
         names["manager"]
     ):
         raise AssertionError("Seed fixtures in a separate invocation with a new token")

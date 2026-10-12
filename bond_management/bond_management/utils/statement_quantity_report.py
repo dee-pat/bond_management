@@ -1,6 +1,7 @@
 from io import BytesIO
 
 import frappe
+from frappe import _
 from frappe.core.doctype.file.utils import get_content_hash
 from frappe.utils import escape_html, get_datetime
 from pypdf import PdfWriter
@@ -41,8 +42,9 @@ def attach_quantity_reconciliation_report(statement, comparisons, *, file_name=N
     password = portfolio.get_password("statement_pdf_password", raise_exception=False)
     if not password:
         frappe.throw(
-            f"Configure Statement PDF Password on portfolio {frappe.bold(escape_html(statement.portfolio_name))} "
-            "before saving its quantity reconciliation report."
+            _(
+                "Configure Statement PDF Password on portfolio {0} before saving its quantity reconciliation report."
+            ).format(frappe.bold(escape_html(statement.portfolio_name)))
         )
     content = build_quantity_reconciliation_pdf(
         statement_name=statement.name,

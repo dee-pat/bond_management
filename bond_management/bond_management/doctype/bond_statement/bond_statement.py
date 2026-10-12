@@ -146,7 +146,9 @@ class BondStatement(Document):
         ).run(pluck=True)
         if existing:
             frappe.throw(
-                f"This PDF attachment is already used by Bond Statement {frappe.bold(escape_html(existing[0]))}."
+                _("This PDF attachment is already used by Bond Statement {0}.").format(
+                    frappe.bold(escape_html(existing[0]))
+                )
             )
 
     def on_update(self):
@@ -204,8 +206,9 @@ class BondStatement(Document):
         missing_isins = [row.isin for row in self.bond_statement_details if row.isin not in prices_by_isin]
         if missing_isins:
             frappe.throw(
-                "Could not find fixed-income market prices in the attached PDF for: "
-                f"{', '.join(missing_isins)}"
+                _("Could not find fixed-income market prices in the attached PDF for: {0}").format(
+                    ", ".join(missing_isins)
+                )
             )
 
         for row in self.bond_statement_details:
