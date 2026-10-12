@@ -32,12 +32,23 @@ def redirect_investor_to_workspace(login_manager) -> None:
     frappe.local.response.pop("redirect_to", None)
 
 
+# Per-transaction caches live in ``frappe.db.value_cache``. Frappe clears it on
+# commit, rollback (including savepoints), and for a DocType whenever one of its
+# documents is saved or deleted. Roles are saved through User; assignments are
+# User Permission documents. Locking reads always bypass the cache.
+_INVESTOR_ROLE_CACHE_KEY = "__bond_investor_role__"
+_ALLOWED_PORTFOLIOS_CACHE_KEY = "__bond_allowed_portfolios__"
+
+
 def is_investor_user(user: str, *, for_update: bool = False) -> bool:
     if not user or user in {"Administrator", "Guest"}:
         return False
+    cache = frappe.db.value_cache["User"][_INVESTOR_ROLE_CACHE_KEY]
+    if not for_update and user in cache:
+        return cache[user]
     # This administrative role lookup owns the investor authorization boundary.
     # User role caches can be repopulated before a concurrent role save commits.
-    return bool(
+    is_investor = bool(
         frappe.qb.get_query(
             "Has Role",
             fields=["name"],
@@ -46,6 +57,8 @@ def is_investor_user(user: str, *, for_update: bool = False) -> bool:
             for_update=for_update,
         ).run(pluck=True)
     )
+    cache[user] = is_investor
+    return is_investor
 
 
 def _get_allowed_portfolios(user: str) -> list[str] | None:
@@ -53,19 +66,25 @@ def _get_allowed_portfolios(user: str) -> list[str] | None:
     if not is_investor_user(user):
         return None
 
-    # User Permission is the administrative boundary for investor portfolios.
-    # This service lookup must bypass the investor's lack of access to User
-    # Permission records themselves.
-    return frappe.qb.get_query(
-        "User Permission",
-        fields=["for_value"],
-        filters={
-            "user": user,
-            "allow": "Bond Portfolio",
-            "apply_to_all_doctypes": 1,
-        },
-        ignore_permissions=True,
-    ).run(pluck=True)
+    cache = frappe.db.value_cache["User Permission"][_ALLOWED_PORTFOLIOS_CACHE_KEY]
+    if user not in cache:
+        # User Permission is the administrative boundary for investor portfolios.
+        # This service lookup must bypass the investor's lack of access to User
+        # Permission records themselves.
+        cache[user] = tuple(
+            frappe.qb.get_query(
+                "User Permission",
+                fields=["for_value"],
+                filters={
+                    "user": user,
+                    "allow": "Bond Portfolio",
+                    "apply_to_all_doctypes": 1,
+                },
+                ignore_permissions=True,
+            ).run(pluck=True)
+        )
+    # Callers may mutate the list; never hand out the cached value.
+    return list(cache[user])
 
 
 def _portfolio_condition(doctype: str, fieldname: str, user: str) -> str | None:

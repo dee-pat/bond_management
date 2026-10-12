@@ -1,3 +1,4 @@
+from bisect import bisect_right
 from collections import defaultdict
 from decimal import Decimal
 
@@ -36,11 +37,11 @@ def get_rate_for_date(
         return Decimal(1)
 
     normalized_date = getdate(rate_date)
-    applicable_rates = [
-        row for row in exchange_rates.get(from_currency, []) if row["rate_date"] <= normalized_date
-    ]
-    if applicable_rates:
-        return applicable_rates[-1]["rate"]
+    # Rows are sorted by rate_date in build_exchange_rate_context.
+    currency_rates = exchange_rates.get(from_currency, [])
+    index = bisect_right(currency_rates, normalized_date, key=lambda row: row["rate_date"])
+    if index:
+        return currency_rates[index - 1]["rate"]
 
     frappe.throw(
         _(

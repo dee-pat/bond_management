@@ -2,14 +2,13 @@ from collections import defaultdict
 
 import frappe
 from frappe.utils import getdate
-from pypika.analytics import RowNumber
-from pypika.enums import Order
 
 from bond_management.bond_management.utils.exchange_rate import build_exchange_rate_context
 from bond_management.bond_management.utils.financial import to_decimal
 from bond_management.bond_management.utils.investor_permissions import (
     include_shared_exchange_rates_in_safe_projection,
 )
+from bond_management.bond_management.utils.market_history import latest_market_rows
 from bond_management.bond_management.utils.xirr import (
     DEFAULT_XIRR_GUESS,
     get_last_xirr_guesses,
@@ -21,43 +20,11 @@ def get_latest_market_rows(isins, valuation_date):
     if not isins:
         return []
 
-    market_date = frappe.qb.DocType("Bond Market Date")
-    market_price = frappe.qb.DocType("Bond Market Prices")
-    price_rank = (
-        RowNumber()
-        .over(market_price.isin)
-        .orderby(market_date.date, order=Order.desc)
-        .orderby(market_date.name, order=Order.desc)
-        .as_("price_rank")
+    return latest_market_rows(
+        isins,
+        valuation_date,
+        ("market_price", "future_xirr", "future_xirr_available"),
     )
-    ranked_query = frappe.qb.get_query(
-        "Bond Market Date",
-        fields=[
-            "bond_market_prices.isin as isin",
-            "bond_market_prices.market_price as market_price",
-            "bond_market_prices.future_xirr as future_xirr",
-            "bond_market_prices.future_xirr_available as future_xirr_available",
-            price_rank,
-        ],
-        filters={
-            "date": ["<=", valuation_date],
-            "bond_market_prices.isin": ["in", isins],
-        },
-        ignore_permissions=False,
-    )
-    ranked_market = ranked_query.as_("ranked_market")
-
-    return (
-        frappe.qb.from_(ranked_market)
-        .select(
-            ranked_market["isin"],
-            ranked_market["market_price"],
-            ranked_market["future_xirr"],
-            ranked_market["future_xirr_available"],
-            ranked_market["price_rank"],
-        )
-        .where(ranked_market["price_rank"] == 1)
-    ).run(as_dict=True)
 
 
 def load_portfolio_performance_context(portfolio, valuation_date):

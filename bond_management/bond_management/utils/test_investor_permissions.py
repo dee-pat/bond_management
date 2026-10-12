@@ -26,6 +26,44 @@ from bond_management.patches.add_bond_yield_comparison_report_permission import 
 
 
 class TestInvestorPermissions(IntegrationTestCase):
+    def setUp(self):
+        # Several tests mock the role and assignment queries for fixed users.
+        frappe.db.value_cache.clear()
+
+    def test_cached_investor_scope_follows_role_and_assignment_saves(self):
+        assigned = make_portfolio()
+        user = frappe.get_doc(
+            {
+                "doctype": "User",
+                "email": f"{frappe.generate_hash(length=10)}-scope-cache@example.com",
+                "first_name": "Scope Cache",
+                "send_welcome_email": 0,
+            }
+        ).insert(ignore_permissions=True)
+
+        self.assertIsNone(investor_permissions._get_allowed_portfolios(user.name))
+
+        user.add_roles(investor_permissions.INVESTOR_ROLE)
+        self.assertEqual(investor_permissions._get_allowed_portfolios(user.name), [])
+
+        assignment = frappe.get_doc(
+            {
+                "doctype": "User Permission",
+                "user": user.name,
+                "allow": "Bond Portfolio",
+                "for_value": assigned.name,
+                "apply_to_all_doctypes": 1,
+            }
+        ).insert(ignore_permissions=True)
+        allowed = investor_permissions._get_allowed_portfolios(user.name)
+        self.assertEqual(allowed, [assigned.name])
+
+        allowed.append("Mutated")
+        self.assertEqual(investor_permissions._get_allowed_portfolios(user.name), [assigned.name])
+
+        assignment.delete(ignore_permissions=True)
+        self.assertEqual(investor_permissions._get_allowed_portfolios(user.name), [])
+
     def test_file_query_condition_is_registered_and_preserves_file_owner_and_share_access(self):
         self.assertEqual(
             app_hooks.permission_query_conditions["File"],
