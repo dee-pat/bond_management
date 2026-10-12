@@ -21,7 +21,7 @@ def get_position(
         ignore_permissions=False,
     ).run(pluck=True)
     if maturity_dates and getdate(maturity_dates[0]) <= statement_date:
-        return 0
+        return to_decimal(0)
 
     return position
 

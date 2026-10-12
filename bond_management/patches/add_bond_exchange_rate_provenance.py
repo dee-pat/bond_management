@@ -3,6 +3,7 @@
 from decimal import Decimal
 
 import frappe
+from frappe import _
 
 from bond_management.bond_management.utils.statement_exchange_rates import (
     SOURCE_DOCTYPE,
@@ -39,7 +40,9 @@ def execute():
             statement_date = frappe.db.get_value("Bond Statement", row.statement, "statement_date")
             if not statement_date:
                 frappe.throw(
-                    f"Cannot backfill exchange-rate provenance: Bond Statement {row.statement} is missing."
+                    _("Cannot backfill exchange-rate provenance: Bond Statement {0} is missing.").format(
+                        row.statement
+                    )
                 )
 
             source_key = build_source_key(row.name, row.statement)

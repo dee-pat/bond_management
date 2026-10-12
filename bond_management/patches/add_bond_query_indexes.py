@@ -1,4 +1,5 @@
 import frappe
+from frappe import _
 
 LEDGER_INDEX = "bond_transaction_portfolio_isin_settlement"
 REPORT_INDEX = "bond_transaction_portfolio_settlement_isin"
@@ -70,8 +71,9 @@ def _validate_duplicates():
     if duplicate_dates:
         dates = ", ".join(str(date) for date in duplicate_dates[:10])
         frappe.throw(
-            "Cannot enforce one Bond Market Date per date because duplicates exist: "
-            f"{dates}. Merge or remove the duplicate snapshots, then run migrate again."
+            _(
+                "Cannot enforce one Bond Market Date per date because duplicates exist: {0}. Merge or remove the duplicate snapshots, then run migrate again."
+            ).format(dates)
         )
 
     duplicate_attachments = frappe.qb.get_query(
@@ -86,8 +88,9 @@ def _validate_duplicates():
     if duplicate_attachments:
         attachments = ", ".join(duplicate_attachments[:10])
         frappe.throw(
-            "Cannot enforce one Bond Statement per attachment because duplicates exist: "
-            f"{attachments}. Run the duplicate cleanup patch, then migrate again."
+            _(
+                "Cannot enforce one Bond Statement per attachment because duplicates exist: {0}. Run the duplicate cleanup patch, then migrate again."
+            ).format(attachments)
         )
 
     duplicate_exchange_rates = frappe.qb.get_query(
@@ -107,6 +110,7 @@ def _validate_duplicates():
             f"{row.rate_date}/{row.from_currency}/{row.to_currency}" for row in duplicate_exchange_rates[:10]
         )
         frappe.throw(
-            "Cannot enforce one Bond Exchange Rate per date/currency pair because "
-            f"duplicates exist: {duplicates}. Merge or remove the duplicate rows, then run migrate again."
+            _(
+                "Cannot enforce one Bond Exchange Rate per date/currency pair because duplicates exist: {0}. Merge or remove the duplicate rows, then run migrate again."
+            ).format(duplicates)
         )

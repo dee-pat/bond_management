@@ -116,7 +116,9 @@ def get_xirr_cashflows(
         portfolio_isins = set(context["isins"])
         if isin not in portfolio_isins:
             frappe.throw(
-                f"ISIN {frappe.bold(escape_html(isin))} is not in this portfolio on or before the valuation date"
+                _("ISIN {0} is not in this portfolio on or before the valuation date").format(
+                    frappe.bold(escape_html(isin))
+                )
             )
         if not frappe.has_permission("Bond Master", "read", doc=isin):
             frappe.throw(_("Not permitted"), frappe.PermissionError)
@@ -186,7 +188,7 @@ def validate_report_inputs(portfolio, valuation_date):
     if not frappe.has_permission("Bond Portfolio", "read", doc=portfolio):
         frappe.throw(_("Not permitted"), frappe.PermissionError)
     if not frappe.db.exists("Bond Portfolio", portfolio):
-        frappe.throw(f"Bond Portfolio {frappe.bold(escape_html(portfolio))} does not exist")
+        frappe.throw(_("Bond Portfolio {0} does not exist").format(frappe.bold(escape_html(portfolio))))
 
     return portfolio, getdate(valuation_date)
 
@@ -202,10 +204,14 @@ def get_terminal_market_price(isin, valuation_date, quantity, market_price):
     """Require a valid quote only when a position still has market exposure."""
     if quantity and market_price is None:
         frappe.throw(
-            f"No market price found for {frappe.bold(escape_html(isin))} on or before {valuation_date}"
+            _("No market price found for {0} on or before {1}").format(
+                frappe.bold(escape_html(isin)), valuation_date
+            )
         )
     if quantity and to_decimal(market_price) <= 0:
-        frappe.throw(f"Market price for {frappe.bold(escape_html(isin))} must be greater than zero")
+        frappe.throw(
+            _("Market price for {0} must be greater than zero").format(frappe.bold(escape_html(isin)))
+        )
 
     # A closed/matured position needs no artificial terminal valuation. Zero is
     # passed only to the cash-flow builder so it omits that zero-value line.
@@ -473,7 +479,7 @@ def get_data(portfolio, valuation_date, context=None):
             valuation_date,
         )
 
-        future_xirr = future_xirr * 100.0 if future_xirr is not None else None
+        future_xirr = _percent_value(future_xirr)
         future_xirr_usd = (
             calculate_future_xirr_from_cashflows(
                 isin,
@@ -484,7 +490,7 @@ def get_data(portfolio, valuation_date, context=None):
             if quantity
             else None
         )
-        future_xirr_usd = future_xirr_usd * 100.0 if future_xirr_usd is not None else None
+        future_xirr_usd = _percent_value(future_xirr_usd)
 
         market_value_usd = market_value * valuation_exchange_rate
         nominal_value_usd = nominal_value * valuation_exchange_rate

@@ -1,6 +1,7 @@
 from decimal import ROUND_HALF_EVEN, Decimal, InvalidOperation
 
 import frappe
+from frappe import _
 
 MONEY_PRECISION = Decimal("0.0001")
 PERCENT_PRECISION = Decimal("0.000000001")
@@ -12,10 +13,10 @@ def to_decimal(value: DecimalInput, field_label: str = "Value") -> Decimal:
     try:
         result = value if isinstance(value, Decimal) else Decimal(str(value or 0))
     except (InvalidOperation, TypeError, ValueError):
-        frappe.throw(f"{field_label} must be a valid number")
+        frappe.throw(_("{0} must be a valid number").format(field_label))
 
     if not result.is_finite():
-        frappe.throw(f"{field_label} must be a finite number")
+        frappe.throw(_("{0} must be a finite number").format(field_label))
 
     return result
 

@@ -17,7 +17,7 @@ from bond_management.bond_management.utils.investor_access import (
     require_readable_portfolio as _require_readable_portfolio,
 )
 from bond_management.bond_management.utils.investor_permissions import (
-    _get_allowed_portfolios,
+    get_allowed_portfolios,
     include_shared_exchange_rates_in_safe_projection,
 )
 from bond_management.bond_management.utils.investor_ui import (
@@ -189,7 +189,7 @@ def get_bootstrap() -> dict:
     """Return the authenticated shell context and allowed portfolio choices."""
     require_investor_ui_access()
 
-    allowed_portfolios = _get_allowed_portfolios(frappe.session.user)
+    allowed_portfolios = get_allowed_portfolios(frappe.session.user)
     portfolio_choices = []
     if allowed_portfolios is None or allowed_portfolios:
         portfolio_rows = frappe.qb.get_query(

@@ -9,12 +9,13 @@ from frappe.utils.data import get_last_day
 from bond_management.bond_management.utils.financial import to_decimal
 
 KENYA_DAY_COUNT_CONVENTIONS = {"ACT/364(Kenya)", "ACT/364(KENYA)", "Actual/364(Kenya)"}
+_KENYA_DAY_COUNT_KEYS = frozenset(convention.casefold() for convention in KENYA_DAY_COUNT_CONVENTIONS)
 KENYA_COUPON_PERIOD_DAYS = 182
 
 
 def is_kenya_day_count_convention(day_count_convention):
     normalized = str(day_count_convention or "").casefold()
-    return normalized in {convention.casefold() for convention in KENYA_DAY_COUNT_CONVENTIONS}
+    return normalized in _KENYA_DAY_COUNT_KEYS
 
 
 def generate_coupon_schedule(

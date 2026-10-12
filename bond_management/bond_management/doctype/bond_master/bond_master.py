@@ -83,7 +83,7 @@ class BondMaster(Document):
 
             repayment_date = getdate(row.repayment_date)
             if repayment_date in repayment_dates:
-                frappe.throw(f"Repayment date {repayment_date} cannot be duplicated")
+                frappe.throw(_("Repayment date {0} cannot be duplicated").format(repayment_date))
             repayment_dates.add(repayment_date)
 
     def update_principal_percentages(self):
@@ -131,7 +131,7 @@ class BondMaster(Document):
         coupon_dates = {getdate(row.coupon_date) for row in self.coupon_schedule if row.coupon_date}
         for row in self.principal_schedule:
             if row.repayment_date and getdate(row.repayment_date) not in coupon_dates:
-                frappe.throw(f"Repayment date {row.repayment_date} must match a coupon date")
+                frappe.throw(_("Repayment date {0} must match a coupon date").format(row.repayment_date))
 
 
 @frappe.whitelist(methods=["POST"])
