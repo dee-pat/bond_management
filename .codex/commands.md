@@ -36,7 +36,7 @@ bench restart
 
 ## Verification
 
-Before verification or CI/Cypress diagnosis, read
+Before verification or CI/Playwright diagnosis, read
 `apps/bond_management/docs/verification.md` for mandatory gates, evidence,
 startup diagnostics, and recovery order. The `ui` stage requires an already
 prepared test site.
@@ -57,12 +57,15 @@ site as needed. Use `pre-push` for the shared lint/server gate and
 
 ## Focused UI diagnosis
 
+Start the test site explicitly, then run one Playwright spec from the app root
+with the credentials loaded from `$HOME/.config/bond_management/test-browser.env`:
+
 ```bash
-CYPRESS_SPEC="cypress/integration/portfolio_performance.js" \
-    apps/bond_management/scripts/verify.sh ui
-
-apps/bond_management/scripts/cypress-runtime.sh diagnose
-apps/bond_management/scripts/cypress-runtime.sh prepare
-
 bench --site bond-management-test.localhost serve --port 8001 --noreload
+
+cd apps/bond_management
+BASE_URL=http://localhost:8001 yarn playwright test e2e/desk/portfolio-performance.spec.ts --project=desk
 ```
+
+Playwright keeps traces, screenshots and videos for failures and writes the
+HTML report to `playwright-report/`.

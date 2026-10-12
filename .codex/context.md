@@ -20,7 +20,7 @@ architecture, invariants, environment, sites, and verification policy live in
   applicable migration.
 - JavaScript field updates: check form triggers and `frm.refresh_field`.
 - Bench build failures: check the Node and Yarn versions.
-- For Cypress startup/login failures or CI bootstrap issues, read
+- For Playwright startup/login failures or CI bootstrap issues, read
   `docs/verification.md` for runtime diagnostics, recovery, and the required
   rerun sequence.
 
