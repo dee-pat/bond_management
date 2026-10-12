@@ -14,7 +14,7 @@ from bond_management.bond_management.doctype.bond_market_date.bond_market_date i
     get_recalculated_market_data,
 )
 from bond_management.bond_management.tests.factories import make_bond, make_market_date
-from bond_management.bond_management.utils.performance import get_market_price
+from bond_management.bond_management.utils.performance import get_latest_market_rows
 from bond_management.bond_management.utils.xirr import calculate_future_xirr
 from bond_management.patches.add_bond_query_indexes import (
     LEDGER_INDEX,
@@ -255,9 +255,13 @@ class TestBondMarketDate(IntegrationTestCase):
         early = make_market_date(bond, market_price=90, date="2025-06-29")
         late = make_market_date(bond, market_price=100, date="2025-12-26")
 
-        self.assertIsNone(get_market_price(bond.name, early.date - timedelta(days=1)))
-        self.assertEqual(get_market_price(bond.name, early.date), 90)
-        self.assertEqual(get_market_price(bond.name, late.date + timedelta(days=1)), 100)
+        def market_price(valuation_date):
+            rows = get_latest_market_rows([bond.name], valuation_date)
+            return rows[0].market_price if rows else None
+
+        self.assertIsNone(market_price(early.date - timedelta(days=1)))
+        self.assertEqual(market_price(early.date), 90)
+        self.assertEqual(market_price(late.date + timedelta(days=1)), 100)
 
     def test_bank_quote_is_not_scaled_by_principal_factor_again(self):
         bond = make_bond(

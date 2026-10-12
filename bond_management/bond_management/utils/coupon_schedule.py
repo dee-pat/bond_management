@@ -134,22 +134,6 @@ def generate_coupon_schedule(
     return coupon_schedule
 
 
-def get_coupon_schedule(isin):
-    query = frappe.qb.get_query(
-        "Bond Coupon Schedule",
-        fields=["coupon_date", "period_start", "period_end", "coupon_factor"],
-        filters={
-            "parent": isin,
-            "parenttype": "Bond Master",
-            "parentfield": "coupon_schedule",
-        },
-        order_by="coupon_date asc",
-        parent_doctype="Bond Master",
-        ignore_permissions=False,
-    )
-    return query.run(as_dict=True)
-
-
 def year_fraction(
     day_count_convention,
     start_date,

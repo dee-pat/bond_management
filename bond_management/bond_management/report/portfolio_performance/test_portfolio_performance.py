@@ -24,7 +24,6 @@ from bond_management.bond_management.utils.performance import (
     get_latest_market_rows,
     load_portfolio_performance_context,
 )
-from bond_management.bond_management.utils.portfolio import fetch_holdings
 from bond_management.bond_management.utils.xirr import create_future_cash_flows
 
 
@@ -539,32 +538,6 @@ class TestPortfolioPerformance(IntegrationTestCase):
 
         self.assertEqual(len(rows), 2)
         self.assertEqual(get_query.call_count, 6)
-
-    def test_fetch_holdings_batches_ledger_and_bond_queries(self):
-        portfolio = make_portfolio()
-        live_bond = make_bond()
-        matured_bond = make_bond(
-            issue_date="2025-01-01",
-            maturity_date="2025-12-30",
-            first_coupon_date="2025-06-30",
-            principal_schedule=[{"repayment_date": "2025-12-30", "principal_units": 100}],
-        )
-        make_transaction(live_bond, portfolio)
-        make_transaction(
-            matured_bond,
-            portfolio,
-            trade_date="2025-12-28",
-            settlement_date="2025-12-29",
-        )
-
-        with patch(
-            "bond_management.bond_management.utils.portfolio.frappe.qb.get_query",
-            wraps=frappe.qb.get_query,
-        ) as get_query:
-            holdings = fetch_holdings(portfolio.name, "2025-12-31")
-
-        self.assertEqual(get_query.call_count, 2)
-        self.assertEqual(holdings, [{"isin": live_bond.name, "quantity": 10, "currency": "USD"}])
 
     def test_market_history_query_returns_one_latest_row_per_bond(self):
         bond = make_bond()

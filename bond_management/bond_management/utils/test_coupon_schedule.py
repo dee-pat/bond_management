@@ -8,7 +8,6 @@ from frappe.tests import IntegrationTestCase
 
 from bond_management.bond_management.utils.coupon_schedule import (
     generate_coupon_schedule,
-    get_coupon_schedule,
     year_fraction,
 )
 
@@ -132,12 +131,3 @@ class TestCouponSchedule(IntegrationTestCase):
         schedule = generate_coupon_schedule("2025-01-01", "2026-01-01", 2, 0, "2025-07-01", "30E/360")
 
         self.assertEqual(schedule[0]["coupon_factor"], 0)
-
-    def test_child_schedule_query_checks_permissions_through_bond_master(self):
-        with patch("bond_management.bond_management.utils.coupon_schedule.frappe.qb.get_query") as get_query:
-            get_query.return_value.run.return_value = []
-
-            self.assertEqual(get_coupon_schedule("TEST-ISIN"), [])
-
-        self.assertEqual(get_query.call_args.kwargs["parent_doctype"], "Bond Master")
-        self.assertFalse(get_query.call_args.kwargs["ignore_permissions"])
