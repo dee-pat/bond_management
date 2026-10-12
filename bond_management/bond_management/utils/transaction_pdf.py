@@ -1,9 +1,8 @@
 import hmac
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import date, datetime
 from decimal import ROUND_HALF_EVEN, Decimal
-from io import BytesIO
 
 import frappe
 from frappe import _
@@ -11,12 +10,18 @@ from pypdf import PdfReader
 from pypdf.errors import DependencyError, FileNotDecryptedError, PdfReadError, PdfStreamError
 
 from bond_management.bond_management.utils.financial import quantize_percent, to_decimal
+from bond_management.bond_management.utils.pdf_common import (
+    MAX_PDF_BYTES,
+    PortfolioPdfCredentials,
+    get_portfolio_pdf_credentials,
+    open_pdf,
+)
 from bond_management.bond_management.utils.private_attachment import read_private_pdf_attachment
 from bond_management.bond_management.utils.statement_pdf import (
     normalize_account_number,
 )
 
-MAX_TRANSACTION_PDF_BYTES = 10 * 1024 * 1024
+MAX_TRANSACTION_PDF_BYTES = MAX_PDF_BYTES
 MAX_TRANSACTION_PDF_PAGES = 200
 MAX_TRANSACTION_PDF_TEXT_CHARS = 2_000_000
 MAX_POSITIONED_TEXT_FRAGMENTS = 100_000
@@ -54,14 +59,6 @@ class TransactionPdfError(ValueError):
 
 class TransactionPdfPasswordError(TransactionPdfError):
     pass
-
-
-@dataclass(frozen=True)
-class TransactionPortfolioPdfCredentials:
-    portfolio_name: str
-    account_no: str
-    transaction_account_no: str | None = None
-    password: str | None = field(default=None, repr=False)
 
 
 @dataclass(frozen=True)
@@ -181,38 +178,16 @@ def parse_transaction_pdf_text(text: str) -> ParsedTransactionPdf:
 
 def extract_transaction_pdf(content: bytes, passwords: list[str]) -> ParsedTransactionPdf:
     """Decrypt a transaction PDF with configured portfolio passwords and parse every trade."""
-    if len(content) > MAX_TRANSACTION_PDF_BYTES:
-        raise TransactionPdfError("The transaction PDF must be 10 MB or smaller.")
-    if b"%PDF-" not in content[:1024]:
-        raise TransactionPdfError("The attachment is not a valid PDF file.")
-
-    try:
-        probe = PdfReader(BytesIO(content), strict=False)
-    except (PdfReadError, PdfStreamError, ValueError) as error:
-        raise TransactionPdfError("The attachment could not be read as a PDF.") from error
-
-    if not probe.is_encrypted:
-        return _parse_reader(probe)
-
-    for password in dict.fromkeys(password for password in passwords if password):
-        try:
-            reader = PdfReader(BytesIO(content), strict=False)
-            if not reader.decrypt(password):
-                continue
-        except (DependencyError, FileNotDecryptedError, PdfReadError, PdfStreamError, ValueError):
-            continue
-        # Once decryption succeeds, report the real format/parsing error instead
-        # of incorrectly trying the next password and masking it as a password error.
-        parsed = _parse_reader(reader)
-        return ParsedTransactionPdf(
-            account_no=parsed.account_no,
-            transactions=parsed.transactions,
-            unlock_password=password,
-        )
-
-    raise TransactionPdfPasswordError(
-        "The transaction PDF could not be unlocked with any configured Bond Portfolio password."
+    reader, password = open_pdf(
+        content,
+        passwords,
+        error_class=TransactionPdfError,
+        password_error_class=TransactionPdfPasswordError,
+        size_message="The transaction PDF must be 10 MB or smaller.",
+        password_message="The transaction PDF could not be unlocked with any configured Bond Portfolio password.",
     )
+    parsed = _parse_reader(reader)
+    return replace(parsed, unlock_password=password) if password else parsed
 
 
 def get_transaction_attachment_details(attachment: str) -> TransactionAttachmentDetails:
@@ -225,7 +200,7 @@ def get_transaction_attachment_details(attachment: str) -> TransactionAttachment
         private_message=_("Bond Transaction PDFs must be uploaded as private files."),
         size_message=_("The transaction PDF must be 10 MB or smaller."),
     )
-    credentials = _get_portfolio_credentials()
+    credentials = get_portfolio_pdf_credentials()
     try:
         parsed = extract_transaction_pdf(
             content,
@@ -403,34 +378,10 @@ def _extract_positioned_page_text(
     return (positioned_text, len(fragments)) if include_fragment_count else positioned_text
 
 
-def _get_portfolio_credentials() -> list[TransactionPortfolioPdfCredentials]:
-    portfolios = frappe.qb.get_query(
-        "Bond Portfolio",
-        fields=["name", "account_no", "transaction_account_no"],
-        order_by="name asc",
-        ignore_permissions=False,
-    ).run(as_dict=True)
-    credentials = []
-    for portfolio in portfolios:
-        portfolio_doc = frappe.get_doc("Bond Portfolio", portfolio.name)
-        credentials.append(
-            TransactionPortfolioPdfCredentials(
-                portfolio_name=portfolio.name,
-                account_no=portfolio.account_no,
-                transaction_account_no=portfolio.transaction_account_no,
-                password=portfolio_doc.get_password(
-                    "statement_pdf_password",
-                    raise_exception=False,
-                ),
-            )
-        )
-    return credentials
-
-
 def _resolve_portfolio(
     parsed: ParsedTransactionPdf,
-    credentials: list[TransactionPortfolioPdfCredentials],
-) -> TransactionPortfolioPdfCredentials:
+    credentials: list[PortfolioPdfCredentials],
+) -> PortfolioPdfCredentials:
     matching = [
         credential
         for credential in credentials

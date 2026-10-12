@@ -104,21 +104,12 @@ def generate_coupon_schedule(
         period_start = prev
         period_end = add_days(d, -1)
 
-        if kenya_convention:
-            coupon_factor = to_decimal(coupon_rate) * year_fraction(
-                day_count_convention=day_count_convention,
-                start_date=period_start,
-                end_date=d,
-                coupon_frequency=coupon_frequency,
-            )
-        else:
-            fraction = year_fraction(
-                day_count_convention=day_count_convention,
-                start_date=period_start,
-                end_date=d,
-                coupon_frequency=coupon_frequency,
-            )
-            coupon_factor = to_decimal(coupon_rate) * fraction
+        coupon_factor = to_decimal(coupon_rate) * year_fraction(
+            day_count_convention=day_count_convention,
+            start_date=period_start,
+            end_date=d,
+            coupon_frequency=coupon_frequency,
+        )
 
         coupon_schedule.append(
             {
