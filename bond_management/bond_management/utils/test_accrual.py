@@ -6,8 +6,7 @@ from frappe.tests import IntegrationTestCase
 from bond_management.bond_management.tests.factories import make_bond
 from bond_management.bond_management.utils.accrual import (
     calculate_accrued_fraction,
-    calculate_coupon_principal_factor,
-    calculate_principal_factor,
+    calculate_principal_factor_from_bond,
     calculate_quantity_factor_from_bond,
     calculate_weighted_average_repayment,
     get_coupon_period,
@@ -86,12 +85,19 @@ class TestAccrual(IntegrationTestCase):
             ],
         )
 
-        self.assertEqual(calculate_principal_factor(bond.name, "2025-06-30"), 1)
-        self.assertEqual(calculate_principal_factor(bond.name, "2025-07-01"), Decimal("0.5"))
-        self.assertEqual(calculate_principal_factor(bond.name, "2025-07-02"), 0.5)
-        self.assertEqual(calculate_coupon_principal_factor(bond.name, "2025-06-30"), 1)
-        self.assertEqual(calculate_coupon_principal_factor(bond.name, "2025-07-01"), 1)
-        self.assertEqual(calculate_coupon_principal_factor(bond.name, "2025-07-02"), Decimal("0.5"))
+        self.assertEqual(calculate_principal_factor_from_bond(bond, "2025-06-30"), 1)
+        self.assertEqual(calculate_principal_factor_from_bond(bond, "2025-07-01"), Decimal("0.5"))
+        self.assertEqual(calculate_principal_factor_from_bond(bond, "2025-07-02"), 0.5)
+        self.assertEqual(
+            calculate_principal_factor_from_bond(bond, "2025-06-30", include_repayment_on_date=False), 1
+        )
+        self.assertEqual(
+            calculate_principal_factor_from_bond(bond, "2025-07-01", include_repayment_on_date=False), 1
+        )
+        self.assertEqual(
+            calculate_principal_factor_from_bond(bond, "2025-07-02", include_repayment_on_date=False),
+            Decimal("0.5"),
+        )
 
     def test_kes_quantity_change_uses_quantity_factor_and_keeps_principal_factor_at_one(self):
         bond = make_bond(
@@ -103,7 +109,7 @@ class TestAccrual(IntegrationTestCase):
             ],
         )
 
-        self.assertEqual(calculate_principal_factor(bond.name, "2025-07-04"), Decimal("1"))
+        self.assertEqual(calculate_principal_factor_from_bond(bond, "2025-07-04"), Decimal("1"))
         self.assertEqual(calculate_quantity_factor_from_bond(bond, "2025-07-03"), Decimal("1"))
         self.assertEqual(calculate_quantity_factor_from_bond(bond, "2025-07-04"), Decimal("0.5"))
         self.assertEqual(

@@ -74,17 +74,6 @@ def calculate_accrued_fraction(
     return to_decimal(coupon_rate) / to_decimal(100) * to_decimal(face_value_per_unit) * fraction
 
 
-def calculate_principal_factor(isin, date):
-    bond_doc = frappe.get_doc("Bond Master", isin)
-    return calculate_principal_factor_from_bond(bond_doc, date)
-
-
-def calculate_coupon_principal_factor(isin, coupon_date):
-    """Return principal outstanding immediately before a same-day repayment."""
-    bond_doc = frappe.get_doc("Bond Master", isin)
-    return calculate_principal_factor_from_bond(bond_doc, coupon_date, include_repayment_on_date=False)
-
-
 def is_quantity_change_bond(bond_doc):
     """Return whether a bond uses the KES quantity-change convention."""
     return str(bond_doc.get("currency") or "").upper() == "KES" and is_kenya_day_count_convention(
@@ -171,13 +160,6 @@ def calculate_quantity_factor_from_bond(bond_doc, date, *, include_repayment_on_
     )
 
 
-def calculate_effective_quantity_factor_from_bond(bond_doc, date, *, include_repayment_on_date: bool = True):
-    """Return the factor applied to a raw transaction quantity for KES holdings."""
-    return calculate_quantity_factor_from_bond(
-        bond_doc, date, include_repayment_on_date=include_repayment_on_date
-    )
-
-
 def calculate_weighted_average_repayment(principal_schedule, valuation_date):
     """Return the remaining-principal weighted repayment date and exact years.
 
@@ -238,30 +220,12 @@ def unit_accrued_interest_from_bond(bond_doc, settlement_date):
     return fraction * principal_factor
 
 
-def unit_accrued_interest(isin=None, settlement_date=None):
-    if not isin or not settlement_date:
-        return to_decimal(0)
-
-    settlement_date = getdate(settlement_date)
-
-    bond_doc = frappe.get_doc("Bond Master", isin)
-
-    return unit_accrued_interest_from_bond(bond_doc, settlement_date)
-
-
-def get_accrued_interest(isin=None, settlement_date=None, quantity_face_value=None):
-    if not isin or not settlement_date or not quantity_face_value:
-        return to_decimal(0)
-    bond_doc = frappe.get_doc("Bond Master", isin)
-    return get_accrued_interest_from_bond(bond_doc, settlement_date, quantity_face_value)
-
-
 def get_accrued_interest_from_bond(bond_doc, settlement_date=None, quantity_face_value=None):
     """Calculate from the same authoritative bond used for the transaction snapshot."""
     if not settlement_date or not quantity_face_value:
         return to_decimal(0)
     settlement_date = getdate(settlement_date)
-    quantity_factor = calculate_effective_quantity_factor_from_bond(bond_doc, settlement_date)
+    quantity_factor = calculate_quantity_factor_from_bond(bond_doc, settlement_date)
     return (
         unit_accrued_interest_from_bond(bond_doc, settlement_date)
         * quantity_factor
