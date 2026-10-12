@@ -43,23 +43,22 @@ def require_investor_ui_access() -> None:
         frappe.throw(_("You are not permitted to access the investor application."), frappe.PermissionError)
 
 
+def get_investor_user_context() -> dict:
+    """Return the shell's user and role flags for the current session."""
+    user = frappe.session.user
+    roles = set(frappe.get_roles(user))
+    return {
+        "feature_enabled": True,
+        "user": {
+            "name": user,
+            "full_name": get_fullname(user),
+        },
+        "is_investor": INVESTOR_ROLE in roles,
+        "is_support": user == "Administrator" or BOND_MANAGER_ROLE in roles,
+    }
+
+
 def get_investor_boot_context() -> dict:
     """Return the minimum trusted context embedded in the SPA website entry."""
     require_investor_ui_access()
-
-    user = frappe.session.user
-    roles = set(frappe.get_roles(user))
-    is_support_user = user == "Administrator" or BOND_MANAGER_ROLE in roles
-
-    return {
-        "csrf_token": get_csrf_token(),
-        "bond_investor": {
-            "feature_enabled": True,
-            "user": {
-                "name": user,
-                "full_name": get_fullname(user),
-            },
-            "is_investor": INVESTOR_ROLE in roles,
-            "is_support": is_support_user,
-        },
-    }
+    return {"csrf_token": get_csrf_token(), "bond_investor": get_investor_user_context()}
