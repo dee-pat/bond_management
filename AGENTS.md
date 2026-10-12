@@ -1,4 +1,9 @@
-# Bond Management agent guidance
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+(It is the same file as `AGENTS.md` through a symlink; Codex reads it too.)
+
+## Bond Management agent guidance
 
 The parent `frappe-bench/AGENTS.md` contains rules shared by Frappe v16 apps.
 This file contains only bond-management-specific additions and overrides. When
@@ -52,6 +57,89 @@ the two files conflict, this app-level file governs.
   prefer absolute imports and do not infer paths from names alone.
 - Keep DocType controllers focused on their own DocType. Put shared logic under
   `bond_management/bond_management/utils`.
+
+## Commands
+
+Run gates from the bench root (`../..`). `TEST_SITE` overrides the default
+`bond-management-test.localhost`.
+
+```bash
+apps/bond_management/scripts/verify.sh lint         # pre-commit (ruff, eslint, prettier) + Semgrep (Frappe + app rules) + rule tests
+apps/bond_management/scripts/verify.sh server       # migrate test site + full server suite
+apps/bond_management/scripts/verify.sh frontend     # yarn lint + yarn typecheck + bench build --app bond_management
+apps/bond_management/scripts/verify.sh ui           # seed investor fixtures + full Playwright suite
+apps/bond_management/scripts/verify.sh pre-push     # lint + server
+apps/bond_management/scripts/verify.sh pre-push-ui  # lint + server + frontend + ui
+```
+
+Focused server tests (test modules sit next to the code they cover):
+
+```bash
+bench --site bond-management-test.localhost run-tests --module bond_management.bond_management.utils.test_accrual
+bench --site bond-management-test.localhost run-tests --module bond_management.bond_management.utils.test_accrual --test <test_method>
+bench --site bond-management-test.localhost run-tests --doctype "Bond Transaction"
+```
+
+Focused Playwright (from the app root; needs a served test site plus the
+credentials from `test-browser.env`; projects are `investor-desktop`,
+`investor-mobile` and `desk`):
+
+```bash
+bench --site bond-management-test.localhost serve --port 8001 --noreload
+BASE_URL=http://localhost:8001 yarn playwright test e2e/investor/bonds.spec.ts --project=investor-desktop
+```
+
+Frontend, from the app root: `yarn dev`, `yarn build`, `yarn lint`, `yarn typecheck`.
+The Vite build is served from `/assets/bond_management/frontend/`.
+
+## Architecture
+
+- Two surfaces share one Frappe session:
+  - **Desk**: the `/desk/bond-investor` workspace, plus DocType form JS and
+    script reports. Every financial mutation, PDF parse, reconciliation and
+    market-data change happens here.
+  - **Investor SPA**: Vue 3 + Frappe UI in `frontend/`, served at
+    `/bond-investor` by `bond_management/www/bond_investor.py` and a
+    `website_route_rules` entry. It is read-only, and the site config
+    `bond_investor_spa_enabled` turns it on. Its only backend is
+    `bond_management/bond_management/api/investor.py` and `investor_reports.py`,
+    which return fixed, permission-scoped projections instead of generic
+    DocType reads.
+- Investor isolation is centralized in `hooks.py`:
+  - `permission_query_conditions` and `has_permission` (in
+    `utils/investor_permissions.py`) scope Portfolio, Transaction, Statement,
+    Exchange Rate (and its Source) and File to the portfolios a user is
+    assigned through User Permission.
+  - `utils/investor_shares.py` is wired through `extend_doctype_class`,
+    `doc_events` and an override of `clear_user_permissions`. It rejects
+    investor mutations and keeps DocShare/User Permission changes consistent.
+  - Any new financial DocType must be added to `_financial_doctypes` in
+    `hooks.py`.
+- Controllers stay thin. Shared logic lives in `bond_management/bond_management/utils/`:
+  - accrual, coupon schedules, XIRR and performance math;
+  - PDF parsing (`statement_pdf.py`, `transaction_pdf.py`) behind
+    `private_attachment.py`;
+  - statement-derived writes: exchange rates, market prices, and the
+    quantity reconciliation and its generated private report.
+- Statement save synchronously writes derived data: canonical
+  `Bond Exchange Rate` rows plus a `Bond Exchange Rate Source` provenance row
+  for each statement, market prices posted to `Bond Market Date`, and the
+  reconciliation report file. Equal-valued rates can be shared across
+  statements; conflicting values make the whole save fail.
+- Install/migrate invariants (DocPerms, manual indexes) are idempotent
+  functions in `bond_management/patches/`. They are registered in
+  `patches.txt` and, where a fresh install needs them, also in
+  `after_install` and `after_migrate` in `hooks.py`.
+- Tests: server tests live beside their code (`utils/test_*.py`,
+  `api/test_*.py`, `doctype/*/test_*.py`). The shared factories are in
+  `tests/factories.py` and `tests/pdf_factory.py`; the idempotent Playwright
+  seed is `tests/investor_ui_seed.py`. Browser specs are in `e2e/investor/`
+  and `e2e/desk/`; `e2e/README.md` defines what Python tests own and what
+  Playwright owns.
+- Design and planning docs: `ARCHITECTURE_SPEC.md` (open work and
+  invariants), `docs/specs/` and `docs/plans/`. Read
+  `docs/specs/investor-ui-migration.md` before changing the SPA or the
+  investor APIs.
 
 ## Bond financial conventions
 
