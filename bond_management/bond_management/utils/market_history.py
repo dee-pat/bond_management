@@ -37,7 +37,5 @@ def latest_market_rows(isins, on_or_before, fields, *, filters=None, where=None)
         ranked_query = ranked_query.where(where(market_price))
     ranked = ranked_query.as_("ranked_market")
     return (
-        frappe.qb.from_(ranked)
-        .select(*(ranked[column] for column in columns))
-        .where(ranked[_RANK] == 1)
+        frappe.qb.from_(ranked).select(*(ranked[column] for column in columns)).where(ranked[_RANK] == 1)
     ).run(as_dict=True)
