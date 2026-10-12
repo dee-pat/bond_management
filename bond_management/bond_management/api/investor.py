@@ -1,8 +1,9 @@
 """Read-only API contracts for the investor SPA."""
 
+from contextlib import AbstractContextManager, nullcontext
+
 import frappe
 from frappe import _
-from frappe.utils import get_fullname
 
 # Keep established dotted API paths while report adapters live in a focused module.
 from bond_management.bond_management.api.investor_reports import (
@@ -16,12 +17,11 @@ from bond_management.bond_management.utils.investor_access import (
     require_readable_portfolio as _require_readable_portfolio,
 )
 from bond_management.bond_management.utils.investor_permissions import (
-    BOND_MANAGER_ROLE,
-    INVESTOR_ROLE,
     _get_allowed_portfolios,
     include_shared_exchange_rates_in_safe_projection,
 )
 from bond_management.bond_management.utils.investor_ui import (
+    get_investor_user_context,
     require_investor_ui_access,
     set_investor_api_data,
 )
@@ -73,15 +73,15 @@ STATEMENT_LIST_FIELDS = (
     "portfolio_name",
     "reconciliation_status",
 )
-STATEMENT_DETAIL_FIELDS = (
+STATEMENT_SCALAR_FIELDS = (
     "portfolio_name",
     "statement_date",
     "market_price_posting",
     "reconciliation_status",
     "attachment",
     "quantity_reconciliation_report",
-    "bond_statement_details",
 )
+STATEMENT_DETAIL_FIELDS = (*STATEMENT_SCALAR_FIELDS, "bond_statement_details")
 STATEMENT_HOLDING_FIELDS = (
     "isin",
     "quantity",
@@ -116,7 +116,8 @@ BOND_DETAIL_FIELDS = (*BOND_SCALAR_FIELDS, "principal_schedule", "coupon_schedul
 BOND_PRINCIPAL_FIELDS = ("repayment_date", "principal_units", "repayment_percent")
 BOND_COUPON_FIELDS = ("coupon_date", "period_start", "period_end", "coupon_factor")
 MARKET_DATE_LIST_FIELDS = ("name", "date")
-MARKET_DATE_DETAIL_FIELDS = ("date", "bond_market_prices")
+MARKET_DATE_SCALAR_FIELDS = ("date",)
+MARKET_DATE_DETAIL_FIELDS = (*MARKET_DATE_SCALAR_FIELDS, "bond_market_prices")
 MARKET_PRICE_FIELDS = (
     "isin",
     "principal_factor",
@@ -166,25 +167,12 @@ EXCHANGE_RATE_SORT_OPTIONS = _build_sort_options(
     ("rate_date", "from_currency", "to_currency", "rate", "reverse_rate")
 )
 
-TRANSACTION_FILTER_FIELDS = {
-    "transaction_type": "transaction_type",
-    "isin": "isin",
-    "quantity_face_value": "quantity_face_value",
-    "price": "price",
-}
-STATEMENT_FILTER_FIELDS = {}
-BOND_FILTER_FIELDS = {
-    "bond_name": "bond_name",
-    "isin": "isin",
-    "currency": "currency",
-}
-MARKET_DATE_FILTER_FIELDS = {}
-EXCHANGE_RATE_FILTER_FIELDS = {
-    "from_currency": "from_currency",
-    "to_currency": "to_currency",
-    "rate": "rate",
-    "reverse_rate": "reverse_rate",
-}
+# Click-to-filter columns. Frozensets keep these out of the response allowlists.
+TRANSACTION_FILTER_FIELDS = frozenset({"transaction_type", "isin", "quantity_face_value", "price"})
+STATEMENT_FILTER_FIELDS = frozenset()
+BOND_FILTER_FIELDS = frozenset({"bond_name", "isin", "currency"})
+MARKET_DATE_FILTER_FIELDS = frozenset()
+EXCHANGE_RATE_FILTER_FIELDS = frozenset({"from_currency", "to_currency", "rate", "reverse_rate"})
 EXCHANGE_RATE_DETAIL_FIELDS = (
     "rate_date",
     "from_currency",
@@ -201,39 +189,19 @@ def get_bootstrap() -> dict:
     """Return the authenticated shell context and allowed portfolio choices."""
     require_investor_ui_access()
 
-    user = frappe.session.user
-    roles = set(frappe.get_roles(user))
-    allowed_portfolios = _get_allowed_portfolios(user)
-    filters = {}
-
-    if allowed_portfolios is not None:
-        if not allowed_portfolios:
-            portfolio_choices = []
-        else:
-            filters["name"] = ["in", allowed_portfolios]
-
+    allowed_portfolios = _get_allowed_portfolios(frappe.session.user)
+    portfolio_choices = []
     if allowed_portfolios is None or allowed_portfolios:
         portfolio_rows = frappe.qb.get_query(
             "Bond Portfolio",
             fields=["name", "portfolio_name"],
-            filters=filters,
+            filters={} if allowed_portfolios is None else {"name": ["in", allowed_portfolios]},
             order_by="portfolio_name asc, name asc",
             ignore_permissions=False,
         ).run(as_dict=True)
         portfolio_choices = [{"name": row.name, "label": row.portfolio_name} for row in portfolio_rows]
 
-    return set_investor_api_data(
-        {
-            "feature_enabled": True,
-            "user": {
-                "name": user,
-                "full_name": get_fullname(user),
-            },
-            "is_investor": INVESTOR_ROLE in roles,
-            "is_support": user == "Administrator" or BOND_MANAGER_ROLE in roles,
-            "portfolios": portfolio_choices,
-        }
-    )
+    return set_investor_api_data({**get_investor_user_context(), "portfolios": portfolio_choices})
 
 
 @frappe.whitelist(methods=["GET"])
@@ -250,32 +218,25 @@ def get_transactions(
     require_investor_ui_access()
 
     portfolio = optional_string(portfolio, "Portfolio")
-    order_by, click_filters = _list_controls(
-        sort_by,
-        sort_order,
-        filter_field,
-        filter_value,
-        sort_options=TRANSACTION_SORT_OPTIONS,
-        filter_fields=TRANSACTION_FILTER_FIELDS,
-        default_order="settlement_date desc, name desc",
-    )
-    start_value, page_length_value = _pagination_arguments(start, page_length)
     filters = {}
     if portfolio:
         _require_readable_portfolio(portfolio)
         filters["portfolio_name"] = portfolio
-    filters.update(click_filters)
 
-    rows = frappe.qb.get_query(
+    return _paged_list(
         "Bond Transaction",
-        fields=list(TRANSACTION_LIST_FIELDS),
+        TRANSACTION_LIST_FIELDS,
         filters=filters,
-        order_by=order_by,
-        offset=start_value,
-        limit=page_length_value + 1,
-        ignore_permissions=False,
-    ).run(as_dict=True)
-    return set_investor_api_data(_page_result(rows, start_value, page_length_value))
+        start=start,
+        page_length=page_length,
+        sort_by=sort_by,
+        sort_order=sort_order,
+        filter_field=filter_field,
+        filter_value=filter_value,
+        sort_options=TRANSACTION_SORT_OPTIONS,
+        filter_fields=TRANSACTION_FILTER_FIELDS,
+        default_order="settlement_date desc, name desc",
+    )
 
 
 @frappe.whitelist(methods=["GET"])
@@ -283,18 +244,13 @@ def get_transaction(name: str) -> dict:
     """Return one permission-scoped transaction, including its private PDF URL."""
     require_investor_ui_access()
     name = required_string(name, "Transaction")
-
-    rows = frappe.qb.get_query(
+    transaction = _fetch_one(
         "Bond Transaction",
-        fields=list(TRANSACTION_DETAIL_FIELDS),
-        filters={"name": name},
-        limit=1,
-        ignore_permissions=False,
-    ).run(as_dict=True)
-    if not rows:
-        frappe.throw(_("You are not permitted to read this transaction."), frappe.PermissionError)
-
-    return set_investor_api_data({"transaction": rows[0]})
+        TRANSACTION_DETAIL_FIELDS,
+        name,
+        _("You are not permitted to read this transaction."),
+    )
+    return set_investor_api_data({"transaction": transaction})
 
 
 @frappe.whitelist(methods=["GET"])
@@ -313,37 +269,30 @@ def get_statements(
 
     portfolio = optional_string(portfolio, "Portfolio")
     reconciliation_status = optional_string(reconciliation_status, "Reconciliation status")
-    order_by, click_filters = _list_controls(
-        sort_by,
-        sort_order,
-        filter_field,
-        filter_value,
-        sort_options=STATEMENT_SORT_OPTIONS,
-        filter_fields=STATEMENT_FILTER_FIELDS,
-        default_order="statement_date desc, name desc",
-    )
     if reconciliation_status and reconciliation_status not in STATEMENT_RECONCILIATION_STATUSES:
         frappe.throw(_("Reconciliation status must be Matched or Mismatched."))
 
-    start_value, page_length_value = _pagination_arguments(start, page_length)
     filters = {}
     if portfolio:
         _require_readable_portfolio(portfolio)
         filters["portfolio_name"] = portfolio
     if reconciliation_status:
         filters["reconciliation_status"] = reconciliation_status
-    filters.update(click_filters)
 
-    rows = frappe.qb.get_query(
+    return _paged_list(
         "Bond Statement",
-        fields=list(STATEMENT_LIST_FIELDS),
+        STATEMENT_LIST_FIELDS,
         filters=filters,
-        order_by=order_by,
-        offset=start_value,
-        limit=page_length_value + 1,
-        ignore_permissions=False,
-    ).run(as_dict=True)
-    return set_investor_api_data(_page_result(rows, start_value, page_length_value))
+        start=start,
+        page_length=page_length,
+        sort_by=sort_by,
+        sort_order=sort_order,
+        filter_field=filter_field,
+        filter_value=filter_value,
+        sort_options=STATEMENT_SORT_OPTIONS,
+        filter_fields=STATEMENT_FILTER_FIELDS,
+        default_order="statement_date desc, name desc",
+    )
 
 
 @frappe.whitelist(methods=["GET"])
@@ -351,24 +300,15 @@ def get_statement(name: str) -> dict:
     """Return one permission-scoped statement with its PDF and report URLs."""
     require_investor_ui_access()
     name = required_string(name, "Statement")
-
-    rows = frappe.qb.get_query(
+    statement = _fetch_one(
         "Bond Statement",
-        fields=list(STATEMENT_DETAIL_FIELDS[:-1]),
-        filters={"name": name},
-        limit=1,
-        ignore_permissions=False,
-    ).run(as_dict=True)
-    if not rows:
-        frappe.throw(_("You are not permitted to read this statement."), frappe.PermissionError)
-
-    statement = rows[0]
-    document = frappe.get_doc("Bond Statement", name)
-    document.check_permission("read")
-    statement["bond_statement_details"] = [
-        {field: row.get(field) for field in STATEMENT_HOLDING_FIELDS}
-        for row in document.bond_statement_details
-    ]
+        STATEMENT_SCALAR_FIELDS,
+        name,
+        _("You are not permitted to read this statement."),
+    )
+    statement["bond_statement_details"] = _checked_child_rows(
+        "Bond Statement", name, "bond_statement_details", STATEMENT_HOLDING_FIELDS
+    )
     return set_investor_api_data({"statement": statement})
 
 
@@ -383,27 +323,19 @@ def get_bonds(
 ) -> dict:
     """Return one permission-scoped page of the Desk Bond Master projection."""
     require_investor_ui_access()
-    order_by, filters = _list_controls(
-        sort_by,
-        sort_order,
-        filter_field,
-        filter_value,
+    return _paged_list(
+        "Bond Master",
+        BOND_LIST_FIELDS,
+        start=start,
+        page_length=page_length,
+        sort_by=sort_by,
+        sort_order=sort_order,
+        filter_field=filter_field,
+        filter_value=filter_value,
         sort_options=BOND_SORT_OPTIONS,
         filter_fields=BOND_FILTER_FIELDS,
         default_order="issue_date desc, name desc",
     )
-
-    start_value, page_length_value = _pagination_arguments(start, page_length)
-    rows = frappe.qb.get_query(
-        "Bond Master",
-        fields=list(BOND_LIST_FIELDS),
-        filters=filters,
-        order_by=order_by,
-        offset=start_value,
-        limit=page_length_value + 1,
-        ignore_permissions=False,
-    ).run(as_dict=True)
-    return set_investor_api_data(_page_result(rows, start_value, page_length_value))
 
 
 @frappe.whitelist(methods=["GET"])
@@ -411,25 +343,13 @@ def get_bond(name: str) -> dict:
     """Return one permission-scoped Bond Master with visible schedules."""
     require_investor_ui_access()
     name = required_string(name, "Bond")
-
-    rows = frappe.qb.get_query(
-        "Bond Master",
-        fields=list(BOND_SCALAR_FIELDS),
-        filters={"name": name},
-        limit=1,
-        ignore_permissions=False,
-    ).run(as_dict=True)
-    if not rows:
-        frappe.throw(_("You are not permitted to read this bond."), frappe.PermissionError)
-
-    bond = rows[0]
-    document = frappe.get_doc("Bond Master", name)
-    bond["principal_schedule"] = [
-        {field: row.get(field) for field in BOND_PRINCIPAL_FIELDS} for row in document.principal_schedule
-    ]
-    bond["coupon_schedule"] = [
-        {field: row.get(field) for field in BOND_COUPON_FIELDS} for row in document.coupon_schedule
-    ]
+    bond = _fetch_one("Bond Master", BOND_SCALAR_FIELDS, name, _("You are not permitted to read this bond."))
+    bond["principal_schedule"] = _child_rows(
+        "Bond Master", name, "principal_schedule", "Bond Principal Schedule", BOND_PRINCIPAL_FIELDS
+    )
+    bond["coupon_schedule"] = _child_rows(
+        "Bond Master", name, "coupon_schedule", "Bond Coupon Schedule", BOND_COUPON_FIELDS
+    )
     return set_investor_api_data({"bond": bond})
 
 
@@ -444,27 +364,19 @@ def get_market_dates(
 ) -> dict:
     """Return one permission-scoped page of Bond Market Date history."""
     require_investor_ui_access()
-    order_by, filters = _list_controls(
-        sort_by,
-        sort_order,
-        filter_field,
-        filter_value,
+    return _paged_list(
+        "Bond Market Date",
+        MARKET_DATE_LIST_FIELDS,
+        start=start,
+        page_length=page_length,
+        sort_by=sort_by,
+        sort_order=sort_order,
+        filter_field=filter_field,
+        filter_value=filter_value,
         sort_options=MARKET_DATE_SORT_OPTIONS,
         filter_fields=MARKET_DATE_FILTER_FIELDS,
         default_order="date desc, name desc",
     )
-
-    start_value, page_length_value = _pagination_arguments(start, page_length)
-    rows = frappe.qb.get_query(
-        "Bond Market Date",
-        fields=list(MARKET_DATE_LIST_FIELDS),
-        filters=filters,
-        order_by=order_by,
-        offset=start_value,
-        limit=page_length_value + 1,
-        ignore_permissions=False,
-    ).run(as_dict=True)
-    return set_investor_api_data(_page_result(rows, start_value, page_length_value))
 
 
 @frappe.whitelist(methods=["GET"])
@@ -472,23 +384,15 @@ def get_market_date(name: str) -> dict:
     """Return one permission-scoped market date with persisted market rows."""
     require_investor_ui_access()
     name = required_string(name, "Market date")
-
-    rows = frappe.qb.get_query(
+    market_date = _fetch_one(
         "Bond Market Date",
-        fields=list(MARKET_DATE_DETAIL_FIELDS[:-1]),
-        filters={"name": name},
-        limit=1,
-        ignore_permissions=False,
-    ).run(as_dict=True)
-    if not rows:
-        frappe.throw(_("You are not permitted to read this market date."), frappe.PermissionError)
-
-    market_date = rows[0]
-    document = frappe.get_doc("Bond Market Date", name)
-    document.check_permission("read")
-    market_date["bond_market_prices"] = [
-        {field: row.get(field) for field in MARKET_PRICE_FIELDS} for row in document.bond_market_prices
-    ]
+        MARKET_DATE_SCALAR_FIELDS,
+        name,
+        _("You are not permitted to read this market date."),
+    )
+    market_date["bond_market_prices"] = _checked_child_rows(
+        "Bond Market Date", name, "bond_market_prices", MARKET_PRICE_FIELDS
+    )
     for row in market_date["bond_market_prices"]:
         if not row["future_xirr_available"]:
             row["future_xirr"] = None
@@ -506,28 +410,20 @@ def get_exchange_rates(
 ) -> dict:
     """Return one permission-scoped page of Bond Exchange Rate history."""
     require_investor_ui_access()
-    order_by, filters = _list_controls(
-        sort_by,
-        sort_order,
-        filter_field,
-        filter_value,
+    return _paged_list(
+        "Bond Exchange Rate",
+        EXCHANGE_RATE_LIST_FIELDS,
+        start=start,
+        page_length=page_length,
+        sort_by=sort_by,
+        sort_order=sort_order,
+        filter_field=filter_field,
+        filter_value=filter_value,
         sort_options=EXCHANGE_RATE_SORT_OPTIONS,
         filter_fields=EXCHANGE_RATE_FILTER_FIELDS,
         default_order="rate_date desc, name desc",
+        query_context=include_shared_exchange_rates_in_safe_projection(),
     )
-
-    start_value, page_length_value = _pagination_arguments(start, page_length)
-    with include_shared_exchange_rates_in_safe_projection():
-        rows = frappe.qb.get_query(
-            "Bond Exchange Rate",
-            fields=list(EXCHANGE_RATE_LIST_FIELDS),
-            filters=filters,
-            order_by=order_by,
-            offset=start_value,
-            limit=page_length_value + 1,
-            ignore_permissions=False,
-        ).run(as_dict=True)
-    return set_investor_api_data(_page_result(rows, start_value, page_length_value))
 
 
 @frappe.whitelist(methods=["GET"])
@@ -537,17 +433,12 @@ def get_exchange_rate(name: str) -> dict:
     name = required_string(name, "Exchange rate")
 
     with include_shared_exchange_rates_in_safe_projection():
-        rows = frappe.qb.get_query(
+        exchange_rate = _fetch_one(
             "Bond Exchange Rate",
-            fields=[field for field in EXCHANGE_RATE_DETAIL_FIELDS if field != "statement"],
-            filters={"name": name},
-            limit=1,
-            ignore_permissions=False,
-        ).run(as_dict=True)
-    if not rows:
-        frappe.throw(_("You are not permitted to read this exchange rate."), frappe.PermissionError)
-
-    exchange_rate = rows[0]
+            tuple(field for field in EXCHANGE_RATE_DETAIL_FIELDS if field != "statement"),
+            name,
+            _("You are not permitted to read this exchange rate."),
+        )
     # The row is authorized above. Read private provenance only to apply the
     # linked statement's read boundary before returning this fixed projection.
     statement = frappe.db.get_value("Bond Exchange Rate", name, "statement")
@@ -569,6 +460,88 @@ def _visible_statement_reference(statement: str | None) -> str | None:
     return statement if readable else None
 
 
+def _fetch_one(doctype: str, fields: tuple[str, ...], name: str, denied_message: str) -> dict:
+    """Return one readable projection row, or deny without revealing existence."""
+    rows = frappe.qb.get_query(
+        doctype,
+        fields=list(fields),
+        filters={"name": name},
+        limit=1,
+        ignore_permissions=False,
+    ).run(as_dict=True)
+    if not rows:
+        frappe.throw(denied_message, frappe.PermissionError)
+    return rows[0]
+
+
+def _child_rows(
+    parent_doctype: str, parent: str, parentfield: str, child_doctype: str, fields: tuple[str, ...]
+) -> list[dict]:
+    """Return a child table's projection in form order, checked through its parent."""
+    return frappe.qb.get_query(
+        child_doctype,
+        fields=list(fields),
+        filters={"parent": parent, "parenttype": parent_doctype, "parentfield": parentfield},
+        order_by="idx asc",
+        parent_doctype=parent_doctype,
+        ignore_permissions=False,
+    ).run(as_dict=True)
+
+
+def _checked_child_rows(
+    parent_doctype: str, parent: str, parentfield: str, fields: tuple[str, ...]
+) -> list[dict]:
+    """Return child rows only when the whole document passes its read check.
+
+    Document-level ``check_permission`` also applies User Permissions to Link
+    fields inside child rows (for example a restricted Bond Master ISIN), which
+    a child-table query does not.
+    """
+    document = frappe.get_doc(parent_doctype, parent)
+    document.check_permission("read")
+    return [{field: row.get(field) for field in fields} for row in document.get(parentfield)]
+
+
+def _paged_list(
+    doctype: str,
+    fields: tuple[str, ...],
+    *,
+    start,
+    page_length,
+    sort_by: str | None,
+    sort_order: str | None,
+    filter_field: str | None,
+    filter_value: str | None,
+    sort_options: dict[str, dict[str, str]],
+    filter_fields: frozenset[str],
+    default_order: str,
+    filters: dict | None = None,
+    query_context: AbstractContextManager | None = None,
+) -> dict:
+    """Return one permission-scoped page with validated sort, filter, and paging controls."""
+    order_by, click_filters = _list_controls(
+        sort_by,
+        sort_order,
+        filter_field,
+        filter_value,
+        sort_options=sort_options,
+        filter_fields=filter_fields,
+        default_order=default_order,
+    )
+    start_value, page_length_value = _pagination_arguments(start, page_length)
+    with query_context or nullcontext():
+        rows = frappe.qb.get_query(
+            doctype,
+            fields=list(fields),
+            filters={**(filters or {}), **click_filters},
+            order_by=order_by,
+            offset=start_value,
+            limit=page_length_value + 1,
+            ignore_permissions=False,
+        ).run(as_dict=True)
+    return set_investor_api_data(_page_result(rows, start_value, page_length_value))
+
+
 def _list_controls(
     sort_by: str | None,
     sort_order: str | None,
@@ -576,7 +549,7 @@ def _list_controls(
     filter_value: str | None,
     *,
     sort_options: dict[str, dict[str, str]],
-    filter_fields: dict[str, str],
+    filter_fields: frozenset[str],
     default_order: str,
 ) -> tuple[str, dict[str, str]]:
     sort_by = optional_string(sort_by, "Sort by")
@@ -600,7 +573,7 @@ def _list_controls(
         frappe.throw(_("Filter field is not supported for this list."), frappe.ValidationError)
 
     order_by = default_order if sort_by is None else sort_options[sort_by][sort_order]
-    filters = {} if filter_field is None else {filter_fields[filter_field]: filter_value}
+    filters = {} if filter_field is None else {filter_field: filter_value}
     return order_by, filters
 
 
