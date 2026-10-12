@@ -3,8 +3,6 @@ from decimal import Decimal
 
 import frappe
 from frappe.utils import getdate
-from pypika.analytics import RowNumber
-from pypika.enums import Order
 from pyxirr import InvalidPaymentsError, xirr
 
 from bond_management.bond_management.utils.accrual import (
@@ -14,6 +12,7 @@ from bond_management.bond_management.utils.accrual import (
     unit_accrued_interest_from_bond,
 )
 from bond_management.bond_management.utils.financial import quantize_money, to_decimal
+from bond_management.bond_management.utils.market_history import latest_market_rows
 from bond_management.bond_management.utils.portfolio import (
     get_coupon_position_from_transactions,
     get_ledger_position_from_transactions,
@@ -98,35 +97,13 @@ def get_last_xirr_guesses(isins, date):
     if not isins or not date:
         return {}
 
-    market_date = frappe.qb.DocType("Bond Market Date")
-    market_price = frappe.qb.DocType("Bond Market Prices")
-    guess_rank = (
-        RowNumber()
-        .over(market_price.isin)
-        .orderby(market_date.date, order=Order.desc)
-        .orderby(market_date.name, order=Order.desc)
-        .as_("guess_rank")
+    results = latest_market_rows(
+        isins,
+        date,
+        ("future_xirr",),
+        filters={"bond_market_prices.future_xirr_available": 1},
+        where=lambda market_price: market_price.future_xirr.isnotnull(),
     )
-    ranked_query = frappe.qb.get_query(
-        "Bond Market Date",
-        fields=[
-            "bond_market_prices.isin as isin",
-            "bond_market_prices.future_xirr as future_xirr",
-            guess_rank,
-        ],
-        filters={
-            "date": ["<=", date],
-            "bond_market_prices.isin": ["in", isins],
-            "bond_market_prices.future_xirr_available": 1,
-        },
-        ignore_permissions=False,
-    ).where(market_price.future_xirr.isnotnull())
-    ranked_market = ranked_query.as_("ranked_market")
-    results = (
-        frappe.qb.from_(ranked_market)
-        .select(ranked_market["isin"], ranked_market["future_xirr"])
-        .where(ranked_market["guess_rank"] == 1)
-    ).run(as_dict=True)
 
     return {result.isin: float(to_decimal(result.future_xirr) / to_decimal(100)) for result in results}
 
