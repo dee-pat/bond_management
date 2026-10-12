@@ -18,7 +18,7 @@ from bond_management.bond_management.utils.transaction_pdf import (
 
 class TestTransactionPdf(UnitTestCase):
     def test_rejects_pdf_with_too_many_pages_before_extracting_text(self):
-        reader = patch("bond_management.bond_management.utils.transaction_pdf.PdfReader")
+        reader = patch("bond_management.bond_management.utils.pdf_common.PdfReader")
         with reader as pdf_reader:
             pdf_reader.return_value.is_encrypted = False
             pdf_reader.return_value.pages = [object()] * (MAX_TRANSACTION_PDF_PAGES + 1)
@@ -31,7 +31,7 @@ class TestTransactionPdf(UnitTestCase):
             def extract_text(self):
                 return "x" * (MAX_TRANSACTION_PDF_TEXT_CHARS + 1)
 
-        reader = patch("bond_management.bond_management.utils.transaction_pdf.PdfReader")
+        reader = patch("bond_management.bond_management.utils.pdf_common.PdfReader")
         with reader as pdf_reader:
             pdf_reader.return_value.is_encrypted = False
             pdf_reader.return_value.pages = [LargePage()]

@@ -25,7 +25,7 @@ from bond_management.bond_management.utils.performance import load_portfolio_per
 from bond_management.bond_management.utils.portfolio import get_ledger_position_from_transactions
 from bond_management.bond_management.utils.validation import optional_string, required_string
 from bond_management.bond_management.utils.xirr import (
-    DEFAULT_XIRR_GUESS,
+    bounded_xirr_guess,
     calculate_xirr,
     consolidate_cashflows,
     create_future_cash_flows,
@@ -214,15 +214,8 @@ def get_terminal_market_price(isin, valuation_date, quantity, market_price):
 
 def calculate_future_xirr_from_cashflows(isin, valuation_date, cashflows, historical_guess=None):
     """Calculate future XIRR with the same bounded historical guess as the utility."""
-    guess = historical_guess
-    if guess is not None:
-        guess = float(to_decimal(guess) / to_decimal(100))
-    else:
-        guess = get_last_xirr_guess(isin, valuation_date)
-    if guess is None:
-        guess = DEFAULT_XIRR_GUESS
-    guess = max(min(guess, 1.0), -0.5)
-    return calculate_xirr(consolidate_cashflows(cashflows), guess)
+    guess = historical_guess if historical_guess is not None else get_last_xirr_guess(isin, valuation_date)
+    return calculate_xirr(consolidate_cashflows(cashflows), bounded_xirr_guess(guess))
 
 
 # ---------- COLUMNS ----------

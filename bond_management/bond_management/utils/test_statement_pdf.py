@@ -42,7 +42,7 @@ class TestStatementPdf(UnitTestCase):
         self.assertEqual(_get_filename_account_hint(filename), "ACCOUNT-123")
 
     def test_rejects_pdf_with_too_many_pages_before_extracting_text(self):
-        reader = patch("bond_management.bond_management.utils.statement_pdf.PdfReader")
+        reader = patch("bond_management.bond_management.utils.pdf_common.PdfReader")
         with reader as pdf_reader:
             pdf_reader.return_value.is_encrypted = False
             pdf_reader.return_value.pages = [object()] * (MAX_STATEMENT_PDF_PAGES + 1)
@@ -55,7 +55,7 @@ class TestStatementPdf(UnitTestCase):
             def extract_text(self):
                 return "x" * (MAX_STATEMENT_PDF_TEXT_CHARS + 1)
 
-        reader = patch("bond_management.bond_management.utils.statement_pdf.PdfReader")
+        reader = patch("bond_management.bond_management.utils.pdf_common.PdfReader")
         with reader as pdf_reader:
             pdf_reader.return_value.is_encrypted = False
             pdf_reader.return_value.pages = [LargePage()]

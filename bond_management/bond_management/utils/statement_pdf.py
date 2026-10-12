@@ -2,20 +2,25 @@ import hmac
 import re
 from collections import defaultdict
 from collections.abc import Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
-from io import BytesIO
 
 import frappe
 from frappe import _
 from pypdf import PdfReader
 from pypdf.errors import DependencyError, FileNotDecryptedError, PdfReadError, PdfStreamError
 
+from bond_management.bond_management.utils.pdf_common import (
+    MAX_PDF_BYTES,
+    PortfolioPdfCredentials,
+    get_portfolio_pdf_credentials,
+    open_pdf,
+)
 from bond_management.bond_management.utils.private_attachment import read_private_pdf_attachment
 from bond_management.bond_management.utils.validation import optional_string
 
-MAX_STATEMENT_PDF_BYTES = 10 * 1024 * 1024
+MAX_STATEMENT_PDF_BYTES = MAX_PDF_BYTES
 MAX_STATEMENT_PDF_PAGES = 200
 MAX_STATEMENT_PDF_TEXT_CHARS = 2_000_000
 DATE_PATTERNS = (
@@ -100,14 +105,6 @@ class ParsedStatementPdf:
     market_prices: tuple[ParsedMarketPrice, ...] = ()
     exchange_rates: tuple[ParsedExchangeRate, ...] = ()
     unlock_password: str | None = field(default=None, repr=False)
-
-
-@dataclass(frozen=True)
-class PortfolioPdfCredentials:
-    portfolio_name: str
-    account_no: str
-    transaction_account_no: str | None = None
-    password: str | None = field(default=None, repr=False)
 
 
 @dataclass(frozen=True)
@@ -336,39 +333,16 @@ def extract_statement_pdf(
     bond_name_to_isin: Mapping[str, str] | None = None,
 ) -> ParsedStatementPdf:
     """Decrypt a PDF with configured portfolio passwords and parse its first page."""
-    if len(content) > MAX_STATEMENT_PDF_BYTES:
-        raise StatementPdfError("The statement PDF must be 10 MB or smaller.")
-    if b"%PDF-" not in content[:1024]:
-        raise StatementPdfError("The attachment is not a valid PDF file.")
-
-    try:
-        probe = PdfReader(BytesIO(content), strict=False)
-    except (PdfReadError, PdfStreamError, ValueError) as error:
-        raise StatementPdfError("The attachment could not be read as a PDF.") from error
-
-    if not probe.is_encrypted:
-        return _parse_reader(probe, account_no_hint, bond_name_to_isin)
-
-    for password in dict.fromkeys(password for password in passwords if password):
-        try:
-            reader = PdfReader(BytesIO(content), strict=False)
-            if not reader.decrypt(password):
-                continue
-        except (DependencyError, FileNotDecryptedError, PdfReadError, PdfStreamError, ValueError):
-            continue
-
-        parsed = _parse_reader(reader, account_no_hint, bond_name_to_isin)
-        return ParsedStatementPdf(
-            account_no=parsed.account_no,
-            statement_date=parsed.statement_date,
-            market_prices=parsed.market_prices,
-            exchange_rates=parsed.exchange_rates,
-            unlock_password=password,
-        )
-
-    raise StatementPdfPasswordError(
-        "The PDF could not be unlocked with any configured Bond Portfolio password."
+    reader, password = open_pdf(
+        content,
+        passwords,
+        error_class=StatementPdfError,
+        password_error_class=StatementPdfPasswordError,
+        size_message="The statement PDF must be 10 MB or smaller.",
+        password_message="The PDF could not be unlocked with any configured Bond Portfolio password.",
     )
+    parsed = _parse_reader(reader, account_no_hint, bond_name_to_isin)
+    return replace(parsed, unlock_password=password) if password else parsed
 
 
 def get_statement_attachment_details(
@@ -385,7 +359,7 @@ def get_statement_attachment_details(
         private_message=_("Bond Statement PDFs must be uploaded as private files."),
         size_message=_("The statement PDF must be 10 MB or smaller."),
     )
-    credentials = _get_portfolio_credentials()
+    credentials = get_portfolio_pdf_credentials()
     bond_name_to_isin = _get_bond_name_to_isin()
 
     hinted_portfolios = [
@@ -535,31 +509,6 @@ def _bond_name_aliases(value: str) -> set[str]:
 
 def _normalize_bond_name(value: str) -> str:
     return re.sub(r"[^A-Z0-9]+", "-", (value or "").upper()).strip("-")
-
-
-def _get_portfolio_credentials() -> list[PortfolioPdfCredentials]:
-    portfolios = frappe.qb.get_query(
-        "Bond Portfolio",
-        fields=["name", "account_no", "transaction_account_no"],
-        order_by="name asc",
-        ignore_permissions=False,
-    ).run(as_dict=True)
-
-    credentials = []
-    for portfolio in portfolios:
-        portfolio_doc = frappe.get_doc("Bond Portfolio", portfolio.name)
-        credentials.append(
-            PortfolioPdfCredentials(
-                portfolio_name=portfolio.name,
-                account_no=portfolio.account_no,
-                transaction_account_no=portfolio.transaction_account_no,
-                password=portfolio_doc.get_password(
-                    "statement_pdf_password",
-                    raise_exception=False,
-                ),
-            )
-        )
-    return credentials
 
 
 def _unique_matches(text, patterns, converter):

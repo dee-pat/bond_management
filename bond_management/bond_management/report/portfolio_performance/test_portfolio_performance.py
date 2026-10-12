@@ -46,7 +46,7 @@ class TestPortfolioPerformance(IntegrationTestCase):
         self.assertEqual(context["market_prices"], {bond.name: 110})
         self.assertAlmostEqual(
             context["xirr_guesses"][bond.name],
-            earlier.bond_market_prices[0].future_xirr,
+            earlier.bond_market_prices[0].future_xirr / 100,
             places=7,
         )
         self.assertNotEqual(context["market_prices"][bond.name], earlier.bond_market_prices[0].market_price)

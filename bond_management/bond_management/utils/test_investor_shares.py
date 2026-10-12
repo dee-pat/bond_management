@@ -627,6 +627,10 @@ class TestInvestorShares(IntegrationTestCase):
             with self.assertRaises(frappe.PermissionError):
                 read_doc("Bond Portfolio", self.other.name)
 
+    def test_hook_registrations_cover_the_share_boundary_doctypes(self):
+        # hooks.py keeps its own copy so it stays free of app imports; keep both in sync.
+        self.assertEqual(set(hooks._financial_doctypes), set(FINANCIAL_DOCTYPES))
+
     def test_financial_mutations_reject_shares_even_with_an_additional_manager_role(self):
         self.investor.append("roles", {"role": BOND_MANAGER_ROLE})
         self.investor.save(ignore_permissions=True)

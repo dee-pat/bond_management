@@ -81,6 +81,24 @@ def is_quantity_change_bond(bond_doc):
     )
 
 
+def _outstanding_factor(principal_schedule, date, *, include_repayment_on_date: bool):
+    """Return the share of original principal outstanding after repayments through ``date``."""
+    settlement_date = getdate(date)
+    factor = to_decimal(1)
+    for period in principal_schedule or []:
+        repayment_date = getdate(period.get("repayment_date"))
+        repayment_is_effective = repayment_date and (
+            repayment_date <= settlement_date
+            if include_repayment_on_date
+            else repayment_date < settlement_date
+        )
+        if repayment_is_effective:
+            factor -= to_decimal(period.get("repayment_percent")) / to_decimal(100)
+
+    factor = quantize_percent(factor)
+    return to_decimal(0) if abs(factor) <= PERCENT_PRECISION else factor
+
+
 def calculate_principal_factor_from_schedule(
     principal_schedule,
     date,
@@ -92,27 +110,12 @@ def calculate_principal_factor_from_schedule(
 
     Coupon entitlement is the distinct exception: pass
     ``include_repayment_on_date=False`` to use principal immediately before a
-    repayment made on the coupon date.
+    repayment made on the coupon date. Quantity-change bonds keep principal at
+    one because their repayments reduce quantity instead.
     """
-
-    settlement_date = getdate(date)
-    principal_factor = to_decimal(1)
-
     if quantity_change:
         return to_decimal(1)
-
-    for period in principal_schedule or []:
-        repayment_date = getdate(period.get("repayment_date"))
-        repayment_is_effective = repayment_date and (
-            repayment_date <= settlement_date
-            if include_repayment_on_date
-            else repayment_date < settlement_date
-        )
-        if repayment_is_effective:
-            principal_factor -= to_decimal(period.get("repayment_percent")) / to_decimal(100)
-
-    principal_factor = quantize_percent(principal_factor)
-    return to_decimal(0) if abs(principal_factor) <= PERCENT_PRECISION else principal_factor
+    return _outstanding_factor(principal_schedule, date, include_repayment_on_date=include_repayment_on_date)
 
 
 def calculate_quantity_factor_from_schedule(
@@ -125,21 +128,7 @@ def calculate_quantity_factor_from_schedule(
     """Return the outstanding quantity factor for quantity-changing bonds."""
     if not quantity_change:
         return to_decimal(1)
-
-    settlement_date = getdate(date)
-    quantity_factor = to_decimal(1)
-    for period in principal_schedule or []:
-        repayment_date = getdate(period.get("repayment_date"))
-        repayment_is_effective = repayment_date and (
-            repayment_date <= settlement_date
-            if include_repayment_on_date
-            else repayment_date < settlement_date
-        )
-        if repayment_is_effective:
-            quantity_factor -= to_decimal(period.get("repayment_percent")) / to_decimal(100)
-
-    quantity_factor = quantize_percent(quantity_factor)
-    return to_decimal(0) if abs(quantity_factor) <= PERCENT_PRECISION else quantity_factor
+    return _outstanding_factor(principal_schedule, date, include_repayment_on_date=include_repayment_on_date)
 
 
 def calculate_principal_factor_from_bond(bond_doc, date, *, include_repayment_on_date: bool = True):
