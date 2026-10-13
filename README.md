@@ -18,7 +18,7 @@ Financial calculations and permissions are enforced on the server. Uploaded stat
 | Transactions         | Record purchases and sales manually or extract transaction data from private PDF attachments. Validate dates, prices, accrued interest, commissions, and ledger consistency.              | Bond Transaction                                                  |
 | Statements           | Extract statement identity, holdings, prices, and exchange rates from private PDFs; reconcile statement quantities with calculated portfolio positions; generate a reconciliation report. | Bond Statement, Bond Statement Details                            |
 | Market data          | Maintain dated market prices, principal factors, weighted repayment dates, future XIRR values, and yield-curve data.                                                                      | Bond Market Date, Bond Market Prices                              |
-| Exchange rates       | Store statement-sourced and manually maintained currency rates, including reverse rates.                                                                                                  | Bond Exchange Rate                                                |
+| Exchange rates       | Store statement-sourced and manually maintained currency rates, including reverse rates, with per-statement provenance. Equal rates are shared; conflicting rates reject the save.        | Bond Exchange Rate, Bond Exchange Rate Source                     |
 | Analytics            | Review portfolio value, proceeds, gains, past and future XIRR, historical stored bond yields, and settlement interest differences.                                                        | Portfolio Performance, Interest Difference, Bond Yield Comparison |
 
 The normal operating flow is:
@@ -148,6 +148,17 @@ apps/bond_management/scripts/verify.sh pre-push-ui
 
 See [`docs/verification.md`](docs/verification.md) for the required gates, test-site rules, Playwright setup, and completion evidence format.
 
+Individual gates can also be run on their own:
+
+| Gate       | Runs                                                                   |
+| ---------- | ---------------------------------------------------------------------- |
+| `lint`     | pre-commit (ruff, eslint, prettier), Semgrep rules, and rule tests     |
+| `server`   | migrates the test site and runs the full server suite                  |
+| `frontend` | `yarn lint`, `yarn typecheck`, and `bench build --app bond_management` |
+| `ui`       | seeds investor fixtures and runs the full Playwright suite             |
+
+`pre-push` runs `lint` and `server`; `pre-push-ui` adds `frontend` and `ui`. Set `TEST_SITE` to override the default `bond-management-test.localhost`.
+
 ### Manual PR reviews
 
 Request a Codex review with an `@codex review` PR comment. Reviews follow the
@@ -164,7 +175,12 @@ for setup and manual review instructions.
 - Investor API responses use fixed, permission-scoped projections rather than unrestricted generic DocType access.
 - Generated statement reports and derived exchange-rate or market-price data are kept tied to their owning statement and handled idempotently.
 
-More implementation context is documented in [`ARCHITECTURE_SPEC.md`](ARCHITECTURE_SPEC.md).
+More implementation context:
+
+- [`ARCHITECTURE_SPEC.md`](ARCHITECTURE_SPEC.md): open work and invariants.
+- [`docs/domain-model.md`](docs/domain-model.md): DocType relationships and data flows.
+- [`docs/testing-matrix.md`](docs/testing-matrix.md): index from high-risk bond rules to their source modules and regression tests.
+- [`docs/specs/`](docs/specs/) and [`docs/plans/`](docs/plans/): design specs and plans.
 
 ## License
 
