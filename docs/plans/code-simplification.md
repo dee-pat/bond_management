@@ -33,7 +33,8 @@ domain model and record gate commands and observed results below.
 - Independent field contracts now cover all 23 projections. Endpoint tests
   retain their financial and portfolio/child/provenance assertions.
 - Eight user factories and seven session helpers now use shared factories.
-  The common access matrix covers 33 combinations across the same 11 endpoints.
+  The common access matrix covers 48 combinations across 16 endpoints: 11
+  list/report endpoints plus five detail endpoints added in the review follow-up.
 - Report/export position and cash-flow construction are shared inside the report
   module. Exports still build only their selected series and authorize at the
   endpoint. The new consistency test covers native/reporting and bond/TOTAL
@@ -98,3 +99,29 @@ explicitly. The underlying test and permission behavior are unchanged.
 - Observed exit statuses: both 0; targeted regression 1 passed and full server suite 403 passed.
 - Failures/blockers: none. Local frontend/UI reruns are not required for this documentation fix.
 - Remaining verification: updated PR CI; results will be recorded on the PR.
+
+## Test-coverage review follow-up
+
+Two test-coverage findings were valid. The access matrix accepted any
+`PermissionError`, so a downstream report or portfolio check could satisfy a
+case without the investor gate, and it omitted the five detail endpoints. The
+report/export consistency test compared two consumers of the same builder.
+
+- Change (`5ea3c6f`): access cases now match the gate's own messages and cover
+  16 endpoints (48 combinations); native single-bond export flows are pinned to
+  hand-derived values before and on maturity.
+- Risk: low, test-only. Domain graph reviewed; no mapped relationship changed.
+- Required gates: affected test modules and lint.
+- Commands: `bench --site bond-management-test.localhost run-tests --module bond_management.bond_management.api.test_investor`,
+  `bench --site bond-management-test.localhost run-tests --module bond_management.bond_management.report.portfolio_performance.test_portfolio_performance`,
+  and `apps/bond_management/scripts/verify.sh lint` from the bench root.
+- Observed exit statuses: all 0 after ruff formatting; an intermediate lint pass
+  exited 1 when ruff reformatted a changed test. Access module 4 passed; report
+  module 25 passed.
+- Mutation check: removing the gate from `get_portfolio_performance` made the
+  matrix fail with the report-permission message, which the previous assertion
+  accepted. The production file was restored.
+- Tests not run: full server and UI gates, not required for test-only changes.
+- Remaining verification: updated PR CI.
+- The earlier "33 cases" evidence above records the `acd2fa4` run and is kept as
+  historical evidence.
