@@ -124,6 +124,50 @@ class TestPortfolioPerformance(IntegrationTestCase):
                         )
                         self.assertEqual(sorted(actual), reference)
 
+            # Report and export share one builder, so pin native bond flows to hand-derived values.
+            # 10 units x 100 face at 100, 7% semiannual 30E/360 (3.50/unit coupon), quote 101 per 100.
+            # Accrued to 2025-09-14 is 73/180 x 3.50 = 1.419444/unit, exported as 14.1944 (4dp half-even) for 10 units.
+            expected_native = {
+                ("2025-09-14", "past"): [
+                    ("purchase", "2025-01-02", "-1000.00"),
+                    ("coupon", "2025-07-01", "35.00"),
+                    ("accrued_interest", "2025-09-14", "14.1944"),
+                    ("market_price", "2025-09-14", "1010.00"),
+                ],
+                ("2025-09-14", "future"): [
+                    ("market_price", "2025-09-14", "-1010.00"),
+                    ("accrued_interest", "2025-09-14", "-14.1944"),
+                    ("coupon", "2026-01-01", "35.00"),
+                    ("coupon", "2026-07-01", "35.00"),
+                    ("coupon", "2027-01-01", "35.00"),
+                    ("sale", "2027-01-01", "1000.00"),
+                ],
+                # Maturity day: the final coupon and redemption are past flows, with no position left.
+                ("2027-01-01", "past"): [
+                    ("purchase", "2025-01-02", "-1000.00"),
+                    ("coupon", "2025-07-01", "35.00"),
+                    ("coupon", "2026-01-01", "35.00"),
+                    ("coupon", "2026-07-01", "35.00"),
+                    ("coupon", "2027-01-01", "35.00"),
+                    ("sale", "2027-01-01", "1000.00"),
+                ],
+                ("2027-01-01", "future"): [],
+            }
+            for (expected_date, xirr_type), flows in expected_native.items():
+                if expected_date != valuation_date:
+                    continue
+                with self.subTest(date=valuation_date, type=xirr_type, pinned=True):
+                    exported = get_xirr_cashflows(
+                        portfolio.name, valuation_date, bond.name, xirr_type, "native"
+                    )
+                    self.assertEqual(
+                        sorted(
+                            (flow["transaction_type"], flow["date"], Decimal(str(flow["amount"])))
+                            for flow in exported
+                        ),
+                        sorted((kind, date, Decimal(amount)) for kind, date, amount in flows),
+                    )
+
             purchase = next(flow for flow in reporting_past if flow["type"] == "purchase")
             self.assertEqual(purchase["amount"], Decimal("-10.0000"))
             self.assertEqual(rows[0]["purchases_value_usd"], Decimal("10.0000"))

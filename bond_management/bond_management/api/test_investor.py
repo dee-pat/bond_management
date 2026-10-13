@@ -25,23 +25,30 @@ class TestInvestorAccess(IntegrationTestCase):
             (investor.get_bonds, ()),
             (investor.get_market_dates, ()),
             (investor.get_exchange_rates, ()),
+            # The gate must run before name lookup, so a missing name still hits it.
+            (investor.get_transaction, ("missing",)),
+            (investor.get_statement, ("missing",)),
+            (investor.get_bond, ("missing",)),
+            (investor.get_market_date, ("missing",)),
+            (investor.get_exchange_rate, ("missing",)),
             (investor_reports.get_portfolio_performance, report_args),
             (investor_reports.get_portfolio_performance_cashflows, (*report_args, "TOTAL", "past")),
             (investor_reports.get_interest_difference_by_portfolio, (portfolio.name,)),
             (investor_reports.get_bond_yield_comparison, ()),
             (investor_reports.get_yield_comparison_defaults, ()),
         )
+        # Match the gate's own messages so later portfolio or record checks cannot satisfy a case.
         access_cases = (
-            ("Guest", True, frappe.AuthenticationError),
-            (make_investor_user([]), True, frappe.PermissionError),
-            ("Administrator", False, frappe.PermissionError),
+            ("Guest", True, frappe.AuthenticationError, "Login is required"),
+            (make_investor_user([]), True, frappe.PermissionError, "not permitted to access the investor"),
+            ("Administrator", False, frappe.PermissionError, "investor application is not enabled"),
         )
         for endpoint, args in endpoints:
-            for user, feature_enabled, error in access_cases:
+            for user, feature_enabled, error, message in access_cases:
                 with (
                     self.subTest(endpoint=endpoint.__name__, user=user, feature_enabled=feature_enabled),
                     as_investor_user(user, feature_enabled=feature_enabled),
-                    self.assertRaises(error),
+                    self.assertRaisesRegex(error, message),
                 ):
                     endpoint(*args)
 
