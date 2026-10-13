@@ -258,22 +258,17 @@ function render_audit_copy_button(report) {
 function copy_audit_data(report) {
 	const columns = (report.raw_data?.columns || []).filter((column) => !column.hidden);
 	const rows = report.raw_data?.result || [];
-	const lines = [
-		columns.map((column) => audit_cell(column.label, column)).join("\t"),
-		...rows.map((row) =>
-			columns.map((column) => audit_cell(row[column.fieldname], column)).join("\t")
-		),
-	];
+	const numeric_columns = columns.flatMap((column, index) =>
+		["Currency", "Float", "Int", "Percent"].includes(column.fieldtype) ? [index] : []
+	);
 	frappe.utils.copy_to_clipboard(
-		lines.join("\n"),
+		frappe.provide("bond_management.utils.clipboard").tsv(
+			columns.map((column) => column.label),
+			rows.map((row) => columns.map((column) => row[column.fieldname])),
+			numeric_columns
+		),
 		"Audit data copied to clipboard. You can paste it into Excel."
 	);
-}
-
-function audit_cell(value, column) {
-	return frappe.provide("bond_management.utils.clipboard").sanitize(value, {
-		numeric: ["Currency", "Float", "Int", "Percent"].includes(column?.fieldtype),
-	});
 }
 
 function remove_report_controls(report) {

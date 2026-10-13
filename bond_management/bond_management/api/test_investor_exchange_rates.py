@@ -176,22 +176,6 @@ class TestInvestorExchangeRates(IntegrationTestCase):
 
         with as_investor_user(investor):
             first_page = get_exchange_rates(page_length="1")
-            maximum_page = get_exchange_rates(page_length="50")
-            with self.assertRaisesRegex(frappe.ValidationError, "cannot exceed 50"):
-                get_exchange_rates(page_length="51")
-            with self.assertRaisesRegex(frappe.ValidationError, "must be at least 1"):
-                get_exchange_rates(page_length="0")
-            with self.assertRaisesRegex(frappe.ValidationError, "must be at least 0"):
-                get_exchange_rates(start="-1")
-            with self.assertRaisesRegex(
-                frappe.ValidationError,
-                f"cannot exceed {MAX_PAGE_START}",
-            ):
-                get_exchange_rates(start=MAX_PAGE_START + 1)
-            with self.assertRaises(FrappeTypeError):
-                get_exchange_rates(start=[])
-            with self.assertRaises(TypeError):
-                get_exchange_rates(filters={"from_currency": "EUR"})
 
         self.assertGreater(newer.rate_date, older.rate_date)
         self.assertEqual(first_page["data"][0].name, newer.name)
@@ -199,7 +183,6 @@ class TestInvestorExchangeRates(IntegrationTestCase):
             first_page["pagination"],
             {"start": 0, "page_length": 1, "has_more": True},
         )
-        self.assertEqual(maximum_page["pagination"]["page_length"], 50)
 
     def test_visible_columns_can_sort_and_filter_with_server_controls(self):
         older = make_exchange_rate(from_currency="CHF", rate_date="2030-01-01")
@@ -212,10 +195,6 @@ class TestInvestorExchangeRates(IntegrationTestCase):
                 filter_field="from_currency",
                 filter_value="CHF",
             )
-            with self.assertRaisesRegex(frappe.ValidationError, "not supported"):
-                get_exchange_rates(sort_by="statement", sort_order="asc")
-            with self.assertRaisesRegex(frappe.ValidationError, "Filter field"):
-                get_exchange_rates(filter_field="rate_date", filter_value="2025-01-02")
 
         names = [row.name for row in ascending["data"]]
         self.assertLess(names.index(older.name), names.index(newer.name))

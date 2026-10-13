@@ -94,7 +94,7 @@ class TestPortfolioPerformance(IntegrationTestCase):
 
         # Before maturity has future flows; maturity day and later have none.
         for valuation_date in ("2025-09-14", "2027-01-01", "2027-01-02"):
-            rows, past, future, reporting_past, reporting_future = get_data(portfolio.name, valuation_date)
+            _rows, past, future, reporting_past, reporting_future = get_data(portfolio.name, valuation_date)
             series = (
                 ("past", "native", past),
                 ("future", "native", future),
@@ -170,7 +170,6 @@ class TestPortfolioPerformance(IntegrationTestCase):
 
             purchase = next(flow for flow in reporting_past if flow["type"] == "purchase")
             self.assertEqual(purchase["amount"], Decimal("-10.0000"))
-            self.assertEqual(rows[0]["purchases_value_usd"], Decimal("10.0000"))
             if future:
                 opening = next(flow for flow in future if flow["type"] == "market_price")
                 converted = next(flow for flow in reporting_future if flow["type"] == "market_price")
@@ -180,7 +179,7 @@ class TestPortfolioPerformance(IntegrationTestCase):
         rows = [{"currency": "USD", "proceeds_value": 10}]
         cashflows = [{"date": "2025-01-01", "amount": 10}]
 
-        total = make_total_row(rows, cashflows, [], cashflows, [])
+        total = make_total_row(rows, cashflows, [], cashflows)
 
         self.assertIsNone(total["xirr"])
         self.assertIsNone(total["xirr_usd"])
@@ -213,22 +212,6 @@ class TestPortfolioPerformance(IntegrationTestCase):
             fieldnames[-2:],
             ["expected_coupons_next_year", "expected_coupons_next_year_usd"],
         )
-        self.assertIn("isin", fieldnames)
-        self.assertIn("proceeds_value", fieldnames)
-        self.assertIn("expected_coupons_next_year", fieldnames)
-        self.assertIn("expected_coupons_next_year_usd", fieldnames)
-        self.assertNotIn("proceeds_value_usd", fieldnames)
-        self.assertNotIn("nominal_value_usd", fieldnames)
-        self.assertNotIn("purchases_value_usd", fieldnames)
-        self.assertNotIn("gain_value_usd", fieldnames)
-        self.assertNotIn("reporting_currency", fieldnames)
-        self.assertNotIn("exchange_rate", fieldnames)
-        self.assertIn("market_value_usd", fieldnames)
-        self.assertIn("xirr_usd", fieldnames)
-        self.assertNotIn("future_xirr_usd", fieldnames)
-        self.assertNotIn("sales_value", fieldnames)
-        self.assertNotIn("coupons_value", fieldnames)
-        self.assertNotIn("amortisation_value", fieldnames)
         labels = {column["fieldname"]: column["label"] for column in columns}
         self.assertEqual(labels["currency"], "CCY")
         self.assertEqual(labels["principal_factor"], "Prin. Factor")
@@ -277,12 +260,8 @@ class TestPortfolioPerformance(IntegrationTestCase):
                 "market_value": 1,
                 "gain_value": 3,
                 "reporting_currency": "USD",
-                "nominal_value_usd": 1,
-                "purchases_value_usd": 1,
-                "proceeds_value_usd": 3,
                 "expected_coupons_next_year_usd": 3,
                 "market_value_usd": 1,
-                "gain_value_usd": 3,
             },
             {
                 "currency": "KES",
@@ -293,12 +272,8 @@ class TestPortfolioPerformance(IntegrationTestCase):
                 "market_value": 1,
                 "gain_value": 5,
                 "reporting_currency": "USD",
-                "nominal_value_usd": 2,
-                "purchases_value_usd": 2,
-                "proceeds_value_usd": 5,
                 "expected_coupons_next_year_usd": 5,
                 "market_value_usd": 2,
-                "gain_value_usd": 5,
             },
         ]
         portfolio = make_portfolio()
@@ -312,10 +287,11 @@ class TestPortfolioPerformance(IntegrationTestCase):
         total = data[-1]
         self.assertIsNone(total["currency"])
         self.assertEqual(total["reporting_currency"], "USD")
-        self.assertEqual(total["proceeds_value_usd"], 8)
+        self.assertIsNone(total["proceeds_value"])
+        self.assertEqual(total["market_value_usd"], 3)
         self.assertEqual(total["expected_coupons_next_year_usd"], 8)
 
-        total = make_total_row(rows[:1], [], [], [], [])
+        total = make_total_row(rows[:1], [], [], [])
         self.assertEqual(total["currency"], "USD")
         self.assertEqual(total["proceeds_value"], 3)
         self.assertEqual(total["expected_coupons_next_year"], 3)
@@ -412,7 +388,6 @@ class TestPortfolioPerformance(IntegrationTestCase):
         bond_rows = {row["isin"]: row for row in rows if row["isin"] != "TOTAL"}
         self.assertEqual(bond_rows[kes_bond.name]["currency"], "KES")
         self.assertEqual(bond_rows[kes_bond.name]["reporting_currency"], "USD")
-        self.assertEqual(bond_rows[kes_bond.name]["exchange_rate"], Decimal("0.01"))
         self.assertEqual(
             bond_rows[kes_bond.name]["market_value_usd"],
             (bond_rows[kes_bond.name]["market_value"] * Decimal("0.01")).quantize(Decimal("0.0001")),

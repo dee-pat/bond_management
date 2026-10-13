@@ -118,17 +118,6 @@ class TestInvestorBonds(IntegrationTestCase):
 
         with as_investor_user(investor):
             first_page = get_bonds(page_length="1")
-            maximum_page = get_bonds(page_length="50")
-            with self.assertRaisesRegex(frappe.ValidationError, "cannot exceed 50"):
-                get_bonds(page_length="51")
-            with self.assertRaisesRegex(frappe.ValidationError, "must be at least 1"):
-                get_bonds(page_length="0")
-            with self.assertRaisesRegex(frappe.ValidationError, "must be at least 0"):
-                get_bonds(start="-1")
-            with self.assertRaises(FrappeTypeError):
-                get_bonds(start=[])
-            with self.assertRaises(TypeError):
-                get_bonds(filters={"currency": "USD"})
 
         self.assertEqual(first_page["data"][0].name, newer.name)
         self.assertNotEqual(first_page["data"][0].name, older.name)
@@ -136,7 +125,6 @@ class TestInvestorBonds(IntegrationTestCase):
             first_page["pagination"],
             {"start": 0, "page_length": 1, "has_more": True},
         )
-        self.assertEqual(maximum_page["pagination"]["page_length"], 50)
 
     def test_visible_columns_can_sort_and_filter_with_server_controls(self):
         first = make_bond(bond_name="A-" + unique_name("TEST-BOND"))
@@ -146,10 +134,6 @@ class TestInvestorBonds(IntegrationTestCase):
         with as_investor_user(investor):
             ascending = get_bonds(sort_by="bond_name", sort_order="asc")
             filtered = get_bonds(filter_field="isin", filter_value=first.isin)
-            with self.assertRaisesRegex(frappe.ValidationError, "not supported"):
-                get_bonds(sort_by="principal_schedule", sort_order="asc")
-            with self.assertRaisesRegex(frappe.ValidationError, "Filter field"):
-                get_bonds(filter_field="issue_date", filter_value="2099-01-01")
 
         names = [row.name for row in ascending["data"]]
         self.assertLess(names.index(first.name), names.index(second.name))

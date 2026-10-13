@@ -14,9 +14,6 @@ from bond_management.patches.add_bond_query_indexes import (
     EXCHANGE_RATE_SOURCE_STATEMENT_INDEX,
     EXCHANGE_RATE_UNIQUE,
 )
-from bond_management.patches.backfill_bond_exchange_reverse_rates import (
-    execute as backfill_reverse_rates,
-)
 
 
 class TestBondExchangeRate(IntegrationTestCase):
@@ -249,25 +246,6 @@ class TestBondExchangeRate(IntegrationTestCase):
             places=12,
         )
         self.assertEqual(Decimal(str(rate.reverse_rate)), Decimal("130"))
-
-    def test_reverse_rate_backfill_is_idempotent(self):
-        rate = make_exchange_rate()
-        frappe.db.set_value(
-            "Bond Exchange Rate",
-            rate.name,
-            "reverse_rate",
-            0,
-            update_modified=False,
-        )
-
-        backfill_reverse_rates()
-        rate.reload()
-        expected_reverse_rate = Decimal(1) / Decimal("0.00772499")
-        self.assertAlmostEqual(Decimal(str(rate.reverse_rate)), expected_reverse_rate, places=12)
-
-        backfill_reverse_rates()
-        rate.reload()
-        self.assertAlmostEqual(Decimal(str(rate.reverse_rate)), expected_reverse_rate, places=12)
 
     def test_rejects_duplicate_rows_at_document_and_database_boundaries(self):
         rate = make_exchange_rate()

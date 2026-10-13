@@ -25,25 +25,21 @@ and every registered Patch Log immediately after `install-app`, before any
 migration. `prepare()` creates synthetic legacy rows and removes only Patch
 Logs returned by Frappe's `get_patches_from_app("bond_management")`.
 
-Fixtures include a USD purchase with stale principal and net consideration;
-a Kenya quantity-change bond with stale coupon cadence, flag, and market
-values; encrypted private legacy confirmation and nominal-face-value statement
-PDFs; a duplicate statement sharing a private File; and a statement-derived FX
-rate with the obsolete portfolio column/scoped index and stale reverse rate.
-They use synthetic identities rather than impersonating the known correction
-patch's real records. Direct database/schema writes reproduce legacy states
-only after the helper has enforced its temporary-site administrative boundary.
+One-time data backfills were retired on 2026-10-13 after every deployed site
+had run them; a fresh install marks registered patches complete without running
+them. The remaining registered patches bootstrap permissions and indexes and
+backfill exchange-rate provenance. Fixtures therefore include a USD purchase, a
+statement, a statement-derived FX rate without its provenance row, and a manual
+FX rate without its manual-fallback flag. Direct database writes reproduce these
+legacy states only after the helper has enforced its temporary-site
+administrative boundary. Add representative rows here whenever a new data
+patch is registered.
 
-`verify()` asserts financial values, statement quantity/nominal conversion,
-private attachment ownership and canonical filenames, v8 reconciliation,
-Kenya schedule/market values, global FX scope/reverse rate/provenance,
-permissions, and manual indexes. It persists a business snapshot beside the
-bench, outside the repository and site configuration. Snapshots omit generated
-child names and timestamps while retaining financial fields, child ordering,
-current private File references, and FX provenance. Obsolete reconciliation
-reports queued for asynchronous deletion are excluded. The cleanup worker
-checks the statement's current report field before deleting a queued File, so a
-report reused by a later patch survives a stale cleanup job. `requeue()` removes
+`verify()` asserts transaction financial values, FX provenance and
+manual-fallback flags, permissions, and manual indexes. It persists a business
+snapshot beside the bench, outside the repository and site configuration.
+Snapshots omit generated child names and timestamps while retaining financial
+fields, child ordering, and FX provenance. `requeue()` removes
 only the registered app Patch Logs for a forced rerun. The next `verify()`
 compares business results with the first migrated snapshot. A subsequent
 ordinary migration must preserve both the snapshot and Patch Log
@@ -90,7 +86,7 @@ No browser test is needed because this change adds server verification only.
 The domain model was reviewed: no production relationship or data flow changes.
 The initial helper and five guard tests passed locally on 2026-10-08. The
 current guard suite has eight cases for the temporary-site policy. Fresh
-installation, all 25 registered patches on representative legacy data, forced rerun, and
+installation, all 25 then-registered patches on representative legacy data, forced rerun, and
 ordinary skipped rerun each exited 0. All seven manual indexes, permissions,
 financial values, private attachments and FX provenance were verified. The
 shared `pre-push-ui` gate exited 0 with 328 server and 49 browser tests.

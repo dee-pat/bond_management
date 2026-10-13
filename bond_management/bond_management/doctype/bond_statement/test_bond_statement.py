@@ -33,24 +33,6 @@ from bond_management.bond_management.utils.statement_quantity_report import (
     delete_quantity_reconciliation_report_file,
 )
 from bond_management.patches.add_bond_query_indexes import STATEMENT_ATTACHMENT_UNIQUE
-from bond_management.patches.backfill_statement_reconciliation_statuses import (
-    execute as backfill_reconciliation_statuses,
-)
-from bond_management.patches.refresh_statement_reconciliations_v8 import (
-    execute as refresh_statement_reconciliations_v8,
-)
-from bond_management.patches.regenerate_legacy_face_value_reconciliations import (
-    execute as regenerate_legacy_reconciliations,
-)
-from bond_management.patches.remove_duplicate_bond_statements import (
-    execute as remove_duplicate_statements,
-)
-from bond_management.patches.remove_duplicate_bond_statements import (
-    get_redundant_statement_names,
-)
-from bond_management.patches.standardize_bond_statement_attachment_names import (
-    execute as standardize_existing_statement_attachments,
-)
 
 
 class TestBondStatement(IntegrationTestCase):
@@ -203,13 +185,9 @@ class TestBondStatement(IntegrationTestCase):
                 )
 
                 preview = read_statement_pdf(None, attachment, statement.portfolio_name)
-                legacy_preview = statement.read_statement_pdf()
                 self.assertEqual(preview["portfolio_name"], portfolio.name)
                 self.assertEqual(preview["statement_date"].isoformat(), expected_date)
                 self.assertEqual(preview["account_no"], account_no)
-                self.assertEqual(legacy_preview["portfolio_name"], preview["portfolio_name"])
-                self.assertEqual(legacy_preview["statement_date"], preview["statement_date"])
-                self.assertEqual(legacy_preview["account_no"], preview["account_no"])
 
                 statement.insert()
                 self.assertEqual(statement.portfolio_name, portfolio.name)
@@ -647,72 +625,6 @@ class TestBondStatement(IntegrationTestCase):
         with self.assertRaises(frappe.UniqueValidationError):
             database_duplicate.db_insert()
 
-    def test_duplicate_cleanup_keeps_the_earliest_statement(self):
-        rows = [
-            frappe._dict(
-                name="BS-NEWER",
-                attachment="/private/files/duplicate.pdf",
-                creation="2026-07-31 18:20:00",
-            ),
-            frappe._dict(
-                name="BS-ONLY",
-                attachment="/private/files/only.pdf",
-                creation="2026-07-31 18:21:00",
-            ),
-            frappe._dict(
-                name="BS-OLDER",
-                attachment="/private/files/duplicate.pdf",
-                creation="2026-07-31 18:10:00",
-            ),
-        ]
-
-        self.assertEqual(get_redundant_statement_names(rows), ["BS-NEWER"])
-
-    def test_duplicate_cleanup_runs_before_unique_index_patch(self):
-        patch_lines = Path(frappe.get_app_path("bond_management", "patches.txt")).read_text().splitlines()
-        cleanup_index = patch_lines.index("bond_management.patches.remove_duplicate_bond_statements")
-        index_patch_index = patch_lines.index("bond_management.patches.add_bond_query_indexes")
-        self.assertLess(cleanup_index, index_patch_index)
-
-        events = []
-        rows = [
-            frappe._dict(
-                name="BS-NEWER",
-                attachment="/private/files/duplicate.pdf",
-                creation="2026-07-31 18:20:00",
-            ),
-            frappe._dict(
-                name="BS-OLDER",
-                attachment="/private/files/duplicate.pdf",
-                creation="2026-07-31 18:10:00",
-            ),
-        ]
-        with (
-            patch(
-                "bond_management.patches.remove_duplicate_bond_statements.frappe.qb.get_query"
-            ) as get_query,
-            patch("bond_management.patches.remove_duplicate_bond_statements.frappe.delete_doc") as delete_doc,
-            patch(
-                "bond_management.patches.remove_duplicate_bond_statements.ensure_bond_query_indexes"
-            ) as ensure_indexes,
-        ):
-            get_query.return_value.run.return_value = rows
-            delete_doc.side_effect = lambda *args, **kwargs: events.append("delete")
-            ensure_indexes.side_effect = lambda: events.append("index")
-
-            remove_duplicate_statements()
-
-        self.assertEqual(events, ["delete", "index"])
-
-    def test_v8_reconciliation_refresh_has_a_new_registered_patch_identity(self):
-        patch_lines = Path(frappe.get_app_path("bond_management", "patches.txt")).read_text().splitlines()
-        original_index = patch_lines.index(
-            "bond_management.patches.backfill_statement_reconciliation_statuses"
-        )
-        refresh_index = patch_lines.index("bond_management.patches.refresh_statement_reconciliations_v8")
-
-        self.assertLess(original_index, refresh_index)
-
     def test_rejects_unconfigured_passwords_and_unknown_accounts(self):
         configured_password = unique_name("CONFIGURED-PASSWORD")
         portfolio = make_portfolio(statement_pdf_password=configured_password)
@@ -765,47 +677,6 @@ class TestBondStatement(IntegrationTestCase):
 
         self.assertEqual(statement.portfolio_name, portfolio.name)
         self.assertEqual(statement.statement_date.isoformat(), "2022-10-31")
-
-    def test_patch_standardizes_an_existing_statement_attachment(self):
-        account_no = unique_name("PATCH-ACCOUNT")
-        portfolio = make_portfolio(account_no=account_no)
-        attachment = self._attach_pdf(
-            f"Portfolio Summary as of 31/03/2034\nProduct Account No.: {account_no}",
-            "test-password",
-            file_name=f"{unique_name('old-statement-name')}.pdf",
-        )
-        statement = frappe.get_doc(
-            {
-                "doctype": "Bond Statement",
-                "portfolio_name": portfolio.name,
-                "statement_date": "2034-03-31",
-                "attachment": attachment,
-            }
-        )
-        statement.flags.ignore_statement_pdf = True
-        statement.insert()
-        self.assertEqual(statement.attachment, attachment)
-
-        standardize_existing_statement_attachments([statement.name])
-        statement.reload()
-
-        expected_url = f"/private/files/PortfolioStatement-{account_no}-20340331.pdf"
-        self.assertEqual(statement.attachment, expected_url)
-        standardized_files = frappe.qb.get_query(
-            "File",
-            fields=["file_name", "attached_to_name", "attached_to_field"],
-            filters={"file_url": expected_url},
-            limit=1,
-            ignore_permissions=False,
-        ).run(as_dict=True)
-        self.assertEqual(len(standardized_files), 1)
-        self.assertEqual(standardized_files[0].file_name, expected_url.removeprefix("/private/files/"))
-        self.assertEqual(standardized_files[0].attached_to_name, statement.name)
-        self.assertEqual(standardized_files[0].attached_to_field, "attachment")
-
-        standardize_existing_statement_attachments([statement.name])
-        statement.reload()
-        self.assertEqual(statement.attachment, expected_url)
 
     def test_pdf_managed_fields_are_read_only_and_cannot_be_changed_directly(self):
         account_no = unique_name("PDF-ACCOUNT")
@@ -1007,7 +878,7 @@ class TestBondStatement(IntegrationTestCase):
         delete_quantity_reconciliation_report_file(report_name)
         self.assertIsNone(frappe.db.exists("File", report_name))
 
-    def test_legacy_face_value_is_rescaled_by_face_value_per_unit(self):
+    def test_face_value_quantity_is_scaled_by_face_value_per_unit(self):
         portfolio = make_portfolio()
         bond = self._make_long_dated_bond(face_value_per_unit=100)
         make_transaction(bond, portfolio, quantity_face_value=2000)
@@ -1042,30 +913,6 @@ class TestBondStatement(IntegrationTestCase):
         self.assertIn("2,000", report_text)
         self.assertIn("MATCHED", report_text)
         self.assertEqual(statement.reconciliation_status, "Matched")
-
-        regenerate_legacy_reconciliations([statement.name])
-        statement.reload()
-        versioned_report_url = statement.quantity_reconciliation_report
-        self.assertIn("FaceValue-v2", versioned_report_url)
-        self._read_reconciliation_report(versioned_report_url, "test-password")
-
-        regenerate_legacy_reconciliations([statement.name])
-        statement.reload()
-        self.assertEqual(statement.quantity_reconciliation_report, versioned_report_url)
-
-        backfill_reconciliation_statuses([statement.name])
-        statement.reload()
-        quantity_basis_report_url = statement.quantity_reconciliation_report
-        self.assertIn("QuantityBasis-v8", quantity_basis_report_url)
-        self.assertEqual(statement.reconciliation_status, "Matched")
-
-        refresh_statement_reconciliations_v8([statement.name])
-        statement.reload()
-        self.assertEqual(statement.quantity_reconciliation_report, quantity_basis_report_url)
-
-        refresh_statement_reconciliations_v8([statement.name])
-        statement.reload()
-        self.assertEqual(statement.quantity_reconciliation_report, quantity_basis_report_url)
 
     def test_legacy_face_value_column_can_contain_units_without_rescaling(self):
         portfolio = make_portfolio()

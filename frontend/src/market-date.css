@@ -2,18 +2,6 @@
 	grid-template-columns: minmax(0, 1fr);
 }
 
-.market-price-section,
-.yield-curve-section {
-	margin-top: 20px;
-}
-
-.market-price-section h3 {
-	margin: 0 0 10px;
-	color: var(--desk-text);
-	font-size: 14px;
-	font-weight: 600;
-}
-
 .yield-curve {
 	height: auto;
 	min-height: 21.25rem;

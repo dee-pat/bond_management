@@ -61,21 +61,8 @@ PORTFOLIO_PERFORMANCE_COLUMN_FIELDS = (
     "expected_coupons_next_year_usd",
 )
 PORTFOLIO_PERFORMANCE_ROW_FIELDS = (
-    "isin",
-    "currency",
+    *PORTFOLIO_PERFORMANCE_COLUMN_FIELDS,
     "reporting_currency",
-    "principal_factor",
-    "nominal_value",
-    "purchases_value",
-    "proceeds_value",
-    "market_value",
-    "market_value_usd",
-    "gain_value",
-    "xirr",
-    "xirr_usd",
-    "future_xirr",
-    "expected_coupons_next_year",
-    "expected_coupons_next_year_usd",
     "has_past_cashflows",
     "has_future_cashflows",
 )
@@ -162,7 +149,10 @@ def get_bond_yield_comparison(
     require_investor_ui_access()
     get_report_doc(BOND_YIELD_COMPARISON_REPORT)
 
-    filters = _yield_comparison_filters(from_date, to_date)
+    filters = {
+        "from_date": optional_string(from_date, "From Date"),
+        "to_date": optional_string(to_date, "To Date"),
+    }
     columns, rows = execute_bond_yield_comparison(filters)
     return set_investor_api_data(
         {
@@ -248,12 +238,6 @@ def _authorized_filters(portfolio, valuation_date) -> dict:
         "portfolio": portfolio,
         "valuation_date": getdate(valuation_date).isoformat(),
     }
-
-
-def _yield_comparison_filters(from_date, to_date) -> dict:
-    from_date = optional_string(from_date, "From Date")
-    to_date = optional_string(to_date, "To Date")
-    return {"from_date": from_date, "to_date": to_date}
 
 
 def _oldest_readable_yield_date() -> str | None:

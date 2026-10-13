@@ -251,15 +251,11 @@ function copy_cashflows(frm, row) {
 			}
 
 			cashflows.sort((left, right) => left.date.localeCompare(right.date));
-			const tsv = [
-				"isin\ttransaction_type\tdate\tamount",
-				...cashflows.map(
-					(flow) =>
-						`${clipboard_text(flow.isin)}\t${clipboard_text(
-							flow.type
-						)}\t${clipboard_text(flow.date)}\t${clipboard_number(flow.amount)}`
-				),
-			].join("\n");
+			const tsv = frappe.provide("bond_management.utils.clipboard").tsv(
+				["isin", "transaction_type", "date", "amount"],
+				cashflows.map((flow) => [flow.isin, flow.type, flow.date, flow.amount]),
+				[3]
+			);
 
 			frappe.utils.copy_to_clipboard(
 				tsv,
@@ -267,14 +263,6 @@ function copy_cashflows(frm, row) {
 			);
 			return cashflows;
 		});
-}
-
-function clipboard_text(value) {
-	return frappe.provide("bond_management.utils.clipboard").sanitize(value);
-}
-
-function clipboard_number(value) {
-	return frappe.provide("bond_management.utils.clipboard").sanitize(value, { numeric: true });
 }
 
 function render_yield_curve(frm) {

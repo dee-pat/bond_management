@@ -23,22 +23,11 @@ from bond_management.bond_management.tests.factories import (
     unique_name,
 )
 from bond_management.bond_management.tests.pdf_factory import make_text_pdf
-from bond_management.bond_management.utils.portfolio import (
-    get_position,
-    get_position_for_payment,
-)
+from bond_management.bond_management.utils.performance import load_portfolio_performance_context
+from bond_management.bond_management.utils.portfolio import get_ledger_position_from_transactions
 from bond_management.bond_management.utils.private_attachment import standardize_private_pdf_attachment
 from bond_management.bond_management.utils.transaction_attachment import get_standard_transaction_filename
 from bond_management.bond_management.utils.transaction_pdf import MAX_TRANSACTION_PDF_BYTES
-from bond_management.patches.backfill_transaction_amounts import (
-    execute as backfill_transaction_amounts,
-)
-from bond_management.patches.backfill_transaction_principal_values import (
-    execute as backfill_transaction_principal_values,
-)
-from bond_management.patches.standardize_bond_transaction_attachment_names import (
-    execute as standardize_existing_transaction_attachments,
-)
 
 
 class TestBondTransaction(IntegrationTestCase):
@@ -213,34 +202,6 @@ class TestBondTransaction(IntegrationTestCase):
         with self.assertRaisesRegex(FrappeTypeError, "Argument 'attachment'"):
             read_transaction_pdf(None, transaction.attachment)
 
-    def test_principal_backfill_is_price_adjusted_and_idempotent(self):
-        bond = make_bond(face_value_per_unit=100)
-        portfolio = make_portfolio()
-        transaction = make_transaction(
-            bond,
-            portfolio,
-            quantity_face_value=10,
-            price=105,
-            accrued_interest_paid=1,
-        )
-        original_settlement = transaction.settlement_amount
-        frappe.db.set_value(
-            "Bond Transaction",
-            transaction.name,
-            "principal",
-            1000,
-            update_modified=False,
-        )
-
-        backfill_transaction_principal_values([transaction.name])
-        transaction.reload()
-        self.assertEqual(transaction.principal, 1050)
-        self.assertEqual(transaction.settlement_amount, original_settlement)
-
-        backfill_transaction_principal_values([transaction.name])
-        transaction.reload()
-        self.assertEqual(transaction.principal, 1050)
-
     def test_pdf_attachment_populates_fields_and_rejects_later_changes(self):
         bond = self._make_pdf_bond()
         portfolio = make_portfolio()
@@ -278,11 +239,11 @@ class TestBondTransaction(IntegrationTestCase):
             transaction.attachment,
             expected_attachment,
         )
-        legacy_preview = transaction.read_transaction_pdf()
-        self.assertEqual(legacy_preview["portfolio_name"], portfolio.name)
-        self.assertEqual(legacy_preview["account_no"], portfolio.transaction_account_no)
-        self.assertEqual(len(legacy_preview["transactions"]), 1)
-        self.assertEqual(legacy_preview["transactions"][0]["isin"], bond.name)
+        saved_preview = read_transaction_pdf(transaction.name, transaction.attachment)
+        self.assertEqual(saved_preview["portfolio_name"], portfolio.name)
+        self.assertEqual(saved_preview["account_no"], portfolio.transaction_account_no)
+        self.assertEqual(len(saved_preview["transactions"]), 1)
+        self.assertEqual(saved_preview["transactions"][0]["isin"], bond.name)
 
         attachment_files = frappe.qb.get_query(
             "File",
@@ -534,79 +495,6 @@ class TestBondTransaction(IntegrationTestCase):
         with self.assertRaisesRegex(ValidationError, "overrides can only be set"):
             overridden.save()
 
-    def test_patch_standardizes_an_existing_transaction_attachment(self):
-        bond = self._make_pdf_bond()
-        portfolio = make_portfolio()
-        reference = self._numeric_reference("U")
-        attachment = self._attach_transaction_pdf(
-            self._confirmation_text(
-                portfolio.transaction_account_no,
-                reference,
-                bond.name,
-            ),
-            "test-password",
-        )
-        expected_attachment = self._expected_pdf_attachment(attachment, portfolio)
-        transaction = make_transaction(
-            bond,
-            portfolio,
-            transaction_reference=reference,
-            trade_date="2025-12-30",
-            settlement_date="2025-12-31",
-        )
-        transaction.db_set("attachment", attachment, update_modified=False)
-
-        standardize_existing_transaction_attachments([transaction.name])
-        transaction.reload()
-
-        self.assertEqual(transaction.attachment, expected_attachment)
-        attachment_files = frappe.qb.get_query(
-            "File",
-            fields=["file_name", "attached_to_name", "attached_to_field"],
-            filters={"file_url": expected_attachment},
-            ignore_permissions=False,
-        ).run(as_dict=True)
-        self.assertEqual(len(attachment_files), 1)
-        self.assertEqual(
-            attachment_files[0].file_name,
-            expected_attachment.removeprefix("/private/files/"),
-        )
-        self.assertEqual(attachment_files[0].attached_to_name, transaction.name)
-        self.assertEqual(attachment_files[0].attached_to_field, "attachment")
-
-        standardize_existing_transaction_attachments([transaction.name])
-        transaction.reload()
-        self.assertEqual(transaction.attachment, expected_attachment)
-
-    def test_attachment_backfill_accepts_historical_pdf_above_current_upload_limit(self):
-        bond = self._make_pdf_bond()
-        portfolio = make_portfolio()
-        pdf_bytes = make_text_pdf("Historical confirmation", "test-password")
-        pdf_bytes += b" " * (MAX_TRANSACTION_PDF_BYTES + 1 - len(pdf_bytes))
-        with patch(
-            "frappe.core.api.file.get_max_file_size",
-            return_value=MAX_TRANSACTION_PDF_BYTES + 2,
-        ):
-            attachment = self._upload_transaction_pdf(pdf_bytes)
-        transaction = make_transaction(bond, portfolio)
-        transaction.db_set("attachment", attachment, update_modified=False)
-
-        standardize_existing_transaction_attachments([transaction.name])
-        transaction.reload()
-
-        expected_filename = get_standard_transaction_filename(
-            portfolio.account_no,
-            transaction.settlement_date,
-            content=pdf_bytes,
-        )
-        expected_url = f"/private/files/{expected_filename}"
-        self.assertEqual(transaction.attachment, expected_url)
-        file_name = frappe.db.get_value("File", {"file_url": expected_url}, "name")
-        file_doc = frappe.get_doc("File", file_name)
-        self.assertTrue(file_doc.is_private)
-        self.assertEqual(file_doc.file_name, expected_filename)
-        self.assertEqual(file_doc.get_content(encodings=()), pdf_bytes)
-
     def test_one_selected_row_from_multi_transaction_pdf_populates_current_document(self):
         bond = self._make_pdf_bond()
         portfolio = make_portfolio()
@@ -783,24 +671,6 @@ class TestBondTransaction(IntegrationTestCase):
             },
         )
 
-    def test_transaction_amount_backfill_is_idempotent(self):
-        transaction = make_transaction(make_bond(), make_portfolio())
-        frappe.db.set_value(
-            "Bond Transaction",
-            transaction.name,
-            "transaction_amount",
-            0,
-            update_modified=False,
-        )
-
-        backfill_transaction_amounts([transaction.name])
-        transaction.reload()
-        self.assertEqual(transaction.transaction_amount, 1031)
-
-        backfill_transaction_amounts([transaction.name])
-        transaction.reload()
-        self.assertEqual(transaction.transaction_amount, 1031)
-
     def test_value_endpoint_rejects_complex_string_inputs(self):
         with self.assertRaisesRegex(FrappeTypeError, "isin.*str"):
             get_calculated_amounts(isin=[])
@@ -942,7 +812,10 @@ class TestBondTransaction(IntegrationTestCase):
             quantity_face_value=purchase.quantity_face_value,
         )
 
-        self.assertEqual(get_position(bond.name, sale.settlement_date, portfolio.name), 0)
+        context = load_portfolio_performance_context(portfolio.name, sale.settlement_date)
+        self.assertEqual(
+            get_ledger_position_from_transactions(context["transactions"][bond.name], sale.settlement_date), 0
+        )
 
     def test_backdating_or_reducing_purchase_cannot_break_later_ledger(self):
         bond = make_bond()
@@ -993,19 +866,6 @@ class TestBondTransaction(IntegrationTestCase):
         purchase.portfolio_name = make_portfolio().name
         with self.assertRaisesRegex(ValidationError, "position negative"):
             purchase.save()
-
-    def test_maturity_payment_position_is_inclusive_but_end_of_day_is_zero(self):
-        bond = make_bond()
-        portfolio = make_portfolio()
-        make_transaction(
-            bond,
-            portfolio,
-            trade_date=bond.maturity_date,
-            settlement_date=bond.maturity_date,
-        )
-
-        self.assertEqual(get_position_for_payment(bond.name, bond.maturity_date, portfolio.name), 10)
-        self.assertEqual(get_position(bond.name, bond.maturity_date, portfolio.name), 0)
 
     def _make_pdf_bond(self):
         isin = f"XS{frappe.generate_hash(length=10).upper()}"

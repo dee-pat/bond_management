@@ -9,6 +9,7 @@ from bond_management.bond_management.tests.factories import (
     make_portfolio,
     make_transaction,
 )
+from bond_management.bond_management.utils.performance import load_portfolio_performance_context
 from bond_management.bond_management.utils.xirr import (
     calculate_xirr,
     create_future_cash_flows,
@@ -16,6 +17,18 @@ from bond_management.bond_management.utils.xirr import (
     get_last_xirr_guesses,
     round_cashflow_amount,
 )
+
+
+def _past_cash_flows(bond, valuation_date, market_price, portfolio):
+    """Build past flows from the same preloaded inputs the report uses."""
+    context = load_portfolio_performance_context(portfolio.name, valuation_date)
+    return create_past_cash_flows(
+        bond.name,
+        valuation_date,
+        market_price,
+        context["bonds"][bond.name],
+        context["transactions"][bond.name],
+    )
 
 
 class TestXirr(IntegrationTestCase):
@@ -170,7 +183,7 @@ class TestXirr(IntegrationTestCase):
             commission=0,
         )
 
-        cashflows = create_past_cash_flows(bond.name, "2025-07-01", 100, portfolio.name)
+        cashflows = _past_cash_flows(bond, "2025-07-01", 100, portfolio)
 
         first_coupon = next(flow for flow in cashflows if flow["type"] == "coupon")
         self.assertEqual(first_coupon["amount"], 45)
@@ -210,8 +223,11 @@ class TestXirr(IntegrationTestCase):
             commission=2,
         )
 
-        cashflows = create_past_cash_flows(bond.name, bond.maturity_date, 0, portfolio.name)
+        cashflows = _past_cash_flows(bond, bond.maturity_date, 100, portfolio)
         amounts_by_type = {row["type"]: row["amount"] for row in cashflows}
+
+        # Same-day settlement is entitled to redemption; the end-of-day position is closed.
+        self.assertNotIn("market_price", amounts_by_type)
 
         self.assertEqual(transaction.commission_amount, 20)
         self.assertEqual(transaction.settlement_amount, 1000)
@@ -223,7 +239,7 @@ class TestXirr(IntegrationTestCase):
         portfolio = make_portfolio()
         make_transaction(bond, portfolio)
 
-        cashflows = create_past_cash_flows(bond.name, "2025-12-31", "105", portfolio.name)
+        cashflows = _past_cash_flows(bond, "2025-12-31", "105", portfolio)
         market_price = next(row for row in cashflows if row["type"] == "market_price")
 
         self.assertEqual(market_price["amount"], 1050)
@@ -241,7 +257,7 @@ class TestXirr(IntegrationTestCase):
             commission=0,
         )
 
-        cashflows = create_past_cash_flows(bond.name, coupon_date, 0, portfolio.name)
+        cashflows = _past_cash_flows(bond, coupon_date, 0, portfolio)
 
         coupons = [row["amount"] for row in cashflows if row["type"] == "coupon"]
         self.assertEqual(len(coupons), 1)
@@ -260,7 +276,7 @@ class TestXirr(IntegrationTestCase):
             commission=0,
         )
 
-        cashflows = create_past_cash_flows(bond.name, coupon_date, 0, portfolio.name)
+        cashflows = _past_cash_flows(bond, coupon_date, 0, portfolio)
 
         self.assertEqual([row for row in cashflows if row["type"] == "coupon"], [])
 
@@ -286,7 +302,7 @@ class TestXirr(IntegrationTestCase):
             commission=0,
         )
 
-        cashflows = create_past_cash_flows(bond.name, coupon_date, 0, portfolio.name)
+        cashflows = _past_cash_flows(bond, coupon_date, 0, portfolio)
 
         coupons = [row["amount"] for row in cashflows if row["type"] == "coupon"]
         self.assertEqual(len(coupons), 1)

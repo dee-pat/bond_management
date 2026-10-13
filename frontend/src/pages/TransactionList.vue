@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
 import { RouterLink } from "vue-router";
-import { Button, Select } from "frappe-ui";
+import { Select } from "frappe-ui";
 import { ListCell } from "frappe-ui/list";
 
 import DataList from "../components/DataList.vue";
 import ListFilterBar from "../components/ListFilterBar.vue";
 import ListPagination from "../components/ListPagination.vue";
+import FilterButton from "../components/FilterButton.vue";
 import SortableColumn from "../components/SortableColumn.vue";
 import SurfaceState from "../components/SurfaceState.vue";
 import { useInvestorApi } from "../lib/api";
@@ -90,6 +91,15 @@ function clearAllFilters(): void {
 	activeFilter.value = null;
 	void loadTransactions(0);
 }
+const sortColumns = [
+	{ label: "Settlement Date", field: "settlement_date" },
+	{ label: "Transaction Type", field: "transaction_type" },
+	{ label: "Portfolio Name", field: "portfolio_name" },
+	{ label: "ISIN", field: "isin" },
+	{ label: "Trade Date", field: "trade_date" },
+	{ label: "Quantity/ Face Value", field: "quantity_face_value" },
+	{ label: "Price", field: "price" },
+];
 </script>
 
 <template>
@@ -155,56 +165,10 @@ function clearAllFilters(): void {
 			>
 				<template #header>
 					<SortableColumn
-						label="Settlement Date"
-						field="settlement_date"
-						:sort-by="sortBy"
-						:sort-order="sortOrder"
-						:disabled="loading"
-						@sort="changeSort"
-					/>
-					<SortableColumn
-						label="Transaction Type"
-						field="transaction_type"
-						:sort-by="sortBy"
-						:sort-order="sortOrder"
-						:disabled="loading"
-						@sort="changeSort"
-					/>
-					<SortableColumn
-						label="Portfolio Name"
-						field="portfolio_name"
-						:sort-by="sortBy"
-						:sort-order="sortOrder"
-						:disabled="loading"
-						@sort="changeSort"
-					/>
-					<SortableColumn
-						label="ISIN"
-						field="isin"
-						:sort-by="sortBy"
-						:sort-order="sortOrder"
-						:disabled="loading"
-						@sort="changeSort"
-					/>
-					<SortableColumn
-						label="Trade Date"
-						field="trade_date"
-						:sort-by="sortBy"
-						:sort-order="sortOrder"
-						:disabled="loading"
-						@sort="changeSort"
-					/>
-					<SortableColumn
-						label="Quantity/ Face Value"
-						field="quantity_face_value"
-						:sort-by="sortBy"
-						:sort-order="sortOrder"
-						:disabled="loading"
-						@sort="changeSort"
-					/>
-					<SortableColumn
-						label="Price"
-						field="price"
+						v-for="column in sortColumns"
+						:key="column.field"
+						:label="column.label"
+						:field="column.field"
 						:sort-by="sortBy"
 						:sort-order="sortOrder"
 						:disabled="loading"
@@ -221,80 +185,51 @@ function clearAllFilters(): void {
 						</RouterLink>
 					</ListCell>
 					<ListCell data-label="Transaction Type">
-						<Button
-							class="list-filter-button"
-							variant="ghost"
-							size="sm"
-							:label="`Filter Transaction Type by ${transaction.transaction_type}`"
-							@click="
-								applyFilter(
-									'transaction_type',
-									'Transaction Type',
-									transaction.transaction_type
-								)
-							"
-						>
-							{{ transaction.transaction_type }}
-						</Button>
+						<FilterButton
+							field="transaction_type"
+							label="Transaction Type"
+							:value="transaction.transaction_type"
+							@filter="applyFilter"
+						/>
 					</ListCell>
 					<ListCell data-label="Portfolio Name">
-						<Button
-							class="list-filter-button"
-							variant="ghost"
-							size="sm"
-							:label="`Filter Portfolio Name by ${transaction.portfolio_name}`"
-							@click="
-								applyFilter(
-									'portfolio_name',
-									'Portfolio Name',
-									transaction.portfolio_name
-								)
-							"
-						>
-							{{ transaction.portfolio_name }}
-						</Button>
+						<FilterButton
+							field="portfolio_name"
+							label="Portfolio Name"
+							:value="transaction.portfolio_name"
+							@filter="applyFilter"
+						/>
 					</ListCell>
 					<ListCell data-label="ISIN">
-						<Button
-							class="list-filter-button"
-							variant="ghost"
-							size="sm"
-							:label="`Filter ISIN by ${transaction.isin}`"
-							@click="applyFilter('isin', 'ISIN', transaction.isin)"
-						>
-							{{ transaction.isin }}
-						</Button>
+						<FilterButton
+							field="isin"
+							label="ISIN"
+							:value="transaction.isin"
+							@filter="applyFilter"
+						/>
 					</ListCell>
 					<ListCell data-label="Trade Date">
 						<span>{{ formatDate(transaction.trade_date) }}</span>
 					</ListCell>
 					<ListCell data-label="Quantity/ Face Value">
-						<Button
-							class="list-filter-button"
-							variant="ghost"
-							size="sm"
-							:label="`Filter Quantity/ Face Value by ${transaction.quantity_face_value}`"
-							@click="
-								applyFilter(
-									'quantity_face_value',
-									'Quantity/ Face Value',
-									transaction.quantity_face_value
-								)
-							"
+						<FilterButton
+							field="quantity_face_value"
+							label="Quantity/ Face Value"
+							:value="transaction.quantity_face_value"
+							@filter="applyFilter"
 						>
 							{{ formatNumber(transaction.quantity_face_value) }}
-						</Button>
+						</FilterButton>
 					</ListCell>
 					<ListCell data-label="Price">
-						<Button
-							class="list-filter-button"
-							variant="ghost"
-							size="sm"
-							:label="`Filter Price by ${transaction.price}`"
-							@click="applyFilter('price', 'Price', transaction.price)"
+						<FilterButton
+							field="price"
+							label="Price"
+							:value="transaction.price"
+							@filter="applyFilter"
 						>
 							{{ formatNumber(transaction.price, 6) }}
-						</Button>
+						</FilterButton>
 					</ListCell>
 				</template>
 			</DataList>

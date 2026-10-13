@@ -1,69 +1,6 @@
-import frappe
 from frappe.utils import getdate
 
 from bond_management.bond_management.utils.financial import to_decimal
-
-
-def get_position(
-    isin,
-    statement_date,
-    portfolio_name,
-    exclude_name=None,
-):
-    """Return the end-of-day position, after maturity redemption on that date."""
-    statement_date = getdate(statement_date)
-    position = _get_ledger_position(isin, statement_date, portfolio_name, exclude_name=exclude_name)
-
-    maturity_dates = frappe.qb.get_query(
-        "Bond Master",
-        filters={"name": isin},
-        fields=["maturity_date"],
-        ignore_permissions=False,
-    ).run(pluck=True)
-    if maturity_dates and getdate(maturity_dates[0]) <= statement_date:
-        return to_decimal(0)
-
-    return position
-
-
-def get_position_for_payment(isin, payment_date, portfolio_name):
-    """Return the position immediately before a coupon or principal payment.
-
-    Settlement is ordered before cash payments within the day, so transactions
-    settling exactly on ``payment_date`` participate in that day's entitlement.
-    Unlike :func:`get_position`, maturity redemption is not applied here.
-    """
-    return _get_ledger_position(isin, payment_date, portfolio_name)
-
-
-def get_position_for_coupon_payment(isin, coupon_date, coupon_per_unit, portfolio_name):
-    """Return the position entitled to a coupon on ``coupon_date``.
-
-    Holdings acquired before the coupon date receive the coupon and holdings
-    sold on that date retain it. A purchase settling on the coupon date is
-    entitled only where the recorded accrued-interest payment covers that
-    purchase's full scheduled coupon. This reflects the bank settlement rather
-    than assuming that all same-day settlements occur before the payment.
-    """
-    coupon_date = getdate(coupon_date)
-    coupon_per_unit = to_decimal(coupon_per_unit)
-    rows = frappe.qb.get_query(
-        "Bond Transaction",
-        filters={
-            "isin": isin,
-            "portfolio_name": portfolio_name,
-            "settlement_date": ["<=", coupon_date],
-        },
-        fields=[
-            "transaction_type",
-            "quantity_face_value",
-            "settlement_date",
-            "accrued_interest_paid",
-        ],
-        ignore_permissions=False,
-    ).run(as_dict=True)
-
-    return get_coupon_position_from_transactions(rows, coupon_date, coupon_per_unit)
 
 
 def get_coupon_position_from_transactions(rows, coupon_date, coupon_per_unit):
@@ -85,28 +22,12 @@ def get_coupon_position_from_transactions(rows, coupon_date, coupon_per_unit):
     return position
 
 
-def _get_ledger_position(isin, statement_date, portfolio_name, exclude_name=None):
-    statement_date = getdate(statement_date)
-    rows = frappe.qb.get_query(
-        "Bond Transaction",
-        filters={
-            "isin": isin,
-            "portfolio_name": portfolio_name,
-            "settlement_date": ["<=", statement_date],
-        },
-        fields=["name", "transaction_type", "quantity_face_value", "settlement_date"],
-        ignore_permissions=False,
-    ).run(as_dict=True)
-
-    return get_ledger_position_from_transactions(rows, statement_date, exclude_name=exclude_name)
-
-
-def get_ledger_position_from_transactions(rows, statement_date, exclude_name=None):
+def get_ledger_position_from_transactions(rows, statement_date):
     """Calculate an end-of-day ledger position without additional database reads."""
     statement_date = getdate(statement_date)
     position = to_decimal(0)
     for row in rows:
-        if row.get("name") == exclude_name or getdate(row.get("settlement_date")) > statement_date:
+        if getdate(row.get("settlement_date")) > statement_date:
             continue
         if row.get("transaction_type") == "Purchase":
             position += to_decimal(row.get("quantity_face_value"))

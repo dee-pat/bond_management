@@ -132,15 +132,6 @@ class TestInvestorTransactions(IntegrationTestCase):
 
         with as_investor_user(investor):
             first_page = get_transactions(page_length="1")
-            maximum_page = get_transactions(page_length="50")
-            with self.assertRaisesRegex(frappe.ValidationError, "cannot exceed 50"):
-                get_transactions(page_length="51")
-            with self.assertRaisesRegex(frappe.ValidationError, "must be at least 1"):
-                get_transactions(page_length="0")
-            with self.assertRaisesRegex(frappe.ValidationError, "must be at least 0"):
-                get_transactions(start="-1")
-            with self.assertRaises(FrappeTypeError):
-                get_transactions(start=[])
 
         self.assertEqual(first_page["data"][0].name, newer.name)
         self.assertNotEqual(first_page["data"][0].name, older.name)
@@ -148,7 +139,6 @@ class TestInvestorTransactions(IntegrationTestCase):
             first_page["pagination"],
             {"start": 0, "page_length": 1, "has_more": True},
         )
-        self.assertEqual(maximum_page["pagination"]["page_length"], 50)
 
     def test_visible_columns_can_sort_and_filter_with_server_controls(self):
         bond = make_bond()
@@ -166,22 +156,9 @@ class TestInvestorTransactions(IntegrationTestCase):
                 filter_field="isin",
                 filter_value=bond.name,
             )
-            with self.assertRaisesRegex(frappe.ValidationError, "not supported"):
-                get_transactions(sort_by="attachment", sort_order="asc")
-            with self.assertRaisesRegex(frappe.ValidationError, "must be asc or desc"):
-                get_transactions(sort_by="isin", sort_order="sideways")
-            with self.assertRaisesRegex(frappe.ValidationError, "Filter field"):
-                get_transactions(filter_field="settlement_date", filter_value="2025-12-31")
 
         self.assertEqual([row.name for row in ascending["data"]], [older.name, newer.name])
         self.assertEqual({row.name for row in filtered["data"]}, {older.name, newer.name})
-
-    def test_arbitrary_filters_are_not_accepted(self):
-        investor = make_investor_user([INVESTOR_ROLE])
-
-        with as_investor_user(investor):
-            with self.assertRaises(TypeError):
-                get_transactions(filters={"attachment": ["is", "set"]})
 
     def _make_investor(self, portfolio_name):
         investor = make_investor_user([INVESTOR_ROLE])

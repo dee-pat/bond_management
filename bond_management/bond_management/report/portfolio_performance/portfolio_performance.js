@@ -22,7 +22,6 @@ frappe.query_reports["Portfolio Performance"] = {
 			xirr: { xirr_type: "past", cashflow_currency: "native" },
 			future_xirr: { xirr_type: "future", cashflow_currency: "native" },
 			xirr_usd: { xirr_type: "past", cashflow_currency: "reporting" },
-			future_xirr_usd: { xirr_type: "future", cashflow_currency: "reporting" },
 		};
 		const cashflow = cashflow_columns[column.fieldname];
 		const formatted_value = cashflow
@@ -91,28 +90,20 @@ function copy_xirr_cashflows(report, isin, xirr_type, cashflow_currency) {
 				return cashflows;
 			}
 
-			const tsv = [
-				"isin\ttransaction_type\tdate\tcurrency\tamount\tquantity\trate",
-				...cashflows.map(
-					(flow) =>
-						`${clipboard_text(flow.isin)}\t${clipboard_text(
-							flow.transaction_type
-						)}\t${clipboard_text(flow.date)}\t${clipboard_text(
-							flow.currency
-						)}\t${clipboard_number(flow.amount)}\t${clipboard_number(
-							flow.quantity
-						)}\t${clipboard_number(flow.rate)}`
-				),
-			].join("\n");
+			const tsv = frappe.provide("bond_management.utils.clipboard").tsv(
+				["isin", "transaction_type", "date", "currency", "amount", "quantity", "rate"],
+				cashflows.map((flow) => [
+					flow.isin,
+					flow.transaction_type,
+					flow.date,
+					flow.currency,
+					flow.amount,
+					flow.quantity,
+					flow.rate,
+				]),
+				[4, 5, 6]
+			);
 			frappe.utils.copy_to_clipboard(tsv, `Copied ${cashflows.length} cash flows`);
 			return cashflows;
 		});
-}
-
-function clipboard_text(value) {
-	return frappe.provide("bond_management.utils.clipboard").sanitize(value);
-}
-
-function clipboard_number(value) {
-	return frappe.provide("bond_management.utils.clipboard").sanitize(value, { numeric: true });
 }
