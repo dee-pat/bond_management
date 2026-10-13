@@ -1,13 +1,44 @@
+from contextlib import contextmanager
 from datetime import date, timedelta
+from unittest.mock import patch
 
 import frappe
 from frappe.utils import getdate
+
+from bond_management.bond_management.utils.investor_ui import FEATURE_FLAG
 
 DEFAULT_MARKET_DATE_START = date(2025, 5, 31)
 
 
 def unique_name(prefix):
     return f"{prefix}-{frappe.generate_hash(length=8)}"
+
+
+def make_investor_user(roles):
+    return (
+        frappe.get_doc(
+            {
+                "doctype": "User",
+                "email": f"{unique_name('investor-ui').lower()}@example.com",
+                "first_name": "Investor UI Test",
+                "send_welcome_email": 0,
+                "roles": [{"role": role} for role in roles],
+            }
+        )
+        .insert(ignore_permissions=True)
+        .name
+    )
+
+
+@contextmanager
+def as_investor_user(user, *, feature_enabled=True):
+    previous_user = frappe.session.user
+    try:
+        frappe.set_user(user)
+        with patch.dict(frappe.conf, {FEATURE_FLAG: int(feature_enabled)}):
+            yield
+    finally:
+        frappe.set_user(previous_user)
 
 
 def make_bond(**overrides):

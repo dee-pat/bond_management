@@ -29,6 +29,23 @@ const INVESTOR_API_URL =
 
 type InvestorApiParameters = Record<string, string | number | undefined>;
 
+interface ListOptions {
+	start?: number;
+	pageLength?: number;
+	sortBy?: string;
+	sortOrder?: SortOrder;
+	filterField?: string;
+	filterValue?: string;
+}
+
+interface PortfolioListOptions extends ListOptions {
+	portfolio?: string;
+}
+
+interface StatementListOptions extends PortfolioListOptions {
+	reconciliationStatus?: string;
+}
+
 export class InvestorApiError extends Error {
 	status: number;
 
@@ -122,96 +139,26 @@ export function useInvestorApi() {
 
 	return {
 		fetchBootstrap: () => bootstrap.request(),
-		fetchTransactions: (options: {
-			portfolio?: string;
-			start?: number;
-			pageLength?: number;
-			sortBy?: string;
-			sortOrder?: SortOrder;
-			filterField?: string;
-			filterValue?: string;
-		}) =>
+		fetchTransactions: (options: PortfolioListOptions) =>
 			transactions.request({
 				portfolio: options.portfolio,
-				start: options.start,
-				page_length: options.pageLength,
-				sort_by: options.sortBy,
-				sort_order: options.sortOrder,
-				filter_field: options.filterField,
-				filter_value: options.filterValue,
+				...listParams(options),
 			}),
 		fetchTransaction: (name: string) => transaction.request({ name }),
-		fetchStatements: (options: {
-			portfolio?: string;
-			reconciliationStatus?: string;
-			start?: number;
-			pageLength?: number;
-			sortBy?: string;
-			sortOrder?: SortOrder;
-			filterField?: string;
-			filterValue?: string;
-		}) =>
+		fetchStatements: (options: StatementListOptions) =>
 			statements.request({
 				portfolio: options.portfolio,
 				reconciliation_status: options.reconciliationStatus,
-				start: options.start,
-				page_length: options.pageLength,
-				sort_by: options.sortBy,
-				sort_order: options.sortOrder,
-				filter_field: options.filterField,
-				filter_value: options.filterValue,
+				...listParams(options),
 			}),
 		fetchStatement: (name: string) => statement.request({ name }),
-		fetchBonds: (options: {
-			start?: number;
-			pageLength?: number;
-			sortBy?: string;
-			sortOrder?: SortOrder;
-			filterField?: string;
-			filterValue?: string;
-		}) =>
-			bonds.request({
-				start: options.start,
-				page_length: options.pageLength,
-				sort_by: options.sortBy,
-				sort_order: options.sortOrder,
-				filter_field: options.filterField,
-				filter_value: options.filterValue,
-			}),
+		fetchBonds: (options: ListOptions) => bonds.request(listParams(options)),
 		fetchBond: (name: string) => bond.request({ name }),
-		fetchMarketDates: (options: {
-			start?: number;
-			pageLength?: number;
-			sortBy?: string;
-			sortOrder?: SortOrder;
-			filterField?: string;
-			filterValue?: string;
-		}) =>
-			marketDates.request({
-				start: options.start,
-				page_length: options.pageLength,
-				sort_by: options.sortBy,
-				sort_order: options.sortOrder,
-				filter_field: options.filterField,
-				filter_value: options.filterValue,
-			}),
+		fetchMarketDates: (options: ListOptions) =>
+			marketDates.request(listParams(options)),
 		fetchMarketDate: (name: string) => marketDate.request({ name }),
-		fetchExchangeRates: (options: {
-			start?: number;
-			pageLength?: number;
-			sortBy?: string;
-			sortOrder?: SortOrder;
-			filterField?: string;
-			filterValue?: string;
-		}) =>
-			exchangeRates.request({
-				start: options.start,
-				page_length: options.pageLength,
-				sort_by: options.sortBy,
-				sort_order: options.sortOrder,
-				filter_field: options.filterField,
-				filter_value: options.filterValue,
-			}),
+		fetchExchangeRates: (options: ListOptions) =>
+			exchangeRates.request(listParams(options)),
 		fetchExchangeRate: (name: string) => exchangeRate.request({ name }),
 		fetchPortfolioPerformance: (options: {
 			portfolio: string;
@@ -257,4 +204,15 @@ export function useInvestorApi() {
 export function redirectToLogin(): void {
 	const target = `${window.location.pathname}${window.location.search}${window.location.hash}`;
 	window.location.assign(`/login?redirect-to=${encodeURIComponent(target)}`);
+}
+
+function listParams(options: ListOptions): InvestorApiParameters {
+	return {
+		start: options.start,
+		page_length: options.pageLength,
+		sort_by: options.sortBy,
+		sort_order: options.sortOrder,
+		filter_field: options.filterField,
+		filter_value: options.filterValue,
+	};
 }

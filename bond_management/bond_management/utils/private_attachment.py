@@ -38,16 +38,7 @@ def read_private_pdf_attachment(
     if max_bytes is not None and file_doc.file_size and int(file_doc.file_size) > max_bytes:
         frappe.throw(size_message)
 
-    try:
-        # Frappe's default encodings can turn binary PDF bytes into text.
-        content = file_doc.get_content(encodings=())
-    except (OSError, TypeError, ValueError):
-        frappe.throw(_("The attached private PDF could not be read from storage."))
-
-    if isinstance(content, str):
-        content = content.encode()
-    if not isinstance(content, bytes):
-        frappe.throw(_("The attached private PDF could not be read from storage."))
+    content = _read_private_bytes(file_doc)
     if max_bytes is not None and len(content) > max_bytes:
         frappe.throw(size_message)
 
@@ -161,7 +152,12 @@ def standardize_private_pdf_attachment(
 
 
 def _private_file_sha256(file_doc) -> str:
+    return hashlib.sha256(_read_private_bytes(file_doc)).hexdigest()
+
+
+def _read_private_bytes(file_doc) -> bytes:
     try:
+        # Frappe's default encodings can turn binary PDF bytes into text.
         content = file_doc.get_content(encodings=())
     except (OSError, TypeError, ValueError):
         frappe.throw(_("The attached private PDF could not be read from storage."))
@@ -169,7 +165,7 @@ def _private_file_sha256(file_doc) -> str:
         content = content.encode()
     if not isinstance(content, bytes):
         frappe.throw(_("The attached private PDF could not be read from storage."))
-    return hashlib.sha256(content).hexdigest()
+    return content
 
 
 def _required_attachment_url(attachment, missing_message: str) -> str:

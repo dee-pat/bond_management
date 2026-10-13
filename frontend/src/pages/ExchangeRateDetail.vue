@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
 import { RouterLink, useRoute } from "vue-router";
 
 import SurfaceState from "../components/SurfaceState.vue";
-import { InvestorApiError, redirectToLogin, useInvestorApi } from "../lib/api";
+import { useInvestorApi } from "../lib/api";
+import { useRecordDetail } from "../lib/detail";
 import { formatDate, formatNumber } from "../lib/format";
 import type { ExchangeRateDetail } from "../types";
 
@@ -24,41 +24,20 @@ const DETAIL_FIELDS: DetailField[] = [
 ];
 
 const route = useRoute();
-const exchangeRate = ref<ExchangeRateDetail | null>(null);
-const loading = ref(true);
-const error = ref<string | null>(null);
-const exchangeRateName = computed(() => String(route.params.exchangeRateName ?? ""));
 const api = useInvestorApi();
-let latestRequest = 0;
-
-async function loadExchangeRate(): Promise<void> {
-	const requestId = ++latestRequest;
-	loading.value = true;
-	error.value = null;
-
-	try {
-		const response = await api.fetchExchangeRate(exchangeRateName.value);
-		if (requestId === latestRequest) {
-			exchangeRate.value = response.exchange_rate;
-		}
-	} catch (caughtError) {
-		if (requestId !== latestRequest) {
-			return;
-		}
-		if (caughtError instanceof InvestorApiError && caughtError.status === 401) {
-			redirectToLogin();
-			return;
-		}
-		error.value =
-			caughtError instanceof InvestorApiError && caughtError.status === 403
-				? "This exchange rate is unavailable or you do not have permission to view it."
-				: "The exchange rate could not be loaded. Please retry.";
-	} finally {
-		if (requestId === latestRequest) {
-			loading.value = false;
-		}
+const {
+	record: exchangeRate,
+	loading,
+	error,
+	load: loadExchangeRate,
+} = useRecordDetail(
+	async () =>
+		(await api.fetchExchangeRate(String(route.params.exchangeRateName ?? ""))).exchange_rate,
+	{
+		forbidden: "This exchange rate is unavailable or you do not have permission to view it.",
+		failed: "The exchange rate could not be loaded. Please retry.",
 	}
-}
+);
 
 function displayValue(field: DetailField): string {
 	if (!exchangeRate.value) {
@@ -77,8 +56,6 @@ function displayValue(field: DetailField): string {
 	}
 	return String(value);
 }
-
-onMounted(() => void loadExchangeRate());
 </script>
 
 <template>

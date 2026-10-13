@@ -124,40 +124,13 @@ def get_xirr_cashflows(
             frappe.throw(_("Not permitted"), frappe.PermissionError)
 
         bond = context["bonds"][isin]
-        transactions = context["transactions"][isin]
-        quantity = get_ledger_position_from_transactions(transactions, valuation_date)
-        if getdate(bond.maturity_date) <= getdate(valuation_date):
-            quantity = to_decimal(0)
-        market_price = context["market_prices"].get(isin)
-        terminal_market_price = get_terminal_market_price(isin, valuation_date, quantity, market_price)
-        if xirr_type == "past":
-            cashflows = create_past_cash_flows(
-                isin=isin,
-                date=valuation_date,
-                market_price=terminal_market_price,
-                portfolio=portfolio,
-                bond_doc=bond,
-                transactions=transactions,
-            )
-        elif not quantity:
-            cashflows = []
-        else:
-            cashflows = create_future_cash_flows(
-                isin,
-                valuation_date,
-                terminal_market_price,
-                quantity=quantity,
-                bond_doc=bond,
-            )
-
+        _quantity, _terminal_price, past, future = _bond_cashflows(
+            portfolio, isin, context, valuation_date, xirr_type=xirr_type
+        )
+        cashflows = past if xirr_type == "past" else future
         currency = bond.currency
         if cashflow_currency == "reporting":
-            cashflows = convert_cashflows(
-                cashflows,
-                context.get("exchange_rates", {}),
-                currency=currency,
-                rate_date=valuation_date if xirr_type == "future" else None,
-            )
+            cashflows = _reporting_cashflows(cashflows, bond, context, valuation_date, xirr_type=xirr_type)
             currency = REPORTING_CURRENCY
 
     return [
@@ -385,10 +358,9 @@ def get_data(portfolio, valuation_date, context=None):
 
     for isin in context["isins"]:
         bond = context["bonds"][isin]
-        transactions = context["transactions"][isin]
-        quantity = get_ledger_position_from_transactions(transactions, valuation_date)
-        if getdate(bond.maturity_date) <= valuation_date:
-            quantity = to_decimal(0)
+        quantity, terminal_market_price, cashflows, future_cashflows = _bond_cashflows(
+            portfolio, isin, context, valuation_date
+        )
 
         # ---------- MASTER DATA ----------
         currency = bond.get("currency")
@@ -401,8 +373,6 @@ def get_data(portfolio, valuation_date, context=None):
         )
 
         # ---------- MARKET DATA ----------
-        market_price = context["market_prices"].get(isin)
-        terminal_market_price = get_terminal_market_price(isin, valuation_date, quantity, market_price)
         accrued_interest = unit_accrued_interest_from_bond(bond, valuation_date)
         quantity_factor = calculate_quantity_factor_from_bond(bond, valuation_date)
         effective_quantity = quantity * quantity_factor
@@ -414,20 +384,8 @@ def get_data(portfolio, valuation_date, context=None):
         principal_factor = calculate_principal_factor_from_bond(bond, valuation_date)
         nominal_value = effective_quantity * face_value_per_unit * principal_factor
 
-        cashflows = create_past_cash_flows(
-            isin=isin,
-            date=valuation_date,
-            market_price=terminal_market_price,
-            portfolio=portfolio,
-            bond_doc=bond,
-            transactions=transactions,
-        )
         combined_cashflow.extend(cashflows)
-        reporting_cashflows = convert_cashflows(
-            cashflows,
-            exchange_rates,
-            currency=currency,
-        )
+        reporting_cashflows = _reporting_cashflows(cashflows, bond, context, valuation_date, xirr_type="past")
         combined_reporting_cashflow.extend(reporting_cashflows)
 
         totals = defaultdict(Decimal)
@@ -448,13 +406,6 @@ def get_data(portfolio, valuation_date, context=None):
         xirr_usd = _percent_value(calculate_xirr(consolidate_cashflows(reporting_cashflows)))
 
         if quantity:
-            future_cashflows = create_future_cash_flows(
-                isin=isin,
-                date=valuation_date,
-                market_price=terminal_market_price,
-                quantity=quantity,
-                bond_doc=bond,
-            )
             future_xirr = calculate_future_xirr_from_cashflows(
                 isin,
                 valuation_date,
@@ -463,14 +414,10 @@ def get_data(portfolio, valuation_date, context=None):
             )
         else:
             future_xirr = None
-            future_cashflows = []
 
         combined_future_cashflow.extend(future_cashflows)
-        future_reporting_cashflows = convert_cashflows(
-            future_cashflows,
-            exchange_rates,
-            currency=currency,
-            rate_date=valuation_date,
+        future_reporting_cashflows = _reporting_cashflows(
+            future_cashflows, bond, context, valuation_date, xirr_type="future"
         )
         combined_future_reporting_cashflow.extend(future_reporting_cashflows)
         expected_coupons_next_year = expected_coupon_value(future_cashflows, valuation_date)
@@ -529,6 +476,53 @@ def get_data(portfolio, valuation_date, context=None):
         combined_future_cashflow,
         combined_reporting_cashflow,
         combined_future_reporting_cashflow,
+    )
+
+
+def _bond_cashflows(portfolio, isin, context, valuation_date, *, xirr_type=None):
+    """Use the same position and terminal quote for report and export flows."""
+    bond = context["bonds"][isin]
+    transactions = context["transactions"][isin]
+    quantity = get_ledger_position_from_transactions(transactions, valuation_date)
+    if getdate(bond.maturity_date) <= getdate(valuation_date):
+        quantity = to_decimal(0)
+    terminal_price = get_terminal_market_price(
+        isin, valuation_date, quantity, context["market_prices"].get(isin)
+    )
+    # Exports build only the requested series; reports need both.
+    past = (
+        create_past_cash_flows(
+            isin=isin,
+            date=valuation_date,
+            market_price=terminal_price,
+            portfolio=portfolio,
+            bond_doc=bond,
+            transactions=transactions,
+        )
+        if xirr_type != "future"
+        else []
+    )
+    future = (
+        create_future_cash_flows(
+            isin=isin,
+            date=valuation_date,
+            market_price=terminal_price,
+            quantity=quantity,
+            bond_doc=bond,
+        )
+        if quantity and xirr_type != "past"
+        else []
+    )
+    return quantity, terminal_price, past, future
+
+
+def _reporting_cashflows(cashflows, bond, context, valuation_date, *, xirr_type):
+    # Past flows use their own historical dates; future flows use today's valuation.
+    return convert_cashflows(
+        cashflows,
+        context.get("exchange_rates", {}),
+        currency=bond.currency,
+        rate_date=valuation_date if xirr_type == "future" else None,
     )
 
 

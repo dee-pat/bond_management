@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
 import { RouterLink, useRoute } from "vue-router";
 import { ListCell, ListHeaderCell } from "frappe-ui/list";
 
 import DataList from "../components/DataList.vue";
 import SurfaceState from "../components/SurfaceState.vue";
-import { InvestorApiError, redirectToLogin, useInvestorApi } from "../lib/api";
+import { useInvestorApi } from "../lib/api";
+import { useRecordDetail } from "../lib/detail";
 import { formatDate, formatMoney, formatNumber, formatPercent } from "../lib/format";
 import type { BondDetail } from "../types";
 
@@ -21,54 +21,41 @@ const DETAIL_FIELDS: DetailField[] = [
 	{ fieldname: "bond_name", label: "Bond Name" },
 	{ fieldname: "isin", label: "ISIN" },
 	{ fieldname: "issue_date", label: "Issue Date", format: "date" },
-	{ fieldname: "first_coupon_date", label: "First Coupon Date", format: "date" },
-	{ fieldname: "face_value_per_unit", label: "Face Value Per Unit", format: "money" },
+	{
+		fieldname: "first_coupon_date",
+		label: "First Coupon Date",
+		format: "date",
+	},
+	{
+		fieldname: "face_value_per_unit",
+		label: "Face Value Per Unit",
+		format: "money",
+	},
 	{ fieldname: "coupon_frequency", label: "Coupon Frequency" },
 	{ fieldname: "bond_type", label: "Bond Type" },
 	{ fieldname: "maturity_date", label: "Maturity Date", format: "date" },
 	{ fieldname: "currency", label: "Currency" },
 	{ fieldname: "coupon_rate", label: "Coupon Rate %", format: "percent" },
-	{ fieldname: "withholding_tax", label: "Withholding Tax %", format: "percent" },
+	{
+		fieldname: "withholding_tax",
+		label: "Withholding Tax %",
+		format: "percent",
+	},
 	{ fieldname: "day_count_convention", label: "Day Count Convention" },
 	{ fieldname: "quantity_change", label: "Quantity Change", format: "boolean" },
 ];
 
 const route = useRoute();
-const bond = ref<BondDetail | null>(null);
-const loading = ref(true);
-const error = ref<string | null>(null);
-const bondName = computed(() => String(route.params.bondName ?? ""));
 const api = useInvestorApi();
-let latestRequest = 0;
-
-async function loadBond(): Promise<void> {
-	const requestId = ++latestRequest;
-	loading.value = true;
-	error.value = null;
-
-	try {
-		const response = await api.fetchBond(bondName.value);
-		if (requestId === latestRequest) {
-			bond.value = response.bond;
-		}
-	} catch (caughtError) {
-		if (requestId !== latestRequest) {
-			return;
-		}
-		if (caughtError instanceof InvestorApiError && caughtError.status === 401) {
-			redirectToLogin();
-			return;
-		}
-		error.value =
-			caughtError instanceof InvestorApiError && caughtError.status === 403
-				? "This bond is unavailable or you do not have permission to view it."
-				: "The bond could not be loaded. Please retry.";
-	} finally {
-		if (requestId === latestRequest) {
-			loading.value = false;
-		}
-	}
-}
+const {
+	record: bond,
+	loading,
+	error,
+	load: loadBond,
+} = useRecordDetail(async () => (await api.fetchBond(String(route.params.bondName ?? ""))).bond, {
+	forbidden: "This bond is unavailable or you do not have permission to view it.",
+	failed: "The bond could not be loaded. Please retry.",
+});
 
 function displayValue(field: DetailField): string {
 	if (!bond.value) {
@@ -90,8 +77,6 @@ function displayValue(field: DetailField): string {
 	}
 	return String(value || "—");
 }
-
-onMounted(() => void loadBond());
 </script>
 
 <template>

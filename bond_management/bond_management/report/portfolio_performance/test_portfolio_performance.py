@@ -76,6 +76,62 @@ class TestPortfolioPerformance(IntegrationTestCase):
             with self.assertRaises(frappe.PermissionError):
                 get_xirr_cashflows(portfolio.name, "2025-12-31", "TOTAL", "past")
 
+    def test_report_and_exports_share_cashflows_across_fx_and_maturity_boundaries(self):
+        bond = make_bond(currency="EUR")
+        portfolio = make_portfolio()
+        make_transaction(
+            bond,
+            portfolio,
+            trade_date="2025-01-01",
+            settlement_date="2025-01-02",
+            price=100,
+            accrued_interest_paid=0,
+            commission=0,
+        )
+        make_market_date(bond, market_price=101, date="2025-09-13")
+        for rate_date, rate in (("2025-01-01", "0.01"), ("2025-09-01", "0.02"), ("2027-01-02", "0.03")):
+            make_exchange_rate(from_currency="EUR", rate_date=rate_date, rate=rate)
+
+        # Before maturity has future flows; maturity day and later have none.
+        for valuation_date in ("2025-09-14", "2027-01-01", "2027-01-02"):
+            rows, past, future, reporting_past, reporting_future = get_data(portfolio.name, valuation_date)
+            series = (
+                ("past", "native", past),
+                ("future", "native", future),
+                ("past", "reporting", reporting_past),
+                ("future", "reporting", reporting_future),
+            )
+            self.assertEqual(bool(future), valuation_date < "2027-01-01")
+            for xirr_type, currency, expected in series:
+                for isin in (bond.name, "TOTAL"):
+                    with self.subTest(date=valuation_date, type=xirr_type, currency=currency, isin=isin):
+                        exported = get_xirr_cashflows(
+                            portfolio.name, valuation_date, isin, xirr_type, currency
+                        )
+                        actual = [
+                            (
+                                flow["isin"],
+                                flow["transaction_type"],
+                                flow["date"],
+                                Decimal(str(flow["amount"])),
+                            )
+                            for flow in exported
+                        ]
+                        reference = sorted(
+                            (flow["bond"], flow["type"], flow["date"].isoformat(), flow["amount"])
+                            for flow in expected
+                            if flow["amount"] != 0
+                        )
+                        self.assertEqual(sorted(actual), reference)
+
+            purchase = next(flow for flow in reporting_past if flow["type"] == "purchase")
+            self.assertEqual(purchase["amount"], Decimal("-10.0000"))
+            self.assertEqual(rows[0]["purchases_value_usd"], Decimal("10.0000"))
+            if future:
+                opening = next(flow for flow in future if flow["type"] == "market_price")
+                converted = next(flow for flow in reporting_future if flow["type"] == "market_price")
+                self.assertEqual(converted["amount"], opening["amount"] * Decimal("0.02"))
+
     def test_invalid_xirr_values_and_zero_quantity_rates_stay_blank(self):
         rows = [{"currency": "USD", "proceeds_value": 10}]
         cashflows = [{"date": "2025-01-01", "amount": 10}]

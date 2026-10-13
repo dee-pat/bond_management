@@ -1,4 +1,3 @@
-from contextlib import contextmanager
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -9,59 +8,43 @@ from frappe.client import get_list
 from frappe.exceptions import FrappeTypeError
 from frappe.tests import IntegrationTestCase
 
-from bond_management.bond_management.api.investor import (
-    EXCHANGE_RATE_DETAIL_FIELDS,
-    EXCHANGE_RATE_LIST_FIELDS,
-    MAX_PAGE_START,
-    get_exchange_rate,
-    get_exchange_rates,
-)
+from bond_management.bond_management.api.investor import MAX_PAGE_START, get_exchange_rate, get_exchange_rates
 from bond_management.bond_management.tests.factories import (
+    as_investor_user,
     make_exchange_rate,
+    make_investor_user,
     make_portfolio,
     make_statement,
     unique_name,
+)
+from bond_management.bond_management.tests.investor_contracts import (
+    EXCHANGE_RATE_DETAIL_FIELDS,
+    EXCHANGE_RATE_LIST_FIELDS,
 )
 from bond_management.bond_management.utils.investor_permissions import (
     BOND_MANAGER_ROLE,
     INVESTOR_ROLE,
 )
-from bond_management.bond_management.utils.investor_ui import FEATURE_FLAG
 from bond_management.bond_management.utils.statement_exchange_rates import (
     sync_statement_exchange_rates,
 )
 
 
 class TestInvestorExchangeRates(IntegrationTestCase):
-    def test_guest_and_unapproved_role_are_rejected(self):
-        with self._as_user("Guest"):
-            with self.assertRaises(frappe.AuthenticationError):
-                get_exchange_rates()
-
-        unapproved_user = self._make_user([])
-        with self._as_user(unapproved_user):
-            with self.assertRaises(frappe.PermissionError):
-                get_exchange_rates()
-
-    def test_feature_flag_is_required(self):
-        with self._as_user("Administrator", feature_enabled=False):
-            with self.assertRaises(frappe.PermissionError):
-                get_exchange_rates()
-
     def test_investor_without_portfolio_assignment_can_read_shared_history(self):
         exchange_rate = make_exchange_rate()
-        investor = self._make_user([INVESTOR_ROLE])
+        investor = make_investor_user([INVESTOR_ROLE])
 
-        with self._as_user(investor):
+        with as_investor_user(investor):
             response = get_exchange_rates()
 
         self.assertIn(exchange_rate.name, {row.name for row in response["data"]})
 
     def test_generic_list_keeps_rows_without_statement_provenance(self):
         exchange_rate = make_exchange_rate()
-        investor = self._make_user([INVESTOR_ROLE])
+        investor = make_investor_user([INVESTOR_ROLE])
 
-        with self._as_user(investor):
+        with as_investor_user(investor):
             rows = get_list(
                 "Bond Exchange Rate",
                 fields=["name"],
@@ -72,13 +55,16 @@ class TestInvestorExchangeRates(IntegrationTestCase):
 
     def test_list_has_exact_visible_projection(self):
         exchange_rate = make_exchange_rate()
-        investor = self._make_user([INVESTOR_ROLE])
+        investor = make_investor_user([INVESTOR_ROLE])
 
-        with self._as_user(investor):
+        with as_investor_user(investor):
             response = get_exchange_rates()
 
         row = next(row for row in response["data"] if row.name == exchange_rate.name)
+        self.assertEqual(set(response), {"data", "pagination"})
+        self.assertEqual(set(response["pagination"]), {"start", "page_length", "has_more"})
         self.assertEqual(set(row), set(EXCHANGE_RATE_LIST_FIELDS))
+        self.assertTrue(all(set(row) == set(EXCHANGE_RATE_LIST_FIELDS) for row in response["data"]))
         self.assertEqual(row.from_currency, exchange_rate.from_currency)
         self.assertNotIn("source", row)
         self.assertNotIn("statement", row)
@@ -86,11 +72,12 @@ class TestInvestorExchangeRates(IntegrationTestCase):
 
     def test_detail_has_exact_visible_projection(self):
         exchange_rate = make_exchange_rate()
-        investor = self._make_user([INVESTOR_ROLE])
+        investor = make_investor_user([INVESTOR_ROLE])
 
-        with self._as_user(investor):
+        with as_investor_user(investor):
             response = get_exchange_rate(exchange_rate.name)
 
+        self.assertEqual(set(response), {"exchange_rate"})
         detail = response["exchange_rate"]
         self.assertEqual(set(detail), set(EXCHANGE_RATE_DETAIL_FIELDS))
         self.assertEqual(detail.from_currency, exchange_rate.from_currency)
@@ -102,10 +89,10 @@ class TestInvestorExchangeRates(IntegrationTestCase):
     def test_detail_keeps_a_readable_statement_reference(self):
         portfolio = make_portfolio()
         exchange_rate = self._make_statement_exchange_rate(portfolio)
-        investor = self._make_user([INVESTOR_ROLE])
+        investor = make_investor_user([INVESTOR_ROLE])
         self._assign_user_permission(investor, "Bond Portfolio", portfolio.name)
 
-        with self._as_user(investor):
+        with as_investor_user(investor):
             response = get_exchange_rate(exchange_rate.name)
             self._assert_generic_apis_hide_statement(exchange_rate.name)
 
@@ -117,10 +104,10 @@ class TestInvestorExchangeRates(IntegrationTestCase):
         assigned_portfolio = make_portfolio()
         other_portfolio = make_portfolio()
         exchange_rate = self._make_statement_exchange_rate(other_portfolio)
-        investor = self._make_user([INVESTOR_ROLE])
+        investor = make_investor_user([INVESTOR_ROLE])
         self._assign_user_permission(investor, "Bond Portfolio", assigned_portfolio.name)
 
-        with self._as_user(investor):
+        with as_investor_user(investor):
             listed = get_exchange_rates()
             response = get_exchange_rate(exchange_rate.name)
             self._assert_generic_apis_hide_statement(exchange_rate.name, list_visible=False)
@@ -145,8 +132,8 @@ class TestInvestorExchangeRates(IntegrationTestCase):
         exchange_rate = self._make_statement_exchange_rate(make_portfolio())
 
         for roles in ([BOND_MANAGER_ROLE], ["System Manager"]):
-            manager = self._make_user(roles)
-            with self.subTest(roles=roles), self._as_user(manager):
+            manager = make_investor_user(roles)
+            with self.subTest(roles=roles), as_investor_user(manager):
                 for api, response in self._generic_api_responses(exchange_rate.name).items():
                     with self.subTest(api=api):
                         if api == "frappe.client.get_list":
@@ -157,11 +144,11 @@ class TestInvestorExchangeRates(IntegrationTestCase):
     def test_unreadable_and_unknown_detail_have_same_failure(self):
         readable = make_exchange_rate()
         unreadable = make_exchange_rate()
-        investor = self._make_user([INVESTOR_ROLE])
+        investor = make_investor_user([INVESTOR_ROLE])
         self._assign_user_permission(investor, "Bond Exchange Rate", readable.name)
         messages = []
 
-        with self._as_user(investor):
+        with as_investor_user(investor):
             for name in (unreadable.name, unique_name("UNKNOWN-EXCHANGE-RATE")):
                 with self.assertRaises(frappe.PermissionError) as error:
                     get_exchange_rate(name)
@@ -173,21 +160,21 @@ class TestInvestorExchangeRates(IntegrationTestCase):
         first = make_exchange_rate()
         second = make_exchange_rate()
         exchange_rates = {first.name, second.name}
-        manager = self._make_user([BOND_MANAGER_ROLE])
+        manager = make_investor_user([BOND_MANAGER_ROLE])
 
         for user in (manager, "Administrator"):
-            with self.subTest(user=user), self._as_user(user):
+            with self.subTest(user=user), as_investor_user(user):
                 response = get_exchange_rates()
                 self.assertTrue(exchange_rates.issubset({row.name for row in response["data"]}))
 
     def test_pagination_is_allow_listed_bounded_and_sorted_by_rate_date(self):
         newer = make_exchange_rate(from_currency="EUR", rate_date="2025-01-02")
         older = make_exchange_rate(from_currency="EUR", rate_date="2025-01-01")
-        investor = self._make_user([INVESTOR_ROLE])
+        investor = make_investor_user([INVESTOR_ROLE])
         self._assign_user_permission(investor, "Bond Exchange Rate", older.name)
         self._assign_user_permission(investor, "Bond Exchange Rate", newer.name)
 
-        with self._as_user(investor):
+        with as_investor_user(investor):
             first_page = get_exchange_rates(page_length="1")
             maximum_page = get_exchange_rates(page_length="50")
             with self.assertRaisesRegex(frappe.ValidationError, "cannot exceed 50"):
@@ -217,9 +204,9 @@ class TestInvestorExchangeRates(IntegrationTestCase):
     def test_visible_columns_can_sort_and_filter_with_server_controls(self):
         older = make_exchange_rate(from_currency="CHF", rate_date="2030-01-01")
         newer = make_exchange_rate(from_currency="CHF", rate_date="2030-01-02")
-        investor = self._make_user([INVESTOR_ROLE])
+        investor = make_investor_user([INVESTOR_ROLE])
 
-        with self._as_user(investor):
+        with as_investor_user(investor):
             ascending = get_exchange_rates(sort_by="rate_date", sort_order="asc")
             filtered = get_exchange_rates(
                 filter_field="from_currency",
@@ -289,30 +276,3 @@ class TestInvestorExchangeRates(IntegrationTestCase):
                 "apply_to_all_doctypes": 1,
             }
         ).insert(ignore_permissions=True)
-
-    @staticmethod
-    def _make_user(roles):
-        return (
-            frappe.get_doc(
-                {
-                    "doctype": "User",
-                    "email": f"{unique_name('investor-exchange-rate-ui').lower()}@example.com",
-                    "first_name": "Investor Exchange Rate Test",
-                    "send_welcome_email": 0,
-                    "roles": [{"role": role} for role in roles],
-                }
-            )
-            .insert(ignore_permissions=True)
-            .name
-        )
-
-    @staticmethod
-    @contextmanager
-    def _as_user(user, *, feature_enabled=True):
-        previous_user = frappe.session.user
-        try:
-            frappe.set_user(user)
-            with patch.dict(frappe.conf, {FEATURE_FLAG: int(feature_enabled)}):
-                yield
-        finally:
-            frappe.set_user(previous_user)

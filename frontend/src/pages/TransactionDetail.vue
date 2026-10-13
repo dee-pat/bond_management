@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
 import { RouterLink, useRoute } from "vue-router";
 
 import PdfAttachmentActions from "../components/PdfAttachmentActions.vue";
 import SurfaceState from "../components/SurfaceState.vue";
-import { InvestorApiError, redirectToLogin, useInvestorApi } from "../lib/api";
+import { useInvestorApi } from "../lib/api";
+import { useRecordDetail } from "../lib/detail";
 import { formatDate, formatMoney, formatNumber, formatPercent } from "../lib/format";
 import type { TransactionDetail } from "../types";
 
@@ -23,7 +23,11 @@ const DETAIL_FIELDS: DetailField[] = [
 	{ fieldname: "transaction_reference", label: "Transaction Reference" },
 	{ fieldname: "trade_date", label: "Trade Date", format: "date" },
 	{ fieldname: "settlement_date", label: "Settlement Date", format: "date" },
-	{ fieldname: "quantity_face_value", label: "Quantity/ Face Value", format: "quantity" },
+	{
+		fieldname: "quantity_face_value",
+		label: "Quantity/ Face Value",
+		format: "quantity",
+	},
 	{ fieldname: "price", label: "Price", format: "price" },
 	{ fieldname: "principal", label: "Principal", format: "money" },
 	{ fieldname: "commission", label: "Commission %", format: "percent" },
@@ -32,55 +36,54 @@ const DETAIL_FIELDS: DetailField[] = [
 		label: "Accrued Interest Calculated",
 		format: "money",
 	},
-	{ fieldname: "accrued_interest_paid", label: "Accrued Interest Paid", format: "money" },
+	{
+		fieldname: "accrued_interest_paid",
+		label: "Accrued Interest Paid",
+		format: "money",
+	},
 	{ fieldname: "currency", label: "Currency" },
 	{ fieldname: "maturity_date", label: "Maturity Date", format: "date" },
 	{ fieldname: "coupon_frequency", label: "Coupon frequency" },
 	{ fieldname: "coupon_rate", label: "Coupon Rate %", format: "percent" },
-	{ fieldname: "face_value_per_unit", label: "Face Value Per Unit", format: "money" },
+	{
+		fieldname: "face_value_per_unit",
+		label: "Face Value Per Unit",
+		format: "money",
+	},
 	{ fieldname: "issue_date", label: "Issue Date", format: "date" },
 	{ fieldname: "day_count_convention", label: "Day Count Convention" },
-	{ fieldname: "commission_amount", label: "Commission Amount", format: "money" },
-	{ fieldname: "settlement_amount", label: "Settlement Amount", format: "money" },
-	{ fieldname: "transaction_amount", label: "Transaction Amount", format: "money" },
+	{
+		fieldname: "commission_amount",
+		label: "Commission Amount",
+		format: "money",
+	},
+	{
+		fieldname: "settlement_amount",
+		label: "Settlement Amount",
+		format: "money",
+	},
+	{
+		fieldname: "transaction_amount",
+		label: "Transaction Amount",
+		format: "money",
+	},
 ];
 
 const route = useRoute();
-const transaction = ref<TransactionDetail | null>(null);
-const loading = ref(true);
-const error = ref<string | null>(null);
-const transactionName = computed(() => String(route.params.transactionName ?? ""));
 const api = useInvestorApi();
-let latestRequest = 0;
-
-async function loadTransaction(): Promise<void> {
-	const requestId = ++latestRequest;
-	loading.value = true;
-	error.value = null;
-
-	try {
-		const response = await api.fetchTransaction(transactionName.value);
-		if (requestId === latestRequest) {
-			transaction.value = response.transaction;
-		}
-	} catch (caughtError) {
-		if (requestId !== latestRequest) {
-			return;
-		}
-		if (caughtError instanceof InvestorApiError && caughtError.status === 401) {
-			redirectToLogin();
-			return;
-		}
-		error.value =
-			caughtError instanceof InvestorApiError && caughtError.status === 403
-				? "This transaction is unavailable or you do not have permission to view it."
-				: "The transaction could not be loaded. Please retry.";
-	} finally {
-		if (requestId === latestRequest) {
-			loading.value = false;
-		}
+const {
+	record: transaction,
+	loading,
+	error,
+	load: loadTransaction,
+} = useRecordDetail(
+	async () =>
+		(await api.fetchTransaction(String(route.params.transactionName ?? ""))).transaction,
+	{
+		forbidden: "This transaction is unavailable or you do not have permission to view it.",
+		failed: "The transaction could not be loaded. Please retry.",
 	}
-}
+);
 
 function displayValue(field: DetailField): string {
 	if (!transaction.value) {
@@ -105,8 +108,6 @@ function displayValue(field: DetailField): string {
 	}
 	return String(value || "—");
 }
-
-onMounted(() => void loadTransaction());
 </script>
 
 <template>

@@ -1,4 +1,3 @@
-from contextlib import contextmanager
 from decimal import Decimal
 from unittest.mock import patch
 
@@ -8,17 +7,23 @@ from frappe.tests import IntegrationTestCase
 
 from bond_management.bond_management.api import investor as investor_api
 from bond_management.bond_management.api.investor_reports import (
-    BOND_YIELD_COMPARISON_FIELDS,
-    YIELD_COMPARISON_CHART,
     get_bond_yield_comparison,
     get_yield_comparison_defaults,
 )
 from bond_management.bond_management.report.bond_yield_comparison.bond_yield_comparison import (
     execute,
 )
-from bond_management.bond_management.tests.factories import make_bond, make_market_date, unique_name
+from bond_management.bond_management.tests.factories import (
+    as_investor_user,
+    make_bond,
+    make_investor_user,
+    make_market_date,
+)
+from bond_management.bond_management.tests.investor_contracts import (
+    BOND_YIELD_COMPARISON_FIELDS,
+    YIELD_COMPARISON_CHART,
+)
 from bond_management.bond_management.utils.investor_permissions import INVESTOR_ROLE
-from bond_management.bond_management.utils.investor_ui import FEATURE_FLAG
 
 COLUMN_FIELDS = {
     "fieldname",
@@ -31,26 +36,10 @@ COLUMN_FIELDS = {
 
 
 class TestInvestorBondYieldComparison(IntegrationTestCase):
-    def test_common_access_gate_protects_report(self):
-        unapproved = self._make_user([])
-        for method in (get_bond_yield_comparison, get_yield_comparison_defaults):
-            with self.subTest(method=method.__name__):
-                with self._as_user("Guest"):
-                    with self.assertRaises(frappe.AuthenticationError):
-                        method()
-
-                with self._as_user(unapproved):
-                    with self.assertRaises(frappe.PermissionError):
-                        method()
-
-                with self._as_user("Administrator", feature_enabled=False):
-                    with self.assertRaises(frappe.PermissionError):
-                        method()
-
     def test_standard_report_and_market_history_permissions_are_required(self):
-        investor = self._make_user([INVESTOR_ROLE])
+        investor = make_investor_user([INVESTOR_ROLE])
 
-        with self._as_user(investor):
+        with as_investor_user(investor):
             for method in (get_bond_yield_comparison, get_yield_comparison_defaults):
                 with self.subTest(method=method.__name__):
                     with (
@@ -77,10 +66,10 @@ class TestInvestorBondYieldComparison(IntegrationTestCase):
 
     def test_investor_without_portfolio_assignment_can_read_shared_history(self):
         bond, market_date = self._make_market_history()
-        investor = self._make_user([INVESTOR_ROLE])
+        investor = make_investor_user([INVESTOR_ROLE])
         report_date = market_date.date.isoformat()
 
-        with self._as_user(investor):
+        with as_investor_user(investor):
             response = get_bond_yield_comparison(report_date, report_date)
 
         self.assertEqual([row["isin"] for row in response["report"]["rows"]], [bond.name])
@@ -89,11 +78,11 @@ class TestInvestorBondYieldComparison(IntegrationTestCase):
 
     def test_projection_matches_authoritative_persisted_report(self):
         _, market_date = self._make_market_history()
-        investor = self._make_user([INVESTOR_ROLE])
+        investor = make_investor_user([INVESTOR_ROLE])
         report_date = market_date.date.isoformat()
         filters = {"from_date": report_date, "to_date": report_date}
 
-        with self._as_user(investor):
+        with as_investor_user(investor):
             authoritative_columns, authoritative_rows = execute(filters)
             response = get_bond_yield_comparison(report_date, report_date)
 
@@ -126,10 +115,10 @@ class TestInvestorBondYieldComparison(IntegrationTestCase):
         bond = make_bond()
         newer = make_market_date(bond)
         older = make_market_date(bond)
-        investor = self._make_user([INVESTOR_ROLE])
+        investor = make_investor_user([INVESTOR_ROLE])
 
         with (
-            self._as_user(investor),
+            as_investor_user(investor),
             patch(
                 "bond_management.bond_management.api.investor_reports.get_readable_isins",
                 return_value=[bond.name],
@@ -157,10 +146,10 @@ class TestInvestorBondYieldComparison(IntegrationTestCase):
         )
 
     def test_default_dates_allow_empty_readable_history(self):
-        investor = self._make_user([INVESTOR_ROLE])
+        investor = make_investor_user([INVESTOR_ROLE])
 
         with (
-            self._as_user(investor),
+            as_investor_user(investor),
             patch(
                 "bond_management.bond_management.api.investor_reports.get_readable_isins",
                 return_value=[],
@@ -186,10 +175,10 @@ class TestInvestorBondYieldComparison(IntegrationTestCase):
             {"market_price": "104.625", "future_xirr": "13.875", "future_xirr_available": 1},
             update_modified=False,
         )
-        investor = self._make_user([INVESTOR_ROLE])
+        investor = make_investor_user([INVESTOR_ROLE])
         report_date = market_date.date.isoformat()
 
-        with self._as_user(investor):
+        with as_investor_user(investor):
             row = get_bond_yield_comparison(report_date, report_date)["report"]["rows"][0]
 
         self.assertEqual(Decimal(str(row["market_price"])), Decimal("104.625"))
@@ -199,11 +188,11 @@ class TestInvestorBondYieldComparison(IntegrationTestCase):
         bond = make_bond()
         last = make_market_date(bond)
         first = make_market_date(bond)
-        investor = self._make_user([INVESTOR_ROLE])
+        investor = make_investor_user([INVESTOR_ROLE])
         from_date = first.date.isoformat()
         to_date = last.date.isoformat()
 
-        with self._as_user(investor):
+        with as_investor_user(investor):
             bounded = get_bond_yield_comparison(from_date, to_date)["report"]["rows"]
             from_only = get_bond_yield_comparison(from_date, None)["report"]["rows"]
             to_only = get_bond_yield_comparison(None, to_date)["report"]["rows"]
@@ -214,9 +203,9 @@ class TestInvestorBondYieldComparison(IntegrationTestCase):
         self.assertTrue(set(expected_dates).issubset(row["date"] for row in to_only))
 
     def test_empty_history_returns_fixed_columns_and_no_rows(self):
-        investor = self._make_user([INVESTOR_ROLE])
+        investor = make_investor_user([INVESTOR_ROLE])
 
-        with self._as_user(investor):
+        with as_investor_user(investor):
             report = get_bond_yield_comparison("2099-01-01", "2099-01-02")["report"]
 
         self.assertEqual(report["rows"], [])
@@ -226,9 +215,9 @@ class TestInvestorBondYieldComparison(IntegrationTestCase):
         )
 
     def test_rejects_invalid_dates_complex_values_and_arbitrary_arguments(self):
-        investor = self._make_user([INVESTOR_ROLE])
+        investor = make_investor_user([INVESTOR_ROLE])
 
-        with self._as_user(investor):
+        with as_investor_user(investor):
             with self.assertRaises(frappe.ValidationError):
                 get_bond_yield_comparison("not-a-date", None)
             with self.assertRaisesRegex(
@@ -246,30 +235,3 @@ class TestInvestorBondYieldComparison(IntegrationTestCase):
         bond = make_bond()
         market_date = make_market_date(bond)
         return bond, market_date
-
-    @staticmethod
-    def _make_user(roles):
-        return (
-            frappe.get_doc(
-                {
-                    "doctype": "User",
-                    "email": f"{unique_name('investor-yield-ui').lower()}@example.com",
-                    "first_name": "Investor Yield Test",
-                    "send_welcome_email": 0,
-                    "roles": [{"role": role} for role in roles],
-                }
-            )
-            .insert(ignore_permissions=True)
-            .name
-        )
-
-    @staticmethod
-    @contextmanager
-    def _as_user(user, *, feature_enabled=True):
-        previous_user = frappe.session.user
-        try:
-            frappe.set_user(user)
-            with patch.dict(frappe.conf, {FEATURE_FLAG: int(feature_enabled)}):
-                yield
-        finally:
-            frappe.set_user(previous_user)

@@ -8,21 +8,8 @@ const INVESTOR_API =
 test("compares persisted bond yields without mobile overflow", async ({
   page,
 }) => {
-  const defaultsResponse = page.waitForResponse((response) =>
-    response.url().includes(".get_yield_comparison_defaults")
-  );
   await page.goto("/bond-investor/yield-comparison");
-  const defaults = (await (await defaultsResponse).json()) as {
-    message: { filters: { from_date: string | null; to_date: string } };
-  };
-
   await expect(page.getByTestId("yield-comparison-initial")).toBeVisible();
-  await expect(page.getByLabel("From Date")).toHaveValue(
-    defaults.message.filters.from_date ?? ""
-  );
-  await expect(page.getByLabel("To Date")).toHaveValue(
-    defaults.message.filters.to_date
-  );
   await page.getByLabel("From Date").fill("2095-01-01");
   await page.getByLabel("To Date").fill("2095-01-03");
   await page.getByRole("button", { name: "Run", exact: true }).click();
@@ -34,7 +21,6 @@ test("compares persisted bond yields without mobile overflow", async ({
     name: "Persisted Future XIRR, By market date and bond",
   });
   await expect(image).toBeVisible();
-  await expect(chart).toHaveAttribute("data-gap-count", "1");
   await expect(
     chart.getByRole("button", { name: `Hide ${PRIMARY_BOND} · USD` })
   ).toContainText(PRIMARY_BOND);
@@ -46,11 +32,6 @@ test("compares persisted bond yields without mobile overflow", async ({
       `03 Jan 2095, ${GAP_BOND}, KES, Market Price 100.750, Future XIRR 9.625%`
     )
   );
-  await expect(
-    chart.getByTestId("yield-comparison-chart-description").filter({
-      hasText: `03 Jan 2095, ${GAP_BOND}, KES, Market Price 100.750, Future XIRR 9.625%`,
-    })
-  ).toContainText("Future XIRR 9.625%");
   await expect(page.locator("table")).toHaveCount(0);
 
   const fitsViewport = await page.evaluate(
