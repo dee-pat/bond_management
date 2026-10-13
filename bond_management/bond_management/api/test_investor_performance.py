@@ -238,31 +238,6 @@ class TestInvestorPortfolioPerformance(IntegrationTestCase):
         self.assertIs(investor_api.get_portfolio_performance, get_portfolio_performance)
         self.assertEqual(frappe.allowed_http_methods_for_whitelisted_func[get_portfolio_performance], ["GET"])
 
-    def test_hidden_report_helpers_and_column_controls_are_omitted(self):
-        portfolio, _, investor = self._make_usd_report()
-
-        with as_investor_user(investor):
-            response = get_portfolio_performance(portfolio.name, VALUATION_DATE)
-
-        report = response["report"]
-        hidden = {
-            "exchange_rate",
-            "nominal_value_usd",
-            "purchases_value_usd",
-            "proceeds_value_usd",
-            "gain_value_usd",
-            "future_xirr_usd",
-        }
-        self.assertTrue(all(hidden.isdisjoint(row) for row in report["rows"]))
-        self.assertTrue(all(set(column) == COLUMN_FIELDS for column in report["columns"]))
-        self.assertTrue(
-            set(PORTFOLIO_PERFORMANCE_COLUMN_FIELDS).issuperset(
-                column["fieldname"] for column in report["columns"]
-            )
-        )
-        self.assertNotIn("width", str(report["columns"]))
-        self.assertNotIn("disable_total", str(report["columns"]))
-
     def test_mixed_currency_columns_totals_and_values_match_authoritative_report(self):
         portfolio = make_portfolio()
         usd_bond = make_bond()

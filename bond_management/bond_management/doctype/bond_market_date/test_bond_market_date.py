@@ -25,10 +25,6 @@ from bond_management.patches.add_bond_query_indexes import (
 from bond_management.patches.add_bond_query_indexes import (
     execute as add_bond_query_indexes,
 )
-from bond_management.patches.backfill_kenya_quantity_change_market_data import (
-    execute as backfill_kenya_quantity_change_market_data,
-)
-from bond_management.patches.backfill_weighted_avg_repayment import execute as backfill_weighted_repayment
 
 
 class TestBondMarketDate(IntegrationTestCase):
@@ -158,35 +154,6 @@ class TestBondMarketDate(IntegrationTestCase):
         self.assertEqual(price_row.weighted_avg_repayment_date.isoformat(), "2026-10-20")
         self.assertEqual(price_row.weighted_avg_repayment_years, Decimal(624) / Decimal(365))
 
-    def test_backfill_patch_updates_existing_market_price_rows(self):
-        bond = make_bond(
-            principal_schedule=[
-                {"repayment_date": "2026-01-01", "principal_units": 20},
-                {"repayment_date": "2027-01-01", "principal_units": 80},
-            ]
-        )
-        market_date = make_market_date(bond, date="2025-02-04")
-        price_row = market_date.bond_market_prices[-1]
-        frappe.db.set_value(
-            "Bond Market Prices",
-            price_row.name,
-            {
-                "weighted_avg_repayment_date": None,
-                "weighted_avg_repayment_years": 0,
-            },
-            update_modified=False,
-        )
-
-        backfill_weighted_repayment()
-        market_date.reload()
-        price_row = market_date.bond_market_prices[-1]
-
-        self.assertEqual(price_row.weighted_avg_repayment_date.isoformat(), "2026-10-20")
-        expected_years = (Decimal(623) / Decimal(365)).quantize(
-            Decimal("0.000000001"), rounding=ROUND_HALF_UP
-        )
-        self.assertEqual(Decimal(str(price_row.weighted_avg_repayment_years)), expected_years)
-
     def test_market_price_must_be_greater_than_zero(self):
         bond = make_bond()
 
@@ -276,34 +243,3 @@ class TestBondMarketDate(IntegrationTestCase):
 
         self.assertEqual(price_row.principal_factor, 0.5)
         self.assertEqual(get_cashflows(market_date.date.isoformat(), bond.name, 50)[0]["amount"], -50)
-
-    def test_kenya_market_data_backfill_is_idempotent(self):
-        bond = make_bond(
-            currency="KES",
-            day_count_convention="Actual/364(Kenya)",
-            principal_schedule=[
-                {"repayment_date": "2025-07-04", "principal_units": 50},
-                {"repayment_date": "2027-01-01", "principal_units": 50},
-            ],
-        )
-        market_date = make_market_date(bond, market_price=103.248, date="2025-07-05")
-        price_row = market_date.bond_market_prices[-1]
-
-        frappe.db.set_value(
-            "Bond Market Prices",
-            price_row.name,
-            {"principal_factor": 0.5, "future_xirr": -18.771252834, "future_xirr_available": 1},
-            update_modified=False,
-        )
-        expected_future_xirr = calculate_future_xirr(bond.name, market_date.date, 103.248) * 100
-
-        backfill_kenya_quantity_change_market_data([bond.name])
-        price_row.reload()
-        self.assertEqual(price_row.market_price, 103.248)
-        self.assertEqual(price_row.principal_factor, 1)
-        self.assertEqual(price_row.future_xirr, round(expected_future_xirr, 9))
-
-        backfill_kenya_quantity_change_market_data([bond.name])
-        price_row.reload()
-        self.assertEqual(price_row.principal_factor, 1)
-        self.assertEqual(price_row.future_xirr, round(expected_future_xirr, 9))

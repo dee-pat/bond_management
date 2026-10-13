@@ -12,18 +12,6 @@ from bond_management.bond_management.doctype.bond_master.bond_master import (
     get_recalculated_schedules,
 )
 from bond_management.bond_management.tests.factories import make_bond
-from bond_management.patches.regenerate_kenya_coupon_schedules import (
-    execute as regenerate_kenya_coupon_schedules,
-)
-from bond_management.patches.set_kenya_quantity_change_flags import (
-    execute as synchronize_quantity_change_flags,
-)
-from bond_management.patches.set_kenya_withholding_tax import (
-    KENYA_WITHHOLDING_TAX,
-)
-from bond_management.patches.set_kenya_withholding_tax import (
-    execute as set_kenya_withholding_tax,
-)
 
 
 class TestBondMaster(IntegrationTestCase):
@@ -92,69 +80,6 @@ class TestBondMaster(IntegrationTestCase):
         bond.withholding_tax = -0.01
         with self.assertRaisesRegex(ValidationError, "Withholding Tax must be between 0 and 100"):
             bond.save()
-
-    def test_known_kenya_withholding_tax_patch_is_idempotent(self):
-        bonds = []
-        for isin in KENYA_WITHHOLDING_TAX:
-            bond = (
-                frappe.get_doc("Bond Master", isin)
-                if frappe.db.exists("Bond Master", isin)
-                else make_bond(isin=isin, bond_name=isin)
-            )
-            frappe.db.set_value("Bond Master", isin, "withholding_tax", 0, update_modified=False)
-            bonds.append(bond)
-
-        set_kenya_withholding_tax()
-        for bond in bonds:
-            bond.reload()
-            self.assertEqual(bond.withholding_tax, 10)
-
-        set_kenya_withholding_tax()
-        for bond in bonds:
-            bond.reload()
-            self.assertEqual(bond.withholding_tax, 10)
-
-    def test_quantity_change_patch_is_idempotent(self):
-        bond = make_bond(currency="KES", day_count_convention="Actual/364(Kenya)")
-        frappe.db.set_value("Bond Master", bond.name, "quantity_change", 0, update_modified=False)
-
-        synchronize_quantity_change_flags()
-        bond.reload()
-        self.assertEqual(bond.quantity_change, 1)
-
-        synchronize_quantity_change_flags()
-        bond.reload()
-        self.assertEqual(bond.quantity_change, 1)
-
-        bond.currency = "KES"
-        bond.day_count_convention = "30E/360"
-        bond.save()
-        self.assertEqual(bond.quantity_change, 0)
-
-    def test_kenya_schedule_patch_is_idempotent(self):
-        bond = make_bond(day_count_convention="Actual/364(Kenya)")
-        frappe.db.set_value(
-            "Bond Master",
-            bond.name,
-            "first_coupon_date",
-            "2025-07-01",
-            update_modified=False,
-        )
-        frappe.db.set_value(
-            "Bond Coupon Schedule",
-            bond.coupon_schedule[0].name,
-            {"coupon_date": "2025-07-01", "coupon_factor": "3.5"},
-            update_modified=False,
-        )
-
-        regenerate_kenya_coupon_schedules([bond.name])
-        bond.reload()
-        self.assertEqual(bond.first_coupon_date.isoformat(), "2025-01-03")
-        self.assertEqual(bond.coupon_schedule[0].coupon_date.isoformat(), "2025-01-03")
-
-        regenerate_kenya_coupon_schedules([bond.name])
-        bond.reload()
-        self.assertEqual(bond.first_coupon_date.isoformat(), "2025-01-03")
 
     def test_rejects_empty_principal_schedule(self):
         bond = make_bond()

@@ -17,4 +17,19 @@
 		}
 		return /^[=+\-@]/.test(text) ? `'${text}` : text;
 	};
+
+	// Build spreadsheet-safe tab-separated text; numericColumns holds row cell indexes.
+	clipboard.tsv = function (header, rows, numericColumns = []) {
+		const numeric = new Set(numericColumns);
+		return [
+			header.map((value) => clipboard.sanitize(value)).join("\t"),
+			...rows.map((row) =>
+				row
+					.map((value, index) =>
+						clipboard.sanitize(value, { numeric: numeric.has(index) })
+					)
+					.join("\t")
+			),
+		].join("\n");
+	};
 })();

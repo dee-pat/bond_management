@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { RouterLink } from "vue-router";
-import { Button } from "frappe-ui";
 import { ListCell } from "frappe-ui/list";
 
 import DataList from "../components/DataList.vue";

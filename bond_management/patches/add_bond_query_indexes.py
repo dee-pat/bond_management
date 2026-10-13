@@ -89,7 +89,7 @@ def _validate_duplicates():
         attachments = ", ".join(duplicate_attachments[:10])
         frappe.throw(
             _(
-                "Cannot enforce one Bond Statement per attachment because duplicates exist: {0}. Run the duplicate cleanup patch, then migrate again."
+                "Cannot enforce one Bond Statement per attachment because duplicates exist: {0}. Remove the duplicate statements, then migrate again."
             ).format(attachments)
         )
 

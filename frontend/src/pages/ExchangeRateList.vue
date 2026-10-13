@@ -6,6 +6,7 @@ import { ListCell } from "frappe-ui/list";
 import DataList from "../components/DataList.vue";
 import ListFilterBar from "../components/ListFilterBar.vue";
 import ListPagination from "../components/ListPagination.vue";
+import FilterButton from "../components/FilterButton.vue";
 import SortableColumn from "../components/SortableColumn.vue";
 import SurfaceState from "../components/SurfaceState.vue";
 import { useInvestorApi } from "../lib/api";
@@ -33,6 +34,13 @@ const {
 	sortBy: "rate_date",
 	errorMessage: "Exchange rates could not be loaded. Please retry.",
 });
+const sortColumns = [
+	{ label: "Rate Date", field: "rate_date" },
+	{ label: "From Currency", field: "from_currency" },
+	{ label: "To Currency", field: "to_currency" },
+	{ label: "Rate", field: "rate" },
+	{ label: "Reverse Rate", field: "reverse_rate" },
+];
 </script>
 
 <template>
@@ -80,40 +88,10 @@ const {
 			>
 				<template #header>
 					<SortableColumn
-						label="Rate Date"
-						field="rate_date"
-						:sort-by="sortBy"
-						:sort-order="sortOrder"
-						:disabled="loading"
-						@sort="changeSort"
-					/>
-					<SortableColumn
-						label="From Currency"
-						field="from_currency"
-						:sort-by="sortBy"
-						:sort-order="sortOrder"
-						:disabled="loading"
-						@sort="changeSort"
-					/>
-					<SortableColumn
-						label="To Currency"
-						field="to_currency"
-						:sort-by="sortBy"
-						:sort-order="sortOrder"
-						:disabled="loading"
-						@sort="changeSort"
-					/>
-					<SortableColumn
-						label="Rate"
-						field="rate"
-						:sort-by="sortBy"
-						:sort-order="sortOrder"
-						:disabled="loading"
-						@sort="changeSort"
-					/>
-					<SortableColumn
-						label="Reverse Rate"
-						field="reverse_rate"
+						v-for="column in sortColumns"
+						:key="column.field"
+						:label="column.label"
+						:field="column.field"
 						:sort-by="sortBy"
 						:sort-order="sortOrder"
 						:disabled="loading"
@@ -148,45 +126,32 @@ const {
 						</Button>
 					</ListCell>
 					<ListCell data-label="To Currency">
-						<Button
-							class="list-filter-button"
-							variant="ghost"
-							size="sm"
-							:label="`Filter To Currency by ${exchangeRate.to_currency}`"
-							@click="
-								applyFilter('to_currency', 'To Currency', exchangeRate.to_currency)
-							"
-						>
-							{{ exchangeRate.to_currency }}
-						</Button>
+						<FilterButton
+							field="to_currency"
+							label="To Currency"
+							:value="exchangeRate.to_currency"
+							@filter="applyFilter"
+						/>
 					</ListCell>
 					<ListCell data-label="Rate">
-						<Button
-							class="list-filter-button"
-							variant="ghost"
-							size="sm"
-							:label="`Filter Rate by ${exchangeRate.rate}`"
-							@click="applyFilter('rate', 'Rate', exchangeRate.rate)"
+						<FilterButton
+							field="rate"
+							label="Rate"
+							:value="exchangeRate.rate"
+							@filter="applyFilter"
 						>
 							{{ formatNumber(exchangeRate.rate, 12) }}
-						</Button>
+						</FilterButton>
 					</ListCell>
 					<ListCell data-label="Reverse Rate">
-						<Button
-							class="list-filter-button"
-							variant="ghost"
-							size="sm"
-							:label="`Filter Reverse Rate by ${exchangeRate.reverse_rate}`"
-							@click="
-								applyFilter(
-									'reverse_rate',
-									'Reverse Rate',
-									exchangeRate.reverse_rate
-								)
-							"
+						<FilterButton
+							field="reverse_rate"
+							label="Reverse Rate"
+							:value="exchangeRate.reverse_rate"
+							@filter="applyFilter"
 						>
 							{{ formatNumber(exchangeRate.reverse_rate, 12) }}
-						</Button>
+						</FilterButton>
 					</ListCell>
 				</template>
 			</DataList>

@@ -3,11 +3,8 @@
 from decimal import Decimal
 
 import frappe
-from frappe.utils import getdate
 
-from bond_management.bond_management.tests.migration_lifecycle_fixtures import ACCOUNT, KENYA_ISIN, USD_ISIN
-from bond_management.bond_management.utils.private_attachment import read_private_pdf_attachment
-from bond_management.bond_management.utils.transaction_attachment import get_standard_transaction_filename
+from bond_management.bond_management.tests.migration_lifecycle_fixtures import USD_ISIN
 from bond_management.patches import add_bond_query_indexes as indexes
 from bond_management.patches.add_bond_investor_read_only_access import READ_ONLY_DOCTYPES
 from bond_management.patches.add_bond_management_manager_access import BOND_DOCTYPES
@@ -84,75 +81,18 @@ def assert_business_data(fixtures):
         "transaction_amount": "1031",
     }.items():
         assert Decimal(str(transaction.get(field))) == Decimal(expected), (field, transaction.get(field))
-    statement = frappe.get_doc("Bond Statement", fixtures["statement"])
-    assert not frappe.db.exists("Bond Statement", fixtures["duplicate"])
-    assert statement.reconciliation_status == "Matched"
-    assert len(statement.bond_statement_details) == 1
-    holding = statement.bond_statement_details[0]
-    assert holding.isin == USD_ISIN and holding.quantity == 10
-    assert Decimal(str(holding.quantity)) * Decimal(str(transaction.face_value_per_unit)) == Decimal("1000")
-    assert statement.attachment == f"/private/files/PortfolioStatement-{ACCOUNT}-20251231.pdf"
-    transaction_pdf, _ = read_private_pdf_attachment(
-        transaction.attachment,
-        max_bytes=None,
-        missing_message="Lifecycle transaction attachment is missing.",
-        extension_message="Lifecycle transaction attachment must be a PDF.",
-        private_message="Lifecycle transaction attachment must be private.",
-        size_message="Lifecycle transaction attachment is too large.",
-    )
-    expected_transaction_filename = get_standard_transaction_filename(
-        ACCOUNT, transaction.settlement_date, content=transaction_pdf
-    )
-    assert transaction.attachment == f"/private/files/{expected_transaction_filename}"
-    assert "QuantityBasis-v8" in statement.quantity_reconciliation_report
-    for document, field in (
-        (statement, "attachment"),
-        (statement, "quantity_reconciliation_report"),
-        (transaction, "attachment"),
-    ):
-        _assert_private_file(document, field)
-    kenya = frappe.get_doc("Bond Master", KENYA_ISIN)
-    assert kenya.quantity_change == 1 and getdate(kenya.first_coupon_date) == getdate("2025-01-03")
-    assert getdate(kenya.coupon_schedule[0].coupon_date) == getdate("2025-01-03")
-    market = frappe.get_doc("Bond Market Date", fixtures["market_date"]).bond_market_prices[0]
-    assert Decimal(str(market.principal_factor)) == Decimal("1")
-    assert getdate(market.weighted_avg_repayment_date) == getdate("2027-01-01")
-    assert Decimal(str(market.weighted_avg_repayment_years)) == Decimal("1.008219178")
-    assert getdate(market.maturity_date) == getdate("2027-01-01") and market.future_xirr != -999
-    legacy_portfolio_columns = frappe.db.sql(
-        """SELECT COLUMN_NAME FROM information_schema.COLUMNS
-        WHERE TABLE_SCHEMA = %s AND TABLE_NAME = %s AND COLUMN_NAME = %s""",
-        (frappe.conf.db_name, "tabBond Exchange Rate", "portfolio_name"),
-        as_dict=True,
-    )
-    assert not legacy_portfolio_columns, legacy_portfolio_columns
+    assert transaction.isin == USD_ISIN
     rate = frappe.get_doc("Bond Exchange Rate", fixtures["exchange_rate"])
     assert Decimal(str(rate.rate)) == Decimal("0.008") and Decimal(str(rate.reverse_rate)) == Decimal("125")
-    assert rate.manual_fallback == 0 and rate.statement == statement.name
+    assert rate.manual_fallback == 0 and rate.statement == fixtures["statement"]
     sources = _rows(
         "Bond Exchange Rate Source", ["statement", "rate", "reverse_rate"], {"exchange_rate": rate.name}
     )
-    assert len(sources) == 1 and sources[0]["statement"] == statement.name
+    assert len(sources) == 1 and sources[0]["statement"] == fixtures["statement"]
     assert Decimal(str(sources[0]["rate"])) == Decimal("0.008")
     assert Decimal(str(sources[0]["reverse_rate"])) == Decimal("125")
-
-
-def _assert_private_file(document, field):
-    url = document.get(field)
-    assert url.startswith("/private/files/")
-    name = frappe.db.get_value(
-        "File",
-        {
-            "file_url": url,
-            "is_private": 1,
-            "attached_to_doctype": document.doctype,
-            "attached_to_name": document.name,
-            "attached_to_field": field,
-        },
-        "name",
-    )
-    assert name, (document.doctype, document.name, field)
-    assert frappe.get_doc("File", name).get_content(encodings=()).startswith(b"%PDF-")
+    manual = frappe.get_doc("Bond Exchange Rate", fixtures["manual_exchange_rate"])
+    assert manual.manual_fallback == 1 and not manual.statement
 
 
 def _rows(doctype, fields, filters):

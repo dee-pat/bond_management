@@ -12,6 +12,7 @@ export {}
 declare module 'vue' {
   export interface GlobalComponents {
     DataList: typeof import('./src/components/DataList.vue')['default']
+    FilterButton: typeof import('./src/components/FilterButton.vue')['default']
     ListFilterBar: typeof import('./src/components/ListFilterBar.vue')['default']
     ListPagination: typeof import('./src/components/ListPagination.vue')['default']
     PdfAttachmentActions: typeof import('./src/components/PdfAttachmentActions.vue')['default']

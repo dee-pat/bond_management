@@ -1,8 +1,9 @@
 import frappe
+from frappe.exceptions import FrappeTypeError
 from frappe.tests import IntegrationTestCase
 
 from bond_management.bond_management.api import investor, investor_reports
-from bond_management.bond_management.api.investor import get_bootstrap
+from bond_management.bond_management.api.investor import MAX_PAGE_LENGTH, MAX_PAGE_START, get_bootstrap
 from bond_management.bond_management.tests.factories import (
     as_investor_user,
     make_investor_user,
@@ -51,6 +52,64 @@ class TestInvestorAccess(IntegrationTestCase):
                     self.assertRaisesRegex(error, message),
                 ):
                     endpoint(*args)
+
+
+class TestInvestorListControls(IntegrationTestCase):
+    # Each list shares one validated paging/sort/filter path; a hidden or
+    # non-filterable column per endpoint proves its allowlist is applied.
+    LIST_ENDPOINTS = (
+        (investor.get_transactions, "isin", "attachment", "settlement_date"),
+        (investor.get_statements, "statement_date", "attachment", "statement_date"),
+        (investor.get_bonds, "isin", "principal_schedule", "issue_date"),
+        (investor.get_market_dates, "date", "bond_market_prices", "date"),
+        (investor.get_exchange_rates, "rate", "statement", "rate_date"),
+    )
+
+    def test_list_endpoints_bound_paging_and_allow_list_sort_and_filter(self):
+        rejected = (
+            (
+                {"page_length": str(MAX_PAGE_LENGTH + 1)},
+                frappe.ValidationError,
+                f"cannot exceed {MAX_PAGE_LENGTH}",
+            ),
+            ({"page_length": "0"}, frappe.ValidationError, "must be at least 1"),
+            ({"start": "-1"}, frappe.ValidationError, "must be at least 0"),
+            ({"start": MAX_PAGE_START + 1}, frappe.ValidationError, f"cannot exceed {MAX_PAGE_START}"),
+            ({"start": "1.5"}, frappe.ValidationError, "must be an integer"),
+            ({"start": []}, FrappeTypeError, ""),
+            ({"filters": {"name": "x"}}, TypeError, ""),
+            ({"sort_by": "name", "sort_order": "asc"}, frappe.ValidationError, "not supported"),
+            ({"sort_order": "asc"}, frappe.ValidationError, "requires Sort by"),
+            ({"filter_field": "isin"}, frappe.ValidationError, "provided together"),
+        )
+        investor_user = make_investor_user([INVESTOR_ROLE])
+
+        with as_investor_user(investor_user):
+            for endpoint, sortable, hidden_sort, unfilterable in self.LIST_ENDPOINTS:
+                with self.subTest(endpoint=endpoint.__name__):
+                    page = endpoint(page_length=str(MAX_PAGE_LENGTH))
+                    self.assertEqual(page["pagination"]["page_length"], MAX_PAGE_LENGTH)
+                    cases = (
+                        *rejected,
+                        (
+                            {"sort_by": hidden_sort, "sort_order": "asc"},
+                            frappe.ValidationError,
+                            "not supported",
+                        ),
+                        (
+                            {"sort_by": sortable, "sort_order": "sideways"},
+                            frappe.ValidationError,
+                            "asc or desc",
+                        ),
+                        (
+                            {"filter_field": unfilterable, "filter_value": "2025-01-01"},
+                            frappe.ValidationError,
+                            "Filter field is not supported",
+                        ),
+                    )
+                    for kwargs, error, message in cases:
+                        with self.subTest(kwargs=kwargs), self.assertRaisesRegex(error, message):
+                            endpoint(**kwargs)
 
 
 class TestInvestorBootstrap(IntegrationTestCase):

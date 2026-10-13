@@ -50,25 +50,15 @@ def execute(filters: dict | None = None):
         filters.get("portfolio"), filters.get("valuation_date")
     )
 
-    (
-        data,
-        combined_cashflow,
-        combined_future_cashflow,
-        combined_reporting_cashflow,
-        combined_future_reporting_cashflow,
-    ) = get_data(portfolio, valuation_date)
+    data, combined_cashflow, combined_future_cashflow, combined_reporting_cashflow, _future_reporting = (
+        get_data(portfolio, valuation_date)
+    )
 
     data = list(data)
     columns = get_columns(has_non_reporting_currency(data))
     if data:
         data.append(
-            make_total_row(
-                data,
-                combined_cashflow,
-                combined_future_cashflow,
-                combined_reporting_cashflow,
-                combined_future_reporting_cashflow,
-            )
+            make_total_row(data, combined_cashflow, combined_future_cashflow, combined_reporting_cashflow)
         )
     return columns, data
 
@@ -389,18 +379,11 @@ def get_data(portfolio, valuation_date, context=None):
         combined_reporting_cashflow.extend(reporting_cashflows)
 
         totals = defaultdict(Decimal)
-        reporting_totals = defaultdict(Decimal)
         for line in cashflows:
             totals[line.get("type")] += line.get("amount") or 0
-        for line in reporting_cashflows:
-            reporting_totals[line.get("type")] += line.get("amount") or 0
 
         purchases_value = -totals["purchase"]
         proceeds_value = totals["sale"] + totals["coupon"] + totals["amortisation"]
-        purchases_value_usd = -reporting_totals["purchase"]
-        proceeds_value_usd = (
-            reporting_totals["sale"] + reporting_totals["coupon"] + reporting_totals["amortisation"]
-        )
 
         xirr = _percent_value(calculate_xirr(consolidate_cashflows(cashflows)))
         xirr_usd = _percent_value(calculate_xirr(consolidate_cashflows(reporting_cashflows)))
@@ -426,45 +409,23 @@ def get_data(portfolio, valuation_date, context=None):
             valuation_date,
         )
 
-        future_xirr = _percent_value(future_xirr)
-        future_xirr_usd = (
-            calculate_future_xirr_from_cashflows(
-                isin,
-                valuation_date,
-                future_reporting_cashflows,
-                historical_guess=context["xirr_guesses"].get(isin),
-            )
-            if quantity
-            else None
-        )
-        future_xirr_usd = _percent_value(future_xirr_usd)
-
-        market_value_usd = market_value * valuation_exchange_rate
-        nominal_value_usd = nominal_value * valuation_exchange_rate
-
         rows.append(
             {
                 "isin": isin,
                 "currency": currency,
                 "reporting_currency": REPORTING_CURRENCY,
-                "exchange_rate": valuation_exchange_rate,
                 "principal_factor": principal_factor,
                 "nominal_value": quantize_money(nominal_value),
-                "nominal_value_usd": quantize_money(nominal_value_usd),
                 "purchases_value": quantize_money(purchases_value),
-                "purchases_value_usd": quantize_money(purchases_value_usd),
                 "proceeds_value": quantize_money(proceeds_value),
-                "proceeds_value_usd": quantize_money(proceeds_value_usd),
                 "expected_coupons_next_year": expected_coupons_next_year,
                 "expected_coupons_next_year_usd": expected_coupons_next_year_usd,
                 "market_value": quantize_money(market_value),
-                "market_value_usd": quantize_money(market_value_usd),
+                "market_value_usd": quantize_money(market_value * valuation_exchange_rate),
                 "gain_value": quantize_money(market_value + proceeds_value - purchases_value),
-                "gain_value_usd": quantize_money(market_value_usd + proceeds_value_usd - purchases_value_usd),
                 "xirr": xirr,
-                "future_xirr": future_xirr,
+                "future_xirr": _percent_value(future_xirr),
                 "xirr_usd": xirr_usd,
-                "future_xirr_usd": future_xirr_usd,
                 "has_past_cashflows": bool(cashflows),
                 "has_future_cashflows": bool(future_cashflows),
             }
@@ -495,7 +456,6 @@ def _bond_cashflows(portfolio, isin, context, valuation_date, *, xirr_type=None)
             isin=isin,
             date=valuation_date,
             market_price=terminal_price,
-            portfolio=portfolio,
             bond_doc=bond,
             transactions=transactions,
         )
@@ -529,19 +489,12 @@ def _reporting_cashflows(cashflows, bond, context, valuation_date, *, xirr_type)
 # ---------- TOTAL ROW ----------
 
 
-def make_total_row(
-    data,
-    combined_cashflow,
-    combined_future_cashflow,
-    combined_reporting_cashflow=None,
-    combined_future_reporting_cashflow=None,
-):
+def make_total_row(data, combined_cashflow, combined_future_cashflow, combined_reporting_cashflow):
     currencies = {row["currency"] for row in data if row.get("currency")}
     single_native_currency = len(currencies) <= 1
 
-    def sum_field(fieldname, fallback_fieldname=None):
-        values = [row.get(fieldname, row.get(fallback_fieldname, 0)) for row in data]
-        return quantize_money(sum((to_decimal(value) for value in values), Decimal(0)))
+    def sum_field(fieldname):
+        return quantize_money(sum((to_decimal(row.get(fieldname)) for row in data), Decimal(0)))
 
     native_values = {
         "nominal_value": sum_field("nominal_value") if single_native_currency else None,
@@ -554,36 +507,15 @@ def make_total_row(
         "gain_value": sum_field("gain_value") if single_native_currency else None,
     }
     reporting_values = {
-        "nominal_value_usd": sum_field("nominal_value_usd", "nominal_value"),
-        "purchases_value_usd": sum_field("purchases_value_usd", "purchases_value"),
-        "proceeds_value_usd": sum_field("proceeds_value_usd", "proceeds_value"),
-        "expected_coupons_next_year_usd": sum_field(
-            "expected_coupons_next_year_usd",
-            "expected_coupons_next_year",
-        ),
-        "market_value_usd": sum_field("market_value_usd", "market_value"),
-        "gain_value_usd": sum_field("gain_value_usd", "gain_value"),
+        "expected_coupons_next_year_usd": sum_field("expected_coupons_next_year_usd"),
+        "market_value_usd": sum_field("market_value_usd"),
     }
 
-    cash_flows = consolidate_cashflows(cash_flows=combined_cashflow)
-    xirr_value = calculate_xirr(cash_flows) if single_native_currency else None
-
-    future_cash_flows = consolidate_cashflows(cash_flows=combined_future_cashflow)
-    future_xirr = calculate_xirr(future_cash_flows) if single_native_currency else None
-
-    reporting_cash_flows = consolidate_cashflows(
-        cash_flows=combined_reporting_cashflow
-        if combined_reporting_cashflow is not None
-        else combined_cashflow
+    xirr_value = calculate_xirr(consolidate_cashflows(combined_cashflow)) if single_native_currency else None
+    future_xirr = (
+        calculate_xirr(consolidate_cashflows(combined_future_cashflow)) if single_native_currency else None
     )
-    reporting_xirr = calculate_xirr(reporting_cash_flows)
-
-    future_reporting_cash_flows = consolidate_cashflows(
-        cash_flows=combined_future_reporting_cashflow
-        if combined_future_reporting_cashflow is not None
-        else combined_future_cashflow
-    )
-    future_reporting_xirr = calculate_xirr(future_reporting_cash_flows)
+    reporting_xirr = calculate_xirr(consolidate_cashflows(combined_reporting_cashflow))
 
     return {
         "isin": "TOTAL",
@@ -594,7 +526,6 @@ def make_total_row(
         "xirr": _percent_value(xirr_value),
         "future_xirr": _percent_value(future_xirr),
         "xirr_usd": _percent_value(reporting_xirr),
-        "future_xirr_usd": _percent_value(future_reporting_xirr),
         "has_past_cashflows": bool(combined_cashflow),
         "has_future_cashflows": bool(combined_future_cashflow),
     }

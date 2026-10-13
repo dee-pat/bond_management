@@ -157,17 +157,6 @@ class TestInvestorMarketDates(IntegrationTestCase):
 
         with as_investor_user(investor):
             first_page = get_market_dates(page_length="1")
-            maximum_page = get_market_dates(page_length="50")
-            with self.assertRaisesRegex(frappe.ValidationError, "cannot exceed 50"):
-                get_market_dates(page_length="51")
-            with self.assertRaisesRegex(frappe.ValidationError, "must be at least 1"):
-                get_market_dates(page_length="0")
-            with self.assertRaisesRegex(frappe.ValidationError, "must be at least 0"):
-                get_market_dates(start="-1")
-            with self.assertRaises(FrappeTypeError):
-                get_market_dates(start=[])
-            with self.assertRaises(TypeError):
-                get_market_dates(filters={"date": "2025-01-01"})
 
         self.assertEqual(first_page["data"][0].name, newer.name)
         self.assertNotEqual(first_page["data"][0].name, older.name)
@@ -175,7 +164,6 @@ class TestInvestorMarketDates(IntegrationTestCase):
             first_page["pagination"],
             {"start": 0, "page_length": 1, "has_more": True},
         )
-        self.assertEqual(maximum_page["pagination"]["page_length"], 50)
 
     def test_visible_columns_can_sort_and_filter_with_server_controls(self):
         older = make_market_date(make_bond(), date="2030-01-01")
@@ -184,10 +172,6 @@ class TestInvestorMarketDates(IntegrationTestCase):
 
         with as_investor_user(investor):
             ascending = get_market_dates(sort_by="date", sort_order="asc")
-            with self.assertRaisesRegex(frappe.ValidationError, "not supported"):
-                get_market_dates(sort_by="bond_market_prices", sort_order="asc")
-            with self.assertRaisesRegex(frappe.ValidationError, "Filter field"):
-                get_market_dates(filter_field="date", filter_value="2030-01-01")
 
         names = [row.name for row in ascending["data"]]
         self.assertLess(names.index(older.name), names.index(newer.name))

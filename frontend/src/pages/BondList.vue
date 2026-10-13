@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import { RouterLink } from "vue-router";
-import { Button } from "frappe-ui";
 import { ListCell } from "frappe-ui/list";
 
 import DataList from "../components/DataList.vue";
 import ListFilterBar from "../components/ListFilterBar.vue";
 import ListPagination from "../components/ListPagination.vue";
+import FilterButton from "../components/FilterButton.vue";
 import SortableColumn from "../components/SortableColumn.vue";
 import SurfaceState from "../components/SurfaceState.vue";
 import { useInvestorApi } from "../lib/api";
@@ -33,6 +33,12 @@ const {
 	sortBy: "issue_date",
 	errorMessage: "Bonds could not be loaded. Please retry.",
 });
+const sortColumns = [
+	{ label: "Bond Name", field: "bond_name" },
+	{ label: "ISIN", field: "isin" },
+	{ label: "Currency", field: "currency" },
+	{ label: "Issue Date", field: "issue_date" },
+];
 </script>
 
 <template>
@@ -66,32 +72,10 @@ const {
 			>
 				<template #header>
 					<SortableColumn
-						label="Bond Name"
-						field="bond_name"
-						:sort-by="sortBy"
-						:sort-order="sortOrder"
-						:disabled="loading"
-						@sort="changeSort"
-					/>
-					<SortableColumn
-						label="ISIN"
-						field="isin"
-						:sort-by="sortBy"
-						:sort-order="sortOrder"
-						:disabled="loading"
-						@sort="changeSort"
-					/>
-					<SortableColumn
-						label="Currency"
-						field="currency"
-						:sort-by="sortBy"
-						:sort-order="sortOrder"
-						:disabled="loading"
-						@sort="changeSort"
-					/>
-					<SortableColumn
-						label="Issue Date"
-						field="issue_date"
+						v-for="column in sortColumns"
+						:key="column.field"
+						:label="column.label"
+						:field="column.field"
 						:sort-by="sortBy"
 						:sort-order="sortOrder"
 						:disabled="loading"
@@ -108,26 +92,20 @@ const {
 						</RouterLink>
 					</ListCell>
 					<ListCell data-label="ISIN">
-						<Button
-							class="list-filter-button"
-							variant="ghost"
-							size="sm"
-							:label="`Filter ISIN by ${bond.isin}`"
-							@click="applyFilter('isin', 'ISIN', bond.isin)"
-						>
-							{{ bond.isin }}
-						</Button>
+						<FilterButton
+							field="isin"
+							label="ISIN"
+							:value="bond.isin"
+							@filter="applyFilter"
+						/>
 					</ListCell>
 					<ListCell data-label="Currency">
-						<Button
-							class="list-filter-button"
-							variant="ghost"
-							size="sm"
-							:label="`Filter Currency by ${bond.currency}`"
-							@click="applyFilter('currency', 'Currency', bond.currency)"
-						>
-							{{ bond.currency }}
-						</Button>
+						<FilterButton
+							field="currency"
+							label="Currency"
+							:value="bond.currency"
+							@filter="applyFilter"
+						/>
 					</ListCell>
 					<ListCell data-label="Issue Date">
 						<span>{{ formatDate(bond.issue_date) }}</span>

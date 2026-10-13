@@ -16,9 +16,6 @@ from bond_management.bond_management.utils.market_history import latest_market_r
 from bond_management.bond_management.utils.portfolio import (
     get_coupon_position_from_transactions,
     get_ledger_position_from_transactions,
-    get_position,
-    get_position_for_coupon_payment,
-    get_position_for_payment,
 )
 
 DEFAULT_XIRR_GUESS = 0.1
@@ -241,22 +238,16 @@ def create_future_cash_flows(isin, date, market_price, quantity=1, bond_doc=None
     return sorted(future_cash_flows, key=lambda x: x["date"])
 
 
-def create_past_cash_flows(isin, date, market_price, portfolio, bond_doc=None, transactions=None):
-    # Fetch the bond document
-    bond_doc = bond_doc or frappe.get_doc("Bond Master", isin)
+def create_past_cash_flows(isin, date, market_price, bond_doc, transactions):
+    """Build past cash flows from a preloaded bond and its portfolio ledger rows."""
     market_price = to_decimal(market_price)
-
-    # Initialize past cash flows list
     past_cash_flows = []
 
-    # Calculate accrued interest up to the settlement date
+    # End-of-day position: maturity redemption on this date closes the holding.
     settlement_date = getdate(date)
-    if transactions is None:
-        position = get_position(isin, statement_date=date, portfolio_name=portfolio)
-    else:
-        position = get_ledger_position_from_transactions(transactions, settlement_date)
-        if getdate(bond_doc.get("maturity_date")) <= settlement_date:
-            position = to_decimal(0)
+    position = get_ledger_position_from_transactions(transactions, settlement_date)
+    if getdate(bond_doc.get("maturity_date")) <= settlement_date:
+        position = to_decimal(0)
     accrued_interest = apply_withholding_tax(
         unit_accrued_interest_from_bond(bond_doc, settlement_date),
         bond_doc,
@@ -296,11 +287,7 @@ def create_past_cash_flows(isin, date, market_price, portfolio, bond_doc=None, t
             continue
         if coupon_date <= settlement_date:
             coupon_rate = _coupon_per_unit(bond_doc, coupon_period, coupon_date)
-            position = (
-                get_position_for_coupon_payment(isin, coupon_date, coupon_rate, portfolio)
-                if transactions is None
-                else get_coupon_position_from_transactions(transactions, coupon_date, coupon_rate)
-            )
+            position = get_coupon_position_from_transactions(transactions, coupon_date, coupon_rate)
 
             if position > 0:
                 past_cash_flows.append(
@@ -321,11 +308,7 @@ def create_past_cash_flows(isin, date, market_price, portfolio, bond_doc=None, t
         if repayment_date <= settlement_date:
             # Equality belongs to past performance. Same-day settlements occur
             # immediately before payment and participate in the entitlement.
-            position = (
-                get_position_for_payment(isin, repayment_date, portfolio)
-                if transactions is None
-                else get_ledger_position_from_transactions(transactions, repayment_date)
-            )
+            position = get_ledger_position_from_transactions(transactions, repayment_date)
             past_cash_flows.append(
                 {
                     "bond": isin,
@@ -336,27 +319,9 @@ def create_past_cash_flows(isin, date, market_price, portfolio, bond_doc=None, t
                 }
             )
 
-    rows = transactions
-    if rows is None:
-        rows = frappe.qb.get_query(
-            "Bond Transaction",
-            filters={
-                "isin": isin,
-                "portfolio_name": portfolio,
-                "settlement_date": ["<=", date],
-            },
-            fields=[
-                "transaction_type",
-                "settlement_amount",
-                "settlement_date",
-                "quantity_face_value",
-            ],
-            ignore_permissions=False,
-        ).run(as_dict=True)
-
     # settlement_amount already contains the commission-inclusive bank price;
     # adding commission_amount here would double-count it in XIRR.
-    for row in rows:
+    for row in transactions:
         if row["transaction_type"] == "Purchase":
             past_cash_flows.append(
                 {

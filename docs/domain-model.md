@@ -135,10 +135,8 @@ bootstraps repair incompatible legacy source shares.
   custom APIs and reports mask unavailable stored values to `None`. Historical
   guesses retain zero yields and skip unavailable rows. Performance keeps the
   latest quote even when its yield is unavailable, batch-loads the latest earlier
-  available yield, and uses the default guess when no history exists. A
-  registered data patch preserves non-zero legacy yields and marks them
-  available; it recalculates ambiguous legacy zero yields with the default guess
-  and preserves other fields.
+  available yield, and uses the default guess when no history exists. Past
+  cash flows are always built from the report's preloaded portfolio ledger.
 
 ## Source anchors
 

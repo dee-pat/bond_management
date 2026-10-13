@@ -37,7 +37,7 @@ its existing five-field projection and expresses unavailable yield as null.
 - Commands executed: `bench --site test_site migrate`; `bench --site test_site
   run-tests --app bond_management --module` for
   `doctype.bond_market_date.test_market_xirr_availability`,
-  `patches.test_backfill_market_xirr_availability`,
+  `patches.test_backfill_market_xirr_availability` (retired with the patch on 2026-10-13),
   `doctype.bond_market_date.test_bond_market_date`,
   `api.test_investor_market_dates`, `api.test_investor_yield_comparison`,
   `utils.test_xirr`, `report.portfolio_performance.test_portfolio_performance`

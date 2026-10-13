@@ -139,49 +139,20 @@ EXCHANGE_RATE_LIST_FIELDS = (
 )
 
 
-def _build_sort_options(fields: tuple[str, ...]) -> dict[str, dict[str, str]]:
-    return {
-        field: {
-            "asc": f"{field} asc, name asc",
-            "desc": f"{field} desc, name desc",
-        }
-        for field in fields
-    }
-
-
-TRANSACTION_SORT_OPTIONS = _build_sort_options(
-    (
-        "settlement_date",
-        "transaction_type",
-        "portfolio_name",
-        "isin",
-        "trade_date",
-        "quantity_face_value",
-        "price",
-    )
-)
-STATEMENT_SORT_OPTIONS = _build_sort_options(("statement_date", "portfolio_name", "reconciliation_status"))
-BOND_SORT_OPTIONS = _build_sort_options(("bond_name", "isin", "currency", "issue_date"))
-MARKET_DATE_SORT_OPTIONS = _build_sort_options(("date",))
-EXCHANGE_RATE_SORT_OPTIONS = _build_sort_options(
-    ("rate_date", "from_currency", "to_currency", "rate", "reverse_rate")
-)
-
 # Click-to-filter columns. Frozensets keep these out of the response allowlists.
 TRANSACTION_FILTER_FIELDS = frozenset({"transaction_type", "isin", "quantity_face_value", "price"})
-STATEMENT_FILTER_FIELDS = frozenset()
 BOND_FILTER_FIELDS = frozenset({"bond_name", "isin", "currency"})
-MARKET_DATE_FILTER_FIELDS = frozenset()
 EXCHANGE_RATE_FILTER_FIELDS = frozenset({"from_currency", "to_currency", "rate", "reverse_rate"})
-EXCHANGE_RATE_DETAIL_FIELDS = (
+# The private statement link is added only after its own read check.
+EXCHANGE_RATE_SCALAR_FIELDS = (
     "rate_date",
     "from_currency",
     "to_currency",
     "source",
     "rate",
     "reverse_rate",
-    "statement",
 )
+EXCHANGE_RATE_DETAIL_FIELDS = (*EXCHANGE_RATE_SCALAR_FIELDS, "statement")
 
 
 @frappe.whitelist(methods=["GET"])
@@ -233,7 +204,6 @@ def get_transactions(
         sort_order=sort_order,
         filter_field=filter_field,
         filter_value=filter_value,
-        sort_options=TRANSACTION_SORT_OPTIONS,
         filter_fields=TRANSACTION_FILTER_FIELDS,
         default_order="settlement_date desc, name desc",
     )
@@ -289,8 +259,6 @@ def get_statements(
         sort_order=sort_order,
         filter_field=filter_field,
         filter_value=filter_value,
-        sort_options=STATEMENT_SORT_OPTIONS,
-        filter_fields=STATEMENT_FILTER_FIELDS,
         default_order="statement_date desc, name desc",
     )
 
@@ -332,7 +300,6 @@ def get_bonds(
         sort_order=sort_order,
         filter_field=filter_field,
         filter_value=filter_value,
-        sort_options=BOND_SORT_OPTIONS,
         filter_fields=BOND_FILTER_FIELDS,
         default_order="issue_date desc, name desc",
     )
@@ -373,8 +340,6 @@ def get_market_dates(
         sort_order=sort_order,
         filter_field=filter_field,
         filter_value=filter_value,
-        sort_options=MARKET_DATE_SORT_OPTIONS,
-        filter_fields=MARKET_DATE_FILTER_FIELDS,
         default_order="date desc, name desc",
     )
 
@@ -419,7 +384,6 @@ def get_exchange_rates(
         sort_order=sort_order,
         filter_field=filter_field,
         filter_value=filter_value,
-        sort_options=EXCHANGE_RATE_SORT_OPTIONS,
         filter_fields=EXCHANGE_RATE_FILTER_FIELDS,
         default_order="rate_date desc, name desc",
         query_context=include_shared_exchange_rates_in_safe_projection(),
@@ -435,7 +399,7 @@ def get_exchange_rate(name: str) -> dict:
     with include_shared_exchange_rates_in_safe_projection():
         exchange_rate = _fetch_one(
             "Bond Exchange Rate",
-            tuple(field for field in EXCHANGE_RATE_DETAIL_FIELDS if field != "statement"),
+            EXCHANGE_RATE_SCALAR_FIELDS,
             name,
             _("You are not permitted to read this exchange rate."),
         )
@@ -512,19 +476,21 @@ def _paged_list(
     sort_order: str | None,
     filter_field: str | None,
     filter_value: str | None,
-    sort_options: dict[str, dict[str, str]],
-    filter_fields: frozenset[str],
     default_order: str,
+    filter_fields: frozenset[str] = frozenset(),
     filters: dict | None = None,
     query_context: AbstractContextManager | None = None,
 ) -> dict:
-    """Return one permission-scoped page with validated sort, filter, and paging controls."""
+    """Return one permission-scoped page with validated sort, filter, and paging controls.
+
+    Every visible list column except ``name`` is sortable, with ``name`` as the tiebreaker.
+    """
     order_by, click_filters = _list_controls(
         sort_by,
         sort_order,
         filter_field,
         filter_value,
-        sort_options=sort_options,
+        sort_fields=frozenset(fields) - {"name"},
         filter_fields=filter_fields,
         default_order=default_order,
     )
@@ -548,7 +514,7 @@ def _list_controls(
     filter_field: str | None,
     filter_value: str | None,
     *,
-    sort_options: dict[str, dict[str, str]],
+    sort_fields: frozenset[str],
     filter_fields: frozenset[str],
     default_order: str,
 ) -> tuple[str, dict[str, str]]:
@@ -559,7 +525,7 @@ def _list_controls(
 
     if sort_by is None and sort_order is not None:
         frappe.throw(_("Sort order requires Sort by."), frappe.ValidationError)
-    if sort_by is not None and sort_by not in sort_options:
+    if sort_by is not None and sort_by not in sort_fields:
         frappe.throw(_("Sort by is not supported for this list."), frappe.ValidationError)
     if sort_by is not None and sort_order not in {"asc", "desc"}:
         frappe.throw(_("Sort order must be asc or desc."), frappe.ValidationError)
@@ -572,7 +538,8 @@ def _list_controls(
     if filter_field is not None and filter_field not in filter_fields:
         frappe.throw(_("Filter field is not supported for this list."), frappe.ValidationError)
 
-    order_by = default_order if sort_by is None else sort_options[sort_by][sort_order]
+    # sort_by and sort_order are validated against fixed allowlists above.
+    order_by = default_order if sort_by is None else f"{sort_by} {sort_order}, name {sort_order}"
     filters = {} if filter_field is None else {filter_field: filter_value}
     return order_by, filters
 

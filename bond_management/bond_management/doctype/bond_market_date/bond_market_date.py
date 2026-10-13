@@ -21,7 +21,7 @@ from bond_management.bond_management.utils.xirr import (
 class BondMarketDate(Document):
     def validate(self):
         self._validate_unique_date()
-        self._validate_market_price_rows(require_complete=True)
+        self._validate_market_price_rows()
         self._recalculate_market_data()
 
     def _validate_unique_date(self):
@@ -71,24 +71,16 @@ class BondMarketDate(Document):
             for fieldname, value in values.items():
                 row.set(fieldname, value)
 
-    def _validate_market_price_rows(self, require_complete):
+    def _validate_market_price_rows(self):
         seen_isins = set()
 
         for row in self.bond_market_prices:
             if not row.isin:
-                if require_complete:
-                    frappe.throw(_("ISIN is required in row {0}").format(row.idx))
-                continue
-
+                frappe.throw(_("ISIN is required in row {0}").format(row.idx))
             _add_unique_isin(row.isin, seen_isins)
-
             if row.market_price is None:
-                if require_complete:
-                    frappe.throw(_("Market Price is required in row {0}").format(row.idx))
-                continue
-
+                frappe.throw(_("Market Price is required in row {0}").format(row.idx))
             if to_decimal(row.market_price, "Market Price") <= 0:
-                row.future_xirr = None
                 frappe.throw(_("Market Price must be greater than zero in row {0}").format(row.idx))
 
 

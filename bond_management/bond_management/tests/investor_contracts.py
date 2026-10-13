@@ -1,4 +1,8 @@
-"""Investor response contracts owned by tests, independent of production projections."""
+"""Investor response contracts owned by tests, independent of production projections.
+
+Endpoint tests compare actual responses with these fields, so a production
+allowlist change must be mirrored here deliberately.
+"""
 
 TRANSACTION_LIST_FIELDS = (
     "name",
@@ -43,14 +47,6 @@ STATEMENT_LIST_FIELDS = (
     "portfolio_name",
     "reconciliation_status",
 )
-STATEMENT_SCALAR_FIELDS = (
-    "portfolio_name",
-    "statement_date",
-    "market_price_posting",
-    "reconciliation_status",
-    "attachment",
-    "quantity_reconciliation_report",
-)
 STATEMENT_DETAIL_FIELDS = (
     "portfolio_name",
     "statement_date",
@@ -74,21 +70,6 @@ BOND_LIST_FIELDS = (
     "currency",
     "issue_date",
 )
-BOND_SCALAR_FIELDS = (
-    "bond_name",
-    "isin",
-    "issue_date",
-    "first_coupon_date",
-    "face_value_per_unit",
-    "coupon_frequency",
-    "bond_type",
-    "maturity_date",
-    "currency",
-    "coupon_rate",
-    "withholding_tax",
-    "day_count_convention",
-    "quantity_change",
-)
 BOND_DETAIL_FIELDS = (
     "bond_name",
     "isin",
@@ -109,7 +90,6 @@ BOND_DETAIL_FIELDS = (
 BOND_PRINCIPAL_FIELDS = ("repayment_date", "principal_units", "repayment_percent")
 BOND_COUPON_FIELDS = ("coupon_date", "period_start", "period_end", "coupon_factor")
 MARKET_DATE_LIST_FIELDS = ("name", "date")
-MARKET_DATE_SCALAR_FIELDS = ("date",)
 MARKET_DATE_DETAIL_FIELDS = ("date", "bond_market_prices")
 MARKET_PRICE_FIELDS = (
     "isin",
@@ -218,30 +198,4 @@ YIELD_COMPARISON_CHART = {
     "value_field": "future_xirr",
     "series_field": "isin",
     "gap_policy": "preserve",
-}
-
-EXPECTED_FIELD_ALLOWLISTS = {
-    "BOND_COUPON_FIELDS": BOND_COUPON_FIELDS,
-    "BOND_DETAIL_FIELDS": BOND_DETAIL_FIELDS,
-    "BOND_LIST_FIELDS": BOND_LIST_FIELDS,
-    "BOND_PRINCIPAL_FIELDS": BOND_PRINCIPAL_FIELDS,
-    "BOND_SCALAR_FIELDS": BOND_SCALAR_FIELDS,
-    "BOND_YIELD_COMPARISON_FIELDS": BOND_YIELD_COMPARISON_FIELDS,
-    "EXCHANGE_RATE_DETAIL_FIELDS": EXCHANGE_RATE_DETAIL_FIELDS,
-    "EXCHANGE_RATE_LIST_FIELDS": EXCHANGE_RATE_LIST_FIELDS,
-    "INTEREST_DIFFERENCE_FIELDS": INTEREST_DIFFERENCE_FIELDS,
-    "INTEREST_DIFFERENCE_ROW_FIELDS": INTEREST_DIFFERENCE_ROW_FIELDS,
-    "MARKET_DATE_DETAIL_FIELDS": MARKET_DATE_DETAIL_FIELDS,
-    "MARKET_DATE_LIST_FIELDS": MARKET_DATE_LIST_FIELDS,
-    "MARKET_DATE_SCALAR_FIELDS": MARKET_DATE_SCALAR_FIELDS,
-    "MARKET_PRICE_FIELDS": MARKET_PRICE_FIELDS,
-    "PORTFOLIO_CASHFLOW_FIELDS": PORTFOLIO_CASHFLOW_FIELDS,
-    "PORTFOLIO_PERFORMANCE_COLUMN_FIELDS": PORTFOLIO_PERFORMANCE_COLUMN_FIELDS,
-    "PORTFOLIO_PERFORMANCE_ROW_FIELDS": PORTFOLIO_PERFORMANCE_ROW_FIELDS,
-    "STATEMENT_DETAIL_FIELDS": STATEMENT_DETAIL_FIELDS,
-    "STATEMENT_HOLDING_FIELDS": STATEMENT_HOLDING_FIELDS,
-    "STATEMENT_LIST_FIELDS": STATEMENT_LIST_FIELDS,
-    "STATEMENT_SCALAR_FIELDS": STATEMENT_SCALAR_FIELDS,
-    "TRANSACTION_DETAIL_FIELDS": TRANSACTION_DETAIL_FIELDS,
-    "TRANSACTION_LIST_FIELDS": TRANSACTION_LIST_FIELDS,
 }

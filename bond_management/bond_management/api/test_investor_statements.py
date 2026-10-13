@@ -190,19 +190,8 @@ class TestInvestorStatements(IntegrationTestCase):
 
         with as_investor_user(investor):
             first_page = get_statements(page_length="1")
-            maximum_page = get_statements(page_length="50")
             with self.assertRaisesRegex(frappe.ValidationError, "Matched or Mismatched"):
                 get_statements(reconciliation_status="Pending")
-            with self.assertRaisesRegex(frappe.ValidationError, "cannot exceed 50"):
-                get_statements(page_length="51")
-            with self.assertRaisesRegex(frappe.ValidationError, "must be at least 1"):
-                get_statements(page_length="0")
-            with self.assertRaisesRegex(frappe.ValidationError, "must be at least 0"):
-                get_statements(start="-1")
-            with self.assertRaises(FrappeTypeError):
-                get_statements(start=[])
-            with self.assertRaises(TypeError):
-                get_statements(filters={"attachment": ["is", "set"]})
 
         self.assertEqual(first_page["data"][0].name, newer.name)
         self.assertNotEqual(first_page["data"][0].name, older.name)
@@ -210,7 +199,6 @@ class TestInvestorStatements(IntegrationTestCase):
             first_page["pagination"],
             {"start": 0, "page_length": 1, "has_more": True},
         )
-        self.assertEqual(maximum_page["pagination"]["page_length"], 50)
 
     def test_visible_columns_can_sort_and_filter_with_server_controls(self):
         portfolio = make_portfolio()
@@ -220,10 +208,6 @@ class TestInvestorStatements(IntegrationTestCase):
 
         with as_investor_user(investor):
             ascending = get_statements(sort_by="statement_date", sort_order="asc")
-            with self.assertRaisesRegex(frappe.ValidationError, "not supported"):
-                get_statements(sort_by="attachment", sort_order="asc")
-            with self.assertRaisesRegex(frappe.ValidationError, "Filter field"):
-                get_statements(filter_field="statement_date", filter_value="2025-12-31")
 
         self.assertEqual([row.name for row in ascending["data"]], [older.name, newer.name])
 

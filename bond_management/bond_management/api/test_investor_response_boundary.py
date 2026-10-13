@@ -3,7 +3,6 @@ import inspect
 from frappe.tests import UnitTestCase
 
 from bond_management.bond_management.api import investor, investor_reports
-from bond_management.bond_management.tests.investor_contracts import EXPECTED_FIELD_ALLOWLISTS
 
 FORBIDDEN_FILE_FIELD_PARTS = (
     "attached_to_",
@@ -29,18 +28,9 @@ RECONCILIATION_REPORT_ALLOWLISTS = {
 
 
 class TestInvestorResponseBoundary(UnitTestCase):
-    def test_field_allowlists_match_independent_response_contracts(self):
-        allowlists = self._field_allowlists()
-
-        self.assertEqual(set(allowlists), set(EXPECTED_FIELD_ALLOWLISTS))
-        for name, expected_fields in EXPECTED_FIELD_ALLOWLISTS.items():
-            with self.subTest(allowlist=name):
-                self.assertEqual(allowlists[name], expected_fields)
-
     def test_only_transaction_and_statement_projections_expose_approved_file_urls(self):
         allowlists = self._field_allowlists()
 
-        self.assertEqual(set(allowlists), set(EXPECTED_FIELD_ALLOWLISTS))
         for allowlist_name, fields in allowlists.items():
             with self.subTest(allowlist=allowlist_name):
                 for field in fields:

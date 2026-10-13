@@ -11,6 +11,7 @@ from frappe.utils import escape_html, getdate
 
 from bond_management.bond_management.utils.accrual import get_accrued_interest_from_bond
 from bond_management.bond_management.utils.financial import (
+    PERCENT_PRECISION,
     DecimalInput,
     quantize_money,
     to_decimal,
@@ -65,7 +66,6 @@ CALCULATED_AMOUNT_FIELDS = (
 )
 PDF_PRICE_PRECISION = Decimal("0.000001")
 PDF_MONEY_PRECISION = Decimal("0.01")
-PDF_PERCENT_PRECISION = Decimal("0.000000001")
 
 
 @frappe.whitelist(methods=["POST"])
@@ -164,13 +164,12 @@ def get_calculated_amounts(
     )
 
 
-class BondTransaction(Document):
-    @frappe.whitelist(methods=["POST"])
-    def read_transaction_pdf(self):
-        """Keep the existing document RPC available for older clients."""
-        name = self.name if self.name and frappe.db.exists("Bond Transaction", self.name) else None
-        return read_transaction_pdf(name, self.attachment)
+def _throw_pdf_mismatches(heading: str, mismatches: list[str], hint: str) -> None:
+    if mismatches:
+        frappe.throw(heading + "<br>".join(f"- {escape_html(mismatch)}" for mismatch in mismatches) + hint)
 
+
+class BondTransaction(Document):
     def before_naming(self):
         row = self._get_selected_attachment_row()
         if row and not any(self.get(fieldname) for fieldname in PDF_POPULATION_CHECK_FIELDS):
@@ -384,12 +383,11 @@ class BondTransaction(Document):
             expected = expected_values[fieldname]
             if not self._attachment_values_match(actual, expected, value_type):
                 mismatches.append(f"{label} (form: {actual or 'blank'}, PDF: {expected})")
-        if mismatches:
-            frappe.throw(
-                _("The Bond Transaction fields no longer match the attached PDF:<br>")
-                + "<br>".join(f"- {escape_html(mismatch)}" for mismatch in mismatches)
-                + _("<br>Re-read the PDF, or remove the attachment to use manual entry.")
-            )
+        _throw_pdf_mismatches(
+            _("The Bond Transaction fields no longer match the attached PDF:<br>"),
+            mismatches,
+            _("<br>Re-read the PDF, or remove the attachment to use manual entry."),
+        )
 
     @staticmethod
     def _attachment_values_match(actual, expected, value_type: str) -> bool:
@@ -405,7 +403,7 @@ class BondTransaction(Document):
         precision = {
             "price": PDF_PRICE_PRECISION,
             "money": PDF_MONEY_PRECISION,
-            "percent": PDF_PERCENT_PRECISION,
+            "percent": PERCENT_PRECISION,
         }[value_type]
         return actual_decimal.quantize(
             precision,
@@ -499,12 +497,11 @@ class BondTransaction(Document):
             if not self._attachment_values_match(actual, expected, "money"):
                 mismatches.append(f"{label} (calculated: {actual}, PDF: {expected})")
 
-        if mismatches:
-            frappe.throw(
-                _("The calculated Bond Transaction amounts no longer match the attached PDF:<br>")
-                + "<br>".join(f"- {escape_html(mismatch)}" for mismatch in mismatches)
-                + _("<br>Correct the Bond Master Face Value Per Unit or re-read the PDF.")
-            )
+        _throw_pdf_mismatches(
+            _("The calculated Bond Transaction amounts no longer match the attached PDF:<br>"),
+            mismatches,
+            _("<br>Correct the Bond Master Face Value Per Unit or re-read the PDF."),
+        )
 
     def validate_portfolio_ledger(self):
         previous = self.get_doc_before_save()
