@@ -83,3 +83,18 @@ domain model and record gate commands and observed results below.
 - Blockers: none for local verification. PR publication is authorized after local verification.
 - Unverified local/CI differences: local macOS configured bench and persistent
   dedicated test site versus Linux CI's fresh bench/site. Remote CI results will be recorded on the PR after publication.
+
+## Codex review follow-up
+
+The sole review finding is valid: the shorthand transaction permission test
+reference followed the new bootstrap/access test module. The matrix now names
+`api/test_investor_transactions.py::test_explicit_cross_portfolio_filter_is_denied`
+explicitly. The underlying test and permission behavior are unchanged.
+
+- Risk: low, documentation only. Domain graph reviewed; no mapped relationship changed.
+- Required gates: affected test and shared lint/server gate.
+- Commands: `bench --site bond-management-test.localhost run-tests --module bond_management.bond_management.api.test_investor_transactions --test test_explicit_cross_portfolio_filter_is_denied`
+  and `apps/bond_management/scripts/verify.sh pre-push` from the bench root.
+- Observed exit statuses: both 0; targeted regression 1 passed and full server suite 403 passed.
+- Failures/blockers: none. Local frontend/UI reruns are not required for this documentation fix.
+- Remaining verification: updated PR CI; results will be recorded on the PR.
