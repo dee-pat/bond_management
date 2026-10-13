@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, type Component } from "vue";
 import {
 	Avatar,
 	Badge,
@@ -37,12 +37,50 @@ import TransactionDetail from "./TransactionDetail.vue";
 import TransactionList from "./TransactionList.vue";
 import YieldComparison from "./YieldComparison.vue";
 
-const DETAIL_PARENT_BY_ROUTE: Record<string, string> = {
-	"transaction-detail": "transactions",
-	"statement-detail": "statements",
-	"bond-detail": "bonds",
-	"market-date-detail": "market-dates",
-	"exchange-rate-detail": "exchange-rates",
+interface InvestorPage {
+	component: Component;
+	title?: string;
+	parent?: string;
+	needsBootstrap?: boolean;
+}
+
+const PAGE_BY_ROUTE: Partial<Record<string, InvestorPage>> = {
+	transactions: { component: TransactionList, needsBootstrap: true },
+	"transaction-detail": {
+		component: TransactionDetail,
+		title: "Bond Transaction",
+		parent: "transactions",
+	},
+	statements: { component: StatementList, needsBootstrap: true },
+	"statement-detail": {
+		component: StatementDetail,
+		title: "Bond Statement",
+		parent: "statements",
+	},
+	bonds: { component: BondList },
+	"bond-detail": {
+		component: BondDetail,
+		title: "Bond Master",
+		parent: "bonds",
+	},
+	"market-dates": { component: MarketDateList },
+	"market-date-detail": {
+		component: MarketDateDetail,
+		title: "Bond Market Date",
+		parent: "market-dates",
+	},
+	"exchange-rates": { component: ExchangeRateList },
+	"exchange-rate-detail": {
+		component: ExchangeRateDetail,
+		title: "Bond Exchange Rate",
+		parent: "exchange-rates",
+	},
+	performance: { component: PortfolioPerformance, needsBootstrap: true },
+	"interest-difference": {
+		component: InterestDifference,
+		needsBootstrap: true,
+	},
+	"yield-comparison": { component: YieldComparison },
 };
 
 const route = useRoute();
@@ -58,57 +96,28 @@ const pageContentTargetId = computed(() =>
 const pageContentTarget = computed(() => `#${pageContentTargetId.value}`);
 const currentItem = computed(() => INVESTOR_NAVIGATION.find((item) => item.name === route.name));
 const isHome = computed(() => currentItem.value?.name === "home");
-const isTransactionList = computed(() => route.name === "transactions");
-const isTransactionDetail = computed(() => route.name === "transaction-detail");
-const isStatementList = computed(() => route.name === "statements");
-const isStatementDetail = computed(() => route.name === "statement-detail");
-const isBondList = computed(() => route.name === "bonds");
-const isBondDetail = computed(() => route.name === "bond-detail");
-const isMarketDateList = computed(() => route.name === "market-dates");
-const isMarketDateDetail = computed(() => route.name === "market-date-detail");
-const isExchangeRateList = computed(() => route.name === "exchange-rates");
-const isExchangeRateDetail = computed(() => route.name === "exchange-rate-detail");
-const isPortfolioPerformance = computed(() => route.name === "performance");
-const isInterestDifference = computed(() => route.name === "interest-difference");
-const isYieldComparison = computed(() => route.name === "yield-comparison");
-const isDetail = computed(() => typeof route.name === "string" && route.name.endsWith("-detail"));
-const activeNavigationName = computed(() => {
-	if (typeof route.name === "string" && DETAIL_PARENT_BY_ROUTE[route.name]) {
-		return DETAIL_PARENT_BY_ROUTE[route.name];
-	}
-	return currentItem.value?.name;
-});
+const currentPage = computed(() =>
+	typeof route.name === "string" ? PAGE_BY_ROUTE[route.name] : undefined
+);
+const pageProps = computed(() =>
+	currentPage.value?.needsBootstrap ? { bootstrap: bootstrap.value } : {}
+);
+const activeNavigationName = computed(() => currentPage.value?.parent ?? currentItem.value?.name);
 const currentSectionItem = computed(() =>
 	INVESTOR_NAVIGATION.find((item) => item.name === activeNavigationName.value)
 );
-const pageTitle = computed(() => {
-	if (isHome.value) {
-		return "Bond Investor";
-	}
-	if (isTransactionDetail.value) {
-		return "Bond Transaction";
-	}
-	if (isStatementDetail.value) {
-		return "Bond Statement";
-	}
-	if (isBondDetail.value) {
-		return "Bond Master";
-	}
-	if (isMarketDateDetail.value) {
-		return "Bond Market Date";
-	}
-	if (isExchangeRateDetail.value) {
-		return "Bond Exchange Rate";
-	}
-	return currentItem.value?.label ?? "Page not found";
-});
+const pageTitle = computed(() =>
+	isHome.value
+		? "Bond Investor"
+		: currentPage.value?.title ?? currentItem.value?.label ?? "Page not found"
+);
 const breadcrumbItems = computed(() => {
 	const items = [{ label: "Home", route: "/" }];
 
 	if (!isHome.value) {
 		items.push({ label: "Bond Investor", route: "/" });
 	}
-	if (isDetail.value && currentSectionItem.value) {
+	if (currentPage.value?.parent && currentSectionItem.value) {
 		items.push({
 			label: currentSectionItem.value.label,
 			route: currentSectionItem.value.path,
@@ -328,37 +337,11 @@ onBeforeUnmount(() => window.removeEventListener("resize", updateMobileLayout));
 				navigation.
 			</p>
 
-			<TransactionList v-else-if="isTransactionList && bootstrap" :bootstrap="bootstrap" />
-
-			<TransactionDetail v-else-if="isTransactionDetail && bootstrap" />
-
-			<StatementList v-else-if="isStatementList && bootstrap" :bootstrap="bootstrap" />
-
-			<StatementDetail v-else-if="isStatementDetail && bootstrap" />
-
-			<BondList v-else-if="isBondList && bootstrap" />
-
-			<BondDetail v-else-if="isBondDetail && bootstrap" />
-
-			<MarketDateList v-else-if="isMarketDateList && bootstrap" />
-
-			<MarketDateDetail v-else-if="isMarketDateDetail && bootstrap" />
-
-			<ExchangeRateList v-else-if="isExchangeRateList && bootstrap" />
-
-			<ExchangeRateDetail v-else-if="isExchangeRateDetail && bootstrap" />
-
-			<PortfolioPerformance
-				v-else-if="isPortfolioPerformance && bootstrap"
-				:bootstrap="bootstrap"
+			<component
+				:is="currentPage.component"
+				v-else-if="currentPage && bootstrap"
+				v-bind="pageProps"
 			/>
-
-			<InterestDifference
-				v-else-if="isInterestDifference && bootstrap"
-				:bootstrap="bootstrap"
-			/>
-
-			<YieldComparison v-else-if="isYieldComparison && bootstrap" />
 
 			<div
 				v-else-if="bootstrap"

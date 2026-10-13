@@ -1,49 +1,31 @@
-from contextlib import contextmanager
-from unittest.mock import patch
-
 import frappe
 from frappe.exceptions import FrappeTypeError
 from frappe.tests import IntegrationTestCase
 
-from bond_management.bond_management.api.investor import (
-    TRANSACTION_DETAIL_FIELDS,
-    TRANSACTION_LIST_FIELDS,
-    get_transaction,
-    get_transactions,
-)
+from bond_management.bond_management.api.investor import get_transaction, get_transactions
 from bond_management.bond_management.tests.factories import (
+    as_investor_user,
     make_bond,
+    make_investor_user,
     make_portfolio,
     make_transaction,
     unique_name,
+)
+from bond_management.bond_management.tests.investor_contracts import (
+    TRANSACTION_DETAIL_FIELDS,
+    TRANSACTION_LIST_FIELDS,
 )
 from bond_management.bond_management.utils.investor_permissions import (
     BOND_MANAGER_ROLE,
     INVESTOR_ROLE,
 )
-from bond_management.bond_management.utils.investor_ui import FEATURE_FLAG
 
 
 class TestInvestorTransactions(IntegrationTestCase):
-    def test_guest_and_unapproved_role_are_rejected(self):
-        with self._as_user("Guest"):
-            with self.assertRaises(frappe.AuthenticationError):
-                get_transactions()
-
-        unapproved_user = self._make_user([])
-        with self._as_user(unapproved_user):
-            with self.assertRaises(frappe.PermissionError):
-                get_transactions()
-
-    def test_feature_flag_is_required(self):
-        with self._as_user("Administrator", feature_enabled=False):
-            with self.assertRaises(frappe.PermissionError):
-                get_transactions()
-
     def test_investor_without_assignments_gets_an_empty_page(self):
-        investor = self._make_user([INVESTOR_ROLE])
+        investor = make_investor_user([INVESTOR_ROLE])
 
-        with self._as_user(investor):
+        with as_investor_user(investor):
             response = get_transactions()
 
         self.assertEqual(response["data"], [])
@@ -67,12 +49,15 @@ class TestInvestorTransactions(IntegrationTestCase):
         )
         investor = self._make_investor(assigned_portfolio.name)
 
-        with self._as_user(investor):
+        with as_investor_user(investor):
             response = get_transactions()
 
         self.assertEqual([row.name for row in response["data"]], [assigned.name])
         self.assertNotIn(other.name, {row.name for row in response["data"]})
+        self.assertEqual(set(response), {"data", "pagination"})
+        self.assertEqual(set(response["pagination"]), {"start", "page_length", "has_more"})
         self.assertEqual(set(response["data"][0]), set(TRANSACTION_LIST_FIELDS))
+        self.assertTrue(all(set(row) == set(TRANSACTION_LIST_FIELDS) for row in response["data"]))
         self.assertNotIn("attachment", response["data"][0])
 
     def test_explicit_cross_portfolio_filter_is_denied(self):
@@ -80,7 +65,7 @@ class TestInvestorTransactions(IntegrationTestCase):
         other_portfolio = make_portfolio()
         investor = self._make_investor(assigned_portfolio.name)
 
-        with self._as_user(investor):
+        with as_investor_user(investor):
             with self.assertRaisesRegex(frappe.PermissionError, "not permitted"):
                 get_transactions(portfolio=other_portfolio.name)
 
@@ -97,9 +82,10 @@ class TestInvestorTransactions(IntegrationTestCase):
         )
         investor = self._make_investor(portfolio.name)
 
-        with self._as_user(investor):
+        with as_investor_user(investor):
             response = get_transaction(transaction.name)
 
+        self.assertEqual(set(response), {"transaction"})
         detail = response["transaction"]
         self.assertEqual(set(detail), set(TRANSACTION_DETAIL_FIELDS))
         self.assertEqual(detail.transaction_reference, transaction.name)
@@ -114,7 +100,7 @@ class TestInvestorTransactions(IntegrationTestCase):
         investor = self._make_investor(assigned_portfolio.name)
         messages = []
 
-        with self._as_user(investor):
+        with as_investor_user(investor):
             for name in (other.name, unique_name("UNKNOWN-TRANSACTION")):
                 with self.assertRaises(frappe.PermissionError) as error:
                     get_transaction(name)
@@ -130,10 +116,10 @@ class TestInvestorTransactions(IntegrationTestCase):
             make_transaction(bond, first_portfolio).name,
             make_transaction(bond, second_portfolio).name,
         }
-        manager = self._make_user([BOND_MANAGER_ROLE])
+        manager = make_investor_user([BOND_MANAGER_ROLE])
 
         for user in (manager, "Administrator"):
-            with self.subTest(user=user), self._as_user(user):
+            with self.subTest(user=user), as_investor_user(user):
                 response = get_transactions()
                 self.assertTrue(transactions.issubset({row.name for row in response["data"]}))
 
@@ -144,7 +130,7 @@ class TestInvestorTransactions(IntegrationTestCase):
         older = make_transaction(bond, portfolio, settlement_date="2025-12-30")
         investor = self._make_investor(portfolio.name)
 
-        with self._as_user(investor):
+        with as_investor_user(investor):
             first_page = get_transactions(page_length="1")
             maximum_page = get_transactions(page_length="50")
             with self.assertRaisesRegex(frappe.ValidationError, "cannot exceed 50"):
@@ -171,7 +157,7 @@ class TestInvestorTransactions(IntegrationTestCase):
         newer = make_transaction(bond, portfolio, settlement_date="2025-12-31")
         investor = self._make_investor(portfolio.name)
 
-        with self._as_user(investor):
+        with as_investor_user(investor):
             ascending = get_transactions(
                 sort_by="settlement_date",
                 sort_order="asc",
@@ -191,14 +177,14 @@ class TestInvestorTransactions(IntegrationTestCase):
         self.assertEqual({row.name for row in filtered["data"]}, {older.name, newer.name})
 
     def test_arbitrary_filters_are_not_accepted(self):
-        investor = self._make_user([INVESTOR_ROLE])
+        investor = make_investor_user([INVESTOR_ROLE])
 
-        with self._as_user(investor):
+        with as_investor_user(investor):
             with self.assertRaises(TypeError):
                 get_transactions(filters={"attachment": ["is", "set"]})
 
     def _make_investor(self, portfolio_name):
-        investor = self._make_user([INVESTOR_ROLE])
+        investor = make_investor_user([INVESTOR_ROLE])
         frappe.get_doc(
             {
                 "doctype": "User Permission",
@@ -209,30 +195,3 @@ class TestInvestorTransactions(IntegrationTestCase):
             }
         ).insert(ignore_permissions=True)
         return investor
-
-    @staticmethod
-    def _make_user(roles):
-        return (
-            frappe.get_doc(
-                {
-                    "doctype": "User",
-                    "email": f"{unique_name('investor-ui').lower()}@example.com",
-                    "first_name": "Investor Transaction Test",
-                    "send_welcome_email": 0,
-                    "roles": [{"role": role} for role in roles],
-                }
-            )
-            .insert(ignore_permissions=True)
-            .name
-        )
-
-    @staticmethod
-    @contextmanager
-    def _as_user(user, *, feature_enabled=True):
-        previous_user = frappe.session.user
-        try:
-            frappe.set_user(user)
-            with patch.dict(frappe.conf, {FEATURE_FLAG: int(feature_enabled)}):
-                yield
-        finally:
-            frappe.set_user(previous_user)

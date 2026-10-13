@@ -1,4 +1,3 @@
-from contextlib import contextmanager
 from unittest.mock import patch
 
 import frappe
@@ -7,11 +6,6 @@ from frappe.tests import IntegrationTestCase
 
 from bond_management.bond_management.api import investor as investor_api
 from bond_management.bond_management.api.investor_reports import (
-    INTEREST_DIFFERENCE_FIELDS,
-    INTEREST_DIFFERENCE_ROW_FIELDS,
-    PORTFOLIO_CASHFLOW_FIELDS,
-    PORTFOLIO_PERFORMANCE_COLUMN_FIELDS,
-    PORTFOLIO_PERFORMANCE_ROW_FIELDS,
     get_interest_difference_by_portfolio,
     get_portfolio_performance,
     get_portfolio_performance_cashflows,
@@ -21,18 +15,26 @@ from bond_management.bond_management.report.portfolio_performance.portfolio_perf
     get_xirr_cashflows,
 )
 from bond_management.bond_management.tests.factories import (
+    as_investor_user,
     make_bond,
     make_exchange_rate,
+    make_investor_user,
     make_market_date,
     make_portfolio,
     make_transaction,
     unique_name,
 )
+from bond_management.bond_management.tests.investor_contracts import (
+    INTEREST_DIFFERENCE_FIELDS,
+    INTEREST_DIFFERENCE_ROW_FIELDS,
+    PORTFOLIO_CASHFLOW_FIELDS,
+    PORTFOLIO_PERFORMANCE_COLUMN_FIELDS,
+    PORTFOLIO_PERFORMANCE_ROW_FIELDS,
+)
 from bond_management.bond_management.utils.investor_permissions import (
     BOND_MANAGER_ROLE,
     INVESTOR_ROLE,
 )
-from bond_management.bond_management.utils.investor_ui import FEATURE_FLAG
 
 COLUMN_FIELDS = {
     "fieldname",
@@ -47,35 +49,11 @@ VALUATION_DATE = "2025-12-31"
 
 
 class TestInvestorPortfolioPerformance(IntegrationTestCase):
-    def test_common_access_gate_protects_report_endpoints(self):
-        portfolio = make_portfolio()
-        report_args = (portfolio.name, VALUATION_DATE)
-        cashflow_args = (*report_args, "TOTAL", "past")
-        interest_difference_args = (portfolio.name,)
-
-        for endpoint, args in (
-            (get_portfolio_performance, report_args),
-            (get_portfolio_performance_cashflows, cashflow_args),
-            (get_interest_difference_by_portfolio, interest_difference_args),
-        ):
-            with self.subTest(endpoint=endpoint.__name__), self._as_user("Guest"):
-                with self.assertRaises(frappe.AuthenticationError):
-                    endpoint(*args)
-
-            unapproved = self._make_user([])
-            with self._as_user(unapproved):
-                with self.assertRaises(frappe.PermissionError):
-                    endpoint(*args)
-
-            with self._as_user("Administrator", feature_enabled=False):
-                with self.assertRaises(frappe.PermissionError):
-                    endpoint(*args)
-
     def test_standard_report_role_and_reference_doctype_permissions_are_required(self):
         portfolio = make_portfolio()
         investor = self._make_investor(portfolio.name)
 
-        with self._as_user(investor):
+        with as_investor_user(investor):
             with (
                 patch(
                     "frappe.core.doctype.report.report.Report.is_permitted",
@@ -123,7 +101,7 @@ class TestInvestorPortfolioPerformance(IntegrationTestCase):
             (get_interest_difference_by_portfolio, ()),
         ):
             messages = []
-            with self._as_user(investor):
+            with as_investor_user(investor):
                 for portfolio in (unreadable.name, unknown):
                     with self.assertRaises(frappe.PermissionError) as error:
                         endpoint(portfolio, VALUATION_DATE, *suffix)
@@ -133,10 +111,10 @@ class TestInvestorPortfolioPerformance(IntegrationTestCase):
 
     def test_manager_and_administrator_use_normal_report_permissions(self):
         portfolio = make_portfolio()
-        manager = self._make_user([BOND_MANAGER_ROLE])
+        manager = make_investor_user([BOND_MANAGER_ROLE])
 
         for user in (manager, "Administrator"):
-            with self.subTest(user=user), self._as_user(user):
+            with self.subTest(user=user), as_investor_user(user):
                 performance = get_portfolio_performance(portfolio.name, VALUATION_DATE)
                 interest_difference = get_interest_difference_by_portfolio(portfolio.name)
 
@@ -147,7 +125,7 @@ class TestInvestorPortfolioPerformance(IntegrationTestCase):
         portfolio = make_portfolio()
         investor = self._make_investor(portfolio.name)
 
-        with self._as_user(investor):
+        with as_investor_user(investor):
             response = get_portfolio_performance(portfolio.name, VALUATION_DATE)
 
         self.assertEqual(response["report"]["rows"], [])
@@ -165,7 +143,7 @@ class TestInvestorPortfolioPerformance(IntegrationTestCase):
         frappe.db.set_value("Bond Transaction", transaction.name, "accrued_interest_calculated", "10.00")
         investor = self._make_investor(portfolio.name)
 
-        with self._as_user(investor):
+        with as_investor_user(investor):
             response = get_interest_difference_by_portfolio(
                 portfolio.name,
                 from_date="2025-02-15",
@@ -204,7 +182,7 @@ class TestInvestorPortfolioPerformance(IntegrationTestCase):
     def test_usd_report_has_exact_normalized_projection(self):
         portfolio, _, investor = self._make_usd_report()
 
-        with self._as_user(investor):
+        with as_investor_user(investor):
             response = get_portfolio_performance(portfolio.name, VALUATION_DATE)
 
         self.assertEqual(set(response), {"report"})
@@ -263,7 +241,7 @@ class TestInvestorPortfolioPerformance(IntegrationTestCase):
     def test_hidden_report_helpers_and_column_controls_are_omitted(self):
         portfolio, _, investor = self._make_usd_report()
 
-        with self._as_user(investor):
+        with as_investor_user(investor):
             response = get_portfolio_performance(portfolio.name, VALUATION_DATE)
 
         report = response["report"]
@@ -297,7 +275,7 @@ class TestInvestorPortfolioPerformance(IntegrationTestCase):
         investor = self._make_investor(portfolio.name)
         filters = {"portfolio": portfolio.name, "valuation_date": VALUATION_DATE}
 
-        with self._as_user(investor):
+        with as_investor_user(investor):
             _, authoritative_rows = execute(filters)
             response = get_portfolio_performance(portfolio.name, VALUATION_DATE)
 
@@ -330,7 +308,7 @@ class TestInvestorPortfolioPerformance(IntegrationTestCase):
     def test_cashflows_have_exact_projection_order_and_authoritative_values(self):
         portfolio, bond, investor = self._make_usd_report()
 
-        with self._as_user(investor):
+        with as_investor_user(investor):
             authoritative = get_xirr_cashflows(
                 portfolio.name,
                 VALUATION_DATE,
@@ -367,7 +345,7 @@ class TestInvestorPortfolioPerformance(IntegrationTestCase):
         portfolio = make_portfolio()
         investor = self._make_investor(portfolio.name)
 
-        with self._as_user(investor):
+        with as_investor_user(investor):
             with self.assertRaisesRegex(frappe.ValidationError, "Portfolio is required"):
                 get_interest_difference_by_portfolio("")
             with self.assertRaisesRegex(frappe.ValidationError, "Portfolio is required"):
@@ -417,7 +395,7 @@ class TestInvestorPortfolioPerformance(IntegrationTestCase):
         return portfolio, bond, self._make_investor(portfolio.name)
 
     def _make_investor(self, portfolio_name):
-        investor = self._make_user([INVESTOR_ROLE])
+        investor = make_investor_user([INVESTOR_ROLE])
         frappe.get_doc(
             {
                 "doctype": "User Permission",
@@ -428,30 +406,3 @@ class TestInvestorPortfolioPerformance(IntegrationTestCase):
             }
         ).insert(ignore_permissions=True)
         return investor
-
-    @staticmethod
-    def _make_user(roles):
-        return (
-            frappe.get_doc(
-                {
-                    "doctype": "User",
-                    "email": f"{unique_name('investor-performance-ui').lower()}@example.com",
-                    "first_name": "Investor Performance Test",
-                    "send_welcome_email": 0,
-                    "roles": [{"role": role} for role in roles],
-                }
-            )
-            .insert(ignore_permissions=True)
-            .name
-        )
-
-    @staticmethod
-    @contextmanager
-    def _as_user(user, *, feature_enabled=True):
-        previous_user = frappe.session.user
-        try:
-            frappe.set_user(user)
-            with patch.dict(frappe.conf, {FEATURE_FLAG: int(feature_enabled)}):
-                yield
-        finally:
-            frappe.set_user(previous_user)

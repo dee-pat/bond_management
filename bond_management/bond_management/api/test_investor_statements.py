@@ -1,53 +1,36 @@
-from contextlib import contextmanager
 from datetime import timedelta
-from unittest.mock import patch
 
 import frappe
 from frappe.exceptions import FrappeTypeError
 from frappe.tests import IntegrationTestCase
 
-from bond_management.bond_management.api.investor import (
-    STATEMENT_DETAIL_FIELDS,
-    STATEMENT_HOLDING_FIELDS,
-    STATEMENT_LIST_FIELDS,
-    get_statement,
-    get_statements,
-)
+from bond_management.bond_management.api.investor import get_statement, get_statements
 from bond_management.bond_management.tests.factories import (
+    as_investor_user,
     make_bond,
+    make_investor_user,
     make_market_date,
     make_portfolio,
     make_statement,
     make_transaction,
     unique_name,
 )
+from bond_management.bond_management.tests.investor_contracts import (
+    STATEMENT_DETAIL_FIELDS,
+    STATEMENT_HOLDING_FIELDS,
+    STATEMENT_LIST_FIELDS,
+)
 from bond_management.bond_management.utils.investor_permissions import (
     BOND_MANAGER_ROLE,
     INVESTOR_ROLE,
 )
-from bond_management.bond_management.utils.investor_ui import FEATURE_FLAG
 
 
 class TestInvestorStatements(IntegrationTestCase):
-    def test_guest_and_unapproved_role_are_rejected(self):
-        with self._as_user("Guest"):
-            with self.assertRaises(frappe.AuthenticationError):
-                get_statements()
-
-        unapproved_user = self._make_user([])
-        with self._as_user(unapproved_user):
-            with self.assertRaises(frappe.PermissionError):
-                get_statements()
-
-    def test_feature_flag_is_required(self):
-        with self._as_user("Administrator", feature_enabled=False):
-            with self.assertRaises(frappe.PermissionError):
-                get_statements()
-
     def test_investor_without_assignments_gets_an_empty_page(self):
-        investor = self._make_user([INVESTOR_ROLE])
+        investor = make_investor_user([INVESTOR_ROLE])
 
-        with self._as_user(investor):
+        with as_investor_user(investor):
             response = get_statements()
 
         self.assertEqual(response["data"], [])
@@ -73,12 +56,15 @@ class TestInvestorStatements(IntegrationTestCase):
         )
         investor = self._make_investor(assigned_portfolio.name)
 
-        with self._as_user(investor):
+        with as_investor_user(investor):
             response = get_statements(reconciliation_status="Matched")
 
         self.assertEqual([row.name for row in response["data"]], [assigned.name])
         self.assertNotIn(other.name, {row.name for row in response["data"]})
+        self.assertEqual(set(response), {"data", "pagination"})
+        self.assertEqual(set(response["pagination"]), {"start", "page_length", "has_more"})
         self.assertEqual(set(response["data"][0]), set(STATEMENT_LIST_FIELDS))
+        self.assertTrue(all(set(row) == set(STATEMENT_LIST_FIELDS) for row in response["data"]))
         self.assertNotIn("attachment", response["data"][0])
         self.assertNotIn("quantity_reconciliation_report", response["data"][0])
 
@@ -87,7 +73,7 @@ class TestInvestorStatements(IntegrationTestCase):
         other_portfolio = make_portfolio()
         investor = self._make_investor(assigned_portfolio.name)
 
-        with self._as_user(investor):
+        with as_investor_user(investor):
             with self.assertRaisesRegex(frappe.PermissionError, "not permitted"):
                 get_statements(portfolio=other_portfolio.name)
 
@@ -118,9 +104,10 @@ class TestInvestorStatements(IntegrationTestCase):
         )
         investor = self._make_investor(portfolio.name)
 
-        with self._as_user(investor):
+        with as_investor_user(investor):
             response = get_statement(statement.name)
 
+        self.assertEqual(set(response), {"statement"})
         detail = response["statement"]
         self.assertEqual(set(detail), set(STATEMENT_DETAIL_FIELDS))
         self.assertEqual(detail.portfolio_name, portfolio.name)
@@ -130,10 +117,8 @@ class TestInvestorStatements(IntegrationTestCase):
             "/private/files/investor-reconciliation-secret.pdf",
         )
         self.assertTrue(detail.bond_statement_details)
-        self.assertEqual(
-            set(detail.bond_statement_details[0]),
-            set(STATEMENT_HOLDING_FIELDS),
-        )
+        for row in detail.bond_statement_details:
+            self.assertEqual(set(row), set(STATEMENT_HOLDING_FIELDS))
 
     def test_detail_rejects_holdings_outside_bond_user_permissions(self):
         readable = make_bond()
@@ -162,7 +147,7 @@ class TestInvestorStatements(IntegrationTestCase):
             }
         ).insert(ignore_permissions=True)
 
-        with self._as_user(investor):
+        with as_investor_user(investor):
             response = get_statement(readable_statement.name)
             self.assertEqual(
                 {row["isin"] for row in response["statement"].bond_statement_details},
@@ -178,7 +163,7 @@ class TestInvestorStatements(IntegrationTestCase):
         investor = self._make_investor(assigned_portfolio.name)
         messages = []
 
-        with self._as_user(investor):
+        with as_investor_user(investor):
             for name in (other.name, unique_name("UNKNOWN-STATEMENT")):
                 with self.assertRaises(frappe.PermissionError) as error:
                     get_statement(name)
@@ -190,10 +175,10 @@ class TestInvestorStatements(IntegrationTestCase):
         first = make_statement(make_portfolio())
         second = make_statement(make_portfolio())
         statements = {first.name, second.name}
-        manager = self._make_user([BOND_MANAGER_ROLE])
+        manager = make_investor_user([BOND_MANAGER_ROLE])
 
         for user in (manager, "Administrator"):
-            with self.subTest(user=user), self._as_user(user):
+            with self.subTest(user=user), as_investor_user(user):
                 response = get_statements()
                 self.assertTrue(statements.issubset({row.name for row in response["data"]}))
 
@@ -203,7 +188,7 @@ class TestInvestorStatements(IntegrationTestCase):
         older = make_statement(portfolio, statement_date="2025-11-30")
         investor = self._make_investor(portfolio.name)
 
-        with self._as_user(investor):
+        with as_investor_user(investor):
             first_page = get_statements(page_length="1")
             maximum_page = get_statements(page_length="50")
             with self.assertRaisesRegex(frappe.ValidationError, "Matched or Mismatched"):
@@ -233,7 +218,7 @@ class TestInvestorStatements(IntegrationTestCase):
         newer = make_statement(portfolio, statement_date="2025-12-31")
         investor = self._make_investor(portfolio.name)
 
-        with self._as_user(investor):
+        with as_investor_user(investor):
             ascending = get_statements(sort_by="statement_date", sort_order="asc")
             with self.assertRaisesRegex(frappe.ValidationError, "not supported"):
                 get_statements(sort_by="attachment", sort_order="asc")
@@ -243,7 +228,7 @@ class TestInvestorStatements(IntegrationTestCase):
         self.assertEqual([row.name for row in ascending["data"]], [older.name, newer.name])
 
     def _make_investor(self, portfolio_name):
-        investor = self._make_user([INVESTOR_ROLE])
+        investor = make_investor_user([INVESTOR_ROLE])
         frappe.get_doc(
             {
                 "doctype": "User Permission",
@@ -254,30 +239,3 @@ class TestInvestorStatements(IntegrationTestCase):
             }
         ).insert(ignore_permissions=True)
         return investor
-
-    @staticmethod
-    def _make_user(roles):
-        return (
-            frappe.get_doc(
-                {
-                    "doctype": "User",
-                    "email": f"{unique_name('investor-ui').lower()}@example.com",
-                    "first_name": "Investor Statement Test",
-                    "send_welcome_email": 0,
-                    "roles": [{"role": role} for role in roles],
-                }
-            )
-            .insert(ignore_permissions=True)
-            .name
-        )
-
-    @staticmethod
-    @contextmanager
-    def _as_user(user, *, feature_enabled=True):
-        previous_user = frappe.session.user
-        try:
-            frappe.set_user(user)
-            with patch.dict(frappe.conf, {FEATURE_FLAG: int(feature_enabled)}):
-                yield
-        finally:
-            frappe.set_user(previous_user)

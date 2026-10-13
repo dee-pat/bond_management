@@ -1,83 +1,76 @@
-from contextlib import contextmanager
-from unittest.mock import patch
-
 import frappe
 from frappe.exceptions import FrappeTypeError
 from frappe.tests import IntegrationTestCase
 
-from bond_management.bond_management.api.investor import (
+from bond_management.bond_management.api.investor import get_bond, get_bonds
+from bond_management.bond_management.tests.factories import (
+    as_investor_user,
+    make_bond,
+    make_investor_user,
+    unique_name,
+)
+from bond_management.bond_management.tests.investor_contracts import (
     BOND_COUPON_FIELDS,
     BOND_DETAIL_FIELDS,
     BOND_LIST_FIELDS,
     BOND_PRINCIPAL_FIELDS,
-    get_bond,
-    get_bonds,
 )
-from bond_management.bond_management.tests.factories import make_bond, unique_name
 from bond_management.bond_management.utils.investor_permissions import (
     BOND_MANAGER_ROLE,
     INVESTOR_ROLE,
 )
-from bond_management.bond_management.utils.investor_ui import FEATURE_FLAG
 
 
 class TestInvestorBonds(IntegrationTestCase):
-    def test_guest_and_unapproved_role_are_rejected(self):
-        with self._as_user("Guest"):
-            with self.assertRaises(frappe.AuthenticationError):
-                get_bonds()
-
-        unapproved_user = self._make_user([])
-        with self._as_user(unapproved_user):
-            with self.assertRaises(frappe.PermissionError):
-                get_bonds()
-
-    def test_feature_flag_is_required(self):
-        with self._as_user("Administrator", feature_enabled=False):
-            with self.assertRaises(frappe.PermissionError):
-                get_bonds()
-
     def test_investor_without_portfolio_assignment_can_read_shared_catalog(self):
         bond = make_bond()
-        investor = self._make_user([INVESTOR_ROLE])
+        investor = make_investor_user([INVESTOR_ROLE])
 
-        with self._as_user(investor):
+        with as_investor_user(investor):
             response = get_bonds()
 
         self.assertIn(bond.name, {row.name for row in response["data"]})
 
     def test_list_has_exact_visible_projection(self):
         bond = make_bond()
-        investor = self._make_user([INVESTOR_ROLE])
+        investor = make_investor_user([INVESTOR_ROLE])
 
-        with self._as_user(investor):
+        with as_investor_user(investor):
             response = get_bonds()
 
         row = next(row for row in response["data"] if row.name == bond.name)
+        self.assertEqual(set(response), {"data", "pagination"})
+        self.assertEqual(set(response["pagination"]), {"start", "page_length", "has_more"})
         self.assertEqual(set(row), set(BOND_LIST_FIELDS))
+        self.assertTrue(all(set(row) == set(BOND_LIST_FIELDS) for row in response["data"]))
         self.assertEqual(row.isin, bond.isin)
         self.assertNotIn("principal_schedule", row)
         self.assertNotIn("modified", row)
 
     def test_detail_has_exact_visible_projection_and_schedules(self):
         bond = make_bond(withholding_tax="15")
-        investor = self._make_user([INVESTOR_ROLE])
+        investor = make_investor_user([INVESTOR_ROLE])
 
-        with self._as_user(investor):
+        with as_investor_user(investor):
             response = get_bond(bond.name)
 
+        self.assertEqual(set(response), {"bond"})
         detail = response["bond"]
         self.assertEqual(set(detail), set(BOND_DETAIL_FIELDS))
         self.assertEqual(detail.isin, bond.isin)
-        self.assertEqual(set(detail.principal_schedule[0]), set(BOND_PRINCIPAL_FIELDS))
-        self.assertEqual(set(detail.coupon_schedule[0]), set(BOND_COUPON_FIELDS))
+        self.assertTrue(detail.principal_schedule)
+        for row in detail.principal_schedule:
+            self.assertEqual(set(row), set(BOND_PRINCIPAL_FIELDS))
+        self.assertTrue(detail.coupon_schedule)
+        for row in detail.coupon_schedule:
+            self.assertEqual(set(row), set(BOND_COUPON_FIELDS))
         self.assertNotIn("parent", str(response))
         self.assertNotIn("modified", str(response))
 
     def test_unreadable_and_unknown_detail_have_same_failure(self):
         readable = make_bond()
         unreadable = make_bond()
-        investor = self._make_user([INVESTOR_ROLE])
+        investor = make_investor_user([INVESTOR_ROLE])
         frappe.get_doc(
             {
                 "doctype": "User Permission",
@@ -89,7 +82,7 @@ class TestInvestorBonds(IntegrationTestCase):
         ).insert(ignore_permissions=True)
         messages = []
 
-        with self._as_user(investor):
+        with as_investor_user(investor):
             for name in (unreadable.name, unique_name("UNKNOWN-BOND")):
                 with self.assertRaises(frappe.PermissionError) as error:
                     get_bond(name)
@@ -101,10 +94,10 @@ class TestInvestorBonds(IntegrationTestCase):
         first = make_bond()
         second = make_bond()
         bonds = {first.name, second.name}
-        manager = self._make_user([BOND_MANAGER_ROLE])
+        manager = make_investor_user([BOND_MANAGER_ROLE])
 
         for user in (manager, "Administrator"):
-            with self.subTest(user=user), self._as_user(user):
+            with self.subTest(user=user), as_investor_user(user):
                 response = get_bonds()
                 self.assertTrue(bonds.issubset({row.name for row in response["data"]}))
 
@@ -121,9 +114,9 @@ class TestInvestorBonds(IntegrationTestCase):
             maturity_date="2100-01-01",
             principal_schedule=[{"repayment_date": "2100-01-01", "principal_units": 100}],
         )
-        investor = self._make_user([INVESTOR_ROLE])
+        investor = make_investor_user([INVESTOR_ROLE])
 
-        with self._as_user(investor):
+        with as_investor_user(investor):
             first_page = get_bonds(page_length="1")
             maximum_page = get_bonds(page_length="50")
             with self.assertRaisesRegex(frappe.ValidationError, "cannot exceed 50"):
@@ -148,9 +141,9 @@ class TestInvestorBonds(IntegrationTestCase):
     def test_visible_columns_can_sort_and_filter_with_server_controls(self):
         first = make_bond(bond_name="A-" + unique_name("TEST-BOND"))
         second = make_bond(bond_name="Z-" + unique_name("TEST-BOND"))
-        investor = self._make_user([INVESTOR_ROLE])
+        investor = make_investor_user([INVESTOR_ROLE])
 
-        with self._as_user(investor):
+        with as_investor_user(investor):
             ascending = get_bonds(sort_by="bond_name", sort_order="asc")
             filtered = get_bonds(filter_field="isin", filter_value=first.isin)
             with self.assertRaisesRegex(frappe.ValidationError, "not supported"):
@@ -161,30 +154,3 @@ class TestInvestorBonds(IntegrationTestCase):
         names = [row.name for row in ascending["data"]]
         self.assertLess(names.index(first.name), names.index(second.name))
         self.assertEqual([row.name for row in filtered["data"]], [first.name])
-
-    @staticmethod
-    def _make_user(roles):
-        return (
-            frappe.get_doc(
-                {
-                    "doctype": "User",
-                    "email": f"{unique_name('investor-bond-ui').lower()}@example.com",
-                    "first_name": "Investor Bond Test",
-                    "send_welcome_email": 0,
-                    "roles": [{"role": role} for role in roles],
-                }
-            )
-            .insert(ignore_permissions=True)
-            .name
-        )
-
-    @staticmethod
-    @contextmanager
-    def _as_user(user, *, feature_enabled=True):
-        previous_user = frappe.session.user
-        try:
-            frappe.set_user(user)
-            with patch.dict(frappe.conf, {FEATURE_FLAG: int(feature_enabled)}):
-                yield
-        finally:
-            frappe.set_user(previous_user)

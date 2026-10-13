@@ -152,3 +152,10 @@ APIs share the same permission-aware portfolio access check; list queries keep
 explicit field projections and filter/sort allowlists. Transaction validation
 reuses one authoritative Bond Master for snapshot and accrued-interest amounts,
 with unchanged coupon/principal factors and Decimal quantization.
+
+Performance report rows and individual cash-flow exports share the report's
+position and cash-flow builders. Past reporting-currency flows use historical
+rates on each flow date; future flows use the valuation-date rate. Export
+authorization remains at the public endpoint, and the shared calculation uses
+the already permission-scoped context. The simplification preserves the mapped
+relationships, statement-derived writes, and read-only investor projections.

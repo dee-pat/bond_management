@@ -1,57 +1,32 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
 import { RouterLink, useRoute } from "vue-router";
 import { ListCell, ListHeaderCell } from "frappe-ui/list";
 
 import DataList from "../components/DataList.vue";
 import PdfAttachmentActions from "../components/PdfAttachmentActions.vue";
 import SurfaceState from "../components/SurfaceState.vue";
-import { InvestorApiError, redirectToLogin, useInvestorApi } from "../lib/api";
+import { useInvestorApi } from "../lib/api";
+import { useRecordDetail } from "../lib/detail";
 import { formatDate, formatNumber } from "../lib/format";
-import type { StatementDetail } from "../types";
 
 const route = useRoute();
-const statement = ref<StatementDetail | null>(null);
-const loading = ref(true);
-const error = ref<string | null>(null);
-const statementName = computed(() => String(route.params.statementName ?? ""));
 const api = useInvestorApi();
-let latestRequest = 0;
+const {
+	record: statement,
+	loading,
+	error,
+	load: loadStatement,
+} = useRecordDetail(
+	async () => (await api.fetchStatement(String(route.params.statementName ?? ""))).statement,
+	{
+		forbidden: "This statement is unavailable or you do not have permission to view it.",
+		failed: "The statement could not be loaded. Please retry.",
+	}
+);
 
 function formatMarketPrice(value: number | null): string {
 	return value === null ? "—" : formatNumber(value, 6);
 }
-
-async function loadStatement(): Promise<void> {
-	const requestId = ++latestRequest;
-	loading.value = true;
-	error.value = null;
-
-	try {
-		const response = await api.fetchStatement(statementName.value);
-		if (requestId === latestRequest) {
-			statement.value = response.statement;
-		}
-	} catch (caughtError) {
-		if (requestId !== latestRequest) {
-			return;
-		}
-		if (caughtError instanceof InvestorApiError && caughtError.status === 401) {
-			redirectToLogin();
-			return;
-		}
-		error.value =
-			caughtError instanceof InvestorApiError && caughtError.status === 403
-				? "This statement is unavailable or you do not have permission to view it."
-				: "The statement could not be loaded. Please retry.";
-	} finally {
-		if (requestId === latestRequest) {
-			loading.value = false;
-		}
-	}
-}
-
-onMounted(() => void loadStatement());
 </script>
 
 <template>

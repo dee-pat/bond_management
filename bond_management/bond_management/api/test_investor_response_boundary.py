@@ -3,32 +3,8 @@ import inspect
 from frappe.tests import UnitTestCase
 
 from bond_management.bond_management.api import investor, investor_reports
+from bond_management.bond_management.tests.investor_contracts import EXPECTED_FIELD_ALLOWLISTS
 
-EXPECTED_FIELD_ALLOWLISTS = {
-    "BOND_COUPON_FIELDS",
-    "BOND_DETAIL_FIELDS",
-    "BOND_LIST_FIELDS",
-    "BOND_PRINCIPAL_FIELDS",
-    "BOND_SCALAR_FIELDS",
-    "BOND_YIELD_COMPARISON_FIELDS",
-    "EXCHANGE_RATE_DETAIL_FIELDS",
-    "EXCHANGE_RATE_LIST_FIELDS",
-    "INTEREST_DIFFERENCE_FIELDS",
-    "INTEREST_DIFFERENCE_ROW_FIELDS",
-    "MARKET_DATE_DETAIL_FIELDS",
-    "MARKET_DATE_LIST_FIELDS",
-    "MARKET_DATE_SCALAR_FIELDS",
-    "MARKET_PRICE_FIELDS",
-    "PORTFOLIO_CASHFLOW_FIELDS",
-    "PORTFOLIO_PERFORMANCE_COLUMN_FIELDS",
-    "PORTFOLIO_PERFORMANCE_ROW_FIELDS",
-    "STATEMENT_DETAIL_FIELDS",
-    "STATEMENT_HOLDING_FIELDS",
-    "STATEMENT_LIST_FIELDS",
-    "STATEMENT_SCALAR_FIELDS",
-    "TRANSACTION_DETAIL_FIELDS",
-    "TRANSACTION_LIST_FIELDS",
-}
 FORBIDDEN_FILE_FIELD_PARTS = (
     "attached_to_",
     "attachment",
@@ -53,10 +29,18 @@ RECONCILIATION_REPORT_ALLOWLISTS = {
 
 
 class TestInvestorResponseBoundary(UnitTestCase):
+    def test_field_allowlists_match_independent_response_contracts(self):
+        allowlists = self._field_allowlists()
+
+        self.assertEqual(set(allowlists), set(EXPECTED_FIELD_ALLOWLISTS))
+        for name, expected_fields in EXPECTED_FIELD_ALLOWLISTS.items():
+            with self.subTest(allowlist=name):
+                self.assertEqual(allowlists[name], expected_fields)
+
     def test_only_transaction_and_statement_projections_expose_approved_file_urls(self):
         allowlists = self._field_allowlists()
 
-        self.assertEqual(set(allowlists), EXPECTED_FIELD_ALLOWLISTS)
+        self.assertEqual(set(allowlists), set(EXPECTED_FIELD_ALLOWLISTS))
         for allowlist_name, fields in allowlists.items():
             with self.subTest(allowlist=allowlist_name):
                 for field in fields:
