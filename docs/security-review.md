@@ -10,7 +10,8 @@ trigger, and the changed line.
 
 Entry points: `api/investor.py`, `api/investor_reports.py`,
 `utils/investor_shares.py`, the Bond Transaction, Statement, Master, and Market
-Date controllers, and the Portfolio Performance report.
+Date controllers, and every Script Report under `report/` (Portfolio
+Performance, Bond Yield Comparison, and Interest Difference by Portfolio).
 
 - Every argument is type-checked before it reaches a read or a filter, so a
   list or dict cannot become a Frappe filter. Reuse the helpers in
@@ -70,6 +71,11 @@ duplicate record.
   `utils/pdf_common.py`), and identity fields, rejecting missing or conflicting
   identity instead of guessing. Extension, MIME type, filename, and
   client-extracted values are untrusted.
+- A documented legacy fallback is allowed only when the primary identity
+  source is absent, and the primary source wins when both exist. For example,
+  `utils/statement_pdf.py` uses the original filename's account hint only for
+  legacy statements whose PDF body omits the account number; keep its
+  regression coverage when changing it.
 - Filenames are standardized only after the document is identified, and stay
   private.
 
