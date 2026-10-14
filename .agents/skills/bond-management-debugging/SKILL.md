@@ -19,9 +19,9 @@ Find the root cause before changing code. Every fix lands behind a regression te
 2. **Reproduce.** Run the narrowest command that shows the failure on `bond-management-test.localhost`:
    - `bench --site bond-management-test.localhost run-tests --module <module> --test <method>`
    - `BASE_URL=http://localhost:8001 yarn playwright test <spec> --project=<project>` against an explicitly served test site.
-   - For CI, read the job's traceback and reproduce the same test both in isolation and in its full module. Passing in isolation but failing in the module means _pollution_: shared records, leftover User Permission/DocShare rows, cached investor scope, or an outcome that depends on a factory's random suffix.
+   - For CI, read the job's traceback and reproduce the same test in isolation, in its module or spec, and in the full suite (`scripts/verify.sh server` or `ui`). Passing alone but failing alongside other tests means _pollution_, possibly leaked from an earlier module or spec: shared records, leftover User Permission/DocShare rows, cached investor scope, or an outcome that depends on a factory's random suffix.
 
-   Done when you have a command that fails deterministically, or proof (two clean runs plus the CI log) that the failure is environmental.
+   Done when you have a command that fails deterministically, or proof that the failure is environmental: the full suite passes on the same commit and the CI log names an environment or site-state cause.
 
 3. **Localize.** Trace the wrong value back to the first layer that produces it: controller → `utils/` service → derived writes (exchange rates and their source rows, market prices, reconciliation report) → API projection → Desk/SPA rendering. For a regression on `main`, `git bisect run` with the reproduce command. Done when you can name the file and line where the correct value turns into the wrong one.
 4. **Reduce.** Shrink the input to the smallest fixture that still fails: one bond, one portfolio, one transaction or statement. For boundary rules, test the exact date or amount at the boundary: settlement day, maturity day, coupon/repayment day, `<` vs `<=`. Done when removing any further input makes the failure disappear.
