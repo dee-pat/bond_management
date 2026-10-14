@@ -15,7 +15,7 @@ Change shape in _expand/contract_ phases so every deployed site migrates safely,
 
 ## Pick the branch
 
-- **Additive** (new DocType, field, index, DocPerm): normal Frappe migrate handles schema; add a patch only for data or an invariant, and bootstrap invariants in `after_install` too. Model sync drops manual indexes that DocField metadata cannot declare, so also reapply them idempotently from `after_migrate`; a logged patch never runs again.
+- **Additive** (new DocType, field, index, DocPerm): normal Frappe migrate handles schema; add a patch only for data or an invariant, and bootstrap invariants in `after_install` too. Model sync drops manual indexes that DocField metadata cannot declare, so also reapply them idempotently from `after_migrate`; a logged patch never runs again. A new field with a default on an existing Single DocType is the schema exception: sync stores no `tabSingles` value and defaults apply only when the Single has no stored values at all, so established sites read `None`. Backfill a business default with an idempotent data patch and test it on a populated site.
 - **Rename** (DocType or field): one release, one patch, see _Renames_.
 - **Remove or retype** (field, DocType, `Link` target, `Table` ownership): expand/contract across releases, see _Expand/contract_.
 - **Retire** (one-time patch, deprecated path, dead code): see _Retirement_.
@@ -24,10 +24,10 @@ Change shape in _expand/contract_ phases so every deployed site migrates safely,
 
 The two renames run on opposite sides of model sync, each in a patch whose rerun is a no-op:
 
-- **DocType:** `frappe.rename_doc("DocType", old, new, force=True)` in a `[pre_model_sync]` patch, so the table and links move before the renamed JSON syncs. `rename_doc` loads the old DocType first and raises when it is gone, so guard on existence: rename when only the old exists, skip when only the new exists, and throw when both or neither exist. Test a forced rerun.
+- **DocType:** `frappe.rename_doc("DocType", old, new, force=True)` in a `[pre_model_sync]` patch, so the table and links move before the renamed JSON syncs. `rename_doc` loads the old DocType first and raises when it is gone, so guard on existence: rename when only the old exists, skip when only the new exists, and throw when both or neither exist. Test a forced rerun. `DocType.after_rename` skips renaming files and folders while `frappe.flags.in_patch` is set, so rename the module folder, JSON, controller, test files, and controller class in the repository in the same change.
 - **Field:** `frappe.model.utils.rename_field.rename_field(doctype, old, new)` in a `[post_model_sync]` patch. It requires the synced DocType and silently returns when the new field is missing, so a pre-sync call copies nothing. It copies every row into the new column with an unconditional `UPDATE`, and Frappe leaves the old column in place, so a forced rerun (the lifecycle `requeue()` deletes Patch Logs) overwrites values the app has since written with stale legacy ones. Patch Log is not a guard: skip the call when a durable marker says the copy already ran, for example a namespaced `frappe.db.set_global` key that cannot match a fieldname, set in the same patch after the copy. Test that a forced rerun after editing the new field on a migrated row keeps the edit. For a `Table` or `Table MultiSelect` field, the parent table has no column, so the default validation returns before moving child rows; call it with `validate=False` (it then only updates `parentfield` from old to new, which a rerun cannot repeat) and test that the child rows load under the new field.
 
-Verify the migrated business data on representative legacy rows, not just the absence of errors. Then update every reference in the same change: controllers, `utils/`, `hooks.py` (`_financial_doctypes`, permission hooks, `doc_events`), `api/investor*.py` projections, reports, Desk JS, the SPA, tests, factories, the Playwright seed, and domain-model.md. Done when `git grep` for the old name returns only the patch.
+Verify the migrated business data on representative legacy rows, not just the absence of errors. Then update every reference in the same change: controllers, `utils/`, `hooks.py` (`_financial_doctypes`, permission hooks, `doc_events`), `api/investor*.py` projections, reports, Desk JS, the SPA, tests, factories, the Playwright seed, and domain-model.md. Done when `git grep` for the old name returns only the patch and `git ls-files` lists no path containing its snake_case form.
 
 ## Expand/contract
 
@@ -50,5 +50,7 @@ A one-time data patch is retirable only after the user confirms every deployed s
 For deprecated code paths, find every consumer first (`git grep`, `hooks.py`, whitelisted method names called from Desk JS and the SPA, report JSON) and remove the path only when the count is zero. Done when nothing imports, routes to, or calls the removed name.
 
 ## Verify
+
+A fresh install of the current tree creates only the new schema and marks every patch complete, so for a rename or retype, lifecycle `prepare()` must recreate the old shape (the old `DocType` record and its table, or the old column) with direct writes and DDL, load legacy rows into it, and assert it exists before the first migrate; otherwise the guards skip and the test passes without migrating anything.
 
 Run the lifecycle sequence for any patch change, plus the applicable gates from verification.md, and drop the temporary site afterwards whether it passed or failed.
