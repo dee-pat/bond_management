@@ -51,25 +51,29 @@ Performance, Bond Yield Comparison, and Interest Difference by Portfolio).
 
 ## `ignore_permissions=True`
 
-Allowed only for generated reports, derived statement writes, migrations,
-invariant bootstraps, and system-wide invariant checks. Each new use sits
-behind a caller whose permission was checked first, with a comment naming that
-boundary, as `delete_statement_exchange_rates` does.
+Allowed only in the cases below. Every use stays narrowly scoped to the records
+it governs and carries a comment naming the boundary it relies on or owns.
 
-System-wide invariant checks, such as the ledger and uniqueness validations in
-`BondTransaction._validate_ledger_group`,
-`BondStatement._validate_unique_attachment`, and
-`BondMarketDate._validate_unique_date`, must read every row. Filtering them by
-the caller's permissions would let hidden rows allow a negative ledger or a
-duplicate record.
+Request-path services sit behind a caller whose permission was checked first,
+and the comment names that check, as `delete_statement_exchange_rates` does:
 
-Permission-boundary and share-maintenance internals are also allowed, because
-they establish the boundary rather than sit behind it. `get_allowed_portfolios`
-and the investor-role lookup in `utils/investor_permissions.py` read Has Role
-and User Permission rows an investor cannot read, and `utils/investor_shares.py`
-locks and repairs DocShare rows to keep shares consistent. Each such use stays
-narrowly scoped to the records it governs and carries a comment naming the
-boundary it owns.
+- Generated reports and derived statement writes.
+- System-wide invariant checks, such as the ledger and uniqueness validations
+  in `BondTransaction._validate_ledger_group`,
+  `BondStatement._validate_unique_attachment`, and
+  `BondMarketDate._validate_unique_date`. They must read every row; filtering
+  them by the caller's permissions would let hidden rows allow a negative
+  ledger or a duplicate record.
+
+Services with no prior permission check to rely on are allowed without one:
+
+- Migrations and install/migrate invariant bootstraps in
+  `bond_management/patches/`.
+- Permission-boundary and share-maintenance internals, which establish the
+  boundary rather than sit behind it. `get_allowed_portfolios` and the
+  investor-role lookup in `utils/investor_permissions.py` read Has Role and
+  User Permission rows an investor cannot read, and `utils/investor_shares.py`
+  locks and repairs DocShare rows to keep shares consistent.
 
 ## Attachments
 
