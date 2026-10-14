@@ -63,6 +63,14 @@ System-wide invariant checks, such as the ledger and uniqueness validations in
 the caller's permissions would let hidden rows allow a negative ledger or a
 duplicate record.
 
+Permission-boundary and share-maintenance internals are also allowed, because
+they establish the boundary rather than sit behind it. `get_allowed_portfolios`
+and the investor-role lookup in `utils/investor_permissions.py` read Has Role
+and User Permission rows an investor cannot read, and `utils/investor_shares.py`
+locks and repairs DocShare rows to keep shares consistent. Each such use stays
+narrowly scoped to the records it governs and carries a comment naming the
+boundary it owns.
+
 ## Attachments
 
 - Financial PDFs stay private and are read through Frappe's File API
@@ -83,8 +91,10 @@ duplicate record.
 
 - PDF passwords live in the Bond Portfolio `Password` field and are read with
   `get_decrypted_password`. The credential dataclass keeps `repr=False`.
-- A password never appears in a log, an exception message, a response, a test
-  fixture, or a file.
+- A configured password never appears in a log, an exception message, a
+  response, a test fixture, or a file. Synthetic passwords in test fixtures
+  (for example in `tests/factories.py`) are allowed and required for the
+  encrypted and invalid-password parser cases.
 
 ## Rendering
 
