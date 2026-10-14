@@ -16,8 +16,11 @@ below the original face value while the quote basis does not change.
   (`utils/xirr.py:_unit_market_value`). Standard bonds keep a factor of 1. KES
   quantity-change bonds reduce the quantity the quote represents after each
   repayment.
-- Statement market values use `reported_quantity × price / 100`
-  (`utils/statement_pdf.py`).
+- Statement quantities are either unit counts or monetary nominal
+  (`ParsedMarketPrice.quantity_is_face_value`). Only monetary-nominal
+  quantities value as `reported_quantity × price / 100`. Legacy rows choose the
+  interpretation whose value is closer to the printed market value and reject
+  ties (`utils/statement_pdf.py:_legacy_quantity_is_monetary_nominal`).
 - The principal factor is never applied a second time to market-price cash
   flows.
 
