@@ -21,13 +21,23 @@ Find the root cause before changing code. Every fix lands behind a regression te
    - `BASE_URL=http://localhost:8001 yarn playwright test <spec> --project=<project>` against an explicitly served test site.
    - For CI, read the job's traceback and reproduce the same test in isolation, in its module or spec, and in the full suite (`scripts/verify.sh server` or `ui`). Passing alone but failing alongside other tests means _pollution_, possibly leaked from an earlier module or spec: shared records, leftover User Permission/DocShare rows, cached investor scope, or an outcome that depends on a factory's random suffix.
 
-   Done when you have a command that fails deterministically, or proof that the failure is environmental: the full suite passes on the same commit and the CI log names an environment or site-state cause. When the failing job installed or migrated a fresh site, the persistent site cannot prove this, because earlier patches may already hold the permission or index a missing `after_install` bootstrap should create: a clean install must pass on the same commit, in CI or on a unique temporary site per verification.md.
+   Done when you have a command that fails deterministically, or proof that the failure is environmental. Locally, that proof is the full suite passing on the same commit. In CI, only a runner-environment cause named in the log qualifies (service outage, network, browser download), and the proof is the failing job itself passing on a rerun of the same commit. The persistent site or a separately prepared clean site cannot prove it, because neither runs the job's own bootstrap. A CI site-state cause is never environmental: treat it as an app defect in the CI bootstrap, patches, or `after_install`.
 
 3. **Localize.** Trace the wrong value back to the first layer that produces it: controller → `utils/` service → derived writes (exchange rates and their source rows, market prices, reconciliation report) → API projection → Desk/SPA rendering. For a regression on `main`, `git bisect run` with the reproduce command. Done when you can name the file and line where the correct value turns into the wrong one.
 4. **Reduce.** Shrink the input to the smallest fixture that still fails: one bond, one portfolio, one transaction or statement. For boundary rules, test the exact date or amount at the boundary: settlement day, maturity day, coupon/repayment day, `<` vs `<=`. Done when removing any further input makes the failure disappear.
 5. **Write the regression test.** Add it at the layer that owns the rule, per bond-management-testing, and run it _red_ against the unfixed code. For comparison rules, cover greater-than, less-than, and equality.
 6. **Fix the root cause.** Change the producing layer found in step 3, not the symptom downstream. Keep `Decimal` from strings, the documented rounding mode, cash-flow signs, and the per-100 market-price basis. If the fix seems to require changing one of those conventions, stop and ask the user: that is a business decision, not a bug fix. Keep the assertion's strength; a fix that loosens an expectation needs the user's explicit agreement.
 7. **Verify.** Run the regression test green, rerun the step 2 command, then every applicable gate from verification.md, and record commands and exit statuses as its evidence format requires.
+
+### Build, import, migration, and workflow failures
+
+Steps 3–5 trace a wrong value. When the failure is an exception or a nonzero exit with no wrong value to trace, replace them with:
+
+- **Localize** to the first failing command and the frame, patch, or step that raised: the patch's line in `patches.txt`, the import path checked against the actual package tree, the failing build or typecheck file, or the workflow step with its working directory and paths.
+- **Reduce** to the narrowest command that still fails: one `bench --site <site> migrate`, `bench build --app bond_management`, `yarn typecheck`, or a single import.
+- **Regression check.** For a patch or install invariant, add the migration or fresh-install test bond-management-testing places, against representative legacy data with a safe rerun. For a build, import, typecheck, or lint failure, the gate that failed is the check: record it red, then green. For a CI workflow defect, the check is the failing job passing on the fix commit.
+
+Steps 6 and 7 apply unchanged.
 
 ## Clues by symptom
 
