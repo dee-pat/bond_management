@@ -16,13 +16,18 @@ Change shape in _expand/contract_ phases so every deployed site migrates safely,
 ## Pick the branch
 
 - **Additive** (new DocType, field, index, DocPerm): normal Frappe migrate handles schema; add a patch only for data or an invariant, and bootstrap invariants in `after_install` too.
-- **Rename** (DocType or field): one release, `[pre_model_sync]` patch, see _Renames_.
+- **Rename** (DocType or field): one release, one patch, see _Renames_.
 - **Remove or retype** (field, DocType, `Link` target, `Table` ownership): expand/contract across releases, see _Expand/contract_.
 - **Retire** (one-time patch, deprecated path, dead code): see _Retirement_.
 
 ## Renames
 
-Frappe migrates the JSON after `[pre_model_sync]` patches run, so a rename patch there moves data before the new schema loads. Use `frappe.rename_doc("DocType", old, new, force=True)` for a DocType and `frappe.model.utils.rename_field.rename_field(doctype, old, new)` for a field, guarded so a rerun is a no-op. Then update every reference in the same change: controllers, `utils/`, `hooks.py` (`_financial_doctypes`, permission hooks, `doc_events`), `api/investor*.py` projections, reports, Desk JS, the SPA, tests, factories, the Playwright seed, and domain-model.md. Done when `git grep` for the old name returns only the patch.
+The two renames run on opposite sides of model sync, each in a patch guarded so a rerun is a no-op:
+
+- **DocType:** `frappe.rename_doc("DocType", old, new, force=True)` in a `[pre_model_sync]` patch, so the table and links move before the renamed JSON syncs.
+- **Field:** `frappe.model.utils.rename_field.rename_field(doctype, old, new)` in a `[post_model_sync]` patch. It requires the synced DocType and silently returns when the new field is missing, so a pre-sync call copies nothing. It copies values into the new column; Frappe leaves the old column in place.
+
+Verify the migrated business data on representative legacy rows, not just the absence of errors. Then update every reference in the same change: controllers, `utils/`, `hooks.py` (`_financial_doctypes`, permission hooks, `doc_events`), `api/investor*.py` projections, reports, Desk JS, the SPA, tests, factories, the Playwright seed, and domain-model.md. Done when `git grep` for the old name returns only the patch.
 
 ## Expand/contract
 
