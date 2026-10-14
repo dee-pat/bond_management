@@ -13,8 +13,10 @@ several storage boundaries, and they do not all use the same mode.
 ## Decision
 
 - Values are built as `Decimal` from strings through
-  `utils/financial.py:to_decimal`, which rejects malformed and non-finite
-  input. They stay `Decimal` through calculation and become floats only in a
+  `utils/financial.py:to_decimal`, which converts `None` and other empty
+  values to `Decimal("0")` and rejects other malformed or non-finite input.
+  Callers that must distinguish a missing value check for it before
+  converting. Values stay `Decimal` through calculation and become floats only in a
   named external-library adapter or at JSON/clipboard serialization.
 - Cash and settlement amounts quantize to 4 decimal places, half-even
   (`quantize_money`).

@@ -20,6 +20,11 @@ settlement.
   paid covers the full coupon (`get_coupon_position_from_transactions`).
 - On a repayment date the coupon is paid on the pre-payment factor
   (`utils/xirr.py:_coupon_position_factor`).
+- A principal repayment is paid on the end-of-day ledger position at the
+  repayment date, so a purchase settling that day receives it and a sale
+  settling that day reduces it (`utils/xirr.py:create_past_cash_flows`).
+- On a valuation date on or after maturity the holding is redeemed: its
+  terminal market value and accrued interest use a position of zero.
 - Same-day and maturity-day behavior follows these explicit pre- and
   post-payment rules, never a generic date comparison.
 
