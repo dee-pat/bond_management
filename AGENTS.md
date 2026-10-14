@@ -290,6 +290,8 @@ The Vite build is served from `/assets/bond_management/frontend/`.
   scope. Prefer `frappe.qb.get_query` with `ignore_permissions=False` for
   multi-record reads; purpose-specific document/database APIs remain valid
   behind the same permission boundary.
+- For a diff touching an entry point, permission scope, shares, attachments,
+  secrets, or rendered HTML, apply [docs/security-review.md](docs/security-review.md).
 - Preserve framework-managed transactions and the financial/file conventions
   above. Check shared services for explicit commits or rollbacks, concurrent
   uniqueness for a database constraint, and registered data patches for safe

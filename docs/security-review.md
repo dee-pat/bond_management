@@ -1,0 +1,87 @@
+# Security review checklist
+
+Bond Management's attack surfaces, with what a reviewer checks on each. Use it
+alongside the generic Frappe checklist in
+`.agents/skills/quality-code-review/SKILL.md` §2 whenever a diff touches one of
+these surfaces. Each finding names the affected user or data, a plausible
+trigger, and the changed line.
+
+## Whitelisted methods
+
+Entry points: `api/investor.py`, `api/investor_reports.py`,
+`utils/investor_shares.py`, the Bond Transaction, Statement, Master, and Market
+Date controllers, and the Portfolio Performance report.
+
+- Every argument is type-checked before it reaches a read or a filter, so a
+  list or dict cannot become a Frappe filter. Reuse the helpers in
+  `api/investor.py` (`optional_string`, `_integer_argument`).
+- Investor endpoints return the fixed projection their spec defines, never a
+  generic DocType read, and accept only allow-listed filters and sort keys
+  (`_list_controls`).
+- Desk methods that parse, post, or reconcile check `write` on an existing
+  document, or `create` for a new one, before reading the attachment or input.
+- No method is `allow_guest`. Adding one needs an explicit reason in the PR.
+
+## Portfolio scope
+
+- A new financial DocType is in `_financial_doctypes` in `hooks.py`, so
+  `permission_query_conditions` and `has_permission` in
+  `utils/investor_permissions.py` scope it to assigned portfolios.
+- Permission-query SQL uses fixed DocType and field identifiers and escapes
+  every value with `frappe.db.escape`.
+- Multi-record reads use `frappe.qb.get_query(..., ignore_permissions=False)` or
+  an equivalent permission-scoped path.
+- Exchange rates are shared, but the representative statement link is
+  permission level 1 and returned only when the caller can read that statement
+  (`docs/plans/exchange-rate-provenance-privacy.md`).
+
+## Shares and User Permissions
+
+- Investor mutations stay rejected by `utils/investor_shares.py`, wired through
+  `extend_doctype_class`, `doc_events`, and the `clear_user_permissions`
+  override.
+- DocShare and User Permission changes stay consistent under concurrency;
+  changes here run the share-race helper in `docs/plans/review-fix-3.md`.
+
+## `ignore_permissions=True`
+
+Allowed only for generated reports, derived statement writes, migrations, and
+invariant bootstraps. Each new use sits behind a caller whose permission was
+checked first, with a comment naming that boundary, as
+`delete_statement_exchange_rates` does.
+
+## Attachments
+
+- Financial PDFs stay private and are read through Frappe's File API
+  (`utils/private_attachment.py`), never a filesystem path built from input.
+- Parsers validate actual content, size (`MAX_PDF_BYTES` in
+  `utils/pdf_common.py`), and identity fields, rejecting missing or conflicting
+  identity instead of guessing. Extension, MIME type, filename, and
+  client-extracted values are untrusted.
+- Filenames are standardized only after the document is identified, and stay
+  private.
+
+## Secrets
+
+- PDF passwords live in the Bond Portfolio `Password` field and are read with
+  `get_decrypted_password`. The credential dataclass keeps `repr=False`.
+- A password never appears in a log, an exception message, a response, a test
+  fixture, or a file.
+
+## Rendering
+
+- The investor SPA renders through Vue templates; `v-html` and `innerHTML` with
+  data are findings.
+- Desk scripts that build HTML or SVG strings escape every data value (for
+  example `escape_svg` in the Bond Yield Comparison report); only numbers and
+  fixed strings are interpolated raw.
+- `/bond-investor` (`www/bond_investor.py`) serves only when
+  `bond_investor_spa_enabled` is set and the user is signed in, and redirects
+  without caching otherwise.
+
+## Automated coverage
+
+`scripts/verify.sh lint` runs Frappe's Semgrep rules plus
+`semgrep/bond_management.yml` (no manual transaction boundaries, no `Decimal`
+from float literals). A recurring finding above that a pattern can catch belongs
+there as a new rule with a test in `semgrep/tests/`.

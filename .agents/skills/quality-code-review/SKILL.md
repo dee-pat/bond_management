@@ -70,6 +70,9 @@ Avoiding a vulnerability is far easier than fixing one safely. Audit
 security-critical code (auth, authorization, permissions, user management)
 especially hard.
 
+In Bond Management, also apply `docs/security-review.md`: the app's entry
+points, portfolio scope, shares, attachments, secrets, and rendering.
+
 **Injection**
 - NEVER build SQL by string concatenation/f-strings. Use the ORM or query
   builder. If raw SQL is unavoidable, use parameter substitution
