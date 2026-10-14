@@ -15,7 +15,7 @@ Find the root cause before changing code. Every fix lands behind a regression te
 
 ## Steps
 
-1. **Classify.** Name the failure layer before touching code: _environment_ (MariaDB, Redis, Node/Yarn, missing browser, locked or wrong credentials, wrong site), _site state_ (app not installed, unmigrated, `allow_tests` off, investor flag or seed missing), or _app defect_. Environment and site-state failures are fixed with the recovery steps in the sources above, then the original command is rerun unchanged; they end here. Done when the layer is named with the log line that proves it.
+1. **Classify.** Name the failure layer before touching code: _environment_ (MariaDB, Redis, Node/Yarn, missing browser, locked or wrong credentials, wrong site), _site state_ (app not installed, unmigrated, `allow_tests` off, investor flag or seed missing), or _app defect_. A local environment or site-state failure is fixed with the recovery steps in the sources above, then the original command is rerun unchanged; it ends here. A CI failure continues to step 2 even after recovery, because CI builds its own site: a missing install, migration, seed, or flag there points at the repository's CI bootstrap, patches, or `after_install`, which recovering a local site would mask. Done when the layer is named with the log line that proves it.
 2. **Reproduce.** Run the narrowest command that shows the failure on `bond-management-test.localhost`:
    - `bench --site bond-management-test.localhost run-tests --module <module> --test <method>`
    - `BASE_URL=http://localhost:8001 yarn playwright test <spec> --project=<project>` against an explicitly served test site.
