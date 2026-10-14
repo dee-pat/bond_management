@@ -24,9 +24,14 @@ Date controllers, and the Portfolio Performance report.
 
 ## Portfolio scope
 
-- A new financial DocType is in `_financial_doctypes` in `hooks.py`, so
-  `permission_query_conditions` and `has_permission` in
-  `utils/investor_permissions.py` scope it to assigned portfolios.
+- A new financial DocType is in `_financial_doctypes` in `hooks.py`. That
+  list only wires the investor-mutation rejection and share cleanup; it does
+  not scope reads.
+- A portfolio-owned DocType is also registered explicitly in both
+  `permission_query_conditions` and `has_permission` in `hooks.py`, backed by
+  functions in `utils/investor_permissions.py`. A DocType left out of either
+  map states why in the PR (for example, shared reference data such as
+  Bond Master).
 - Permission-query SQL uses fixed DocType and field identifiers and escapes
   every value with `frappe.db.escape`.
 - Multi-record reads use `frappe.qb.get_query(..., ignore_permissions=False)` or
@@ -45,10 +50,17 @@ Date controllers, and the Portfolio Performance report.
 
 ## `ignore_permissions=True`
 
-Allowed only for generated reports, derived statement writes, migrations, and
-invariant bootstraps. Each new use sits behind a caller whose permission was
-checked first, with a comment naming that boundary, as
-`delete_statement_exchange_rates` does.
+Allowed only for generated reports, derived statement writes, migrations,
+invariant bootstraps, and system-wide invariant checks. Each new use sits
+behind a caller whose permission was checked first, with a comment naming that
+boundary, as `delete_statement_exchange_rates` does.
+
+System-wide invariant checks, such as the ledger and uniqueness validations in
+`BondTransaction._validate_ledger_group`,
+`BondStatement._validate_unique_attachment`, and
+`BondMarketDate._validate_unique_date`, must read every row. Filtering them by
+the caller's permissions would let hidden rows allow a negative ledger or a
+duplicate record.
 
 ## Attachments
 
