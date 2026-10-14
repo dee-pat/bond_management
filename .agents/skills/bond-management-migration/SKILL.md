@@ -36,7 +36,10 @@ Frappe has no down migration: rollback is restoring the pre-migrate backup. Keep
 1. **Expand.** Add the new field/DocType alongside the old one. Write both from the server; read the new one with a fallback to the old.
 2. **Migrate.** A registered, idempotent, batched patch backfills the new shape from the old. Add its legacy rows to the lifecycle fixtures and test results as business data (amounts, `Decimal` precision, provenance), not only row counts.
 3. **Switch.** Read only the new shape; stop writing the old one.
-4. **Contract,** in a later release after every deployed site ran step 2: delete the old field from JSON. Frappe leaves the database column in place; dropping it (`bench trim-tables`) is a separate, explicitly approved operation on each site.
+4. **Contract,** in a later release after every deployed site ran step 2:
+   - **Field:** delete it from the DocType JSON. Frappe leaves the database column in place; `bench trim-tables` drops orphan columns.
+   - **DocType:** first move or delete what still references it (`Link` and `Table` fields, User Permissions, DocShares, attached Files, reports, workspace entries, `_financial_doctypes` and other `hooks.py` entries), then delete its module folder. `bench migrate` removes the orphan `DocType` record but keeps the table; `bench trim-database` drops it.
+   - Both trim commands are destructive and site-wide (`trim-database` drops every deleted DocType's table, other apps' included). Run each with `--dry-run` per site, show the user the list, and run it for real only with their explicit approval, never on the persistent dev or test site as part of a routine gate.
 
 Done when each release passes the lifecycle sequence and no code reads the old shape.
 
