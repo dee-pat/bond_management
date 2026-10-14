@@ -15,17 +15,17 @@ Change shape in _expand/contract_ phases so every deployed site migrates safely,
 
 ## Pick the branch
 
-- **Additive** (new DocType, field, index, DocPerm): normal Frappe migrate handles schema; add a patch only for data or an invariant, and bootstrap invariants in `after_install` too.
+- **Additive** (new DocType, field, index, DocPerm): normal Frappe migrate handles schema; add a patch only for data or an invariant, and bootstrap invariants in `after_install` too. Model sync drops manual indexes that DocField metadata cannot declare, so also reapply them idempotently from `after_migrate`; a logged patch never runs again.
 - **Rename** (DocType or field): one release, one patch, see _Renames_.
 - **Remove or retype** (field, DocType, `Link` target, `Table` ownership): expand/contract across releases, see _Expand/contract_.
 - **Retire** (one-time patch, deprecated path, dead code): see _Retirement_.
 
 ## Renames
 
-The two renames run on opposite sides of model sync, each in a patch guarded so a rerun is a no-op:
+The two renames run on opposite sides of model sync, each in a patch whose rerun is a no-op:
 
 - **DocType:** `frappe.rename_doc("DocType", old, new, force=True)` in a `[pre_model_sync]` patch, so the table and links move before the renamed JSON syncs.
-- **Field:** `frappe.model.utils.rename_field.rename_field(doctype, old, new)` in a `[post_model_sync]` patch. It requires the synced DocType and silently returns when the new field is missing, so a pre-sync call copies nothing. It copies values into the new column; Frappe leaves the old column in place.
+- **Field:** `frappe.model.utils.rename_field.rename_field(doctype, old, new)` in a `[post_model_sync]` patch. It requires the synced DocType and silently returns when the new field is missing, so a pre-sync call copies nothing. It copies every row into the new column with an unconditional `UPDATE`, and Frappe leaves the old column in place, so a forced rerun (the lifecycle `requeue()` deletes Patch Logs) overwrites values the app has since written with stale legacy ones. Patch Log is not a guard: skip the call when a durable marker says the copy already ran, for example a namespaced `frappe.db.set_global` key that cannot match a fieldname, set in the same patch after the copy. Test that a forced rerun after editing the new field on a migrated row keeps the edit.
 
 Verify the migrated business data on representative legacy rows, not just the absence of errors. Then update every reference in the same change: controllers, `utils/`, `hooks.py` (`_financial_doctypes`, permission hooks, `doc_events`), `api/investor*.py` projections, reports, Desk JS, the SPA, tests, factories, the Playwright seed, and domain-model.md. Done when `git grep` for the old name returns only the patch.
 
