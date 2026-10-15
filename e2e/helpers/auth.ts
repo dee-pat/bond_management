@@ -1,10 +1,22 @@
 import { expect, type APIRequestContext } from "@playwright/test";
 
-export async function authenticateInvestor(
+export function authenticateInvestor(request: APIRequestContext): Promise<string> {
+  return authenticate(request, "FRAPPE_USER", "FRAPPE_PASSWORD");
+}
+
+export function authenticateAdministrator(
   request: APIRequestContext
 ): Promise<string> {
-  const username = requireEnvironmentVariable("FRAPPE_USER");
-  const password = requireEnvironmentVariable("FRAPPE_PASSWORD");
+  return authenticate(request, "FRAPPE_ADMIN_USER", "FRAPPE_ADMIN_PASSWORD");
+}
+
+async function authenticate(
+  request: APIRequestContext,
+  userVariable: string,
+  passwordVariable: string
+): Promise<string> {
+  const username = requireEnvironmentVariable(userVariable);
+  const password = requireEnvironmentVariable(passwordVariable);
 
   const response = await request.post("/api/method/login", {
     form: {
@@ -24,7 +36,7 @@ export async function authenticateInvestor(
 function requireEnvironmentVariable(name: string): string {
   const value = process.env[name];
   if (!value) {
-    throw new Error(`${name} must be set for investor browser tests`);
+    throw new Error(`${name} must be set for browser tests`);
   }
   return value;
 }

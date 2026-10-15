@@ -1,6 +1,10 @@
 name: Linters
 
 on:
+  push:
+    branches:
+      - main
+      - version-16
   pull_request:
   workflow_dispatch:
 

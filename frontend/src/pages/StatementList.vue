@@ -4,12 +4,9 @@ import { RouterLink } from "vue-router";
 import { Button, Select } from "frappe-ui";
 import { ListCell } from "frappe-ui/list";
 
-import DataList from "../components/DataList.vue";
 import ListFilterBar from "../components/ListFilterBar.vue";
-import ListPagination from "../components/ListPagination.vue";
+import PagedRecordList from "../components/PagedRecordList.vue";
 import FilterButton from "../components/FilterButton.vue";
-import SortableColumn from "../components/SortableColumn.vue";
-import SurfaceState from "../components/SurfaceState.vue";
 import { useInvestorApi } from "../lib/api";
 import { toFilterValue, usePagedList } from "../lib/list";
 import { formatDate } from "../lib/format";
@@ -19,20 +16,7 @@ const props = defineProps<{ bootstrap: InvestorBootstrap }>();
 const api = useInvestorApi();
 const selectedPortfolio = ref("");
 const selectedStatus = ref("");
-const {
-	rows: statements,
-	activeFilter,
-	sortBy,
-	sortOrder,
-	pagination,
-	loading,
-	error,
-	load: loadStatements,
-	changeSort,
-	loadMore: loadMoreStatements,
-	changePageLength,
-	retry: retryStatements,
-} = usePagedList<StatementListRow>({
+const list = usePagedList<StatementListRow>({
 	fetchPage: (parameters) =>
 		api.fetchStatements({
 			...parameters,
@@ -42,6 +26,7 @@ const {
 	sortBy: "statement_date",
 	errorMessage: "Statements could not be loaded. Please retry.",
 });
+const { activeFilter, loading, load: loadStatements } = list;
 
 const hasAssignments = computed(() => props.bootstrap.portfolios.length > 0);
 const portfolioOptions = computed(() => [
@@ -144,100 +129,55 @@ const sortColumns = [
 			@clear-all="clearAllFilters"
 		/>
 
-		<SurfaceState
-			v-if="loading && statements.length === 0"
-			:loading="loading"
+		<PagedRecordList
+			:list="list"
+			:columns="['minmax(9rem,1fr)', 'minmax(12rem,1.4fr)', 'minmax(12rem,1fr)']"
+			:sort-columns="sortColumns"
+			row-test-id="statement-row"
 			loading-text="Loading statements…"
-		/>
-
-		<SurfaceState
-			v-else-if="error && statements.length === 0"
-			:error="error"
-			@retry="retryStatements"
-		/>
-
-		<div v-else-if="!hasAssignments" class="surface-state" data-testid="statements-empty">
-			No portfolios are assigned to your account.
-		</div>
-
-		<div
-			v-else-if="statements.length === 0"
-			class="surface-state"
-			data-testid="statements-empty"
+			empty-text="No statements match the selected filters."
+			empty-test-id="statements-empty"
+			pagination-label="Statement list pagination"
+			:unassigned="!hasAssignments"
 		>
-			No statements match the selected filters.
-		</div>
-
-		<template v-else>
-			<SurfaceState v-if="error" :error="error" @retry="retryStatements" />
-
-			<DataList
-				:items="statements"
-				:columns="['minmax(9rem,1fr)', 'minmax(12rem,1.4fr)', 'minmax(12rem,1fr)']"
-				row-key="name"
-				row-test-id="statement-row"
-			>
-				<template #header>
-					<SortableColumn
-						v-for="column in sortColumns"
-						:key="column.field"
-						:label="column.label"
-						:field="column.field"
-						:sort-by="sortBy"
-						:sort-order="sortOrder"
-						:disabled="loading"
-						@sort="changeSort"
+			<template #row="{ item: statement }">
+				<ListCell data-label="Statement Date">
+					<RouterLink
+						:to="`/statements/${encodeURIComponent(statement.name)}`"
+						:aria-label="`View statement ${statement.name}`"
+					>
+						{{ formatDate(statement.statement_date) }}
+					</RouterLink>
+				</ListCell>
+				<ListCell data-label="Portfolio Name">
+					<FilterButton
+						field="portfolio_name"
+						label="Portfolio Name"
+						:value="statement.portfolio_name"
+						@filter="applyFilter"
 					/>
-				</template>
-				<template #row="{ item: statement }">
-					<ListCell data-label="Statement Date">
-						<RouterLink
-							:to="`/statements/${encodeURIComponent(statement.name)}`"
-							:aria-label="`View statement ${statement.name}`"
-						>
-							{{ formatDate(statement.statement_date) }}
-						</RouterLink>
-					</ListCell>
-					<ListCell data-label="Portfolio Name">
-						<FilterButton
-							field="portfolio_name"
-							label="Portfolio Name"
-							:value="statement.portfolio_name"
-							@filter="applyFilter"
-						/>
-					</ListCell>
-					<ListCell data-label="Reconciliation Status">
-						<Button
-							v-if="statement.reconciliation_status"
-							class="status-badge list-filter-status"
-							:class="`status-badge--${statement.reconciliation_status.toLowerCase()}`"
-							variant="ghost"
-							size="sm"
-							:label="`Filter Reconciliation Status by ${statement.reconciliation_status}`"
-							@click="
-								applyFilter(
-									'reconciliation_status',
-									'Reconciliation Status',
-									statement.reconciliation_status
-								)
-							"
-						>
-							{{ statement.reconciliation_status }}
-						</Button>
-						<span v-else class="status-badge status-badge--unset">—</span>
-					</ListCell>
-				</template>
-			</DataList>
-
-			<ListPagination
-				:has-more="pagination.has_more"
-				:item-count="statements.length"
-				:loading="loading"
-				:page-length="pagination.page_length"
-				label="Statement list pagination"
-				@change-page-length="changePageLength"
-				@load-more="loadMoreStatements"
-			/>
-		</template>
+				</ListCell>
+				<ListCell data-label="Reconciliation Status">
+					<Button
+						v-if="statement.reconciliation_status"
+						class="status-badge list-filter-status"
+						:class="`status-badge--${statement.reconciliation_status.toLowerCase()}`"
+						variant="ghost"
+						size="sm"
+						:label="`Filter Reconciliation Status by ${statement.reconciliation_status}`"
+						@click="
+							applyFilter(
+								'reconciliation_status',
+								'Reconciliation Status',
+								statement.reconciliation_status
+							)
+						"
+					>
+						{{ statement.reconciliation_status }}
+					</Button>
+					<span v-else class="status-badge status-badge--unset">—</span>
+				</ListCell>
+			</template>
+		</PagedRecordList>
 	</section>
 </template>

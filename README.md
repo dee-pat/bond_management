@@ -123,10 +123,7 @@ yarn typecheck
 
 The frontend source is under [`frontend/`](frontend/). The Python controllers, reports, APIs, utilities, DocTypes, and tests are under [`bond_management/bond_management/`](bond_management/bond_management/).
 
-For local Frappe development, use the existing configured bench and keep all
-sites under it. Use `bond-management-dev.localhost` for interactive work and reuse `bond-management-test.localhost` for
-automated tests. Do not create temporary or copied bench directories. Start
-the frontend dev server with:
+Start the frontend dev server with:
 
 ```bash
 yarn dev
@@ -134,30 +131,15 @@ yarn dev
 
 ## Verification
 
-The repository has shared verification gates for formatting, linting, server tests, and Playwright browser tests for Desk and investor workflows. Run them from the bench directory:
+Run the shared gates from the bench directory:
 
 ```bash
-apps/bond_management/scripts/verify.sh pre-push
+apps/bond_management/scripts/verify.sh pre-push     # lint + server tests
+apps/bond_management/scripts/verify.sh pre-push-ui  # adds frontend checks and Playwright
 ```
 
-For changes affecting JavaScript, reports, DocType metadata, workspaces, or other Desk behavior, also run:
-
-```bash
-apps/bond_management/scripts/verify.sh pre-push-ui
-```
-
-See [`docs/verification.md`](docs/verification.md) for the required gates, test-site rules, Playwright setup, and completion evidence format.
-
-Individual gates can also be run on their own:
-
-| Gate       | Runs                                                                   |
-| ---------- | ---------------------------------------------------------------------- |
-| `lint`     | pre-commit (ruff, eslint, prettier), `skills.lock` check, Semgrep rules, and rule tests |
-| `server`   | migrates the test site and runs the full server suite                  |
-| `frontend` | `yarn lint`, `yarn typecheck`, and `bench build --app bond_management` |
-| `ui`       | seeds investor fixtures and runs the full Playwright suite             |
-
-`pre-push` runs `lint` and `server`; `pre-push-ui` adds `frontend` and `ui`. Set `TEST_SITE` to override the default `bond-management-test.localhost`.
+[`docs/verification.md`](docs/verification.md) covers the individual gates,
+the dev/test site pair, Playwright setup, and the completion evidence format.
 
 ### Manual PR reviews
 

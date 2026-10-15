@@ -1,12 +1,6 @@
-import frappe
-
-ROLE = "Bond Management Manager"
-REPORT = "Portfolio Performance"
+from bond_management.patches.access import MANAGER_ROLE, ensure_report_role
 
 
 def execute():
     """Allow the app manager role to run the Portfolio Performance report."""
-    report = frappe.get_doc("Report", REPORT)
-    if ROLE not in {row.role for row in report.roles}:
-        report.append("roles", {"role": ROLE})
-        report.save(ignore_permissions=True)
+    ensure_report_role("Portfolio Performance", MANAGER_ROLE)

@@ -1,4 +1,3 @@
-import hmac
 import re
 from collections import defaultdict
 from collections.abc import Mapping
@@ -9,20 +8,22 @@ from decimal import Decimal, InvalidOperation
 import frappe
 from frappe import _
 from pypdf import PdfReader
-from pypdf.errors import DependencyError, FileNotDecryptedError, PdfReadError, PdfStreamError
 
 from bond_management.bond_management.utils.pdf_common import (
+    ISIN_PATTERN,
     MAX_PDF_BYTES,
+    NUMBER_PATTERN,
     PortfolioPdfCredentials,
+    extract_page_texts,
     get_portfolio_pdf_credentials,
+    match_account_portfolio,
+    normalize_account_number,
     open_pdf,
+    unlocked_with_own_password,
 )
 from bond_management.bond_management.utils.private_attachment import read_private_pdf_attachment
 from bond_management.bond_management.utils.validation import optional_string
 
-MAX_STATEMENT_PDF_BYTES = MAX_PDF_BYTES
-MAX_STATEMENT_PDF_PAGES = 200
-MAX_STATEMENT_PDF_TEXT_CHARS = 2_000_000
 DATE_PATTERNS = (
     re.compile(r"Portfolio\s+Summary\s+as\s+of\s+(\d{2}/\d{2}/\d{4})", re.IGNORECASE),
     re.compile(
@@ -34,8 +35,6 @@ ACCOUNT_PATTERNS = (
     re.compile(r"\bProduct\s+Account\s+No\.?\s*:\s*([A-Za-z0-9-]+)", re.IGNORECASE),
     re.compile(r"\bIS\s+Account\s*:\s*([A-Za-z0-9-]+)", re.IGNORECASE),
 )
-ISIN_PATTERN = r"[A-Z]{2}[A-Z0-9]{10}"
-NUMBER_PATTERN = r"[+-]?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?"
 CURRENCY_CODE_PATTERN = r"[A-Z]{3}"
 CURRENCY_RATE_PATTERN = re.compile(
     rf"\b(?P<from_currency>{CURRENCY_CODE_PATTERN})\s*/\s*"
@@ -353,7 +352,7 @@ def get_statement_attachment_details(
     portfolio_name_hint = optional_string(portfolio_name_hint, "Portfolio Name")
     content, original_filename = read_private_pdf_attachment(
         attachment,
-        max_bytes=MAX_STATEMENT_PDF_BYTES,
+        max_bytes=MAX_PDF_BYTES,
         missing_message=_("Attach a PDF statement before saving."),
         extension_message=_("Bond Statement attachments must be PDF files."),
         private_message=_("Bond Statement PDFs must be uploaded as private files."),
@@ -386,38 +385,16 @@ def get_statement_attachment_details(
     except StatementPdfError as error:
         frappe.throw(str(error))
 
-    matching = [
-        credential
-        for credential in credentials
-        if parsed.account_no
-        in {
-            normalize_account_number(credential.account_no),
-            normalize_account_number(credential.transaction_account_no),
-        }
-    ]
-    if not matching:
-        frappe.throw(
-            _(
-                "No accessible Bond Portfolio has account number {0}. Add it as Account No or Transaction Account No on Bond Portfolio, then attach the statement again."
-            ).format(parsed.account_no)
-        )
-    if len(matching) > 1:
-        frappe.throw(
-            _(
-                "More than one Bond Portfolio uses account number {0}. Account No and Transaction Account No values must identify only one portfolio."
-            ).format(parsed.account_no)
-        )
-
-    portfolio = matching[0]
+    portfolio = match_account_portfolio(
+        credentials, parsed.account_no, reattach=_("attach the statement again")
+    )
     if hinted_portfolio and portfolio.portfolio_name != hinted_portfolio.portfolio_name:
         frappe.throw(
             _("The attached PDF belongs to Bond Portfolio {0}, not the selected portfolio {1}.").format(
                 portfolio.portfolio_name, hinted_portfolio.portfolio_name
             )
         )
-    if parsed.unlock_password is not None and (
-        not portfolio.password or not hmac.compare_digest(portfolio.password, parsed.unlock_password)
-    ):
+    if not unlocked_with_own_password(portfolio, parsed.unlock_password):
         frappe.throw(
             _(
                 "The configured statement PDF password for portfolio {0} does not unlock this attachment."
@@ -434,40 +411,12 @@ def get_statement_attachment_details(
     )
 
 
-def normalize_account_number(value: str) -> str:
-    return re.sub(r"\s+", "", value or "")
-
-
 def _parse_reader(
     reader: PdfReader,
     account_no_hint: str | None,
     bond_name_to_isin: Mapping[str, str] | None,
 ) -> ParsedStatementPdf:
-    try:
-        page_count = len(reader.pages)
-    except (DependencyError, FileNotDecryptedError, PdfReadError, PdfStreamError) as error:
-        raise StatementPdfError("The statement PDF pages could not be read.") from error
-    if page_count > MAX_STATEMENT_PDF_PAGES:
-        raise StatementPdfError(
-            f"The statement PDF cannot contain more than {MAX_STATEMENT_PDF_PAGES} pages."
-        )
-    if not page_count:
-        raise StatementPdfError("The statement PDF has no pages.")
-
-    page_texts = []
-    text_length = 0
-    try:
-        for page in reader.pages:
-            page_text = page.extract_text() or ""
-            text_length += len(page_text)
-            if text_length > MAX_STATEMENT_PDF_TEXT_CHARS:
-                raise StatementPdfError(
-                    "The statement PDF contains more text than the parser can safely process."
-                )
-            page_texts.append(page_text)
-    except (DependencyError, FileNotDecryptedError, PdfReadError, PdfStreamError) as error:
-        raise StatementPdfError("The statement PDF pages could not be read.") from error
-
+    page_texts = extract_page_texts(reader, error_class=StatementPdfError, label="statement")
     all_text = "\n".join(page_texts)
     parsed = parse_statement_pdf_text(page_texts[0], account_no_hint)
     return ParsedStatementPdf(

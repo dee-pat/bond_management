@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { computed, isRef, onBeforeUnmount, ref, watch } from "vue";
+import { computed, ref } from "vue";
 import { ChartCard, LineChart } from "frappe-ui/charts";
 import type { ChartTooltipItem, LineChartProps, SeriesStyle } from "frappe-ui/charts";
-import type { ECharts } from "echarts/core";
 
+import { useChartHover } from "../lib/chart";
 import { formatDate, formatNumber, formatPercent } from "../lib/format";
 import type { MarketPriceRow } from "../types";
 
@@ -19,7 +19,6 @@ const props = defineProps<{ rows: MarketPriceRow[] }>();
 const lineChartRef = ref<{ chart?: unknown } | null>(null);
 const hoveredPoint = ref<YieldPoint | null>(null);
 const hiddenCurrencies = ref<string[]>([]);
-let boundChart: ECharts | undefined;
 
 const points = computed<YieldPoint[]>(() =>
 	props.rows
@@ -118,32 +117,7 @@ const chartProps = computed<LineChartProps>(() => ({
 	},
 }));
 const accessibleDescription = computed(() => points.value.map(pointLabel).join("; "));
-const chartInstance = computed<ECharts | undefined>(() => {
-	const chart = lineChartRef.value?.chart;
-	return isRef(chart) ? (chart.value as ECharts | undefined) : (chart as ECharts | undefined);
-});
-
-watch(chartInstance, (chart) => {
-	if (boundChart === chart) {
-		return;
-	}
-	if (boundChart) {
-		boundChart.off("mouseover", handleChartMouseOver);
-		boundChart.off("mouseout", clearHoveredPoint);
-	}
-	boundChart = chart;
-	if (boundChart) {
-		boundChart.on("mouseover", handleChartMouseOver);
-		boundChart.on("mouseout", clearHoveredPoint);
-	}
-});
-
-onBeforeUnmount(() => {
-	if (boundChart) {
-		boundChart.off("mouseover", handleChartMouseOver);
-		boundChart.off("mouseout", clearHoveredPoint);
-	}
-});
+useChartHover(lineChartRef, handleChartMouseOver, clearHoveredPoint);
 
 function pointLabel(point: YieldPoint): string {
 	return `${point.isin}, ${point.currency}, ${formatPercent(point.yieldPercent)}, ${formatDate(

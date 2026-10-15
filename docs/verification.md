@@ -12,15 +12,10 @@ evidence.
 - **Proven:** new or changed behavior has a test that fails without the change
   and passes with it; a bug fix adds its regression test first. Comparison
   rules cover greater-than, less-than, and equality.
-- **Financial conventions:** values stay `Decimal` from strings through the
-  calculation; rounding mode, cash-flow signs, commission, per-100 market-price
-  basis, and settlement-date effectiveness are unchanged, or changed only with
-  an explicit business decision and boundary tests.
-- **Server-authoritative:** financial, posting, reconciliation, and attachment
-  mutations await the server result in Desk and the SPA.
-- **Permission scope:** a new financial DocType is in `_financial_doctypes` in
-  `hooks.py`; new whitelisted inputs are type-checked; investor reads go
-  through `api/investor*.py` projections scoped to assigned portfolios.
+- **Conventions held:** the financial, attachment, and investor-isolation rules
+  in `AGENTS.md` (_Architecture_, _Bond financial conventions_, _Attachments
+  and secrets_) still hold, or changed only with an explicit business decision
+  and boundary tests.
 - **Install and migrate:** a data patch is idempotent and registered; an
   invariant it creates is also bootstrapped in `after_install`; the
   fresh-install check below passed.
@@ -61,10 +56,11 @@ differences in the final field.
   changes need lint plus the focused Playwright spec, with the full UI suite
   when they change a shared runtime or critical user journey.
 - From the bench directory, run
-  `apps/bond_management/scripts/verify.sh pre-push`. This shared gate runs
-  pre-commit, migrates `bond-management-test.localhost`, and runs the complete
-  server suite. GitHub Actions must call the same script so local and CI
-  commands cannot drift.
+  `apps/bond_management/scripts/verify.sh pre-push`. This local combined gate
+  runs the `lint` stage (pre-commit and the other lint checks), migrates
+  `bond-management-test.localhost`, and runs the complete server suite. GitHub
+  Actions runs the same script's stages separately (`lint` in the Linters
+  workflow, `server` and `ui` in CI) so local and CI commands cannot drift.
 - Changes to JavaScript, reports, DocType metadata, permissions, workspaces, or
   other Desk behavior must run
   `apps/bond_management/scripts/verify.sh pre-push-ui`. It includes the
@@ -137,33 +133,6 @@ bench --site "$DEV_SITE" migrate
 bench --site "$DEV_SITE" backup --with-files
 ```
 
-### Legacy site transition
-
-- For an existing bench that still has `dev.local`:
-  - If the site is dedicated to Bond Management, preserve its data and continue
-    interactive work with `DEV_SITE=dev.local` until a separate site-data
-    migration is planned. This transition does not rename, recreate, drop, or
-    restore the existing site.
-  - If the site is shared with another app, do not use it for Bond Management.
-    Provision `bond-management-dev.localhost` in the existing bench with
-    `bench new-site bond-management-dev.localhost`, then install
-    `bond_management` on it. Keep the shared `dev.local` intact; do not copy or
-    delete its data as part of this setup.
-- For an existing bench that still has the legacy `test_site`:
-  - If `test_site` is dedicated to Bond Management, the existing `TEST_SITE`
-    override can run gates there temporarily:
-    `TEST_SITE=test_site apps/bond_management/scripts/verify.sh pre-push`.
-    For the UI gate, start
-    `bench --site test_site serve --port 8001 --noreload`, then run
-    `TEST_SITE=test_site BASE_URL=http://localhost:8001 apps/bond_management/scripts/verify.sh pre-push-ui`.
-    Prepare it like the persistent test site above.
-  - If `test_site` is shared with another app, do not run Bond Management gates
-    against it. When `bond-management-test.localhost` is absent, provision it
-    with `bench new-site bond-management-test.localhost`, then prepare it as
-    above.
-  - Keep the pre-existing `test_site` intact until its owner approves any
-    cleanup. The transition never recreates, drops, or restores it.
-
 ### Temporary sites
 
 When a test genuinely needs an additional local site (including local
@@ -172,9 +141,17 @@ configured bench. After the test finishes, capture its required logs and
 results, then drop it with `bench drop-site <temporary-site> --no-backup`,
 whether the test passed or failed. This keeps the persistent pair at two sites.
 Never drop the persistent pair under this rule. The opt-in migration lifecycle
-and share-race helpers follow the site naming and opt-in steps in
-[migration-lifecycle.md](specs/migration-lifecycle.md) and
-[review-fix-3.md](plans/review-fix-3.md).
+helper follows the site naming and opt-in steps in
+[migration-lifecycle.md](specs/migration-lifecycle.md).
+
+The opt-in investor share-race helper
+(`bond_management/bond_management/tests/investor_share_concurrency.py`) runs
+on a uniquely named `bond-management-race-<32-hex-id>.localhost` site with Bond
+Management installed and `allow_tests` enabled. Set `BOND_SHARE_RACE_BENCH` to
+the configured bench path and provide the observer credentials privately as the
+module docstring describes. Run its `seed` and then `run` phases, capture the
+results, and drop the site even when a phase fails. The helper rejects both
+persistent sites and sites outside the configured bench.
 
 ### Credentials
 
@@ -228,19 +205,12 @@ Never copy the file contents into repository files or logs.
 
 ## CI bootstrap and job boundaries
 
-- CI's fresh-site bootstrap must initialize an explicit bench root, assert that
-  its `sites/common_site_config.json` exists before running `bench get-app`, and
-  fetch the checked-out app through a local `file://` source. Keep the bench
-  initialization path, step working directories, caches, and artifact paths in
-  sync. Use a unique run-scoped directory under the runner's temporary folder;
-  never reuse a fixed `/home/runner/frappe-bench` path or overwrite an existing
-  bench. GitHub's `runner` context is unavailable in `jobs.<job_id>.env`; use
-  it in step-level fields or the runner's `$RUNNER_TEMP` variable instead.
+- The Linters workflow runs `scripts/verify.sh lint`. The CI Server job builds a
+  fresh bench and site under `$RUNNER_TEMP` (emptied per job), installs the
+  checked-out app through a local `file://` source, and runs
+  `scripts/verify.sh server`. The UI job builds its own fresh bench and site and
+  runs `scripts/verify.sh ui`. Each gate runs once per revision.
 - Before starting the UI job's web server, set its disposable Administrator
   password, enable `bond_investor_spa_enabled`, and seed the investor browser
   user and fixture records. The web process must start after the feature flag
   is set. `scripts/verify.sh ui` repeats the idempotent seed before Playwright.
-- The server CI job runs the shared lint and full server gate once. The UI job
-  has its own run-scoped fresh bench/site and runs
-  `apps/bond_management/scripts/verify.sh ui`, which prepares the site and runs
-  the full Playwright suite without repeating the server suite.

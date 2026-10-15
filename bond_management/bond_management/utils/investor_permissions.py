@@ -330,14 +330,6 @@ def _has_portfolio_access(portfolio: str | None, user: str, ptype: str) -> bool 
     return True
 
 
-def investor_portfolio_access(user: str, portfolio: str) -> bool | None:
-    """Return the investor assignment decision, or None for other users."""
-    portfolios = get_allowed_portfolios(user)
-    if portfolios is None:
-        return None
-    return bool(portfolio and portfolio in portfolios)
-
-
 def has_portfolio_permission(doc, user: str | None = None, ptype: str | None = None, **_kwargs):
     return _has_portfolio_access(doc.name, user, ptype)
 

@@ -4,7 +4,7 @@ import path from "node:path";
 import { expect, test as setup } from "@playwright/test";
 
 import { investorStorageState } from "./fixtures";
-import { authenticateInvestor } from "./helpers/auth";
+import { authenticateInvestor } from "../helpers/auth";
 
 setup("authenticate", async ({ page }) => {
   fs.mkdirSync(path.dirname(investorStorageState), { recursive: true });

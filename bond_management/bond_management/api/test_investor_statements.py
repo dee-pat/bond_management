@@ -6,7 +6,9 @@ from frappe.tests import IntegrationTestCase
 
 from bond_management.bond_management.api.investor import get_statement, get_statements
 from bond_management.bond_management.tests.factories import (
+    allow_user,
     as_investor_user,
+    make_assigned_investor,
     make_bond,
     make_investor_user,
     make_market_date,
@@ -54,7 +56,7 @@ class TestInvestorStatements(IntegrationTestCase):
             },
             update_modified=False,
         )
-        investor = self._make_investor(assigned_portfolio.name)
+        investor = make_assigned_investor(assigned_portfolio.name)
 
         with as_investor_user(investor):
             response = get_statements(reconciliation_status="Matched")
@@ -71,7 +73,7 @@ class TestInvestorStatements(IntegrationTestCase):
     def test_explicit_cross_portfolio_filter_is_denied(self):
         assigned_portfolio = make_portfolio()
         other_portfolio = make_portfolio()
-        investor = self._make_investor(assigned_portfolio.name)
+        investor = make_assigned_investor(assigned_portfolio.name)
 
         with as_investor_user(investor):
             with self.assertRaisesRegex(frappe.PermissionError, "not permitted"):
@@ -102,7 +104,7 @@ class TestInvestorStatements(IntegrationTestCase):
             },
             update_modified=False,
         )
-        investor = self._make_investor(portfolio.name)
+        investor = make_assigned_investor(portfolio.name)
 
         with as_investor_user(investor):
             response = get_statement(statement.name)
@@ -136,16 +138,8 @@ class TestInvestorStatements(IntegrationTestCase):
             {row.isin for row in statement.bond_statement_details},
             {readable.name, restricted.name},
         )
-        investor = self._make_investor(portfolio.name)
-        frappe.get_doc(
-            {
-                "doctype": "User Permission",
-                "user": investor,
-                "allow": "Bond Master",
-                "for_value": readable.name,
-                "apply_to_all_doctypes": 1,
-            }
-        ).insert(ignore_permissions=True)
+        investor = make_assigned_investor(portfolio.name)
+        allow_user(investor, "Bond Master", readable.name)
 
         with as_investor_user(investor):
             response = get_statement(readable_statement.name)
@@ -160,7 +154,7 @@ class TestInvestorStatements(IntegrationTestCase):
         assigned_portfolio = make_portfolio()
         other_portfolio = make_portfolio()
         other = make_statement(other_portfolio)
-        investor = self._make_investor(assigned_portfolio.name)
+        investor = make_assigned_investor(assigned_portfolio.name)
         messages = []
 
         with as_investor_user(investor):
@@ -186,7 +180,7 @@ class TestInvestorStatements(IntegrationTestCase):
         portfolio = make_portfolio()
         newer = make_statement(portfolio, statement_date="2025-12-31")
         older = make_statement(portfolio, statement_date="2025-11-30")
-        investor = self._make_investor(portfolio.name)
+        investor = make_assigned_investor(portfolio.name)
 
         with as_investor_user(investor):
             first_page = get_statements(page_length="1")
@@ -204,22 +198,9 @@ class TestInvestorStatements(IntegrationTestCase):
         portfolio = make_portfolio()
         older = make_statement(portfolio, statement_date="2025-11-30")
         newer = make_statement(portfolio, statement_date="2025-12-31")
-        investor = self._make_investor(portfolio.name)
+        investor = make_assigned_investor(portfolio.name)
 
         with as_investor_user(investor):
             ascending = get_statements(sort_by="statement_date", sort_order="asc")
 
         self.assertEqual([row.name for row in ascending["data"]], [older.name, newer.name])
-
-    def _make_investor(self, portfolio_name):
-        investor = make_investor_user([INVESTOR_ROLE])
-        frappe.get_doc(
-            {
-                "doctype": "User Permission",
-                "user": investor,
-                "allow": "Bond Portfolio",
-                "for_value": portfolio_name,
-                "apply_to_all_doctypes": 1,
-            }
-        ).insert(ignore_permissions=True)
-        return investor

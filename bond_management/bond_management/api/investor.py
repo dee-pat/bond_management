@@ -13,6 +13,7 @@ from bond_management.bond_management.api.investor_reports import (
     get_portfolio_performance_cashflows,
     get_yield_comparison_defaults,
 )
+from bond_management.bond_management.utils.investor_access import is_readable
 from bond_management.bond_management.utils.investor_access import (
     require_readable_portfolio as _require_readable_portfolio,
 )
@@ -311,12 +312,10 @@ def get_bond(name: str) -> dict:
     require_investor_ui_access()
     name = required_string(name, "Bond")
     bond = _fetch_one("Bond Master", BOND_SCALAR_FIELDS, name, _("You are not permitted to read this bond."))
-    bond["principal_schedule"] = _child_rows(
-        "Bond Master", name, "principal_schedule", "Bond Principal Schedule", BOND_PRINCIPAL_FIELDS
+    bond["principal_schedule"] = _checked_child_rows(
+        "Bond Master", name, "principal_schedule", BOND_PRINCIPAL_FIELDS
     )
-    bond["coupon_schedule"] = _child_rows(
-        "Bond Master", name, "coupon_schedule", "Bond Coupon Schedule", BOND_COUPON_FIELDS
-    )
+    bond["coupon_schedule"] = _checked_child_rows("Bond Master", name, "coupon_schedule", BOND_COUPON_FIELDS)
     return set_investor_api_data({"bond": bond})
 
 
@@ -406,22 +405,8 @@ def get_exchange_rate(name: str) -> dict:
     # The row is authorized above. Read private provenance only to apply the
     # linked statement's read boundary before returning this fixed projection.
     statement = frappe.db.get_value("Bond Exchange Rate", name, "statement")
-    exchange_rate.statement = _visible_statement_reference(statement)
+    exchange_rate.statement = statement if statement and is_readable("Bond Statement", statement) else None
     return set_investor_api_data({"exchange_rate": exchange_rate})
-
-
-def _visible_statement_reference(statement: str | None) -> str | None:
-    if not statement:
-        return None
-
-    readable = frappe.qb.get_query(
-        "Bond Statement",
-        fields=["name"],
-        filters={"name": statement},
-        limit=1,
-        ignore_permissions=False,
-    ).run(pluck=True)
-    return statement if readable else None
 
 
 def _fetch_one(doctype: str, fields: tuple[str, ...], name: str, denied_message: str) -> dict:
@@ -436,20 +421,6 @@ def _fetch_one(doctype: str, fields: tuple[str, ...], name: str, denied_message:
     if not rows:
         frappe.throw(denied_message, frappe.PermissionError)
     return rows[0]
-
-
-def _child_rows(
-    parent_doctype: str, parent: str, parentfield: str, child_doctype: str, fields: tuple[str, ...]
-) -> list[dict]:
-    """Return a child table's projection in form order, checked through its parent."""
-    return frappe.qb.get_query(
-        child_doctype,
-        fields=list(fields),
-        filters={"parent": parent, "parenttype": parent_doctype, "parentfield": parentfield},
-        order_by="idx asc",
-        parent_doctype=parent_doctype,
-        ignore_permissions=False,
-    ).run(as_dict=True)
 
 
 def _checked_child_rows(

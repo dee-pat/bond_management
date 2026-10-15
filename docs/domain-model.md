@@ -146,8 +146,12 @@ bootstraps repair incompatible legacy source shares.
 - [Investor API](../bond_management/bond_management/api/investor.py)
 
 The cleanup review preserves all mapped relationships. Investor list and report
-APIs share the same permission-aware portfolio access check; list queries keep
-explicit field projections and filter/sort allowlists. Transaction validation
+APIs and the Desk Portfolio Performance and Interest Difference reports share
+one permission-aware portfolio check (`utils/investor_access.py`), so unknown
+and unreadable portfolios fail identically; list queries keep explicit field
+projections and filter/sort allowlists. Both reports load bond coupon and
+principal schedules through one permission-aware helper in
+`utils/performance.py`. Transaction validation
 reuses one authoritative Bond Master for snapshot and accrued-interest amounts,
 with unchanged coupon/principal factors and Decimal quantization.
 

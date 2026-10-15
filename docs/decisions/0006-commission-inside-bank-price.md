@@ -56,5 +56,5 @@ relative to `bond_management/bond_management/`.
 - What `transaction_amount` (settlement less commission, for either direction)
   is meant to represent is not recorded beyond the field description; no
   calculation in the app reads it.
-- `docs/plans/review-fix-1.md` confirms the blank/N/A-as-zero and
+- [PR #16](https://github.com/dee-pat/bond_management/pull/16) confirms the blank/N/A-as-zero and
   percentage-first parsing rules were kept deliberately but gives no reason.

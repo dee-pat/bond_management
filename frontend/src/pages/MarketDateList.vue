@@ -2,36 +2,21 @@
 import { RouterLink } from "vue-router";
 import { ListCell } from "frappe-ui/list";
 
-import DataList from "../components/DataList.vue";
 import ListFilterBar from "../components/ListFilterBar.vue";
-import ListPagination from "../components/ListPagination.vue";
-import SortableColumn from "../components/SortableColumn.vue";
-import SurfaceState from "../components/SurfaceState.vue";
+import PagedRecordList from "../components/PagedRecordList.vue";
 import { useInvestorApi } from "../lib/api";
 import { usePagedList } from "../lib/list";
 import { formatDate } from "../lib/format";
 import type { MarketDateListRow } from "../types";
 
 const api = useInvestorApi();
-const {
-	rows: marketDates,
-	activeFilter,
-	sortBy,
-	sortOrder,
-	pagination,
-	loading,
-	error,
-	applyFilter,
-	clearFilter,
-	changeSort,
-	loadMore: loadMoreMarketDates,
-	changePageLength,
-	retry: retryMarketDates,
-} = usePagedList<MarketDateListRow>({
+const list = usePagedList<MarketDateListRow>({
 	fetchPage: api.fetchMarketDates,
 	sortBy: "date",
 	errorMessage: "Market dates could not be loaded. Please retry.",
 });
+const { activeFilter, clearFilter } = list;
+const sortColumns = [{ label: "Date", field: "date" }];
 </script>
 
 <template>
@@ -42,66 +27,26 @@ const {
 			@clear-all="clearFilter"
 		/>
 
-		<SurfaceState
-			v-if="loading && marketDates.length === 0"
-			:loading="loading"
+		<PagedRecordList
+			:list="list"
+			:columns="['minmax(12rem,1fr)']"
+			:sort-columns="sortColumns"
+			row-test-id="market-date-row"
 			loading-text="Loading market dates…"
-		/>
-
-		<SurfaceState
-			v-else-if="error && marketDates.length === 0"
-			:error="error"
-			@retry="retryMarketDates"
-		/>
-
-		<div
-			v-else-if="marketDates.length === 0"
-			class="surface-state"
-			data-testid="market-dates-empty"
+			empty-text="No market dates match the selected filters."
+			empty-test-id="market-dates-empty"
+			pagination-label="Market date list pagination"
 		>
-			No market dates match the selected filters.
-		</div>
-
-		<template v-else>
-			<SurfaceState v-if="error" :error="error" @retry="retryMarketDates" />
-
-			<DataList
-				:items="marketDates"
-				:columns="['minmax(12rem,1fr)']"
-				row-key="name"
-				row-test-id="market-date-row"
-			>
-				<template #header>
-					<SortableColumn
-						label="Date"
-						field="date"
-						:sort-by="sortBy"
-						:sort-order="sortOrder"
-						:disabled="loading"
-						@sort="changeSort"
-					/>
-				</template>
-				<template #row="{ item: marketDate }">
-					<ListCell data-label="Date">
-						<RouterLink
-							:to="`/market-dates/${encodeURIComponent(marketDate.name)}`"
-							:aria-label="`View market date ${marketDate.name}`"
-						>
-							{{ formatDate(marketDate.date) }}
-						</RouterLink>
-					</ListCell>
-				</template>
-			</DataList>
-
-			<ListPagination
-				:has-more="pagination.has_more"
-				:item-count="marketDates.length"
-				:loading="loading"
-				:page-length="pagination.page_length"
-				label="Market date list pagination"
-				@change-page-length="changePageLength"
-				@load-more="loadMoreMarketDates"
-			/>
-		</template>
+			<template #row="{ item: marketDate }">
+				<ListCell data-label="Date">
+					<RouterLink
+						:to="`/market-dates/${encodeURIComponent(marketDate.name)}`"
+						:aria-label="`View market date ${marketDate.name}`"
+					>
+						{{ formatDate(marketDate.date) }}
+					</RouterLink>
+				</ListCell>
+			</template>
+		</PagedRecordList>
 	</section>
 </template>

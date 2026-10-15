@@ -78,18 +78,8 @@ failure. After capturing logs and results, drop the temporary site whether the
 run passed or failed. Use a new temporary site for a new complete run. Frappe
 manages each CLI transaction; the helper does not commit independently.
 
-## Acceptance and progress
+## Acceptance
 
-Acceptance requires observed zero exits for formatting/lint, the eight guard
-tests, the shared server gate, and every temporary-site lifecycle command above.
-No browser test is needed because this change adds server verification only.
-The domain model was reviewed: no production relationship or data flow changes.
-The initial helper and five guard tests passed locally on 2026-10-08. The
-current guard suite has eight cases for the temporary-site policy. Fresh
-installation, all 25 then-registered patches on representative legacy data, forced rerun, and
-ordinary skipped rerun each exited 0. All seven manual indexes, permissions,
-financial values, private attachments and FX provenance were verified. The
-shared `pre-push-ui` gate exited 0 with 328 server and 49 browser tests.
-See [cleanup evidence](../plans/review-cleanup.md#completion-evidence) for
-fixture failures, recovery and platform differences. CI automation of this
-opt-in sequence is follow-up work; the current helper is invoked explicitly.
+A run passes when formatting/lint, the guard tests, the shared server gate, and
+every temporary-site lifecycle command above exit zero. CI automation of this
+opt-in sequence is follow-up work; the helper is invoked explicitly.

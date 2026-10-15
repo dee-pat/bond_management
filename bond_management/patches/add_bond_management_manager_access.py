@@ -2,7 +2,9 @@
 
 import frappe
 
-ROLE = "Bond Management Manager"
+from bond_management.patches.access import MANAGER_ROLE, ensure_role, upsert_docperm
+
+ROLE = MANAGER_ROLE
 BOND_DOCTYPES = (
     "Bond Market Date",
     "Bond Master",
@@ -31,38 +33,10 @@ FULL_PERMISSIONS = {
 
 def execute():
     """Create or repair the app role without changing standard Frappe roles."""
-    if not frappe.db.exists("Role", ROLE):
-        frappe.get_doc(
-            {
-                "doctype": "Role",
-                "role_name": ROLE,
-                "desk_access": 1,
-                "is_custom": 1,
-            }
-        ).insert(ignore_permissions=True)
-
+    ensure_role(ROLE)
     for doctype in BOND_DOCTYPES:
-        permissions = {
-            **FULL_PERMISSIONS,
-            "import": int(bool(frappe.get_meta(doctype).allow_import)),
-        }
-        permission_name = frappe.db.get_value(
-            "DocPerm",
-            {"parent": doctype, "role": ROLE, "permlevel": 0},
-            "name",
+        upsert_docperm(
+            doctype,
+            ROLE,
+            {**FULL_PERMISSIONS, "import": int(bool(frappe.get_meta(doctype).allow_import))},
         )
-        if permission_name:
-            frappe.db.set_value("DocPerm", permission_name, permissions, update_modified=False)
-            continue
-
-        frappe.get_doc(
-            {
-                "doctype": "DocPerm",
-                "parent": doctype,
-                "parenttype": "DocType",
-                "parentfield": "permissions",
-                "role": ROLE,
-                "permlevel": 0,
-                **permissions,
-            }
-        ).insert(ignore_permissions=True)

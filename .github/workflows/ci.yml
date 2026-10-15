@@ -78,15 +78,14 @@ jobs:
       - name: Setup
         run: |
           pip install frappe-bench
-          BENCH_ROOT="$RUNNER_TEMP/bond-management-bench-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
-          test ! -e "$BENCH_ROOT"
+          BENCH_ROOT="$RUNNER_TEMP/frappe-bench"
+          echo "BENCH_ROOT=$BENCH_ROOT" >> "$GITHUB_ENV"
           bench init --frappe-branch version-16 --skip-redis-config-generation --skip-assets --python "$(which python)" "$BENCH_ROOT"
           test -f "$BENCH_ROOT/sites/common_site_config.json"
 
       - name: Install
-        working-directory: ${{ runner.temp }}/bond-management-bench-${{ github.run_id }}-${{ github.run_attempt }}
+        working-directory: ${{ env.BENCH_ROOT }}
         run: |
-          test -f sites/common_site_config.json
           bench get-app bond_management "file://$GITHUB_WORKSPACE"
           bench setup requirements --dev
           bench new-site --db-root-password root --admin-password admin bond-management-test.localhost
@@ -96,9 +95,8 @@ jobs:
           CI: "Yes"
 
       - name: Run Tests
-        working-directory: ${{ runner.temp }}/bond-management-bench-${{ github.run_id }}-${{ github.run_attempt }}
-        run: |
-          apps/bond_management/scripts/verify.sh pre-push
+        working-directory: ${{ env.BENCH_ROOT }}
+        run: apps/bond_management/scripts/verify.sh server
 
   ui-tests:
     runs-on: ubuntu-latest
@@ -179,15 +177,14 @@ jobs:
       - name: Setup Bench
         run: |
           pip install frappe-bench
-          BENCH_ROOT="$RUNNER_TEMP/bond-management-playwright-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
-          test ! -e "$BENCH_ROOT"
+          BENCH_ROOT="$RUNNER_TEMP/frappe-bench"
+          echo "BENCH_ROOT=$BENCH_ROOT" >> "$GITHUB_ENV"
           bench init --frappe-branch version-16 --skip-redis-config-generation --skip-assets --python "$(which python)" "$BENCH_ROOT"
           test -f "$BENCH_ROOT/sites/common_site_config.json"
 
       - name: Install App and Build Assets
-        working-directory: ${{ runner.temp }}/bond-management-playwright-${{ github.run_id }}-${{ github.run_attempt }}
+        working-directory: ${{ env.BENCH_ROOT }}
         run: |
-          test -f sites/common_site_config.json
           bench get-app bond_management "file://$GITHUB_WORKSPACE"
           bench setup requirements --dev
           bench new-site --db-root-password root --admin-password admin bond-management-test.localhost
@@ -200,25 +197,25 @@ jobs:
           CI: "Yes"
 
       - name: Prepare browser site before starting the server
-        working-directory: ${{ runner.temp }}/bond-management-playwright-${{ github.run_id }}-${{ github.run_attempt }}
+        working-directory: ${{ env.BENCH_ROOT }}
         run: |
           bench --site bond-management-test.localhost set-admin-password admin
           bench --site bond-management-test.localhost set-config bond_investor_spa_enabled 1
           bench --site bond-management-test.localhost execute bond_management.bond_management.tests.investor_ui_seed.seed_investor_ui_browser_test_data
 
       - name: Install Playwright browser
-        working-directory: ${{ runner.temp }}/bond-management-playwright-${{ github.run_id }}-${{ github.run_attempt }}/apps/bond_management
+        working-directory: ${{ env.BENCH_ROOT }}/apps/bond_management
         run: yarn playwright install --with-deps chromium
 
       - name: Start Web Server
-        working-directory: ${{ runner.temp }}/bond-management-playwright-${{ github.run_id }}-${{ github.run_attempt }}
+        working-directory: ${{ env.BENCH_ROOT }}
         run: |
           echo "127.0.0.1 bond-management-test.localhost" | sudo tee -a /etc/hosts
           nohup bench --site bond-management-test.localhost serve --port 8000 --noreload > "$RUNNER_TEMP/playwright-bench-web.log" 2>&1 &
           curl --noproxy '*' --fail --silent --show-error --retry 30 --retry-connrefused --retry-delay 2 http://bond-management-test.localhost:8000/api/method/ping
 
       - name: Run Playwright
-        working-directory: ${{ runner.temp }}/bond-management-playwright-${{ github.run_id }}-${{ github.run_attempt }}
+        working-directory: ${{ env.BENCH_ROOT }}
         run: apps/bond_management/scripts/verify.sh ui
         env:
           BASE_URL: http://localhost:8000
@@ -233,7 +230,7 @@ jobs:
           name: playwright-failure-artifacts
           if-no-files-found: ignore
           path: |
-            ${{ runner.temp }}/bond-management-playwright-${{ github.run_id }}-${{ github.run_attempt }}/apps/bond_management/playwright-report
-            ${{ runner.temp }}/bond-management-playwright-${{ github.run_id }}-${{ github.run_attempt }}/apps/bond_management/test-results
-            ${{ runner.temp }}/bond-management-playwright-${{ github.run_id }}-${{ github.run_attempt }}/apps/bond_management/blob-report
+            ${{ env.BENCH_ROOT }}/apps/bond_management/playwright-report
+            ${{ env.BENCH_ROOT }}/apps/bond_management/test-results
+            ${{ env.BENCH_ROOT }}/apps/bond_management/blob-report
             ${{ runner.temp }}/playwright-bench-web.log

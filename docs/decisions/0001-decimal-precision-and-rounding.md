@@ -45,5 +45,5 @@ several storage boundaries, and they do not all use the same mode.
 ## Open questions
 
 - Why cash and percentages use half-even while rate storage and repayment days
-  use half-up is not recorded. `docs/plans/pr9-review-fixes.md` confirms the rate
+  use half-up is not recorded. [PR #9](https://github.com/dee-pat/bond_management/pull/9) confirms the rate
   boundary was deliberately kept half-up but gives no reason.

@@ -4,10 +4,9 @@ from unittest.mock import patch
 from frappe.tests import UnitTestCase
 
 from bond_management.bond_management.tests.pdf_factory import make_positioned_text_pdf, make_text_pdf
+from bond_management.bond_management.utils.pdf_common import MAX_PDF_PAGES, MAX_PDF_TEXT_CHARS
 from bond_management.bond_management.utils.transaction_pdf import (
     MAX_POSITIONED_TEXT_FRAGMENTS,
-    MAX_TRANSACTION_PDF_PAGES,
-    MAX_TRANSACTION_PDF_TEXT_CHARS,
     TransactionPdfError,
     TransactionPdfPasswordError,
     _extract_positioned_page_text,
@@ -21,7 +20,7 @@ class TestTransactionPdf(UnitTestCase):
         reader = patch("bond_management.bond_management.utils.pdf_common.PdfReader")
         with reader as pdf_reader:
             pdf_reader.return_value.is_encrypted = False
-            pdf_reader.return_value.pages = [object()] * (MAX_TRANSACTION_PDF_PAGES + 1)
+            pdf_reader.return_value.pages = [object()] * (MAX_PDF_PAGES + 1)
 
             with self.assertRaisesRegex(TransactionPdfError, "cannot contain more than"):
                 extract_transaction_pdf(b"%PDF-", [])
@@ -29,7 +28,7 @@ class TestTransactionPdf(UnitTestCase):
     def test_rejects_transaction_text_above_the_parser_limit(self):
         class LargePage:
             def extract_text(self):
-                return "x" * (MAX_TRANSACTION_PDF_TEXT_CHARS + 1)
+                return "x" * (MAX_PDF_TEXT_CHARS + 1)
 
         reader = patch("bond_management.bond_management.utils.pdf_common.PdfReader")
         with reader as pdf_reader:

@@ -4,6 +4,7 @@ from frappe.tests import IntegrationTestCase
 
 from bond_management.bond_management.api.investor import get_bond, get_bonds
 from bond_management.bond_management.tests.factories import (
+    allow_user,
     as_investor_user,
     make_bond,
     make_investor_user,
@@ -71,15 +72,7 @@ class TestInvestorBonds(IntegrationTestCase):
         readable = make_bond()
         unreadable = make_bond()
         investor = make_investor_user([INVESTOR_ROLE])
-        frappe.get_doc(
-            {
-                "doctype": "User Permission",
-                "user": investor,
-                "allow": "Bond Master",
-                "for_value": readable.name,
-                "apply_to_all_doctypes": 1,
-            }
-        ).insert(ignore_permissions=True)
+        allow_user(investor, "Bond Master", readable.name)
         messages = []
 
         with as_investor_user(investor):

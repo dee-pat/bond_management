@@ -14,6 +14,7 @@ from bond_management.bond_management.report.portfolio_performance.portfolio_perf
     make_total_row,
 )
 from bond_management.bond_management.tests.factories import (
+    make_assigned_investor,
     make_bond,
     make_exchange_rate,
     make_market_date,
@@ -683,18 +684,14 @@ class TestPortfolioPerformance(IntegrationTestCase):
             execute({"valuation_date": "2025-01-01"})
         with self.assertRaisesRegex(frappe.ValidationError, "Valuation Date is required"):
             execute({"portfolio": make_portfolio().name})
-        with self.assertRaisesRegex(frappe.ValidationError, "does not exist"):
-            execute({"portfolio": "NOT-A-PORTFOLIO", "valuation_date": "2025-01-01"})
-
-        portfolio = make_portfolio()
-        with (
-            patch(
-                "bond_management.bond_management.report.portfolio_performance.portfolio_performance.frappe.has_permission",
-                return_value=False,
-            ),
-            self.assertRaises(frappe.PermissionError),
-        ):
-            execute({"portfolio": portfolio.name, "valuation_date": "2025-01-01"})
+        # Unknown and unreadable portfolios fail identically, so the report
+        # cannot be used to probe which portfolio names exist.
+        investor = make_assigned_investor(make_portfolio().name)
+        unreadable = make_portfolio().name
+        with self.set_user(investor):
+            for portfolio in ("NOT-A-PORTFOLIO", unreadable):
+                with self.assertRaisesRegex(frappe.PermissionError, "not permitted to read this portfolio"):
+                    execute({"portfolio": portfolio, "valuation_date": "2025-01-01"})
 
     def test_cashflow_endpoint_rejects_bond_outside_portfolio(self):
         portfolio = make_portfolio()

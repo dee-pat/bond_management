@@ -5,10 +5,9 @@ from unittest.mock import patch
 from frappe.tests import UnitTestCase
 
 from bond_management.bond_management.tests.pdf_factory import make_text_pdf
+from bond_management.bond_management.utils.pdf_common import MAX_PDF_PAGES, MAX_PDF_TEXT_CHARS
 from bond_management.bond_management.utils.statement_attachment import get_versioned_statement_filename
 from bond_management.bond_management.utils.statement_pdf import (
-    MAX_STATEMENT_PDF_PAGES,
-    MAX_STATEMENT_PDF_TEXT_CHARS,
     StatementPdfError,
     StatementPdfPasswordError,
     _get_filename_account_hint,
@@ -45,7 +44,7 @@ class TestStatementPdf(UnitTestCase):
         reader = patch("bond_management.bond_management.utils.pdf_common.PdfReader")
         with reader as pdf_reader:
             pdf_reader.return_value.is_encrypted = False
-            pdf_reader.return_value.pages = [object()] * (MAX_STATEMENT_PDF_PAGES + 1)
+            pdf_reader.return_value.pages = [object()] * (MAX_PDF_PAGES + 1)
 
             with self.assertRaisesRegex(StatementPdfError, "cannot contain more than"):
                 extract_statement_pdf(b"%PDF-", [])
@@ -53,7 +52,7 @@ class TestStatementPdf(UnitTestCase):
     def test_rejects_statement_text_above_the_parser_limit(self):
         class LargePage:
             def extract_text(self):
-                return "x" * (MAX_STATEMENT_PDF_TEXT_CHARS + 1)
+                return "x" * (MAX_PDF_TEXT_CHARS + 1)
 
         reader = patch("bond_management.bond_management.utils.pdf_common.PdfReader")
         with reader as pdf_reader:

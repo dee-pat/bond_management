@@ -4,6 +4,7 @@ from frappe.tests import IntegrationTestCase
 
 from bond_management.bond_management.api.investor import get_market_date, get_market_dates
 from bond_management.bond_management.tests.factories import (
+    allow_user,
     as_investor_user,
     make_bond,
     make_investor_user,
@@ -97,15 +98,7 @@ class TestInvestorMarketDates(IntegrationTestCase):
         market_date = make_market_date(readable)
         make_market_date(restricted, market_date=market_date)
         investor = make_investor_user([INVESTOR_ROLE])
-        frappe.get_doc(
-            {
-                "doctype": "User Permission",
-                "user": investor,
-                "allow": "Bond Master",
-                "for_value": readable.name,
-                "apply_to_all_doctypes": 1,
-            }
-        ).insert(ignore_permissions=True)
+        allow_user(investor, "Bond Master", readable.name)
 
         with as_investor_user(investor):
             response = get_market_date(readable_market_date.name)
@@ -120,15 +113,7 @@ class TestInvestorMarketDates(IntegrationTestCase):
         readable = make_market_date(make_bond())
         unreadable = make_market_date(make_bond())
         investor = make_investor_user([INVESTOR_ROLE])
-        frappe.get_doc(
-            {
-                "doctype": "User Permission",
-                "user": investor,
-                "allow": "Bond Market Date",
-                "for_value": readable.name,
-                "apply_to_all_doctypes": 1,
-            }
-        ).insert(ignore_permissions=True)
+        allow_user(investor, "Bond Market Date", readable.name)
         messages = []
 
         with as_investor_user(investor):

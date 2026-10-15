@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { computed, isRef, onBeforeUnmount, ref, watch } from "vue";
+import { computed, ref } from "vue";
 import { ChartCard, LineChart, paletteColors, useChartTheme } from "frappe-ui/charts";
 import type { ChartTooltipItem, LineChartProps, SeriesStyle } from "frappe-ui/charts";
-import type { ECharts } from "echarts/core";
 
+import { useChartHover } from "../lib/chart";
 import { formatDate, formatNumber, formatPercent } from "../lib/format";
 import type { YieldComparisonRow } from "../report-types";
 
@@ -29,7 +29,6 @@ const chartRoot = ref<HTMLElement>();
 const lineChartRef = ref<{ chart?: unknown } | null>(null);
 const hoveredIsin = ref<string | null>(null);
 const { theme } = useChartTheme(chartRoot);
-let boundChart: ECharts | undefined;
 const dates = computed(() => [...new Set(props.rows.map((row) => row.date))].sort());
 const currencies = computed(() =>
 	[...new Set(props.rows.map((row) => row.currency))].sort((left, right) =>
@@ -130,35 +129,10 @@ const chartProps = computed<LineChartProps>(() => ({
 }));
 const accessibleDescription = computed(() => points.value.map(pointLabel).join("; "));
 
-const chartInstance = computed<ECharts | undefined>(() => {
-	const chart = lineChartRef.value?.chart;
-	return isRef(chart) ? (chart.value as ECharts | undefined) : (chart as ECharts | undefined);
-});
-
 // The shared line chart uses an axis tooltip, which includes every visible
 // series at the current date. Track the hovered ECharts series only to narrow
 // this app's tooltip slot to the bond under the pointer.
-watch(chartInstance, (chart) => {
-	if (boundChart === chart) {
-		return;
-	}
-	if (boundChart) {
-		boundChart.off("mouseover", handleChartMouseOver);
-		boundChart.off("mouseout", clearHoveredIsin);
-	}
-	boundChart = chart;
-	if (boundChart) {
-		boundChart.on("mouseover", handleChartMouseOver);
-		boundChart.on("mouseout", clearHoveredIsin);
-	}
-});
-
-onBeforeUnmount(() => {
-	if (boundChart) {
-		boundChart.off("mouseover", handleChartMouseOver);
-		boundChart.off("mouseout", clearHoveredIsin);
-	}
-});
+useChartHover(lineChartRef, handleChartMouseOver, clearHoveredIsin);
 
 function pointKey(isin: string, date: string): string {
 	return `${isin}\u0000${date}`;
