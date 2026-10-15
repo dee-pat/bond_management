@@ -52,8 +52,9 @@ class SyncSkillsTests(unittest.TestCase):
         self.app = root / "bench" / "apps" / "demo"
         (self.app / "scripts").mkdir(parents=True)
         (self.app / ".agents" / "skills").mkdir(parents=True)
-        source_root = Path(__file__).resolve().parent.parent
-        shutil.copy2(source_root / "scripts" / "sync-skills.sh", self.app / "scripts" / "sync-skills.sh")
+        # The script sits beside this test in both the app and the kit.
+        script = Path(__file__).resolve().parent / "sync-skills.sh"
+        shutil.copy2(script, self.app / "scripts" / "sync-skills.sh")
         (self.app / "skills.lock").write_text(
             f"demo  acme/kit  skills/demo      {self.revision}  evals\n"
             f"rule  acme/kit  rules/shared.md  {self.revision}  AGENTS.md\n"
