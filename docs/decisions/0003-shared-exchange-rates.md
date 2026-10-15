@@ -7,9 +7,9 @@
 
 Statements from different portfolios often report the same currency pair on the
 same date. A rate is market reference data rather than portfolio-owned data
-(`docs/plans/investor-ui-migration-progress.md`, Phase 4d), but each statement
+(investor UI Phase 4d, [PR #3](https://github.com/dee-pat/bond_management/pull/3)), but each statement
 that reported it must stay traceable, and that trace must not leak another
-portfolio's statement (`docs/plans/exchange-rate-provenance-privacy.md`).
+portfolio's statement ([PR #19](https://github.com/dee-pat/bond_management/pull/19)).
 
 ## Decision
 

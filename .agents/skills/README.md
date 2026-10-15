@@ -18,6 +18,3 @@ adaptations in the root or nested `AGENTS.md` files instead.
   `gitHead` (`npm view @playwright/cli@<version> gitHead`).
 - **This app** (`bond-management-debugging`, `bond-management-migration`): edit
   here.
-
-[frappe-agent-kit.md](../../docs/plans/frappe-agent-kit.md) records how the
-shared kit was split out of this app.

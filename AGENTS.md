@@ -175,8 +175,8 @@ indexes, DocPerms and schema changes.
   `bond-management-test.localhost` for automated tests. Both are exclusive to
   this app. Reuse the test site for routine gates; never recreate, drop or
   restore either without approval.
-- Legacy `dev.local`/`test_site` benches, temporary sites and credentials:
-  follow [verification.md](docs/verification.md#sites-and-credentials).
+- Temporary sites and credentials: follow
+  [verification.md](docs/verification.md#sites-and-credentials).
 
 ## Commands
 

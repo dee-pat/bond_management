@@ -39,7 +39,7 @@ Performance, Bond Yield Comparison, and Interest Difference by Portfolio).
   an equivalent permission-scoped path.
 - Exchange rates are shared, but the representative statement link is
   permission level 1 and returned only when the caller can read that statement
-  (`docs/plans/exchange-rate-provenance-privacy.md`).
+  ([PR #19](https://github.com/dee-pat/bond_management/pull/19)).
 
 ## Shares and User Permissions
 
@@ -47,7 +47,8 @@ Performance, Bond Yield Comparison, and Interest Difference by Portfolio).
   `extend_doctype_class`, `doc_events`, and the `clear_user_permissions`
   override.
 - DocShare and User Permission changes stay consistent under concurrency;
-  changes here run the share-race helper in `docs/plans/review-fix-3.md`.
+  changes here run the share-race helper described under _Temporary sites_ in
+  `docs/verification.md`.
 
 ## `ignore_permissions=True`
 

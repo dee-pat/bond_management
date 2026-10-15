@@ -12,9 +12,10 @@ Vite build is served from `/assets/bond_management/frontend/`. The root
   current slice.
 - The SPA calls only `api/investor.py` and `api/investor_reports.py`. It never
   creates, edits, deletes, submits, uploads or parses; that is Desk's job.
-- The `frappe-ui` skill is upstream guidance, not pinned to this app. Before
-  using a component, export or token, check the version in `package.json` and
-  the installed `node_modules/frappe-ui` source. Apply the skill's `SETUP.md` to
+- The `frappe-ui` skill is pinned in `skills.lock` to an upstream frappe-ui
+  commit that may not match the `frappe-ui` version in `package.json`. Before
+  using a component, export or token, check that version and the installed
+  `node_modules/frappe-ui` source. Apply the skill's `SETUP.md` to
   fresh projects only; keep this app's dependency pins and Vite config unless a
   dependency change is requested.
 - Financial values and durable status come from the server. Show pending and
