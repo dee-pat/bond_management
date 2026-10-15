@@ -11,6 +11,7 @@ SEMGREP_VERSION="1.172.0"
 FRAPPE_SEMGREP_RULES_REPOSITORY="https://github.com/frappe/semgrep-rules.git"
 FRAPPE_SEMGREP_RULES_SHA="de085539bc9b4d74eb0a2ac508d21f33495be733"
 FRAPPE_SEMGREP_RULES_CACHE="${BENCH_ROOT}/.cache/frappe-semgrep-rules/${FRAPPE_SEMGREP_RULES_SHA}"
+FRAPPE_SEMGREP_RULES_LOCK_TIMEOUT="${FRAPPE_SEMGREP_RULES_LOCK_TIMEOUT:-120}"
 APP_SEMGREP_RULES_FILE="${APP_ROOT}/semgrep/bond_management.yml"
 APP_SEMGREP_TESTS_FILE="${APP_ROOT}/semgrep/tests/bond_management.py"
 
@@ -66,34 +67,138 @@ semgrep_binary() {
 }
 
 frappe_semgrep_rules_dir() {
-    local rules_dir="${FRAPPE_SEMGREP_RULES_DIR:-${FRAPPE_SEMGREP_RULES_CACHE}}"
-
+    # Callers run this in a command substitution, which does not inherit
+    # errexit, so every step checks its own result.
     if [[ -n "${FRAPPE_SEMGREP_RULES_DIR:-}" ]]; then
-        if [[ ! -d "${rules_dir}/.git" ]]; then
+        if [[ ! -d "${FRAPPE_SEMGREP_RULES_DIR}/.git" ]]; then
             echo "FRAPPE_SEMGREP_RULES_DIR must be a git checkout." >&2
-            exit 1
-        fi
-    elif [[ ! -d "${rules_dir}/.git" ]]; then
-        if [[ -e "${rules_dir}" ]]; then
-            echo "Semgrep rules cache path exists but is not a git checkout: ${rules_dir}" >&2
-            exit 1
+            return 1
         fi
 
-        mkdir -p "$(dirname "${rules_dir}")"
-        git init -q "${rules_dir}"
-        git -C "${rules_dir}" remote add origin "${FRAPPE_SEMGREP_RULES_REPOSITORY}"
-        git -C "${rules_dir}" fetch -q --depth 1 origin "${FRAPPE_SEMGREP_RULES_SHA}"
-        git -C "${rules_dir}" checkout -q --detach "${FRAPPE_SEMGREP_RULES_SHA}"
+        local checked_out_sha
+        checked_out_sha="$(git -C "${FRAPPE_SEMGREP_RULES_DIR}" rev-parse HEAD)" || return 1
+        if [[ "${checked_out_sha}" != "${FRAPPE_SEMGREP_RULES_SHA}" ]]; then
+            echo "Expected Frappe Semgrep rules ${FRAPPE_SEMGREP_RULES_SHA}, found ${checked_out_sha}." >&2
+            return 1
+        fi
+
+        printf '%s\n' "${FRAPPE_SEMGREP_RULES_DIR}"
+        return
     fi
 
-    local checked_out_sha
-    checked_out_sha="$(git -C "${rules_dir}" rev-parse HEAD)"
-    if [[ "${checked_out_sha}" != "${FRAPPE_SEMGREP_RULES_SHA}" ]]; then
-        echo "Expected Frappe Semgrep rules ${FRAPPE_SEMGREP_RULES_SHA}, found ${checked_out_sha}." >&2
-        exit 1
+    local rules_dir="${FRAPPE_SEMGREP_RULES_CACHE}"
+    if ! frappe_semgrep_rules_are_pinned "${rules_dir}"; then
+        publish_frappe_semgrep_rules "${rules_dir}" || return 1
     fi
 
     printf '%s\n' "${rules_dir}"
+}
+
+# Succeeds only for a checkout of the pinned commit with no modified, deleted,
+# untracked or ignored files, so local edits never weaken the gate.
+frappe_semgrep_rules_are_pinned() {
+    local checkout="$1"
+    local changes
+    [[ "$(git -C "${checkout}" rev-parse HEAD 2>/dev/null)" == "${FRAPPE_SEMGREP_RULES_SHA}" ]] &&
+        changes="$(git -C "${checkout}" status --porcelain --untracked-files=all --ignored 2>/dev/null)" &&
+        [[ -z "${changes}" ]]
+}
+
+# Fetches the pinned rules into a staging directory beside the cache entry, so
+# publishing is a rename on one filesystem. Runs from other worktrees share the
+# cache, so the fetch runs outside a lock and publication inside it: the entry
+# is checked again while holding the lock, one another run published meanwhile
+# is kept, and only an invalid entry is ever removed. The kernel releases the
+# lock when its holder exits, so a killed run never leaves it held.
+publish_frappe_semgrep_rules() {
+    local rules_dir="$1"
+    local parent staging lock="${rules_dir}.publish.lock"
+    parent="$(dirname "${rules_dir}")"
+    if ! mkdir -p "${parent}" || ! staging="$(mktemp -d "${parent}/.staging.$$.XXXXXX")"; then
+        echo "Could not stage Frappe Semgrep rules in ${parent}." >&2
+        return 1
+    fi
+
+    if ! git init -q "${staging}" ||
+        ! git -C "${staging}" remote add origin "${FRAPPE_SEMGREP_RULES_REPOSITORY}" ||
+        ! git -C "${staging}" fetch -q --depth 1 origin "${FRAPPE_SEMGREP_RULES_SHA}" ||
+        ! git -C "${staging}" checkout -q --detach FETCH_HEAD ||
+        ! frappe_semgrep_rules_are_pinned "${staging}"; then
+        rm -rf "${staging}"
+        echo "Could not fetch Frappe Semgrep rules at ${FRAPPE_SEMGREP_RULES_SHA}; nothing was cached." >&2
+        return 1
+    fi
+
+    local status=0
+    run_with_file_lock "${lock}" "${FRAPPE_SEMGREP_RULES_LOCK_TIMEOUT}" \
+        env "FRAPPE_SEMGREP_RULES_SHA=${FRAPPE_SEMGREP_RULES_SHA}" "${BASH}" -c "$(
+            declare -f frappe_semgrep_rules_are_pinned \
+                remove_stale_frappe_semgrep_rules_staging replace_frappe_semgrep_rules
+        )
+replace_frappe_semgrep_rules \"\$@\"" replace-frappe-semgrep-rules "${rules_dir}" "${staging}" ||
+        status=$?
+    if ((status != 0)); then
+        rm -rf "${staging}"
+        if ((status == 75)); then
+            echo "Timed out waiting for ${lock}; another lint run is publishing the rules." >&2
+        else
+            echo "Could not cache Frappe Semgrep rules at ${rules_dir}." >&2
+        fi
+        return 1
+    fi
+}
+
+# Runs while holding the publish lock. Keeps a valid entry, including one
+# another run published after this run's fetch, and otherwise replaces the
+# entry with the staged checkout.
+replace_frappe_semgrep_rules() {
+    local rules_dir="$1" staging="$2"
+    remove_stale_frappe_semgrep_rules_staging "$(dirname "${rules_dir}")"
+    if frappe_semgrep_rules_are_pinned "${rules_dir}"; then
+        rm -rf "${staging}"
+        return
+    fi
+    rm -rf "${rules_dir}" && mv "${staging}" "${rules_dir}"
+}
+
+# Runs a command while holding an exclusive flock on a file, or exits 75 when
+# the lock stays held for the timeout in seconds. The command inherits the
+# locked descriptor, and the kernel releases the lock when every holder has
+# exited, however it died. Bash 3.2 on macOS has no flock(1), so this uses
+# python3, which the lint gate already needs.
+run_with_file_lock() {
+    local lock="$1" timeout="$2"
+    shift 2
+    python3 -c '
+import fcntl, os, sys, time
+
+lock, timeout, command = sys.argv[1], float(sys.argv[2]), sys.argv[3:]
+descriptor = os.open(lock, os.O_RDWR | os.O_CREAT, 0o644)
+deadline = time.monotonic() + timeout
+while True:
+    try:
+        fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        break
+    except BlockingIOError:
+        if time.monotonic() >= deadline:
+            sys.exit(75)
+        time.sleep(0.1)
+os.set_inheritable(descriptor, True)
+os.execvp(command[0], command)
+' "${lock}" "${timeout}" "$@"
+}
+
+# Removes staging directories whose owning run has exited. Called while holding
+# the publish lock.
+remove_stale_frappe_semgrep_rules_staging() {
+    local parent="$1" staging owner
+    for staging in "${parent}"/.staging.*; do
+        owner="${staging#"${parent}/.staging."}"
+        owner="${owner%%.*}"
+        if [[ -d "${staging}" && "${owner}" =~ ^[0-9]+$ ]] && ! kill -0 "${owner}" 2>/dev/null; then
+            rm -rf "${staging}"
+        fi
+    done
 }
 
 run_semgrep() {
@@ -154,9 +259,13 @@ run_lint() {
     "${APP_ROOT}/scripts/sync-skills.sh" check
     python3 "${APP_ROOT}/scripts/test_sync_skills.py"
     run_semgrep
+
+    local binary rules_dir
+    binary="$(semgrep_binary)"
+    rules_dir="$(frappe_semgrep_rules_dir)"
     python3 "${APP_ROOT}/scripts/test_verify_semgrep.py" \
-        --semgrep "$(semgrep_binary)" \
-        --frappe-rules "$(frappe_semgrep_rules_dir)"
+        --semgrep "${binary}" \
+        --frappe-rules "${rules_dir}"
 }
 
 run_server_tests() {
