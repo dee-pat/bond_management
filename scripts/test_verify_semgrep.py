@@ -3,6 +3,7 @@
 import argparse
 import os
 import shutil
+import signal
 import subprocess
 import tempfile
 import unittest
@@ -207,6 +208,42 @@ class FrappeRulesCacheTests(unittest.TestCase):
         self.assert_cache_is_pinned()
         self.assert_no_staging_left()
 
+    def test_lock_left_by_a_killed_run_is_recovered(self):
+        # A git wrapper kills this run's process group, as Ctrl-C or a cancelled
+        # CI job would, once it holds the publish lock. The next run must not
+        # wait for that lock and must remove the killed run's staging copy.
+        wrapper_root = self.root / "bin"
+        wrapper_root.mkdir()
+        wrapper = wrapper_root / "git"
+        wrapper.write_text(
+            "#!/usr/bin/env bash\n"
+            'if [[ -d "${PUBLISH_CACHE}.lock" ]]; then\n'
+            "    kill -KILL 0\n"
+            "fi\n"
+            'exec "${REAL_GIT}" "$@"\n',
+            encoding="utf-8",
+        )
+        wrapper.chmod(0o755)
+
+        killed = self.resolve(
+            self.reachable_remote(),
+            {
+                "PATH": f"{wrapper_root}{os.pathsep}{os.environ['PATH']}",
+                "REAL_GIT": shutil.which("git"),
+                "PUBLISH_CACHE": str(self.cache),
+            },
+            start_new_session=True,
+        )
+        self.assertEqual(killed.returncode, -signal.SIGKILL, killed.stdout)
+        leftovers = sorted(p.name for p in self.cache.parent.iterdir())
+        self.assertEqual(len(leftovers), 2, leftovers)
+        self.assertEqual(leftovers[1], f"{self.cache.name}.lock")
+
+        result = self.resolve(self.reachable_remote(), {"FRAPPE_SEMGREP_RULES_LOCK_TIMEOUT": "0"})
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assert_cache_is_pinned()
+        self.assert_no_staging_left()
+
     def test_held_lock_times_out_without_publishing(self):
         self.cache.parent.mkdir(parents=True)
         lock = self.cache.parent / f"{self.cache.name}.lock"
@@ -218,7 +255,7 @@ class FrappeRulesCacheTests(unittest.TestCase):
         lock.rmdir()
         self.assert_no_staging_left()
 
-    def resolve(self, repository, extra_environment=None):
+    def resolve(self, repository, extra_environment=None, start_new_session=False):
         script = (
             'source "$1"; '
             'FRAPPE_SEMGREP_RULES_REPOSITORY="$2"; '
@@ -249,6 +286,7 @@ class FrappeRulesCacheTests(unittest.TestCase):
             text=True,
             timeout=60,
             check=False,
+            start_new_session=start_new_session,
         )
 
     def reachable_remote(self):

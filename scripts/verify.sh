@@ -108,12 +108,14 @@ frappe_semgrep_rules_are_pinned() {
 # publishing is a rename on one filesystem. Runs from other worktrees share the
 # cache, so the fetch runs outside a lock and publication inside it: the entry
 # is checked again while holding the lock, one another run published meanwhile
-# is kept, and only an invalid entry is ever removed.
+# is kept, and only an invalid entry is ever removed. The lock and staging
+# directories name their owning process, so those left by a killed run are
+# recovered rather than blocking every later run.
 publish_frappe_semgrep_rules() {
     local rules_dir="$1"
     local parent staging lock="${rules_dir}.lock"
     parent="$(dirname "${rules_dir}")"
-    if ! mkdir -p "${parent}" || ! staging="$(mktemp -d "${parent}/.staging.XXXXXX")"; then
+    if ! mkdir -p "${parent}" || ! staging="$(mktemp -d "${parent}/.staging.$$.XXXXXX")"; then
         echo "Could not stage Frappe Semgrep rules in ${parent}." >&2
         return 1
     fi
@@ -130,6 +132,9 @@ publish_frappe_semgrep_rules() {
 
     local waited=0
     until mkdir "${lock}" 2>/dev/null; do
+        if remove_stale_frappe_semgrep_rules_lock "${lock}"; then
+            continue
+        fi
         if ((waited >= FRAPPE_SEMGREP_RULES_LOCK_TIMEOUT * 10)); then
             rm -rf "${staging}"
             echo "Timed out waiting for ${lock}; remove it if no lint run is active." >&2
@@ -138,16 +143,46 @@ publish_frappe_semgrep_rules() {
         sleep 0.1
         waited=$((waited + 1))
     done
+    printf '%s\n' "$$" >"${lock}/owner"
+    remove_stale_frappe_semgrep_rules_staging "${parent}"
     if ! frappe_semgrep_rules_are_pinned "${rules_dir}"; then
         if ! rm -rf "${rules_dir}" || ! mv "${staging}" "${rules_dir}"; then
-            rm -rf "${staging}"
-            rmdir "${lock}"
+            rm -rf "${staging}" "${lock}"
             echo "Could not cache Frappe Semgrep rules at ${rules_dir}." >&2
             return 1
         fi
     fi
-    rm -rf "${staging}"
-    rmdir "${lock}"
+    rm -rf "${staging}" "${lock}"
+}
+
+# Removes a publish lock whose owner has exited, for example after Ctrl-C or a
+# cancelled CI job. Breakers serialize on a guard directory and read the owner
+# again while holding it, so a lock another run took meanwhile is never
+# removed. A lock with no owner yet is treated as held.
+remove_stale_frappe_semgrep_rules_lock() {
+    local lock="$1" owner removed=1
+    owner="$(cat "${lock}/owner" 2>/dev/null)" || return 1
+    if [[ -z "${owner}" ]] || kill -0 "${owner}" 2>/dev/null || ! mkdir "${lock}.break" 2>/dev/null; then
+        return 1
+    fi
+    if [[ "$(cat "${lock}/owner" 2>/dev/null)" == "${owner}" ]] && rm -rf "${lock}"; then
+        removed=0
+    fi
+    rmdir "${lock}.break"
+    return "${removed}"
+}
+
+# Removes staging directories whose owning run has exited. Called while holding
+# the publish lock.
+remove_stale_frappe_semgrep_rules_staging() {
+    local parent="$1" staging owner
+    for staging in "${parent}"/.staging.*; do
+        owner="${staging#"${parent}/.staging."}"
+        owner="${owner%%.*}"
+        if [[ -d "${staging}" && "${owner}" =~ ^[0-9]+$ ]] && ! kill -0 "${owner}" 2>/dev/null; then
+            rm -rf "${staging}"
+        fi
+    done
 }
 
 run_semgrep() {
