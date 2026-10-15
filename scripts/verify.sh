@@ -66,31 +66,47 @@ semgrep_binary() {
 }
 
 frappe_semgrep_rules_dir() {
-    local rules_dir="${FRAPPE_SEMGREP_RULES_DIR:-${FRAPPE_SEMGREP_RULES_CACHE}}"
-
+    # Callers run this in a command substitution, which does not inherit
+    # errexit, so every step checks its own result. A cache entry is published
+    # only after it is verified at the pinned revision, and a broken entry left
+    # by an older run is replaced.
     if [[ -n "${FRAPPE_SEMGREP_RULES_DIR:-}" ]]; then
-        if [[ ! -d "${rules_dir}/.git" ]]; then
+        if [[ ! -d "${FRAPPE_SEMGREP_RULES_DIR}/.git" ]]; then
             echo "FRAPPE_SEMGREP_RULES_DIR must be a git checkout." >&2
-            exit 1
-        fi
-    elif [[ ! -d "${rules_dir}/.git" ]]; then
-        if [[ -e "${rules_dir}" ]]; then
-            echo "Semgrep rules cache path exists but is not a git checkout: ${rules_dir}" >&2
-            exit 1
+            return 1
         fi
 
-        mkdir -p "$(dirname "${rules_dir}")"
-        git init -q "${rules_dir}"
-        git -C "${rules_dir}" remote add origin "${FRAPPE_SEMGREP_RULES_REPOSITORY}"
-        git -C "${rules_dir}" fetch -q --depth 1 origin "${FRAPPE_SEMGREP_RULES_SHA}"
-        git -C "${rules_dir}" checkout -q --detach "${FRAPPE_SEMGREP_RULES_SHA}"
+        local checked_out_sha
+        checked_out_sha="$(git -C "${FRAPPE_SEMGREP_RULES_DIR}" rev-parse HEAD)" || return 1
+        if [[ "${checked_out_sha}" != "${FRAPPE_SEMGREP_RULES_SHA}" ]]; then
+            echo "Expected Frappe Semgrep rules ${FRAPPE_SEMGREP_RULES_SHA}, found ${checked_out_sha}." >&2
+            return 1
+        fi
+
+        printf '%s\n' "${FRAPPE_SEMGREP_RULES_DIR}"
+        return
     fi
 
-    local checked_out_sha
-    checked_out_sha="$(git -C "${rules_dir}" rev-parse HEAD)"
-    if [[ "${checked_out_sha}" != "${FRAPPE_SEMGREP_RULES_SHA}" ]]; then
-        echo "Expected Frappe Semgrep rules ${FRAPPE_SEMGREP_RULES_SHA}, found ${checked_out_sha}." >&2
-        exit 1
+    local rules_dir="${FRAPPE_SEMGREP_RULES_CACHE}"
+    if [[ "$(git -C "${rules_dir}" rev-parse HEAD 2>/dev/null)" != "${FRAPPE_SEMGREP_RULES_SHA}" ]]; then
+        local staging
+        staging="$(mktemp -d "${TMPDIR:-/tmp}/frappe-semgrep-rules.XXXXXX")" || return 1
+        if ! git init -q "${staging}" ||
+            ! git -C "${staging}" remote add origin "${FRAPPE_SEMGREP_RULES_REPOSITORY}" ||
+            ! git -C "${staging}" fetch -q --depth 1 origin "${FRAPPE_SEMGREP_RULES_SHA}" ||
+            ! git -C "${staging}" checkout -q --detach FETCH_HEAD ||
+            [[ "$(git -C "${staging}" rev-parse HEAD)" != "${FRAPPE_SEMGREP_RULES_SHA}" ]]; then
+            rm -rf "${staging}"
+            echo "Could not fetch Frappe Semgrep rules at ${FRAPPE_SEMGREP_RULES_SHA}; nothing was cached." >&2
+            return 1
+        fi
+        if ! mkdir -p "$(dirname "${rules_dir}")" ||
+            ! rm -rf "${rules_dir}" ||
+            ! mv "${staging}" "${rules_dir}"; then
+            rm -rf "${staging}"
+            echo "Could not cache Frappe Semgrep rules at ${rules_dir}." >&2
+            return 1
+        fi
     fi
 
     printf '%s\n' "${rules_dir}"
@@ -152,9 +168,13 @@ run_lint() {
     cd "${APP_ROOT}"
     run_pre_commit
     run_semgrep
+
+    local binary rules_dir
+    binary="$(semgrep_binary)"
+    rules_dir="$(frappe_semgrep_rules_dir)"
     python3 "${APP_ROOT}/scripts/test_verify_semgrep.py" \
-        --semgrep "$(semgrep_binary)" \
-        --frappe-rules "$(frappe_semgrep_rules_dir)"
+        --semgrep "${binary}" \
+        --frappe-rules "${rules_dir}"
 }
 
 run_server_tests() {

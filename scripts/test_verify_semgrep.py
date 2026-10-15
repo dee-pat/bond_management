@@ -73,6 +73,108 @@ class SemgrepGateTests(unittest.TestCase):
         )
 
 
+class FrappeRulesCacheTests(unittest.TestCase):
+    def setUp(self):
+        temporary_directory = tempfile.TemporaryDirectory(prefix="bond-semgrep-cache-")
+        self.addCleanup(temporary_directory.cleanup)
+        self.root = Path(temporary_directory.name)
+        self.staging_root = self.root / "tmp"
+        self.staging_root.mkdir()
+        self.cache = self.root / "cache" / "rules"
+        self.remote = self.root / "remote"
+        self.remote_sha = self.create_remote(self.remote)
+        self.verify_script = Path(__file__).resolve().parent / "verify.sh"
+
+    def test_unreachable_remote_leaves_no_cache_entry(self):
+        result = self.resolve(f"file://{self.root / 'missing'}")
+        self.assertNotEqual(result.returncode, 0, result.stdout)
+        self.assertFalse(self.cache.exists())
+        self.assertIn("nothing was cached", result.stdout)
+        self.assertEqual(list(self.staging_root.iterdir()), [])
+
+    def test_fetch_populates_cache_at_pinned_revision(self):
+        result = self.resolve(f"file://{self.remote}")
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertEqual(result.stdout.strip(), str(self.cache))
+        self.assertEqual(self.head(self.cache), self.remote_sha)
+        self.assertEqual(list(self.staging_root.iterdir()), [])
+
+    def test_unborn_cache_entry_is_replaced(self):
+        self.git("init", "-q", str(self.cache))
+        result = self.resolve(f"file://{self.remote}")
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertEqual(self.head(self.cache), self.remote_sha)
+
+    def test_failed_repair_cleans_up_staging(self):
+        self.git("init", "-q", str(self.cache))
+        result = self.resolve(f"file://{self.root / 'missing'}")
+        self.assertNotEqual(result.returncode, 0, result.stdout)
+        self.assertEqual(list(self.staging_root.iterdir()), [])
+
+    def resolve(self, repository):
+        script = (
+            'source "$1"; '
+            'FRAPPE_SEMGREP_RULES_REPOSITORY="$2"; '
+            'FRAPPE_SEMGREP_RULES_SHA="$3"; '
+            'FRAPPE_SEMGREP_RULES_CACHE="$4"; '
+            'rules_dir="$(frappe_semgrep_rules_dir)"; '
+            'printf "%s\\n" "${rules_dir}"'
+        )
+        environment = {
+            key: value for key, value in os.environ.items() if key != "FRAPPE_SEMGREP_RULES_DIR"
+        } | {"TMPDIR": str(self.staging_root)}
+        return subprocess.run(
+            [
+                "bash",
+                "-c",
+                script,
+                "semgrep-rules-cache-test",
+                str(self.verify_script),
+                repository,
+                self.remote_sha,
+                str(self.cache),
+            ],
+            env=environment,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            timeout=60,
+            check=False,
+        )
+
+    def create_remote(self, path):
+        self.git("init", "-q", str(path))
+        (path / "rules").mkdir()
+        (path / "rules" / "rule.yml").write_text("rules: []\n", encoding="utf-8")
+        self.git("-C", str(path), "add", "rules")
+        self.git(
+            "-C",
+            str(path),
+            "-c",
+            "user.name=Semgrep Cache Test",
+            "-c",
+            "user.email=semgrep-cache-test@example.invalid",
+            "-c",
+            "commit.gpgsign=false",
+            "commit",
+            "-q",
+            "-m",
+            "rules",
+        )
+        return self.head(path)
+
+    def head(self, path):
+        return self.git("-C", str(path), "rev-parse", "HEAD").stdout.strip()
+
+    def git(self, *arguments):
+        return subprocess.run(
+            ["git", *arguments],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--semgrep", required=True)
