@@ -56,10 +56,11 @@ differences in the final field.
   changes need lint plus the focused Playwright spec, with the full UI suite
   when they change a shared runtime or critical user journey.
 - From the bench directory, run
-  `apps/bond_management/scripts/verify.sh pre-push`. This shared gate runs
-  pre-commit, migrates `bond-management-test.localhost`, and runs the complete
-  server suite. GitHub Actions must call the same script so local and CI
-  commands cannot drift.
+  `apps/bond_management/scripts/verify.sh pre-push`. This local combined gate
+  runs the `lint` stage (pre-commit and the other lint checks), migrates
+  `bond-management-test.localhost`, and runs the complete server suite. GitHub
+  Actions runs the same script's stages separately (`lint` in the Linters
+  workflow, `server` and `ui` in CI) so local and CI commands cannot drift.
 - Changes to JavaScript, reports, DocType metadata, permissions, workspaces, or
   other Desk behavior must run
   `apps/bond_management/scripts/verify.sh pre-push-ui`. It includes the

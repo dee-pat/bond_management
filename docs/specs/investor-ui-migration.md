@@ -339,9 +339,10 @@ Every implementation slice records the evidence required by `AGENTS.md`. At mini
 - `apps/bond_management/scripts/verify.sh pre-push-ui` for UI, metadata, hooks or shared runtime changes;
 - fresh-site verification for dependencies, hooks, installation, build or CI changes.
 
-The shared verification script keeps `pre-push-ui` as the complete local server,
-frontend, and browser gate. CI runs `pre-push` once in the server job and `ui` in
-one separate Playwright job against its own run-scoped fresh site.
+The shared verification script keeps `pre-push` and `pre-push-ui` as the
+combined local gates. CI runs their stages separately: `lint` in the Linters
+workflow, `server` in the Server job, and `ui` in a separate Playwright job, each
+against its own fresh site where a site is needed.
 
 ## Rollback
 
