@@ -132,7 +132,7 @@ This file covers what the code cannot tell you. Nested `AGENTS.md` files in
 - Attachment parsers cover current, supported legacy, malformed, conflicting,
   encrypted, wrong-password and non-PDF cases.
 
-<!-- BEGIN synced-rules: dee-pat/frappe-agent-kit/rules/frappe.md@57cb2573b7948a98a3d20e224e11ca03892c0388 -->
+<!-- BEGIN synced-rules: dee-pat/frappe-agent-kit/rules/frappe.md@878736b4aabd832796f80245f82747ebe89c417a -->
 ## Shared Frappe rules
 
 Frappe v16 rules shared across apps; the app's own rules win on conflict. Use
@@ -143,8 +143,12 @@ indexes, DocPerms and schema changes.
 - Use v16 APIs and supported hooks; never monkey-patch core.
 - User-facing multi-record reads use `frappe.qb.get_query` with
   `ignore_permissions=False`. Use `ignore_permissions=True` only in reports,
-  migrations and admin invariant checks whose caller's permission is verified
-  separately and documented.
+  migrations, admin invariant checks whose caller's permission is verified
+  separately and documented, permission-boundary internals that establish the
+  boundary rather than sit behind it (for example, reads of role or
+  user-permission rows the caller cannot see), and deterministic test or seed
+  setup. Each use names the check or boundary it relies on in a comment, and an
+  externally invocable helper still needs an administrative boundary.
 - At every whitelisted boundary, check runtime types with `isinstance` before
   any read, existence or permission check; reject lists and dicts where a string
   is expected.
@@ -195,11 +199,12 @@ bench --site bond-management-test.localhost run-tests --doctype "Bond Transactio
 - Before reviewing a PR, commit, or uncommitted diff, read the
   [review output contract](docs/code-review.md#review-output-contract). Include
   a merge-readiness score from **0/5 to 5/5**, revision and verification
-  evidence, 5-hour usage when measurable, and ready-to-copy Codex and Claude
-  Code fix prompts populated with the actionable findings. For GitHub PR
-  reviews, publish the summary on the PR when posting is authorized; a
-  chat-only summary is insufficient. Follow the contract's companion-comment
-  procedure when the native review restricts the output format.
+  evidence, 5-hour usage when measurable, and one ready-to-copy fix prompt,
+  usable in Codex and Claude Code alike, populated with the actionable
+  findings. For GitHub PR reviews, publish the summary on the PR when posting
+  is authorized; a chat-only summary is insufficient. Follow the contract's
+  companion-comment procedure when the native review restricts the output
+  format.
 - Review changed APIs, controllers, metadata, hooks, reports and Desk/SPA
   projections together against the rules above.
 - For a diff touching an entry point, permission scope, shares, attachments,

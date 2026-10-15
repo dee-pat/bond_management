@@ -149,24 +149,25 @@ List actionable findings in priority order. Give each a review-local ID (`F1`,
 `F2`, and so on), priority, file and tight line range, concrete trigger, affected
 user or data, and evidence connecting the changed code to the impact. Include
 the intended correction and a meaningful regression check. Keep questions and
-optional suggestions separate from findings and fix prompts.
+optional suggestions separate from findings and the fix prompt.
 
-### Ready-to-copy fix prompts
+### Ready-to-copy fix prompt
 
-When actionable findings exist, end the summary with separate fenced text
-blocks labeled **Codex fix prompt** and **Claude Code fix prompt**. Generate one
-consolidated prompt per agent covering all findings, ordered by priority and
-dependencies. Populate the template below with the actual repository/PR,
-reviewed revision, finding IDs, locations, triggers, impacts, suggested fixes,
-and regression checks. Replace `[guidance]` with `applicable AGENTS.md files`
-for Codex or `CLAUDE.md and applicable parent/directory guidance` for Claude
-Code. Include the complete finding details in both prompts so each works in a
-fresh chat without the review transcript. Leave no placeholders in the
-generated prompts and include no credentials or private financial data.
+When actionable findings exist, end the summary with one fenced text block
+labeled **Fix prompt**, covering all findings in priority and dependency order.
+The same prompt must work unchanged in a fresh Codex or Claude Code chat. Both
+agents follow the same guidance, because every `CLAUDE.md` in this repository
+is a symlink to the `AGENTS.md` beside it, so the prompt names repository files
+and steps only, never one agent's tools, commands or skills. Populate the template below with
+the actual repository/PR, reviewed revision, finding IDs, locations, triggers,
+impacts, suggested fixes, and regression checks. Include the complete finding
+details so the prompt works without the review transcript. Leave no
+placeholders and include no credentials or private financial data.
 
 ```text
 In [repository/PR], resolve findings [IDs] from the review of [revision and base/scope].
-Read [guidance] and docs/verification.md first.
+Read AGENTS.md, the AGENTS.md of each directory you change, and
+docs/verification.md first.
 Check the current revision and independently verify each finding against the
 affected callers and data flows. Implement the smallest complete root-cause fixes
 in priority/dependency order, preserving unrelated changes and existing financial,
@@ -182,7 +183,7 @@ Findings:
 [Full details for every actionable finding, including priority, intended correction, and regression check.]
 ```
 
-When no actionable findings exist, state `No actionable findings; no fix prompts
+When no actionable findings exist, state `No actionable findings; no fix prompt
 needed.` Report outstanding verification separately instead of inventing fixes.
 
 ### Publish GitHub review summaries
@@ -190,8 +191,8 @@ needed.` Report outstanding verification separately instead of inventing fixes.
 For a GitHub PR review, publish the summary as a PR conversation comment when
 the user has authorized posting. The comment must contain the score and rationale,
 reviewed head/base revisions, verification evidence, 5-hour usage or its
-unavailability reason, and both populated fix prompts when actionable findings
-exist. With no findings, explicitly state that no fix prompts are needed.
+unavailability reason, and the populated fix prompt when actionable findings
+exist. With no findings, explicitly state that no fix prompt is needed.
 Identify the summary's author/source; a coordinating agent's score is its own
 assessment, not a score supplied by the native reviewer. Link to the native
 review when one exists and state its reviewed revision and scope.
