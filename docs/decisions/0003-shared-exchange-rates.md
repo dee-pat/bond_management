@@ -20,7 +20,8 @@ portfolio's statement (`docs/plans/exchange-rate-provenance-privacy.md`).
   share the canonical row.
 - A conflicting value fails the whole statement save. That covers a conflict
   within one PDF, with another statement's source, or with a manual fallback
-  rate.
+  rate. Rows within one PDF conflict on any difference in their raw values;
+  the other comparisons use the storage boundary above.
 - Investors read rate history without a portfolio assignment, but the
   representative statement link is permission level 1 and is returned only when
   the caller can read that statement.

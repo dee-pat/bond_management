@@ -22,8 +22,12 @@ several storage boundaries, and they do not all use the same mode.
   (`quantize_money`).
 - Calculated percentages quantize to 9 decimal places, half-even
   (`quantize_percent`).
-- Exchange rates compare at the 12-place, half-up storage boundary of the rate
-  fields (`utils/statement_exchange_rates.py:_stored_rate`); see
+- Exchange rates from different sources (a statement against a canonical row,
+  another statement's source, or a manual fallback) compare at the 12-place,
+  half-up storage boundary of the rate fields
+  (`utils/statement_exchange_rates.py:_stored_rate`). Repeated rows for a pair
+  within one PDF must match exactly before rounding
+  (`utils/statement_pdf.py:parse_statement_exchange_rates`). See
   [0003](0003-shared-exchange-rates.md).
 - Weighted repayment days round to whole days, half-up (`utils/accrual.py`).
 
