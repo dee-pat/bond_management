@@ -25,19 +25,23 @@ pull requests that delivered each slice.
 | Phase | Slice                                | Status                                 |
 | ----- | ------------------------------------ | -------------------------------------- |
 | 0     | Decision record and baseline         | Complete                               |
-| 1     | Compatibility and toolchain          | Verified locally; CI follow-up pending |
+| 1     | Compatibility and toolchain          | Complete                               |
 | 2     | Coexistence shell                    | Complete                               |
 | 3     | Transaction tracer bullet            | Complete                               |
 | 4     | Remaining read-only records          | Complete                               |
 | 5     | Reports                              | Complete                               |
 | 6     | Parity and hardening                 | Complete                               |
-| 6a    | Desk-aligned investor presentation   | Verified locally; CI follow-up pending |
+| 6a    | Desk-aligned investor presentation   | Complete                               |
 | 7     | Pilot                                | In progress                            |
 | 8     | Cutover                              | Pending                                |
 | 9     | Legacy investor workspace retirement | Pending                                |
 
-Phases 1 and 6a still need a CI-shaped fresh-site install and build observed
-for their slice.
+Phases 1 and 6a closed on 2026-10-15 with GitHub Actions
+[CI run 38785330040](https://github.com/dee-pat/bond_management/actions/runs/38785330040)
+on `69271da`: both jobs ran a fresh `bench new-site`, `install-app` and
+`bench build` on Ubuntu with MariaDB 11.8; the server job passed the full
+server suite, and the Playwright job passed 56 tests across the
+`investor-desktop`, `investor-mobile` and `desk` projects.
 
 ## In progress: Phase 7 — Pilot
 
