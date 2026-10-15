@@ -1,7 +1,6 @@
 # Copyright (c) 2026, Deepak Patel and contributors
 # For license information, please see license.txt
 
-from datetime import date as Date
 from datetime import timedelta
 from decimal import ROUND_HALF_UP, Decimal
 
@@ -19,7 +18,9 @@ from bond_management.bond_management.utils.coupon_schedule import (
     year_fraction,
 )
 from bond_management.bond_management.utils.financial import to_decimal
-from bond_management.bond_management.utils.validation import optional_string, required_string
+from bond_management.bond_management.utils.investor_access import require_readable_portfolio
+from bond_management.bond_management.utils.performance import attach_bond_schedules
+from bond_management.bond_management.utils.validation import date_range_filter, optional_date, required_string
 
 
 def execute(filters: dict | None = None):
@@ -34,28 +35,21 @@ def validate_filters(filters: dict | None) -> dict:
     if not isinstance(filters, dict):
         frappe.throw(_("Report filters must be an object"))
 
-    from_date = parse_date_filter(filters.get("from_date"), "From Date")
-    to_date = parse_date_filter(filters.get("to_date"), "To Date")
+    from_date = optional_date(filters.get("from_date"), "From Date")
+    to_date = optional_date(filters.get("to_date"), "To Date")
     if from_date and to_date and from_date > to_date:
         frappe.throw(_("From Date must be on or before To Date"))
 
     portfolio_name = required_string(filters.get("portfolio_name"), "Portfolio")
-    frappe.has_permission("Bond Portfolio", "read", doc=portfolio_name, throw=True)
-    if not frappe.db.exists("Bond Portfolio", portfolio_name):
-        frappe.throw(_("Portfolio does not exist"))
+    require_readable_portfolio(portfolio_name)
 
     return {"from_date": from_date, "to_date": to_date, "portfolio_name": portfolio_name}
 
 
 def get_data(filters: dict) -> list[dict]:
-    query_filters = {}
-    if filters["from_date"] and filters["to_date"]:
-        query_filters["settlement_date"] = ["between", [filters["from_date"], filters["to_date"]]]
-    elif filters["from_date"]:
-        query_filters["settlement_date"] = [">=", filters["from_date"]]
-    elif filters["to_date"]:
-        query_filters["settlement_date"] = ["<=", filters["to_date"]]
-    query_filters["portfolio_name"] = filters["portfolio_name"]
+    query_filters = {"portfolio_name": filters["portfolio_name"]}
+    if settlement_dates := date_range_filter(filters["from_date"], filters["to_date"]):
+        query_filters["settlement_date"] = settlement_dates
 
     rows = frappe.qb.get_query(
         "Bond Transaction",
@@ -79,8 +73,8 @@ def get_data(filters: dict) -> list[dict]:
         ignore_permissions=False,
     ).run(as_dict=True)
     for row in rows:
-        calculated = Decimal(str(row.accrued_interest_calculated or 0))
-        charged = Decimal(str(row.accrued_interest_paid or 0))
+        calculated = to_decimal(row.accrued_interest_calculated)
+        charged = to_decimal(row.accrued_interest_paid)
         row["accrued_interest_calculated"] = calculated
         row["accrued_interest_paid"] = charged
         row["interest_difference"] = (
@@ -103,42 +97,8 @@ def load_bond_schedules(rows: list[dict]) -> dict[str, dict]:
         filters={"name": ["in", isins]},
         ignore_permissions=False,
     ).run(as_dict=True)
-    schedules = {
-        bond.name: {"currency": bond.currency, "coupon_schedule": [], "principal_schedule": []}
-        for bond in bonds
-    }
-    readable_isins = list(schedules)
-    for doctype, fieldname, fields, order_by in (
-        (
-            "Bond Coupon Schedule",
-            "coupon_schedule",
-            ["parent", "coupon_date", "period_start", "period_end"],
-            "coupon_date asc",
-        ),
-        (
-            "Bond Principal Schedule",
-            "principal_schedule",
-            ["parent", "repayment_date", "principal_units", "repayment_percent"],
-            "repayment_date asc",
-        ),
-    ):
-        if not readable_isins:
-            break
-        schedule_rows = frappe.qb.get_query(
-            doctype,
-            fields=fields,
-            filters={
-                "parent": ["in", readable_isins],
-                "parenttype": "Bond Master",
-                "parentfield": fieldname,
-            },
-            order_by=order_by,
-            parent_doctype="Bond Master",
-            ignore_permissions=False,
-        ).run(as_dict=True)
-        for row in schedule_rows:
-            schedules[row.parent][fieldname].append(row)
-
+    schedules = {bond.name: bond for bond in bonds}
+    attach_bond_schedules(schedules)
     return schedules
 
 
@@ -164,7 +124,10 @@ def calculate_interest_difference_days(row: dict, schedules: dict | None) -> Dec
     coupon_rate = to_decimal(row.coupon_rate)
     quantity = to_decimal(row.quantity_face_value)
     convention = row.day_count_convention
-    if is_kenya_day_count_convention(convention):
+    is_kenya = is_kenya_day_count_convention(convention)
+    if convention == "30E/360" and not is_kenya:
+        daily_fraction = Decimal(1) / Decimal(360)
+    else:
         daily_fraction = year_fraction(
             convention,
             settlement_date - timedelta(days=1),
@@ -172,24 +135,9 @@ def calculate_interest_difference_days(row: dict, schedules: dict | None) -> Dec
             row.coupon_frequency,
             reference_end_date=period.coupon_date,
         )
-        principal_factor = calculate_principal_factor_from_bond(bond, settlement_date)
-        daily_per_unit = coupon_rate / Decimal(100) * face_value * daily_fraction * principal_factor
-        quantity_factor = calculate_quantity_factor_from_bond(bond, settlement_date)
-    else:
-        daily_fraction = (
-            Decimal(1) / Decimal(360)
-            if convention == "30E/360"
-            else year_fraction(
-                convention,
-                settlement_date - timedelta(days=1),
-                settlement_date,
-                row.coupon_frequency,
-                reference_end_date=period.coupon_date,
-            )
-        )
-        principal_factor = calculate_principal_factor_from_bond(bond, settlement_date)
-        daily_per_unit = coupon_rate / Decimal(100) * face_value * daily_fraction * principal_factor
-        quantity_factor = Decimal(1)
+    principal_factor = calculate_principal_factor_from_bond(bond, settlement_date)
+    daily_per_unit = coupon_rate / Decimal(100) * face_value * daily_fraction * principal_factor
+    quantity_factor = calculate_quantity_factor_from_bond(bond, settlement_date) if is_kenya else Decimal(1)
 
     daily_interest = daily_per_unit * quantity * quantity_factor
     if not daily_interest:
@@ -266,13 +214,3 @@ def get_columns() -> list[dict]:
             "width": 135,
         },
     ]
-
-
-def parse_date_filter(value, label: str) -> Date | None:
-    value = optional_string(value, label)
-    if not value:
-        return None
-    try:
-        return getdate(value)
-    except (TypeError, ValueError):
-        frappe.throw(_("{0} must be a valid date").format(label))

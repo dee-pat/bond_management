@@ -11,6 +11,9 @@ import frappe
 from filelock import FileLock, Timeout
 from frappe import _
 
+# File.file_name is a 140-character Data field.
+FILE_NAME_MAX_LENGTH = 140
+
 
 def read_private_pdf_attachment(
     attachment,

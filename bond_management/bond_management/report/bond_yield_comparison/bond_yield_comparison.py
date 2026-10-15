@@ -1,13 +1,10 @@
 # Copyright (c) 2026, Deepak Patel and contributors
 # For license information, please see license.txt
 
-from datetime import date as Date
-
 import frappe
 from frappe import _
-from frappe.utils import getdate
 
-from bond_management.bond_management.utils.validation import optional_string
+from bond_management.bond_management.utils.validation import date_range_filter, optional_date
 
 
 def execute(filters: dict | None = None):
@@ -24,8 +21,8 @@ def validate_filters(filters: dict | None) -> dict:
     if not isinstance(filters, dict):
         frappe.throw(_("Report filters must be an object"))
 
-    from_date = parse_date_filter(filters.get("from_date"), "From Date")
-    to_date = parse_date_filter(filters.get("to_date"), "To Date")
+    from_date = optional_date(filters.get("from_date"), "From Date")
+    to_date = optional_date(filters.get("to_date"), "To Date")
     if from_date and to_date and from_date > to_date:
         frappe.throw(_("From Date must be on or before To Date"))
 
@@ -41,15 +38,9 @@ def get_data(filters: dict) -> list[dict]:
     if not readable_isins:
         return []
 
-    market_filters = {
-        "bond_market_prices.isin": ["in", readable_isins],
-    }
-    if filters["from_date"] and filters["to_date"]:
-        market_filters["date"] = ["between", [filters["from_date"], filters["to_date"]]]
-    elif filters["from_date"]:
-        market_filters["date"] = [">=", filters["from_date"]]
-    elif filters["to_date"]:
-        market_filters["date"] = ["<=", filters["to_date"]]
+    market_filters = {"bond_market_prices.isin": ["in", readable_isins]}
+    if dates := date_range_filter(filters["from_date"], filters["to_date"]):
+        market_filters["date"] = dates
 
     rows = frappe.qb.get_query(
         "Bond Market Date",
@@ -136,13 +127,3 @@ def parse_bond_filter(value) -> list[str] | None:
         bonds.append(bond.strip())
 
     return sorted(set(bonds)) or None
-
-
-def parse_date_filter(value, label: str) -> Date | None:
-    value = optional_string(value, label)
-    if not value:
-        return None
-    try:
-        return getdate(value)
-    except (TypeError, ValueError):
-        frappe.throw(_("{0} must be a valid date").format(label))

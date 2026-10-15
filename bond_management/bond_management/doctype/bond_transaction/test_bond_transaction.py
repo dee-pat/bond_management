@@ -27,7 +27,6 @@ from bond_management.bond_management.utils.performance import load_portfolio_per
 from bond_management.bond_management.utils.portfolio import get_ledger_position_from_transactions
 from bond_management.bond_management.utils.private_attachment import standardize_private_pdf_attachment
 from bond_management.bond_management.utils.transaction_attachment import get_standard_transaction_filename
-from bond_management.bond_management.utils.transaction_pdf import MAX_TRANSACTION_PDF_BYTES
 
 
 class TestBondTransaction(IntegrationTestCase):

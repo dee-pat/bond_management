@@ -20,7 +20,7 @@ from bond_management.bond_management.utils.exchange_rate import (
     get_rate_for_date,
 )
 from bond_management.bond_management.utils.financial import quantize_money, to_decimal
-from bond_management.bond_management.utils.investor_permissions import investor_portfolio_access
+from bond_management.bond_management.utils.investor_access import require_readable_portfolio
 from bond_management.bond_management.utils.performance import load_portfolio_performance_context
 from bond_management.bond_management.utils.portfolio import get_ledger_position_from_transactions
 from bond_management.bond_management.utils.validation import optional_string, required_string
@@ -35,6 +35,7 @@ from bond_management.bond_management.utils.xirr import (
 )
 
 XIRR_PRECISION = 3
+REPORTING_ONLY_FIELDS = {"market_value_usd", "xirr_usd", "expected_coupons_next_year_usd"}
 
 # ---------- ENTRY POINT ----------
 
@@ -146,13 +147,7 @@ def get_xirr_cashflows(
 def validate_report_inputs(portfolio, valuation_date):
     portfolio = required_string(portfolio, "Portfolio")
     valuation_date = required_string(valuation_date, "Valuation Date")
-    if investor_portfolio_access(frappe.session.user, portfolio) is False:
-        frappe.throw(_("Not permitted"), frappe.PermissionError)
-    if not frappe.has_permission("Bond Portfolio", "read", doc=portfolio):
-        frappe.throw(_("Not permitted"), frappe.PermissionError)
-    if not frappe.db.exists("Bond Portfolio", portfolio):
-        frappe.throw(_("Bond Portfolio {0} does not exist").format(frappe.bold(escape_html(portfolio))))
-
+    require_readable_portfolio(portfolio)
     return portfolio, getdate(valuation_date)
 
 
@@ -192,6 +187,26 @@ def calculate_future_xirr_from_cashflows(isin, valuation_date, cashflows, histor
 
 def get_columns(include_reporting_currency_columns: bool = True) -> list[dict]:
     """Return native columns and reporting columns when they add information."""
+
+    def money(label, fieldname, width=145, options="currency", **extra):
+        return {
+            "label": label,
+            "fieldname": fieldname,
+            "fieldtype": "Currency",
+            "options": options,
+            "width": width,
+            **extra,
+        }
+
+    def percent(label, fieldname, width):
+        return {
+            "label": label,
+            "fieldname": fieldname,
+            "fieldtype": "Percent",
+            "precision": XIRR_PRECISION,
+            "width": width,
+        }
+
     columns = [
         {
             "label": _("ISIN"),
@@ -208,106 +223,35 @@ def get_columns(include_reporting_currency_columns: bool = True) -> list[dict]:
             "width": 120,
             "disable_total": True,
         },
-        {
-            "label": _("Nominal Value"),
-            "fieldname": "nominal_value",
-            "fieldtype": "Currency",
-            "options": "currency",
-            "width": 145,
-        },
-        {
-            "label": _("Purchases Value"),
-            "fieldname": "purchases_value",
-            "fieldtype": "Currency",
-            "options": "currency",
-            "width": 145,
-        },
-        {
-            "label": _("Proceeds Value"),
-            "fieldname": "proceeds_value",
-            "fieldtype": "Currency",
-            "options": "currency",
-            "width": 145,
-            "description": _("Sales, coupon payments and principal amortisation received."),
-        },
+        money(_("Nominal Value"), "nominal_value"),
+        money(_("Purchases Value"), "purchases_value"),
+        money(
+            _("Proceeds Value"),
+            "proceeds_value",
+            description=_("Sales, coupon payments and principal amortisation received."),
+        ),
+        money(_("Market Value"), "market_value"),
+        money(_("Market Value (USD)"), "market_value_usd", 155, "reporting_currency"),
+        money(_("Gain Value"), "gain_value"),
+        percent(_("XIRR"), "xirr", 85),
+        percent(_("XIRR (USD)"), "xirr_usd", 100),
+        percent(_("Future XIRR"), "future_xirr", 110),
+        money(
+            _("Expected Coupons (Next Year)"),
+            "expected_coupons_next_year",
+            190,
+            description=_("Coupon payments after the valuation date through exactly one year after it."),
+        ),
+        money(
+            _("Expected Coupons (Next Year) (USD)"),
+            "expected_coupons_next_year_usd",
+            210,
+            "reporting_currency",
+        ),
     ]
-    columns.append(
-        {
-            "label": _("Market Value"),
-            "fieldname": "market_value",
-            "fieldtype": "Currency",
-            "options": "currency",
-            "width": 145,
-        }
-    )
     if include_reporting_currency_columns:
-        columns.append(
-            {
-                "label": _("Market Value (USD)"),
-                "fieldname": "market_value_usd",
-                "fieldtype": "Currency",
-                "options": "reporting_currency",
-                "width": 155,
-            }
-        )
-    columns.extend(
-        [
-            {
-                "label": _("Gain Value"),
-                "fieldname": "gain_value",
-                "fieldtype": "Currency",
-                "options": "currency",
-                "width": 145,
-            },
-            {
-                "label": _("XIRR"),
-                "fieldname": "xirr",
-                "fieldtype": "Percent",
-                "precision": XIRR_PRECISION,
-                "width": 85,
-            },
-        ]
-    )
-    if include_reporting_currency_columns:
-        columns.append(
-            {
-                "label": _("XIRR (USD)"),
-                "fieldname": "xirr_usd",
-                "fieldtype": "Percent",
-                "precision": XIRR_PRECISION,
-                "width": 100,
-            }
-        )
-    columns.append(
-        {
-            "label": _("Future XIRR"),
-            "fieldname": "future_xirr",
-            "fieldtype": "Percent",
-            "precision": XIRR_PRECISION,
-            "width": 110,
-        }
-    )
-    columns.append(
-        {
-            "label": _("Expected Coupons (Next Year)"),
-            "fieldname": "expected_coupons_next_year",
-            "fieldtype": "Currency",
-            "options": "currency",
-            "width": 190,
-            "description": _("Coupon payments after the valuation date through exactly one year after it."),
-        }
-    )
-    if include_reporting_currency_columns:
-        columns.append(
-            {
-                "label": _("Expected Coupons (Next Year) (USD)"),
-                "fieldname": "expected_coupons_next_year_usd",
-                "fieldtype": "Currency",
-                "options": "reporting_currency",
-                "width": 210,
-            }
-        )
-    return columns
+        return columns
+    return [column for column in columns if column["fieldname"] not in REPORTING_ONLY_FIELDS]
 
 
 def has_non_reporting_currency(data) -> bool:
@@ -497,14 +441,15 @@ def make_total_row(data, combined_cashflow, combined_future_cashflow, combined_r
         return quantize_money(sum((to_decimal(row.get(fieldname)) for row in data), Decimal(0)))
 
     native_values = {
-        "nominal_value": sum_field("nominal_value") if single_native_currency else None,
-        "purchases_value": sum_field("purchases_value") if single_native_currency else None,
-        "proceeds_value": sum_field("proceeds_value") if single_native_currency else None,
-        "expected_coupons_next_year": (
-            sum_field("expected_coupons_next_year") if single_native_currency else None
-        ),
-        "market_value": sum_field("market_value") if single_native_currency else None,
-        "gain_value": sum_field("gain_value") if single_native_currency else None,
+        fieldname: sum_field(fieldname) if single_native_currency else None
+        for fieldname in (
+            "nominal_value",
+            "purchases_value",
+            "proceeds_value",
+            "expected_coupons_next_year",
+            "market_value",
+            "gain_value",
+        )
     }
     reporting_values = {
         "expected_coupons_next_year_usd": sum_field("expected_coupons_next_year_usd"),

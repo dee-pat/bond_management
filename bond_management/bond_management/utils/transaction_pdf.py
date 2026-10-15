@@ -1,4 +1,3 @@
-import hmac
 import re
 from dataclasses import dataclass, field, replace
 from datetime import date, datetime
@@ -7,27 +6,25 @@ from decimal import ROUND_HALF_EVEN, Decimal
 import frappe
 from frappe import _
 from pypdf import PdfReader
-from pypdf.errors import DependencyError, FileNotDecryptedError, PdfReadError, PdfStreamError
 
 from bond_management.bond_management.utils.financial import quantize_percent, to_decimal
 from bond_management.bond_management.utils.pdf_common import (
+    ISIN_PATTERN,
     MAX_PDF_BYTES,
-    PortfolioPdfCredentials,
+    MAX_PDF_TEXT_CHARS,
+    NUMBER_PATTERN,
+    PDF_READ_ERRORS,
+    extract_page_texts,
     get_portfolio_pdf_credentials,
+    match_account_portfolio,
+    normalize_account_number,
     open_pdf,
+    unlocked_with_own_password,
 )
 from bond_management.bond_management.utils.private_attachment import read_private_pdf_attachment
-from bond_management.bond_management.utils.statement_pdf import (
-    normalize_account_number,
-)
 
-MAX_TRANSACTION_PDF_BYTES = MAX_PDF_BYTES
-MAX_TRANSACTION_PDF_PAGES = 200
-MAX_TRANSACTION_PDF_TEXT_CHARS = 2_000_000
 MAX_POSITIONED_TEXT_FRAGMENTS = 100_000
 POSITIONED_TEXT_Y_TOLERANCE = 2.5
-ISIN_PATTERN = r"[A-Z]{2}[A-Z0-9]{10}"
-NUMBER_PATTERN = r"[+-]?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?"
 ACCOUNT_PATTERN = re.compile(r"\bAccount\s+No\s*:\s*([A-Za-z0-9-]+)", re.IGNORECASE)
 TRANSACTION_BLOCK_PATTERN = re.compile(
     r"(?P<body>\bBonds\s+Name\s*:[\s\S]*?"
@@ -194,7 +191,7 @@ def get_transaction_attachment_details(attachment: str) -> TransactionAttachment
     """Read a private confirmation PDF and resolve its account, bonds, and commission rates."""
     content, _original_filename = read_private_pdf_attachment(
         attachment,
-        max_bytes=MAX_TRANSACTION_PDF_BYTES,
+        max_bytes=MAX_PDF_BYTES,
         missing_message=_("Attach a PDF transaction confirmation before using automatic entry."),
         extension_message=_("Automatic Bond Transaction entry requires a PDF attachment."),
         private_message=_("Bond Transaction PDFs must be uploaded as private files."),
@@ -209,7 +206,15 @@ def get_transaction_attachment_details(attachment: str) -> TransactionAttachment
     except TransactionPdfError as error:
         frappe.throw(str(error))
 
-    portfolio = _resolve_portfolio(parsed, credentials)
+    portfolio = match_account_portfolio(
+        credentials, parsed.account_no, reattach=_("attach the confirmation again")
+    )
+    if not unlocked_with_own_password(portfolio, parsed.unlock_password):
+        frappe.throw(
+            _(
+                "The configured PDF password for portfolio {0} does not unlock this transaction confirmation."
+            ).format(portfolio.portfolio_name)
+        )
     parsed_isins = [row.isin for row in parsed.transactions]
     bonds = frappe.qb.get_query(
         "Bond Master",
@@ -285,30 +290,8 @@ def get_transaction_attachment_details(attachment: str) -> TransactionAttachment
 
 
 def _parse_reader(reader: PdfReader) -> ParsedTransactionPdf:
-    try:
-        page_count = len(reader.pages)
-    except (DependencyError, FileNotDecryptedError, PdfReadError, PdfStreamError) as error:
-        raise TransactionPdfError("The transaction PDF pages could not be read.") from error
-    if page_count > MAX_TRANSACTION_PDF_PAGES:
-        raise TransactionPdfError(
-            f"The transaction PDF cannot contain more than {MAX_TRANSACTION_PDF_PAGES} pages."
-        )
-    if not page_count:
-        raise TransactionPdfError("The transaction PDF has no pages.")
-    text_length = 0
-    try:
-        page_texts = []
-        for page in reader.pages:
-            page_text = page.extract_text() or ""
-            text_length += len(page_text)
-            if text_length > MAX_TRANSACTION_PDF_TEXT_CHARS:
-                raise TransactionPdfError(
-                    "The transaction PDF contains more text than the parser can safely process."
-                )
-            page_texts.append(page_text)
-        text = "\n".join(page_texts)
-    except (DependencyError, FileNotDecryptedError, PdfReadError, PdfStreamError) as error:
-        raise TransactionPdfError("The transaction PDF pages could not be read.") from error
+    page_texts = extract_page_texts(reader, error_class=TransactionPdfError, label="transaction")
+    text = "\n".join(page_texts)
 
     try:
         return parse_transaction_pdf_text(text)
@@ -325,14 +308,13 @@ def _parse_reader(reader: PdfReader) -> ParsedTransactionPdf:
                 positioned_page, page_fragment_count = _extract_positioned_page_text(
                     page,
                     fragment_limit=MAX_POSITIONED_TEXT_FRAGMENTS - positioned_fragment_count,
-                    include_fragment_count=True,
                 )
                 positioned_pages.append(positioned_page)
                 positioned_fragment_count += page_fragment_count
-        except (DependencyError, FileNotDecryptedError, PdfReadError, PdfStreamError):
+        except PDF_READ_ERRORS:
             raise plain_text_error
         positioned_text = "\n".join(positioned_pages)
-        if len(positioned_text) > MAX_TRANSACTION_PDF_TEXT_CHARS:
+        if len(positioned_text) > MAX_PDF_TEXT_CHARS:
             raise TransactionPdfError("The positioned transaction PDF text exceeds the parser safety limit.")
         try:
             return parse_transaction_pdf_text(positioned_text)
@@ -344,9 +326,8 @@ def _extract_positioned_page_text(
     page,
     *,
     fragment_limit=MAX_POSITIONED_TEXT_FRAGMENTS,
-    include_fragment_count=False,
-) -> str | tuple[str, int]:
-    """Rebuild readable rows from PDFs whose content stream is column-ordered."""
+) -> tuple[str, int]:
+    """Rebuild readable rows from PDFs whose content stream is column-ordered; return them and the fragment count."""
     fragments = []
 
     def visitor_text(text, _cm, tm, _font, _font_size):
@@ -384,45 +365,7 @@ def _extract_positioned_page_text(
     positioned_text = "\n".join(
         " ".join(text for _x, text in sorted(fragments_for_row)) for _y, fragments_for_row in rows
     )
-    return (positioned_text, len(fragments)) if include_fragment_count else positioned_text
-
-
-def _resolve_portfolio(
-    parsed: ParsedTransactionPdf,
-    credentials: list[PortfolioPdfCredentials],
-) -> PortfolioPdfCredentials:
-    matching = [
-        credential
-        for credential in credentials
-        if parsed.account_no
-        in {
-            normalize_account_number(credential.account_no),
-            normalize_account_number(credential.transaction_account_no),
-        }
-    ]
-    if not matching:
-        frappe.throw(
-            _(
-                "No accessible Bond Portfolio has account number {0}. Add it as Account No or Transaction Account No on Bond Portfolio, then attach the confirmation again."
-            ).format(parsed.account_no)
-        )
-    if len(matching) > 1:
-        frappe.throw(
-            _(
-                "More than one Bond Portfolio uses account number {0}. Account No and Transaction Account No values must identify only one portfolio."
-            ).format(parsed.account_no)
-        )
-
-    portfolio = matching[0]
-    if parsed.unlock_password is not None and (
-        not portfolio.password or not hmac.compare_digest(portfolio.password, parsed.unlock_password)
-    ):
-        frappe.throw(
-            _(
-                "The configured PDF password for portfolio {0} does not unlock this transaction confirmation."
-            ).format(portfolio.portfolio_name)
-        )
-    return portfolio
+    return positioned_text, len(fragments)
 
 
 def _parse_row_fields(text: str) -> dict[str, str]:

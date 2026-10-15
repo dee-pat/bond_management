@@ -1,30 +1,24 @@
 import hashlib
-import re
 
 import frappe
 from frappe import _
 from frappe.utils import getdate
 
+from bond_management.bond_management.utils.pdf_common import MAX_PDF_BYTES, filename_account
 from bond_management.bond_management.utils.private_attachment import (
+    FILE_NAME_MAX_LENGTH,
     read_private_pdf_attachment,
     standardize_private_pdf_attachment,
 )
-from bond_management.bond_management.utils.statement_pdf import normalize_account_number
-from bond_management.bond_management.utils.transaction_pdf import MAX_TRANSACTION_PDF_BYTES
 
 TRANSACTION_FILENAME_PREFIX = "Transaction-"
-SAFE_ACCOUNT_PATTERN = re.compile(r"^[A-Za-z0-9_-]+$")
-FILE_NAME_MAX_LENGTH = 140
 
 
 def get_standard_transaction_filename(
     account_no: str, settlement_date, *, content: bytes | None = None
 ) -> str:
     """Return the canonical private PDF filename for a Bond Transaction."""
-    normalized_account = normalize_account_number(account_no)
-    if not normalized_account or not SAFE_ACCOUNT_PATTERN.fullmatch(normalized_account):
-        frappe.throw(_("Product Account No. contains characters that cannot be used in a filename."))
-
+    normalized_account = filename_account(account_no)
     settlement_date_component = getdate(settlement_date).strftime("%Y%m%d")
     if content is not None:
         content_digest = hashlib.sha256(content).hexdigest()
@@ -54,7 +48,7 @@ def standardize_transaction_attachment(
     account_no: str,
     settlement_date,
     *,
-    max_bytes: int | None = MAX_TRANSACTION_PDF_BYTES,
+    max_bytes: int | None = MAX_PDF_BYTES,
 ) -> str:
     """Rename a private PDF; legacy backfills may omit the new-upload size limit."""
     legacy_filename = get_standard_transaction_filename(account_no, settlement_date)

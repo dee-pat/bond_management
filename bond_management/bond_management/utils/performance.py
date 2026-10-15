@@ -3,7 +3,10 @@ from collections import defaultdict
 import frappe
 from frappe.utils import getdate
 
-from bond_management.bond_management.utils.exchange_rate import build_exchange_rate_context
+from bond_management.bond_management.utils.exchange_rate import (
+    REPORTING_CURRENCY,
+    build_exchange_rate_context,
+)
 from bond_management.bond_management.utils.financial import to_decimal
 from bond_management.bond_management.utils.investor_permissions import (
     include_shared_exchange_rates_in_safe_projection,
@@ -36,6 +39,45 @@ def _empty_context(transactions_by_isin):
         "xirr_guesses": {},
         "exchange_rates": {},
     }
+
+
+BOND_SCHEDULES = (
+    (
+        "Bond Coupon Schedule",
+        "coupon_schedule",
+        ("coupon_date", "period_start", "period_end", "coupon_factor"),
+    ),
+    (
+        "Bond Principal Schedule",
+        "principal_schedule",
+        ("repayment_date", "principal_units", "repayment_percent"),
+    ),
+)
+
+
+def attach_bond_schedules(bonds_by_isin: dict) -> None:
+    """Load each bond's coupon and principal schedules onto its row, in date order."""
+    for bond in bonds_by_isin.values():
+        bond["coupon_schedule"] = []
+        bond["principal_schedule"] = []
+    if not bonds_by_isin:
+        return
+
+    for doctype, fieldname, fields in BOND_SCHEDULES:
+        rows = frappe.qb.get_query(
+            doctype,
+            fields=["parent", *fields],
+            filters={
+                "parent": ["in", list(bonds_by_isin)],
+                "parenttype": "Bond Master",
+                "parentfield": fieldname,
+            },
+            order_by=f"{fields[0]} asc",
+            parent_doctype="Bond Master",
+            ignore_permissions=False,
+        ).run(as_dict=True)
+        for row in rows:
+            bonds_by_isin[row.parent][fieldname].append(row)
 
 
 def load_portfolio_performance_context(portfolio, valuation_date):
@@ -85,39 +127,7 @@ def load_portfolio_performance_context(portfolio, valuation_date):
     if not visible_isins:
         return _empty_context(transactions_by_isin)
 
-    for bond in bonds:
-        bond["coupon_schedule"] = []
-        bond["principal_schedule"] = []
-
-    coupon_rows = frappe.qb.get_query(
-        "Bond Coupon Schedule",
-        fields=["parent", "coupon_date", "period_start", "period_end", "coupon_factor"],
-        filters={
-            "parent": ["in", visible_isins],
-            "parenttype": "Bond Master",
-            "parentfield": "coupon_schedule",
-        },
-        order_by="coupon_date asc",
-        parent_doctype="Bond Master",
-        ignore_permissions=False,
-    ).run(as_dict=True)
-    for row in coupon_rows:
-        bonds_by_isin[row.parent]["coupon_schedule"].append(row)
-
-    principal_rows = frappe.qb.get_query(
-        "Bond Principal Schedule",
-        fields=["parent", "repayment_date", "principal_units", "repayment_percent"],
-        filters={
-            "parent": ["in", visible_isins],
-            "parenttype": "Bond Master",
-            "parentfield": "principal_schedule",
-        },
-        order_by="repayment_date asc",
-        parent_doctype="Bond Master",
-        ignore_permissions=False,
-    ).run(as_dict=True)
-    for row in principal_rows:
-        bonds_by_isin[row.parent]["principal_schedule"].append(row)
+    attach_bond_schedules(bonds_by_isin)
 
     market_prices = {}
     xirr_guesses = {}
@@ -136,7 +146,7 @@ def load_portfolio_performance_context(portfolio, valuation_date):
             xirr_guesses[isin] = historical_guesses.get(isin, DEFAULT_XIRR_GUESS)
 
     native_currencies = sorted(
-        {bond.get("currency") for bond in bonds if bond.get("currency") and bond.get("currency") != "USD"}
+        {bond.get("currency") for bond in bonds if bond.get("currency") not in (None, "", REPORTING_CURRENCY)}
     )
     exchange_rate_rows = []
     if native_currencies:
@@ -147,7 +157,7 @@ def load_portfolio_performance_context(portfolio, valuation_date):
                 filters={
                     "rate_date": ["<=", valuation_date],
                     "from_currency": ["in", native_currencies],
-                    "to_currency": "USD",
+                    "to_currency": REPORTING_CURRENCY,
                 },
                 order_by="rate_date asc, from_currency asc, name asc",
                 ignore_permissions=False,

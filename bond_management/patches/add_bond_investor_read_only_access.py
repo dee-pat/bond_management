@@ -1,6 +1,6 @@
-import frappe
+from bond_management.patches.access import INVESTOR_ROLE, ensure_report_role, ensure_role, upsert_docperm
 
-ROLE = "Bond Investor Read Only"
+ROLE = INVESTOR_ROLE
 READ_ONLY_DOCTYPES = (
     "Bond Portfolio",
     "Bond Transaction",
@@ -15,67 +15,37 @@ PRINTABLE_DOCTYPES = {
     "Bond Master",
     "Bond Market Date",
 }
+# Portfolio Performance and Interest Difference reference Bond Portfolio;
+# Bond Yield Comparison references Bond Market Date.
+REPORT_DOCTYPES = {"Bond Portfolio", "Bond Market Date"}
 
 
 def execute():
     """Create the investor role and grant its non-mutating application access."""
-    if not frappe.db.exists("Role", ROLE):
-        frappe.get_doc(
-            {
-                "doctype": "Role",
-                "role_name": ROLE,
-                "desk_access": 1,
-                "is_custom": 1,
-            }
-        ).insert(ignore_permissions=True)
-
+    ensure_role(ROLE)
     for doctype in READ_ONLY_DOCTYPES:
         ensure_investor_read_only_docperm(doctype)
-
-    report = frappe.get_doc("Report", "Portfolio Performance")
-    if ROLE not in {row.role for row in report.roles}:
-        report.append("roles", {"role": ROLE})
-        report.save(ignore_permissions=True)
+    ensure_report_role("Portfolio Performance", ROLE)
 
 
 def ensure_investor_read_only_docperm(doctype: str) -> None:
-    """Create or update only the investor DocPerm, without saving its parent DocType.
-
-    Saving the parent can validate unrelated legacy field definitions during a
-    migration. Direct DocPerm updates keep this patch idempotent and scoped to
-    the access rule it owns.
-    """
-    permission_name = frappe.db.get_value(
-        "DocPerm", {"parent": doctype, "role": ROLE, "permlevel": 0}, "name"
-    )
-    values = {
-        "read": 1,
-        "write": 0,
-        "create": 0,
-        "delete": 0,
-        "submit": 0,
-        "cancel": 0,
-        "amend": 0,
-        "print": int(doctype in PRINTABLE_DOCTYPES),
-        "email": 0,
-        "share": 0,
-        "export": 0,
-        "import": 0,
-        "report": int(doctype == "Bond Portfolio"),
-    }
-
-    if permission_name:
-        frappe.db.set_value("DocPerm", permission_name, values, update_modified=False)
-        return
-
-    frappe.get_doc(
+    """Create or reset the investor's read-only DocPerm on ``doctype``."""
+    upsert_docperm(
+        doctype,
+        ROLE,
         {
-            "doctype": "DocPerm",
-            "parent": doctype,
-            "parenttype": "DocType",
-            "parentfield": "permissions",
-            "role": ROLE,
-            "permlevel": 0,
-            **values,
-        }
-    ).insert(ignore_permissions=True)
+            "read": 1,
+            "write": 0,
+            "create": 0,
+            "delete": 0,
+            "submit": 0,
+            "cancel": 0,
+            "amend": 0,
+            "print": int(doctype in PRINTABLE_DOCTYPES),
+            "email": 0,
+            "share": 0,
+            "export": 0,
+            "import": 0,
+            "report": int(doctype in REPORT_DOCTYPES),
+        },
+    )
