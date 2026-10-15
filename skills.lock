@@ -12,4 +12,4 @@ playwright-cli      microsoft/playwright-cli  skills/playwright-cli      74354ec
 frappe-migration    dee-pat/frappe-agent-kit  skills/frappe-migration    57cb2573b7948a98a3d20e224e11ca03892c0388  -
 grilling            dee-pat/frappe-agent-kit  skills/grilling            57cb2573b7948a98a3d20e224e11ca03892c0388  -
 pr-review-threads   dee-pat/frappe-agent-kit  skills/pr-review-threads   57cb2573b7948a98a3d20e224e11ca03892c0388  -
-rule                dee-pat/frappe-agent-kit  rules/frappe.md            57cb2573b7948a98a3d20e224e11ca03892c0388  AGENTS.md
+rule                dee-pat/frappe-agent-kit  rules/frappe.md            878736b4aabd832796f80245f82747ebe89c417a  AGENTS.md
