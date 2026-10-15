@@ -137,12 +137,17 @@ The Vite build is served from `/assets/bond_management/frontend/`.
   and `e2e/desk/`; `e2e/README.md` defines what Python tests own and what
   Playwright owns.
 - Design and planning docs: `ARCHITECTURE_SPEC.md` (open work and
-  invariants), `docs/specs/` and `docs/plans/`. Read
+  invariants), `docs/decisions/` (accepted business and architecture
+  decisions), `docs/specs/` and `docs/plans/`. Read
   `docs/specs/investor-ui-migration.md` before changing the SPA or the
   investor APIs.
 
 ## Bond financial conventions
 
+- [docs/decisions/](docs/decisions/README.md) records some of the conventions
+  below with their reasons and consequences. Read the matching record before
+  changing a convention it covers. Changing any convention below, recorded or
+  not, needs the user's approval and a new or superseding record.
 - Construct precision-sensitive monetary values, accrued interest, yields, and
   quantities with `Decimal` from strings rather than binary floats. Quantize
   only at the business-rule boundary with an explicit rounding mode and
