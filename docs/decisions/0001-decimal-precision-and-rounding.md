@@ -20,8 +20,11 @@ several storage boundaries, and they do not all use the same mode.
   named external-library adapter or at JSON/clipboard serialization.
 - Cash and settlement amounts quantize to 4 decimal places, half-even
   (`quantize_money`).
-- Calculated percentages quantize to 9 decimal places, half-even
-  (`quantize_percent`).
+- The principal factor, transaction commission, and Bond Master repayment
+  percentages quantize to 9 decimal places, half-even (`quantize_percent`).
+  Yields do not: the stored future XIRR (`utils/market_data.py`) and Portfolio
+  Performance report XIRRs are scaled to percent without quantizing, so the
+  `Percent` field or the report's display precision decides how they appear.
 - Exchange rates from different sources (a statement against a canonical row,
   another statement's source, or a manual fallback) compare at the 12-place,
   half-up storage boundary of the rate fields
