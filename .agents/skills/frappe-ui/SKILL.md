@@ -7,37 +7,15 @@ description: Build consistent Frappe-style user interfaces using the frappe-ui V
 
 Build UIs that look and feel like Frappe products by composing **frappe-ui** components and styling with the library's **semantic Tailwind tokens**.
 
-## Bond Management compatibility
-
-Installed from `frappe/frappe-ui`, revision
-`15ed4fecee1c906befdf23cc14f7b7bb0d7acbf4`, path `skills/frappe-ui`.
-This section is the local adaptation; the remaining guidance is upstream,
-formatted for this repository. The upstream development-only `evals/` harness
-is omitted; the skill and all three referenced guides are included.
-
-- Apply this skill to the investor Vue frontend. Use `frappe-app-dev` for
-  Desk forms and backend work, and follow the app and parent `AGENTS.md` rules.
-- Before using an API or token, check `frontend/package.json` and the installed
-  `frontend/node_modules/frappe-ui` exports, source, and component documentation.
-  Those version-specific contracts take precedence over the bundled references.
-- At installation, the app pins Frappe UI `1.0.0-beta.25` and Vite `5.4.10`.
-  That library has no `frappe-ui/charts` export; use its existing chart exports.
-  Apply `SETUP.md` to fresh projects only; retain this app's dependency pins and
-  build configuration unless a dependency change is separately requested.
-- For financial values and durable status, follow the server-authoritative
-  mutation rules in the app's `AGENTS.md`, including pending and failed states.
-- When updating this skill, retain this section, record the new source revision,
-  and recheck compatibility with the app's installed library.
-
 ## Quick start
 
 ```vue
 <script setup>
-import { Button, Dialog, FormControl } from "frappe-ui";
-import { ref } from "vue";
+import { Button, Dialog, FormControl } from 'frappe-ui'
+import { ref } from 'vue'
 
-const open = ref(false);
-const name = ref("");
+const open = ref(false)
+const name = ref('')
 </script>
 
 <template>
@@ -54,11 +32,11 @@ const name = ref("");
 
 Prop names, prop value types, slot names and token names live in these files, not here. Open the one you need before you write markup.
 
-| Writing this                                | Open this first      |
-| ------------------------------------------- | -------------------- |
-| any component, any page, any Tailwind class | [CORE.md](CORE.md)   |
-| anything that fetches or writes data        | [DATA.md](DATA.md)   |
-| a fresh Vite + Vue 3 project                | [SETUP.md](SETUP.md) |
+| Writing this | Open this first |
+|---|---|
+| any component, any page, any Tailwind class | [CORE.md](CORE.md) |
+| anything that fetches or writes data | [DATA.md](DATA.md) |
+| a fresh Vite + Vue 3 project | [SETUP.md](SETUP.md) |
 
 ## Contracts
 

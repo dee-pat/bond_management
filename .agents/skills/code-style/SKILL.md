@@ -11,5 +11,3 @@ description: Code style rules for readable, maintainable implementation. Load th
 - Put higher-order/public functions near the top of the file; keep low-level utilities at the bottom.
 - Write terse, simple English comments. Explain why something is surprising; do not narrate obvious code.
 - Do not add abstractions until there are repeated concrete uses.
-
-For Frappe-specific work, prefer `frappe-app-dev`.

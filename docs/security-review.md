@@ -1,8 +1,8 @@
 # Security review checklist
 
 Bond Management's attack surfaces, with what a reviewer checks on each. Use it
-alongside the generic Frappe checklist in
-`.agents/skills/quality-code-review/SKILL.md` §2 whenever a diff touches one of
+alongside §2 Security of the `frappe-code-review` skill
+(`.agents/skills/frappe-code-review/SKILL.md`) whenever a diff touches one of
 these surfaces. Each finding names the affected user or data, a plausible
 trigger, and the changed line.
 
