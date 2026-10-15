@@ -37,7 +37,7 @@ credentials or anything from private repos.
 | Kit            | `dee-pat/frappe-agent-kit`                | Vendored unmodified at a pinned revision (`skills.lock`) |
 | Kit rules      | `rules/frappe.md` in the kit              | Synced into a marked block in the app's `AGENTS.md`      |
 | App            | This repo                                 | Written here                                             |
-| npm-packaged   | `@playwright/cli`                         | Symlink into `node_modules`, pinned by `package.json`    |
+| npm-packaged   | `microsoft/playwright-cli`                | Vendored at the `gitHead` of the `@playwright/cli` version in `package.json` (`skills.lock`); a `node_modules` symlink dangled in fresh checkouts |
 
 Always-on rules cannot be a skill: a skill loads only when its description
 fires. They go into each app's `AGENTS.md` as a generated block between

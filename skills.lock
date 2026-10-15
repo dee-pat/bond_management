@@ -8,6 +8,7 @@ frappe-app-dev      frappe/skills             skills/frappe-app-dev      c1118cb
 code-style          frappe/skills             skills/code-style          c1118cbf175a3d4393fb7d02d749876eaf8a86e8  -
 frappe-code-review  frappe/skills             skills/frappe-code-review  c1118cbf175a3d4393fb7d02d749876eaf8a86e8  -
 frappe-ui           frappe/frappe-ui          skills/frappe-ui           15ed4fecee1c906befdf23cc14f7b7bb0d7acbf4  evals
+playwright-cli      microsoft/playwright-cli  skills/playwright-cli      74354ecc7a43da16d91a9bc54fa8db8283a3fcf5  -
 frappe-migration    dee-pat/frappe-agent-kit  skills/frappe-migration    57cb2573b7948a98a3d20e224e11ca03892c0388  -
 grilling            dee-pat/frappe-agent-kit  skills/grilling            57cb2573b7948a98a3d20e224e11ca03892c0388  -
 pr-review-threads   dee-pat/frappe-agent-kit  skills/pr-review-threads   57cb2573b7948a98a3d20e224e11ca03892c0388  -
