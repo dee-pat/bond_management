@@ -4,15 +4,14 @@ Codex reads this folder directly; Claude Code reads it through the
 `.claude/skills` symlink. Keep upstream skills unmodified and put app-specific
 adaptations in the root or nested `AGENTS.md` files instead.
 
-| Skill                       | Source                                                                    |
-| --------------------------- | ------------------------------------------------------------------------- |
-| `bond-management-migration` | This app                                                                  |
-| `grilling`                  | This app                                                                  |
-| `frappe-app-dev`            | `frappe/skills` `skills/frappe-app-dev` at `c1118cbf175a3d4393fb7d02d749876eaf8a86e8` |
-| `code-style`                | `frappe/skills` `skills/code-style` at the same revision                  |
-| `frappe-code-review`        | `frappe/skills` `skills/frappe-code-review` at the same revision          |
-| `frappe-ui`                 | `frappe/frappe-ui` `skills/frappe-ui` at `15ed4fecee1c906befdf23cc14f7b7bb0d7acbf4`, without `evals/` |
-| `playwright-cli`            | Symlink to `node_modules/@playwright/cli/skills/playwright-cli`; run `yarn install` in the app root to resolve it |
+- **Upstream** (`frappe-app-dev`, `code-style`, `frappe-code-review`,
+  `frappe-ui`): pinned in [`skills.lock`](../../skills.lock). Run
+  `scripts/sync-skills.sh check` to confirm the copies match their pins. To
+  upgrade, edit a revision, run `scripts/sync-skills.sh sync`, and commit the
+  lock and the skill together.
+- **`playwright-cli`**: symlink to `node_modules/@playwright/cli/skills/playwright-cli`,
+  pinned by `package.json`; run `yarn install` in the app root to resolve it.
+- **This app** (`bond-management-migration`, `grilling`): edit here.
 
-To refresh an upstream skill, replace its folder with the upstream copy at a
-newer revision and update the revision above. Do not reformat the copy.
+[frappe-agent-kit.md](../../docs/plans/frappe-agent-kit.md) plans moving the
+generic app-owned skills to a shared kit repo.

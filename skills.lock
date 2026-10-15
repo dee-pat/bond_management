@@ -1,0 +1,8 @@
+# Upstream agent skills vendored into .agents/skills/, pinned by revision.
+# Columns: name, repository, path, revision, excludes (comma-separated paths
+# relative to the skill, or "-"). Edit a revision, then run
+# scripts/sync-skills.sh sync and commit the lock and the skill together.
+frappe-app-dev      frappe/skills     skills/frappe-app-dev      c1118cbf175a3d4393fb7d02d749876eaf8a86e8  -
+code-style          frappe/skills     skills/code-style          c1118cbf175a3d4393fb7d02d749876eaf8a86e8  -
+frappe-code-review  frappe/skills     skills/frappe-code-review  c1118cbf175a3d4393fb7d02d749876eaf8a86e8  -
+frappe-ui           frappe/frappe-ui  skills/frappe-ui           15ed4fecee1c906befdf23cc14f7b7bb0d7acbf4  evals
