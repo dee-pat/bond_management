@@ -75,8 +75,9 @@ differences in the final field.
   `BASE_URL` (or `PLAYWRIGHT_BASE_URL`) when the test server is not at its
   default address.
 - The individual stages are `lint`, `server`, `frontend`, `ui` and
-  `playwright`. `ui` expects an already prepared test site; the combined gates
-  prepare it as needed.
+  `playwright`. `ui` and `playwright` prepare the configured test site
+  themselves (migrate, enable the investor SPA, seed fixtures) before running
+  Playwright; no manual setup is needed.
 - Changes to patches, schema, hooks, dependencies, installation, or manual
   indexes must also pass a fresh-install check matching the GitHub Actions
   setup. A successful CI clean install on the exact commit satisfies this
