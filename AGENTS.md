@@ -21,7 +21,7 @@ This file covers what the code cannot tell you. Nested `AGENTS.md` files in
 - Skills live in `.agents/skills/`; never install skills globally. Upstream and
   kit skills are pinned in `skills.lock` and vendored unmodified by
   `scripts/sync-skills.sh`; only the `bond-management-*` skills are edited
-  here.
+  here. The same lock vendors Frappe's Semgrep rules into `semgrep/frappe/`.
 - The _Shared Frappe rules_ block below is generated from
   [frappe-agent-kit](https://github.com/dee-pat/frappe-agent-kit). Never edit it
   here: change the kit, then bump the pin in `skills.lock` and run
@@ -132,7 +132,7 @@ This file covers what the code cannot tell you. Nested `AGENTS.md` files in
 - Attachment parsers cover current, supported legacy, malformed, conflicting,
   encrypted, wrong-password and non-PDF cases.
 
-<!-- BEGIN synced-rules: dee-pat/frappe-agent-kit/rules/frappe.md@878736b4aabd832796f80245f82747ebe89c417a -->
+<!-- BEGIN synced-rules: dee-pat/frappe-agent-kit/rules/frappe.md@3512bc7d03c844664fe86dd18bfb3c35bc5e8a11 -->
 ## Shared Frappe rules
 
 Frappe v16 rules shared across apps; the app's own rules win on conflict. Use
