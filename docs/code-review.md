@@ -190,11 +190,16 @@ Identify the summary's author/source; a coordinating agent's score is its own
 assessment, not a score supplied by the native reviewer. Link to the native
 review when one exists and state its reviewed revision and scope.
 
-Use an existing companion comment authored by the current agent/account for the
-same reviewed revision when possible, or create a new one. Preserve native bot
-comments. Include a marker such as `<!-- bond-management-review-summary -->`
-to find companion comments. Post a new summary for a new revision, and retain
-the old revision's evidence. For CLI posting, write the exact Markdown to a
+Start each companion comment with a marker that names the reviewing agent and
+the full reviewed head SHA, for example
+`<!-- bond-management-review-summary agent=claude-code rev=<head SHA> -->`;
+use `agent=codex` for Codex. Codex and Claude Code may post from the same GitHub
+account, so the account alone does not identify a summary's author. Update an
+existing companion comment only when its account, `agent`, and `rev` all match
+the current review; otherwise create a new one. Never edit another agent's
+summary or a comment without an agent-specific marker. Preserve native bot
+comments. Post a new summary for a new revision, and retain the old revision's
+evidence. For CLI posting, write the exact Markdown to a
 temporary file and use `gh pr comment <PR> --repo <owner/repo> --body-file <file>`;
 use the returned comment URL to confirm publication. Read back an updated comment
 to verify its body. If posting lacks authorization or fails, prepare the complete
