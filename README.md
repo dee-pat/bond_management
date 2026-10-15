@@ -152,7 +152,7 @@ Individual gates can also be run on their own:
 
 | Gate       | Runs                                                                   |
 | ---------- | ---------------------------------------------------------------------- |
-| `lint`     | pre-commit (ruff, eslint, prettier), Semgrep rules, and rule tests     |
+| `lint`     | pre-commit (ruff, eslint, prettier), `skills.lock` check, Semgrep rules, and rule tests |
 | `server`   | migrates the test site and runs the full server suite                  |
 | `frontend` | `yarn lint`, `yarn typecheck`, and `bench build --app bond_management` |
 | `ui`       | seeds investor fixtures and runs the full Playwright suite             |

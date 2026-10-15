@@ -12,18 +12,19 @@ This file covers what the code cannot tell you. Nested `AGENTS.md` files in
 - Read [verification.md](docs/verification.md) before running gates, diagnosing
   CI or Playwright, or reporting completion. It owns the gates, evidence format,
   site rules, and recovery steps.
-- A gate passes only when you ran it for the current change and saw exit status
-  zero. Edits to code, tests, fixtures, metadata, dependencies, scripts, or CI
-  make earlier results stale. An unavailable gate is a blocker: report the exact
-  command and what is left unverified.
-- Run the applicable local gates before committing or pushing, and wait for
-  required CI before reporting completion. A green CI clean install on the exact
-  commit satisfies the fresh-install check.
+- Run the applicable gates before committing or pushing, and wait for required
+  CI before reporting completion. A green CI clean install on the exact commit
+  satisfies the fresh-install check.
 - Keep [domain-model.md](docs/domain-model.md) in sync with any change to a
   DocType, `Link`/`Table` field, child-table ownership, attachment or derived
   data, or a report/API/service data flow. Otherwise record that you reviewed it.
-- Keep app skills in `.agents/skills/` in this repo; never install skills
-  globally.
+- Skills live in `.agents/skills/`; never install skills globally. Upstream and
+  kit skills are pinned in `skills.lock` and vendored unmodified by
+  `scripts/sync-skills.sh`; only `bond-management-migration` is edited here.
+- The _Shared Frappe rules_ block below is generated from
+  [frappe-agent-kit](https://github.com/dee-pat/frappe-agent-kit). Never edit it
+  here: change the kit, then bump the pin in `skills.lock` and run
+  `scripts/sync-skills.sh sync`.
 
 ## Layout
 
@@ -111,56 +112,51 @@ This file covers what the code cannot tell you. Nested `AGENTS.md` files in
   documented legacy fallback applies only when the primary source is absent;
   the primary source wins when both exist.
 
-## Frappe rules
+## App migrations and tests
 
-- Use v16 APIs and supported hooks; no monkey-patching core.
-- Multi-record user-facing reads use `frappe.qb.get_query` with
-  `ignore_permissions=False`. `get_value`, `exists`, `set_value` and `get_doc`
-  are fine behind the same permission boundary.
-- Validate runtime types with `isinstance` at every whitelisted boundary before
-  any read, existence or permission check; reject lists and dicts where a string
-  is expected.
-- No `frappe.db.commit()`/`rollback()` in controllers, hooks, request handlers
-  or shared services. One logical change shares the framework-managed request
-  transaction.
-- `ignore_permissions=True` only for generated reports, migrations and
-  administrative invariant checks, where the caller's permission boundary is
-  verified separately and the code documents it.
-- Permission-query hooks may return SQL only where Frappe requires that shape:
-  fixed DocType/field identifiers, every value escaped with Frappe's database
-  API, never a client-controlled identifier.
-- Business calculations stay in Python. Async Desk form handlers return their
-  Promise and guard against stale responses overwriting newer form state.
-- When a backend field or permission reaches Desk, update the form/list/
-  workspace code and one representative Playwright assertion in the same
-  change; server tests own the full permission and validation matrix.
-
-## Migrations and invariants
-
-- Data transformations get an idempotent patch in `bond_management/patches/`,
-  registered in `patches.txt`, tested against representative legacy data with a
-  safe rerun. Schema changes that normal migrate handles get no patch.
-- Frappe marks registered patches complete before `after_install` runs, so any
-  DocPerm, index or other invariant a fresh install needs is also bootstrapped
-  idempotently from `after_install` (and `after_migrate`). Verify both paths.
-- Concurrency-sensitive uniqueness gets a controller check for a useful error
-  and a database unique index as the guarantee, installed idempotently.
-- Permission patches touch only the `DocPerm` rows they own; never save a
-  parent `DocType` just to change permissions.
+- Patches live in `bond_management/patches/`, registered in `patches.txt`;
+  install and migrate invariants are also wired into `after_install` and
+  `after_migrate` in `hooks.py`.
 - Renames, removals, retypes, staged constraints and patch retirement: use the
-  `bond-management-migration` skill.
-
-## Tests
-
-- Tests are deterministic, independent and rerunnable; outcomes never depend on
-  generated name suffixes or wall-clock timing.
-- Python tests own financial rules, permissions, API validation, migrations and
-  data invariants. Playwright owns visible SPA and Desk wiring; see
-  `e2e/AGENTS.md`.
-- For `>`, `>=`, `<`, `<=` rules, test greater, less and equal, and state the
-  equality behaviour.
+  `frappe-migration` skill together with `bond-management-migration`.
+- Tests are deterministic and rerunnable; outcomes never depend on factory
+  name suffixes or wall-clock timing. Playwright owns visible SPA and Desk
+  wiring; see `e2e/AGENTS.md`.
 - Attachment parsers cover current, supported legacy, malformed, conflicting,
   encrypted, wrong-password and non-PDF cases.
+
+<!-- BEGIN synced-rules: dee-pat/frappe-agent-kit/rules/frappe.md@57cb2573b7948a98a3d20e224e11ca03892c0388 -->
+## Shared Frappe rules
+
+Frappe v16 rules shared across apps; the app's own rules win on conflict. Use
+`frappe-app-dev` for Frappe work, `code-style` when writing code,
+`frappe-code-review` when reviewing, and `frappe-migration` for patches,
+indexes, DocPerms and schema changes.
+
+- Use v16 APIs and supported hooks; never monkey-patch core.
+- User-facing multi-record reads use `frappe.qb.get_query` with
+  `ignore_permissions=False`. Use `ignore_permissions=True` only in reports,
+  migrations and admin invariant checks whose caller's permission is verified
+  separately and documented.
+- At every whitelisted boundary, check runtime types with `isinstance` before
+  any read, existence or permission check; reject lists and dicts where a string
+  is expected.
+- Permission-query hooks build SQL only from fixed identifiers and values
+  escaped with Frappe's database API.
+- No `frappe.db.commit()` or `rollback()` in controllers, hooks, request
+  handlers or shared services.
+- Normalize dates with `frappe.utils.getdate`; never compare date strings with
+  date objects.
+- Async form handlers return their Promise and carry a per-form request token so
+  a stale response cannot overwrite newer state.
+- When a backend field or permission reaches the UI, update the client and one
+  browser assertion in the same change; server tests own the full matrix.
+- Background jobs and patches are idempotent and safe to rerun.
+- For `>`, `>=`, `<`, `<=` rules, test greater, less and equal.
+- A gate passes only when run on the current change with an observed zero exit
+  status. Report an unavailable gate as a blocker, and never weaken an assertion
+  to make CI pass.
+<!-- END synced-rules: dee-pat/frappe-agent-kit/rules/frappe.md -->
 
 ## Sites
 
@@ -177,7 +173,7 @@ Run gates from the bench root (`../..`). `TEST_SITE` overrides the default
 test site.
 
 ```bash
-apps/bond_management/scripts/verify.sh lint         # pre-commit + Semgrep + rule tests
+apps/bond_management/scripts/verify.sh lint         # pre-commit + skills.lock check + Semgrep + rule tests
 apps/bond_management/scripts/verify.sh server       # migrate test site + full server suite
 apps/bond_management/scripts/verify.sh frontend     # yarn lint + typecheck + bench build
 apps/bond_management/scripts/verify.sh ui           # seed fixtures + full Playwright suite

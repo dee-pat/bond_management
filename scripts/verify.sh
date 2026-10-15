@@ -151,6 +151,7 @@ run_semgrep() {
 run_lint() {
     cd "${APP_ROOT}"
     run_pre_commit
+    "${APP_ROOT}/scripts/sync-skills.sh" check
     run_semgrep
     python3 "${APP_ROOT}/scripts/test_verify_semgrep.py" \
         --semgrep "$(semgrep_binary)" \

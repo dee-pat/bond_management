@@ -1,36 +1,30 @@
 ---
 name: bond-management-migration
-description: Schema and data migrations for this app. Use when renaming, removing, or retyping a DocType or field, writing or retiring a patch in `patches.txt`, adding a manual index or DocPerm invariant, or deleting a deprecated code path.
+description: Bond Management specifics for schema and data migrations. Use with frappe-migration when renaming, removing, or retyping a DocType or field, writing or retiring a patch in `patches.txt`, adding a manual index or DocPerm invariant, or deleting a deprecated code path.
 ---
 
 # Bond Management Migration
 
-Change shape in _expand/contract_ phases so every deployed site migrates safely, then retire what is left behind.
+Follow the `frappe-migration` skill for the recipe. This skill names where its generic steps land in this app.
 
 ## Sources of truth
 
-- [AGENTS.md](../../../AGENTS.md) "Migrations and invariants" owns patch, index, DocPerm, and `after_install` rules.
-- [migration-lifecycle.md](../../../docs/specs/migration-lifecycle.md) owns the registered-patch regression on a temporary site, its representative legacy data, and cleanup.
+- `frappe-migration` _Invariants_ and _App migrations and tests_ in [AGENTS.md](../../../AGENTS.md) own patch, index, DocPerm, and `after_install` rules.
+- [migration-lifecycle.md](../../../docs/specs/migration-lifecycle.md) is the lifecycle harness: `bond_management.bond_management.tests.migration_lifecycle` with phases `fresh()`, `prepare()`, `verify()` and `requeue()`, on a temporary `bond-management-lifecycle-<32-hex-id>.localhost` site that is dropped afterwards. `requeue()` deletes Patch Logs, so it is the forced rerun that `frappe-migration` warns about.
 - [verification.md](../../../docs/verification.md) owns gates and evidence; [domain-model.md](../../../docs/domain-model.md) must change with any DocType, `Link`, or `Table` change.
 
-## Pick the branch
+## References to update
 
-Read only the reference the branch names.
+On a rename, removal or retype, update every one of these in the same change, in addition to the generic list:
 
-- **Additive** (new DocType, field, index, DocPerm): normal Frappe migrate handles schema; add a patch only for data or an invariant, and bootstrap invariants in `after_install` too. Model sync drops manual indexes that DocField metadata cannot declare, and re-importing a changed DocType JSON replaces its DocPerm rows with the JSON's, so also reapply manual indexes and patch-managed DocPerms idempotently from `after_migrate`; a logged patch never runs again. Three schema exceptions need staging: a new field with a default on an existing Single, a new `unique` field, and a new `reqd` field on a populated DocType. Read [staged-constraints.md](references/staged-constraints.md).
-- **Tighten an existing field** (non-unique to unique, optional to required): stage it across releases. Read [staged-constraints.md](references/staged-constraints.md).
-- **Rename** (DocType or field): one release, one patch, only when the deployment stops every previous-release worker before migrate and a rollback restores the pre-migrate backup. Read [renames.md](references/renames.md). Otherwise old and new code write different columns or query a renamed table, so treat the rename as a retype.
-- **Remove or retype** (field, DocType, `Link` target, `Table` ownership): expand/contract across releases. Read [expand-contract.md](references/expand-contract.md).
-- **Retire** (one-time patch, deprecated path, dead code): see _Retirement_ below.
+- `hooks.py`: `_financial_doctypes`, `permission_query_conditions` and `has_permission` (`utils/investor_permissions.py`), `extend_doctype_class` and `doc_events` (`utils/investor_shares.py`), `after_install` and `after_migrate`.
+- Investor projections in `api/investor.py` and `api/investor_reports.py`, and the SPA in `frontend/`.
+- Script reports, Desk form JS and the `/desk/bond-investor` workspace.
+- `tests/factories.py`, `tests/pdf_factory.py`, the Playwright seed `tests/investor_ui_seed.py`, and [testing-matrix.md](../../../docs/testing-matrix.md).
+- Before removing a DocType: its User Permissions, DocShares and attached private Files, keeping investor portfolio scope intact.
 
-## Retirement
+## Business-data assertions
 
-A one-time data patch is retirable only after the user confirms every deployed site has run it and that no backup, staging copy, or offline site still supported for restore and upgrade predates it; such a site would upgrade without the transformation. If those restore paths stay supported, keep the patch registered. A fresh install marks it complete without running it. In one change: remove its `patches.txt` line and module, any `after_install`/`after_migrate` entry, its tests, its lifecycle fixtures and assertions, and the references in migration-lifecycle.md. Invariant patches (DocPerms, manual indexes) stay, because fresh installs and migrates both need them.
+Lifecycle fixtures assert migrated values as business data, not row counts: transaction amounts as `Decimal` at their stored precision, exchange-rate provenance (`Bond Exchange Rate Source` rows and manual-fallback flags), permissions, and manual indexes. Add representative legacy rows to the harness whenever a new data patch is registered.
 
-For deprecated code paths, find every consumer first (`git grep`, `hooks.py`, whitelisted method names called from Desk JS and the SPA, report JSON) and remove the path only when the count is zero. Done when nothing imports, routes to, or calls the removed name.
-
-## Verify
-
-A fresh install of the current tree creates only the new schema and marks every patch complete, so lifecycle `prepare()` must reconstruct the schema state of the release before the migration under test. Read [lifecycle-fixtures.md](references/lifecycle-fixtures.md) before writing or changing a lifecycle fixture.
-
-Run the lifecycle sequence for any patch change, plus the applicable gates from verification.md, and drop the temporary site afterwards whether it passed or failed.
+Never run `bench trim-tables` or `bench trim-database` against `bond-management-dev.localhost` or `bond-management-test.localhost` as part of a routine gate.

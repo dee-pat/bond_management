@@ -48,24 +48,6 @@ connection, code review access, subscription usage limits, and exact mention.
 
 ## GitHub review conversations
 
-As part of a requested GitHub PR review or review-fix workflow, resolve existing
-review conversations whose findings are verified as addressed by subsequent
-changes; include this reconciliation in completion rather than leaving it for a
-separate user request.
-
-- Fetch the current PR head and every page of unresolved review threads. Read
-  each finding and its replies, then check the current code and relevant change
-  history. An outdated marker or a reply claiming a fix is not proof.
-- Resolve only findings fully addressed at the current head. Leave partial
-  fixes, regressions, unanswered questions, and still-applicable findings open.
-  Check each conversation independently, including older duplicates of a newer
-  finding; a fix that was later lost does not qualify.
-- When implementing fixes, run the applicable verification gates and wait for
-  required CI on the pushed revision before resolving its conversations. If
-  the head changes during reconciliation, recheck affected findings against it.
-- Use the platform's resolve-thread operation, preserving the discussion and
-  other reviewers' comments. Resolution alone does not authorize posting replies
-  or changing review approvals.
-- Read back thread states and report the resolved count and remaining open
-  issues, with links when useful. If permissions or tools prevent resolution,
-  report the exact blocker and which verified conversations remain open.
+During a requested PR review or review-fix workflow, resolve review
+conversations whose findings are verified as fixed at the current head. The
+`pr-review-threads` skill owns the steps and the `gh` commands.

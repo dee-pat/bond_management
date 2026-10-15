@@ -1,9 +1,9 @@
 # Shared Frappe agent kit
 
-Status: phases 1 and 2 done. The kit is public at
-[dee-pat/frappe-agent-kit](https://github.com/dee-pat/frappe-agent-kit), tag
-`v0.1.0` (`cfaf4562a00895f7157126d5a8f91fca267409c4`). Phase 3 (adopting it here)
-is next.
+Status: phases 1–3 done. The kit is public at
+[dee-pat/frappe-agent-kit](https://github.com/dee-pat/frappe-agent-kit);
+Bond Management pins `v0.2.1` (`57cb2573b7948a98a3d20e224e11ca03892c0388`).
+Phase 4 (Gita and task_list) is next.
 
 ## Goal
 
@@ -102,10 +102,17 @@ marker. The sync script owns the block; hand edits inside it fail the check.
    scratch app at that revision. The kit's `tools/sync-skills.sh` is now the
    canonical copy; this app's `scripts/sync-skills.sh` should be refreshed from
    it in phase 3.
-3. **Adopt in Bond Management:** add kit lines to `skills.lock`, add rules-block
-   support to the script, replace the moved `AGENTS.md` sections with the
-   generated block, and thin `bond-management-migration`. Run `sync-skills.sh
-   check` from `verify.sh lint` so CI catches drift.
+3. **Done:** the kit's `tools/sync-skills.sh` gained `rule` lines that sync
+   `rules/frappe.md` between BEGIN/END markers (kit `v0.2.0`). Bond Management
+   vendors that script, pins `frappe-migration`, `grilling`,
+   `pr-review-threads` and the rules block in `skills.lock`, replaced its
+   _Frappe rules_, generic migration, test and gate bullets with the generated
+   _Shared Frappe rules_ block, thinned `bond-management-migration` to bond
+   references and lifecycle-harness specifics, moved the review-thread steps to
+   `pr-review-threads`, and runs `sync-skills.sh check` in `verify.sh lint`.
+   Kit `v0.2.1` then trimmed the always-on rules to about 250 words and moved
+   migration invariants into `frappe-migration`, so Bond's always-loaded
+   `AGENTS.md` shrank instead of growing.
 4. **Adopt in Gita and task_list:** copy the script and lock, then replace their
    stale vendored `frappe-app-dev`/`code-style` and the bench pointer.
 5. **Retire the bench `AGENTS.md`** once no app points to it (keep the backup in

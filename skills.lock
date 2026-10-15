@@ -1,8 +1,14 @@
-# Upstream agent skills vendored into .agents/skills/, pinned by revision.
-# Columns: name, repository, path, revision, excludes (comma-separated paths
-# relative to the skill, or "-"). Edit a revision, then run
-# scripts/sync-skills.sh sync and commit the lock and the skill together.
-frappe-app-dev      frappe/skills     skills/frappe-app-dev      c1118cbf175a3d4393fb7d02d749876eaf8a86e8  -
-code-style          frappe/skills     skills/code-style          c1118cbf175a3d4393fb7d02d749876eaf8a86e8  -
-frappe-code-review  frappe/skills     skills/frappe-code-review  c1118cbf175a3d4393fb7d02d749876eaf8a86e8  -
-frappe-ui           frappe/frappe-ui  skills/frappe-ui           15ed4fecee1c906befdf23cc14f7b7bb0d7acbf4  evals
+# Pinned agent skills vendored into .agents/skills/, and the shared rules block
+# synced into AGENTS.md. Columns: name, repository, path, revision, excludes
+# (comma-separated paths relative to the skill, or "-"); for a "rule" line the
+# last column is the target file. Edit a revision, run
+# scripts/sync-skills.sh sync, and commit the lock and the copies together.
+# scripts/sync-skills.sh is copied from dee-pat/frappe-agent-kit tools/.
+frappe-app-dev      frappe/skills             skills/frappe-app-dev      c1118cbf175a3d4393fb7d02d749876eaf8a86e8  -
+code-style          frappe/skills             skills/code-style          c1118cbf175a3d4393fb7d02d749876eaf8a86e8  -
+frappe-code-review  frappe/skills             skills/frappe-code-review  c1118cbf175a3d4393fb7d02d749876eaf8a86e8  -
+frappe-ui           frappe/frappe-ui          skills/frappe-ui           15ed4fecee1c906befdf23cc14f7b7bb0d7acbf4  evals
+frappe-migration    dee-pat/frappe-agent-kit  skills/frappe-migration    57cb2573b7948a98a3d20e224e11ca03892c0388  -
+grilling            dee-pat/frappe-agent-kit  skills/grilling            57cb2573b7948a98a3d20e224e11ca03892c0388  -
+pr-review-threads   dee-pat/frappe-agent-kit  skills/pr-review-threads   57cb2573b7948a98a3d20e224e11ca03892c0388  -
+rule                dee-pat/frappe-agent-kit  rules/frappe.md            57cb2573b7948a98a3d20e224e11ca03892c0388  AGENTS.md
