@@ -10,7 +10,9 @@ from frappe.tests import IntegrationTestCase
 
 from bond_management.bond_management.api.investor import MAX_PAGE_START, get_exchange_rate, get_exchange_rates
 from bond_management.bond_management.tests.factories import (
+    allow_user,
     as_investor_user,
+    make_assigned_investor,
     make_exchange_rate,
     make_investor_user,
     make_portfolio,
@@ -89,8 +91,7 @@ class TestInvestorExchangeRates(IntegrationTestCase):
     def test_detail_keeps_a_readable_statement_reference(self):
         portfolio = make_portfolio()
         exchange_rate = self._make_statement_exchange_rate(portfolio)
-        investor = make_investor_user([INVESTOR_ROLE])
-        self._assign_user_permission(investor, "Bond Portfolio", portfolio.name)
+        investor = make_assigned_investor(portfolio.name)
 
         with as_investor_user(investor):
             response = get_exchange_rate(exchange_rate.name)
@@ -104,8 +105,7 @@ class TestInvestorExchangeRates(IntegrationTestCase):
         assigned_portfolio = make_portfolio()
         other_portfolio = make_portfolio()
         exchange_rate = self._make_statement_exchange_rate(other_portfolio)
-        investor = make_investor_user([INVESTOR_ROLE])
-        self._assign_user_permission(investor, "Bond Portfolio", assigned_portfolio.name)
+        investor = make_assigned_investor(assigned_portfolio.name)
 
         with as_investor_user(investor):
             listed = get_exchange_rates()
@@ -145,7 +145,7 @@ class TestInvestorExchangeRates(IntegrationTestCase):
         readable = make_exchange_rate()
         unreadable = make_exchange_rate()
         investor = make_investor_user([INVESTOR_ROLE])
-        self._assign_user_permission(investor, "Bond Exchange Rate", readable.name)
+        allow_user(investor, "Bond Exchange Rate", readable.name)
         messages = []
 
         with as_investor_user(investor):
@@ -171,8 +171,8 @@ class TestInvestorExchangeRates(IntegrationTestCase):
         newer = make_exchange_rate(from_currency="EUR", rate_date="2025-01-02")
         older = make_exchange_rate(from_currency="EUR", rate_date="2025-01-01")
         investor = make_investor_user([INVESTOR_ROLE])
-        self._assign_user_permission(investor, "Bond Exchange Rate", older.name)
-        self._assign_user_permission(investor, "Bond Exchange Rate", newer.name)
+        allow_user(investor, "Bond Exchange Rate", older.name)
+        allow_user(investor, "Bond Exchange Rate", newer.name)
 
         with as_investor_user(investor):
             first_page = get_exchange_rates(page_length="1")
@@ -243,15 +243,3 @@ class TestInvestorExchangeRates(IntegrationTestCase):
         )
         exchange_rate.reload()
         return exchange_rate
-
-    @staticmethod
-    def _assign_user_permission(user, allow, value):
-        frappe.get_doc(
-            {
-                "doctype": "User Permission",
-                "user": user,
-                "allow": allow,
-                "for_value": value,
-                "apply_to_all_doctypes": 1,
-            }
-        ).insert(ignore_permissions=True)

@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-import { authenticateInvestor } from "./helpers/auth";
+import { authenticateInvestor } from "../helpers/auth";
 
 test("renders the authenticated investor compatibility shell", async ({
   page,

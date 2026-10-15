@@ -5,6 +5,7 @@ from frappe.tests import IntegrationTestCase
 from bond_management.bond_management.api.investor import get_transaction, get_transactions
 from bond_management.bond_management.tests.factories import (
     as_investor_user,
+    make_assigned_investor,
     make_bond,
     make_investor_user,
     make_portfolio,
@@ -47,7 +48,7 @@ class TestInvestorTransactions(IntegrationTestCase):
             "/private/files/assigned-transaction.pdf",
             update_modified=False,
         )
-        investor = self._make_investor(assigned_portfolio.name)
+        investor = make_assigned_investor(assigned_portfolio.name)
 
         with as_investor_user(investor):
             response = get_transactions()
@@ -63,7 +64,7 @@ class TestInvestorTransactions(IntegrationTestCase):
     def test_explicit_cross_portfolio_filter_is_denied(self):
         assigned_portfolio = make_portfolio()
         other_portfolio = make_portfolio()
-        investor = self._make_investor(assigned_portfolio.name)
+        investor = make_assigned_investor(assigned_portfolio.name)
 
         with as_investor_user(investor):
             with self.assertRaisesRegex(frappe.PermissionError, "not permitted"):
@@ -80,7 +81,7 @@ class TestInvestorTransactions(IntegrationTestCase):
             "/private/files/investor-secret.pdf",
             update_modified=False,
         )
-        investor = self._make_investor(portfolio.name)
+        investor = make_assigned_investor(portfolio.name)
 
         with as_investor_user(investor):
             response = get_transaction(transaction.name)
@@ -97,7 +98,7 @@ class TestInvestorTransactions(IntegrationTestCase):
         assigned_portfolio = make_portfolio()
         other_portfolio = make_portfolio()
         other = make_transaction(bond, other_portfolio)
-        investor = self._make_investor(assigned_portfolio.name)
+        investor = make_assigned_investor(assigned_portfolio.name)
         messages = []
 
         with as_investor_user(investor):
@@ -128,7 +129,7 @@ class TestInvestorTransactions(IntegrationTestCase):
         portfolio = make_portfolio()
         newer = make_transaction(bond, portfolio, settlement_date="2025-12-31")
         older = make_transaction(bond, portfolio, settlement_date="2025-12-30")
-        investor = self._make_investor(portfolio.name)
+        investor = make_assigned_investor(portfolio.name)
 
         with as_investor_user(investor):
             first_page = get_transactions(page_length="1")
@@ -145,7 +146,7 @@ class TestInvestorTransactions(IntegrationTestCase):
         portfolio = make_portfolio()
         older = make_transaction(bond, portfolio, settlement_date="2025-12-30")
         newer = make_transaction(bond, portfolio, settlement_date="2025-12-31")
-        investor = self._make_investor(portfolio.name)
+        investor = make_assigned_investor(portfolio.name)
 
         with as_investor_user(investor):
             ascending = get_transactions(
@@ -159,16 +160,3 @@ class TestInvestorTransactions(IntegrationTestCase):
 
         self.assertEqual([row.name for row in ascending["data"]], [older.name, newer.name])
         self.assertEqual({row.name for row in filtered["data"]}, {older.name, newer.name})
-
-    def _make_investor(self, portfolio_name):
-        investor = make_investor_user([INVESTOR_ROLE])
-        frappe.get_doc(
-            {
-                "doctype": "User Permission",
-                "user": investor,
-                "allow": "Bond Portfolio",
-                "for_value": portfolio_name,
-                "apply_to_all_doctypes": 1,
-            }
-        ).insert(ignore_permissions=True)
-        return investor

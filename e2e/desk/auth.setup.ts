@@ -4,7 +4,7 @@ import path from "node:path";
 import { test as setup } from "@playwright/test";
 
 import { administratorStorageState } from "./fixtures";
-import { authenticateAdministrator } from "./helpers/auth";
+import { authenticateAdministrator } from "../helpers/auth";
 import { openDeskForm } from "./helpers/frappe";
 
 setup("authenticate as Administrator", async ({ page }) => {

@@ -8,12 +8,11 @@ from bond_management.bond_management.report.interest_difference_by_portfolio.int
     get_columns,
 )
 from bond_management.bond_management.tests.factories import (
+    make_assigned_investor,
     make_bond,
     make_portfolio,
     make_transaction,
-    unique_name,
 )
-from bond_management.bond_management.utils.investor_permissions import INVESTOR_ROLE
 
 
 class TestInterestDifferenceByPortfolio(IntegrationTestCase):
@@ -184,35 +183,13 @@ class TestInterestDifferenceByPortfolio(IntegrationTestCase):
         bond = make_bond()
         assigned_transaction = make_transaction(bond, assigned_portfolio)
         other_transaction = make_transaction(bond, other_portfolio)
-        email = f"{unique_name('report-investor').lower()}@example.com"
-        frappe.get_doc(
-            {
-                "doctype": "User",
-                "email": email,
-                "first_name": "Report Investor",
-                "send_welcome_email": 0,
-                "roles": [{"role": INVESTOR_ROLE}],
-            }
-        ).insert(ignore_permissions=True)
-        frappe.get_doc(
-            {
-                "doctype": "User Permission",
-                "user": email,
-                "allow": "Bond Portfolio",
-                "for_value": assigned_portfolio.name,
-                "apply_to_all_doctypes": 1,
-            }
-        ).insert(ignore_permissions=True)
+        email = make_assigned_investor(assigned_portfolio.name)
 
-        previous_user = frappe.session.user
-        try:
-            frappe.set_user(email)
+        with self.set_user(email):
             rows = execute({"portfolio_name": assigned_portfolio.name})[1]
             visible = {row.transaction_reference for row in rows if not row.get("is_total_row")}
             with self.assertRaises(frappe.PermissionError):
                 execute({"portfolio_name": other_portfolio.name})
-        finally:
-            frappe.set_user(previous_user)
 
         self.assertIn(assigned_transaction.name, visible)
         self.assertNotIn(other_transaction.name, visible)

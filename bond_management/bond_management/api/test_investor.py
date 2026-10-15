@@ -6,6 +6,7 @@ from bond_management.bond_management.api import investor, investor_reports
 from bond_management.bond_management.api.investor import MAX_PAGE_LENGTH, MAX_PAGE_START, get_bootstrap
 from bond_management.bond_management.tests.factories import (
     as_investor_user,
+    make_assigned_investor,
     make_investor_user,
     make_portfolio,
 )
@@ -116,16 +117,7 @@ class TestInvestorBootstrap(IntegrationTestCase):
     def test_investor_bootstrap_contains_only_assigned_portfolios(self):
         assigned = make_portfolio()
         unassigned = make_portfolio()
-        email = make_investor_user([INVESTOR_ROLE])
-        frappe.get_doc(
-            {
-                "doctype": "User Permission",
-                "user": email,
-                "allow": "Bond Portfolio",
-                "for_value": assigned.name,
-                "apply_to_all_doctypes": 1,
-            }
-        ).insert(ignore_permissions=True)
+        email = make_assigned_investor(assigned.name)
 
         with as_investor_user(email):
             response = get_bootstrap()

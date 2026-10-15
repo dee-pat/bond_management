@@ -1,6 +1,6 @@
 import { expect, test, type Route } from "@playwright/test";
 
-import { authenticateInvestor } from "./helpers/auth";
+import { authenticateInvestor } from "../helpers/auth";
 import { selectFrappeOption } from "./helpers/controls";
 
 const INVESTOR_API =

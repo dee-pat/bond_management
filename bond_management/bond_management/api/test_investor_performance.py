@@ -16,6 +16,7 @@ from bond_management.bond_management.report.portfolio_performance.portfolio_perf
 )
 from bond_management.bond_management.tests.factories import (
     as_investor_user,
+    make_assigned_investor,
     make_bond,
     make_exchange_rate,
     make_investor_user,
@@ -31,10 +32,7 @@ from bond_management.bond_management.tests.investor_contracts import (
     PORTFOLIO_PERFORMANCE_COLUMN_FIELDS,
     PORTFOLIO_PERFORMANCE_ROW_FIELDS,
 )
-from bond_management.bond_management.utils.investor_permissions import (
-    BOND_MANAGER_ROLE,
-    INVESTOR_ROLE,
-)
+from bond_management.bond_management.utils.investor_permissions import BOND_MANAGER_ROLE
 
 COLUMN_FIELDS = {
     "fieldname",
@@ -51,7 +49,7 @@ VALUATION_DATE = "2025-12-31"
 class TestInvestorPortfolioPerformance(IntegrationTestCase):
     def test_standard_report_role_and_reference_doctype_permissions_are_required(self):
         portfolio = make_portfolio()
-        investor = self._make_investor(portfolio.name)
+        investor = make_assigned_investor(portfolio.name)
 
         with as_investor_user(investor):
             with (
@@ -92,7 +90,7 @@ class TestInvestorPortfolioPerformance(IntegrationTestCase):
     def test_unreadable_and_unknown_portfolios_have_same_failure(self):
         assigned = make_portfolio()
         unreadable = make_portfolio()
-        investor = self._make_investor(assigned.name)
+        investor = make_assigned_investor(assigned.name)
         unknown = unique_name("UNKNOWN-PORTFOLIO")
 
         for endpoint, suffix in (
@@ -123,7 +121,7 @@ class TestInvestorPortfolioPerformance(IntegrationTestCase):
 
     def test_assigned_empty_portfolio_has_no_rows_or_total(self):
         portfolio = make_portfolio()
-        investor = self._make_investor(portfolio.name)
+        investor = make_assigned_investor(portfolio.name)
 
         with as_investor_user(investor):
             response = get_portfolio_performance(portfolio.name, VALUATION_DATE)
@@ -141,7 +139,7 @@ class TestInvestorPortfolioPerformance(IntegrationTestCase):
             accrued_interest_paid="12.25",
         )
         frappe.db.set_value("Bond Transaction", transaction.name, "accrued_interest_calculated", "10.00")
-        investor = self._make_investor(portfolio.name)
+        investor = make_assigned_investor(portfolio.name)
 
         with as_investor_user(investor):
             response = get_interest_difference_by_portfolio(
@@ -247,7 +245,7 @@ class TestInvestorPortfolioPerformance(IntegrationTestCase):
         make_exchange_rate(rate="0.01")
         market_date = make_market_date(usd_bond)
         make_market_date(kes_bond, market_date=market_date)
-        investor = self._make_investor(portfolio.name)
+        investor = make_assigned_investor(portfolio.name)
         filters = {"portfolio": portfolio.name, "valuation_date": VALUATION_DATE}
 
         with as_investor_user(investor):
@@ -318,7 +316,7 @@ class TestInvestorPortfolioPerformance(IntegrationTestCase):
 
     def test_rejects_complex_invalid_and_arbitrary_arguments(self):
         portfolio = make_portfolio()
-        investor = self._make_investor(portfolio.name)
+        investor = make_assigned_investor(portfolio.name)
 
         with as_investor_user(investor):
             with self.assertRaisesRegex(frappe.ValidationError, "Portfolio is required"):
@@ -367,17 +365,4 @@ class TestInvestorPortfolioPerformance(IntegrationTestCase):
         bond = make_bond()
         make_transaction(bond, portfolio)
         make_market_date(bond)
-        return portfolio, bond, self._make_investor(portfolio.name)
-
-    def _make_investor(self, portfolio_name):
-        investor = make_investor_user([INVESTOR_ROLE])
-        frappe.get_doc(
-            {
-                "doctype": "User Permission",
-                "user": investor,
-                "allow": "Bond Portfolio",
-                "for_value": portfolio_name,
-                "apply_to_all_doctypes": 1,
-            }
-        ).insert(ignore_permissions=True)
-        return investor
+        return portfolio, bond, make_assigned_investor(portfolio.name)

@@ -1,10 +1,11 @@
 # Browser test guide
 
 Playwright specs are organized by product surface, with fixtures and helpers
-beside each surface's tests:
+beside each surface's tests. The login helper is shared:
 
 ```text
 e2e/
+├── helpers/auth.ts
 ├── investor/
 │   ├── auth.setup.ts
 │   ├── fixtures.ts

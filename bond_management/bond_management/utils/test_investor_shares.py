@@ -1,6 +1,5 @@
 """Regressions for Frappe's share fallback and strict investor access."""
 
-from contextlib import contextmanager
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -14,12 +13,14 @@ from frappe.tests import IntegrationTestCase
 
 from bond_management import hooks
 from bond_management.bond_management.tests.factories import (
+    allow_user,
     make_bond,
     make_exchange_rate,
     make_market_date,
     make_portfolio,
     make_statement,
     make_transaction,
+    make_user,
     unique_name,
 )
 from bond_management.bond_management.utils import investor_shares
@@ -40,17 +41,9 @@ class TestInvestorShares(IntegrationTestCase):
     def setUp(self):
         self.assigned = make_portfolio()
         self.other = make_portfolio()
-        self.investor = self.make_user([INVESTOR_ROLE])
-        self.manager = self.make_user([BOND_MANAGER_ROLE])
-        self.assignment = frappe.get_doc(
-            {
-                "doctype": "User Permission",
-                "user": self.investor.name,
-                "allow": "Bond Portfolio",
-                "for_value": self.assigned.name,
-                "apply_to_all_doctypes": 1,
-            }
-        ).insert(ignore_permissions=True)
+        self.investor = make_user([INVESTOR_ROLE])
+        self.manager = make_user([BOND_MANAGER_ROLE])
+        self.assignment = allow_user(self.investor.name, "Bond Portfolio", self.assigned.name)
 
     def test_share_validation_allows_assigned_read_and_rejects_other_portfolio(self):
         share = add_docshare("Bond Portfolio", self.assigned.name, self.investor.name)
@@ -78,7 +71,7 @@ class TestInvestorShares(IntegrationTestCase):
         )
         other_source = self.make_statement_source(make_statement(self.other, statement_date="2091-04-05"))
 
-        with self.as_user(self.investor.name):
+        with self.set_user(self.investor.name):
             self.assertEqual(
                 frappe.qb.get_query(
                     SOURCE_DOCTYPE,
@@ -95,7 +88,7 @@ class TestInvestorShares(IntegrationTestCase):
         with self.assertRaises(frappe.PermissionError):
             add_docshare(SOURCE_DOCTYPE, other_source.name, self.investor.name)
 
-        with self.as_user(self.investor.name):
+        with self.set_user(self.investor.name):
             self.assertTrue(frappe.get_doc(SOURCE_DOCTYPE, assigned_source.name).has_permission("read"))
             with self.assertRaises(frappe.PermissionError):
                 read_doc(SOURCE_DOCTYPE, other_source.name)
@@ -108,7 +101,7 @@ class TestInvestorShares(IntegrationTestCase):
             self.assertNotIn(other_source.name, visible_sources)
 
         legacy_share = self.legacy_share(other_source, self.investor.name)
-        with self.as_user(self.investor.name):
+        with self.set_user(self.investor.name):
             with self.assertRaises(frappe.PermissionError):
                 frappe.qb.get_query(
                     SOURCE_DOCTYPE,
@@ -137,7 +130,7 @@ class TestInvestorShares(IntegrationTestCase):
 
         self.assertTrue(frappe.db.exists("DocShare", share.name))
         self.assertEqual(frappe.db.get_value("DocShare", share.name, ["read", "write"]), (0, 0))
-        with self.as_user(self.investor.name):
+        with self.set_user(self.investor.name):
             with self.assertRaises(frappe.PermissionError):
                 read_doc(SOURCE_DOCTYPE, source.name)
             visible_sources = frappe.qb.get_query(
@@ -170,14 +163,14 @@ class TestInvestorShares(IntegrationTestCase):
         share.reload()
         self.assertTrue(share.read)
         self.assertFalse(share.write)
-        with self.as_user(self.investor.name):
+        with self.set_user(self.investor.name):
             self.assertIn(self.assigned.name, self.visible_portfolios())
             self.assertNotIn(self.other.name, self.visible_portfolios())
 
     def test_investor_actor_cannot_create_or_update_compatible_share_with_server_flags(self):
         flags = {"ignore_share_permission": True, "ignore_validate": True}
         share = add_docshare("Bond Portfolio", self.assigned.name, self.manager.name)
-        with self.as_user(self.investor.name):
+        with self.set_user(self.investor.name):
             with self.assertRaises(frappe.PermissionError):
                 add_docshare("Bond Portfolio", self.assigned.name, self.investor.name, flags=flags)
             with self.assertRaises(frappe.PermissionError):
@@ -202,7 +195,7 @@ class TestInvestorShares(IntegrationTestCase):
         self.investor.append("roles", {"role": BOND_MANAGER_ROLE})
         self.investor.save(ignore_permissions=True)
         bond = make_bond()
-        with self.as_user(self.investor.name):
+        with self.set_user(self.investor.name):
             with self.assertRaises(frappe.PermissionError):
                 add("Bond Master", bond.name, self.manager.name)
         self.assertFalse(
@@ -212,7 +205,7 @@ class TestInvestorShares(IntegrationTestCase):
     def test_investor_actor_cannot_remove_financial_share_with_server_flags(self):
         share = add_docshare("Bond Portfolio", self.assigned.name, self.investor.name)
         other_app = add_docshare("User", self.manager.name, self.investor.name)
-        with self.as_user(self.investor.name):
+        with self.set_user(self.investor.name):
             with patch.object(investor_shares, "_lock_users") as lock_users:
                 with self.assertRaises(frappe.PermissionError):
                     remove(
@@ -252,7 +245,7 @@ class TestInvestorShares(IntegrationTestCase):
         manager.reload()
         self.assertTrue(manager.write)
         self.assertTrue(frappe.db.exists("DocShare", other_app.name))
-        with self.as_user(self.investor.name):
+        with self.set_user(self.investor.name):
             self.assertNotIn(self.other.name, self.visible_portfolios())
             self.assertIn(self.assigned.name, self.visible_portfolios())
             with self.assertRaises(frappe.PermissionError):
@@ -336,7 +329,7 @@ class TestInvestorShares(IntegrationTestCase):
         self.assertEqual(locked_targets, expected_order)
 
     def test_mutual_manager_shares_lock_actors_and_recipients_in_one_order(self):
-        other_manager = self.make_user([BOND_MANAGER_ROLE])
+        other_manager = make_user([BOND_MANAGER_ROLE])
         add_docshare("Bond Portfolio", self.assigned.name, other_manager.name)
         add_docshare("Bond Portfolio", self.other.name, self.manager.name)
         lock_users = investor_shares._lock_users
@@ -348,7 +341,7 @@ class TestInvestorShares(IntegrationTestCase):
                 locked_users.extend(sorted({user for user in users if user}))
                 return lock_users(users)
 
-            with self.as_user(actor), patch.object(investor_shares, "_lock_users", side_effect=trace):
+            with self.set_user(actor), patch.object(investor_shares, "_lock_users", side_effect=trace):
                 document.save(ignore_permissions=True)
             return locked_users
 
@@ -471,21 +464,13 @@ class TestInvestorShares(IntegrationTestCase):
         self.manager.append("roles", {"role": INVESTOR_ROLE})
         self.manager.save(ignore_permissions=True)
         self.assertFalse(frappe.db.exists("DocShare", share.name))
-        with self.as_user(self.manager.name):
+        with self.set_user(self.manager.name):
             self.assertNotIn(self.other.name, self.visible_portfolios())
             with self.assertRaises(frappe.PermissionError):
                 read_doc("Bond Portfolio", self.other.name)
 
     def test_role_change_repair_uses_current_transaction_portfolio_for_list_access(self):
-        frappe.get_doc(
-            {
-                "doctype": "User Permission",
-                "user": self.manager.name,
-                "allow": "Bond Portfolio",
-                "for_value": self.assigned.name,
-                "apply_to_all_doctypes": 1,
-            }
-        ).insert(ignore_permissions=True)
+        allow_user(self.manager.name, "Bond Portfolio", self.assigned.name)
         transaction = make_transaction(make_bond(), self.assigned)
         share = add_docshare("Bond Transaction", transaction.name, self.manager.name)
 
@@ -510,7 +495,7 @@ class TestInvestorShares(IntegrationTestCase):
             self.manager.save(ignore_permissions=True)
 
         self.assertFalse(frappe.db.exists("DocShare", share.name))
-        with self.as_user(self.manager.name):
+        with self.set_user(self.manager.name):
             visible_transactions = frappe.qb.get_query(
                 "Bond Transaction", fields=["name"], ignore_permissions=False
             ).run(pluck=True)
@@ -522,7 +507,7 @@ class TestInvestorShares(IntegrationTestCase):
         share = add_docshare("Bond Portfolio", self.assigned.name, self.investor.name)
         self.assignment.delete(ignore_permissions=True)
         self.assertFalse(frappe.db.exists("DocShare", share.name))
-        with self.as_user(self.investor.name):
+        with self.set_user(self.investor.name):
             self.assertNotIn(self.assigned.name, self.visible_portfolios())
             with self.assertRaises(frappe.PermissionError):
                 read_doc("Bond Portfolio", self.assigned.name)
@@ -533,14 +518,14 @@ class TestInvestorShares(IntegrationTestCase):
         self.assertEqual(self.clear_portfolio_assignments(), 0)
         self.assertFalse(frappe.db.exists("DocShare", share.name))
         self.assertFalse(frappe.db.exists("User Permission", self.assignment.name))
-        with self.as_user(self.investor.name):
+        with self.set_user(self.investor.name):
             self.assertNotIn(self.assigned.name, self.visible_portfolios())
             with self.assertRaises(frappe.PermissionError):
                 read_doc("Bond Portfolio", self.assigned.name)
 
     def test_bulk_clear_endpoint_keeps_core_system_manager_permission_boundary(self):
         share = add_docshare("Bond Portfolio", self.assigned.name, self.investor.name)
-        with self.as_user(self.investor.name):
+        with self.set_user(self.investor.name):
             with self.assertRaises(frappe.PermissionError):
                 self.clear_portfolio_assignments()
         self.assertTrue(frappe.db.exists("DocShare", share.name))
@@ -551,12 +536,12 @@ class TestInvestorShares(IntegrationTestCase):
         self.assignment.for_value = self.other.name
         self.assignment.save(ignore_permissions=True)
         self.assertFalse(frappe.db.exists("DocShare", share.name))
-        with self.as_user(self.investor.name):
+        with self.set_user(self.investor.name):
             self.assertNotIn(self.assigned.name, self.visible_portfolios())
             self.assertIn(self.other.name, self.visible_portfolios())
 
     def test_assignment_user_change_revokes_previous_recipient_and_refreshes_permission_cache(self):
-        next_investor = self.make_user([INVESTOR_ROLE])
+        next_investor = make_user([INVESTOR_ROLE])
         share = add_docshare("Bond Portfolio", self.assigned.name, self.investor.name)
         self.assertTrue(get_user_permissions(self.investor.name).get("Bond Portfolio"))
         self.assertFalse(get_user_permissions(next_investor.name).get("Bond Portfolio"))
@@ -565,11 +550,11 @@ class TestInvestorShares(IntegrationTestCase):
         self.assertFalse(frappe.db.exists("DocShare", share.name))
         self.assertFalse(get_user_permissions(self.investor.name).get("Bond Portfolio"))
         self.assertTrue(get_user_permissions(next_investor.name).get("Bond Portfolio"))
-        with self.as_user(self.investor.name):
+        with self.set_user(self.investor.name):
             self.assertNotIn(self.assigned.name, self.visible_portfolios())
             with self.assertRaises(frappe.PermissionError):
                 read_doc("Bond Portfolio", self.assigned.name)
-        with self.as_user(next_investor.name):
+        with self.set_user(next_investor.name):
             self.assertIn(self.assigned.name, self.visible_portfolios())
             self.assertEqual(read_doc("Bond Portfolio", self.assigned.name).name, self.assigned.name)
 
@@ -579,7 +564,7 @@ class TestInvestorShares(IntegrationTestCase):
         self.assignment.applicable_for = "Bond Portfolio"
         self.assignment.save(ignore_permissions=True)
         self.assertFalse(frappe.db.exists("DocShare", share.name))
-        with self.as_user(self.investor.name):
+        with self.set_user(self.investor.name):
             self.assertNotIn(self.assigned.name, self.visible_portfolios())
             with self.assertRaises(frappe.PermissionError):
                 read_doc("Bond Portfolio", self.assigned.name)
@@ -595,7 +580,7 @@ class TestInvestorShares(IntegrationTestCase):
         statement.save()
         self.assertFalse(frappe.db.exists("DocShare", share.name))
         self.assertFalse(frappe.db.exists("DocShare", source_share.name))
-        with self.as_user(self.investor.name):
+        with self.set_user(self.investor.name):
             visible = frappe.qb.get_query("Bond Statement", fields=["name"], ignore_permissions=False).run(
                 pluck=True
             )
@@ -611,7 +596,7 @@ class TestInvestorShares(IntegrationTestCase):
         transaction.portfolio_name = self.other.name
         transaction.save()
         self.assertFalse(frappe.db.exists("DocShare", share.name))
-        with self.as_user(self.investor.name):
+        with self.set_user(self.investor.name):
             visible = frappe.qb.get_query("Bond Transaction", fields=["name"], ignore_permissions=False).run(
                 pluck=True
             )
@@ -621,7 +606,7 @@ class TestInvestorShares(IntegrationTestCase):
 
     def test_direct_document_read_still_rejects_a_conflicting_legacy_share(self):
         self.legacy_share(self.other, self.investor.name)
-        with self.as_user(self.investor.name):
+        with self.set_user(self.investor.name):
             with self.assertRaises(frappe.PermissionError):
                 client_get("Bond Portfolio", self.other.name)
             with self.assertRaises(frappe.PermissionError):
@@ -648,7 +633,7 @@ class TestInvestorShares(IntegrationTestCase):
         for document in documents:
             with self.subTest(doctype=document.doctype):
                 share = self.legacy_share(document, self.investor.name, write=1)
-                with self.as_user(self.investor.name):
+                with self.set_user(self.investor.name):
                     self.assertFalse(document.has_permission("write"))
                     with self.assertRaises(frappe.PermissionError):
                         document.save(ignore_permissions=True)
@@ -672,7 +657,7 @@ class TestInvestorShares(IntegrationTestCase):
             # A role cache refilled before a concurrent role save commits can
             # retain the prior manager roles after the investor role is saved.
             frappe.cache.hset("roles", self.investor.name, [BOND_MANAGER_ROLE, "All"])
-            with self.as_user(self.investor.name):
+            with self.set_user(self.investor.name):
                 self.assertNotIn(self.other.name, self.visible_portfolios())
                 with self.assertRaises(frappe.PermissionError):
                     read_doc("Bond Portfolio", self.other.name)
@@ -683,7 +668,7 @@ class TestInvestorShares(IntegrationTestCase):
 
     def test_standard_client_update_cannot_use_a_legacy_write_share(self):
         self.legacy_share(self.assigned, self.investor.name, write=1)
-        with self.as_user(self.investor.name):
+        with self.set_user(self.investor.name):
             with self.assertRaises(frappe.PermissionError):
                 set_value("Bond Portfolio", self.assigned.name, "account_no", "changed")
         self.assigned.reload()
@@ -739,27 +724,3 @@ class TestInvestorShares(IntegrationTestCase):
         )
         source_name = frappe.db.get_value(SOURCE_DOCTYPE, {"statement": statement.name}, "name")
         return frappe.get_doc(SOURCE_DOCTYPE, source_name)
-
-    def make_user(self, roles):
-        user = frappe.get_doc(
-            {
-                "doctype": "User",
-                "email": f"{unique_name('share-user').lower()}@example.com",
-                "first_name": "Share Test",
-                "send_welcome_email": 0,
-                "roles": [{"role": role} for role in roles],
-            }
-        )
-        # Frappe's production signup throttle is unrelated to test fixtures and
-        # can reject later tests after the full app suite creates many users.
-        with patch.object(frappe.db, "get_creation_count", return_value=0):
-            return user.insert(ignore_permissions=True)
-
-    @contextmanager
-    def as_user(self, user):
-        previous = frappe.session.user
-        try:
-            frappe.set_user(user)
-            yield
-        finally:
-            frappe.set_user(previous)

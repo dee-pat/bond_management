@@ -5,6 +5,7 @@ from unittest.mock import patch
 import frappe
 from frappe.utils import getdate
 
+from bond_management.bond_management.utils.investor_permissions import INVESTOR_ROLE
 from bond_management.bond_management.utils.investor_ui import FEATURE_FLAG
 
 DEFAULT_MARKET_DATE_START = date(2025, 5, 31)
@@ -14,20 +15,44 @@ def unique_name(prefix):
     return f"{prefix}-{frappe.generate_hash(length=8)}"
 
 
-def make_investor_user(roles):
-    return (
-        frappe.get_doc(
-            {
-                "doctype": "User",
-                "email": f"{unique_name('investor-ui').lower()}@example.com",
-                "first_name": "Investor UI Test",
-                "send_welcome_email": 0,
-                "roles": [{"role": role} for role in roles],
-            }
-        )
-        .insert(ignore_permissions=True)
-        .name
+def make_user(roles=()):
+    user = frappe.get_doc(
+        {
+            "doctype": "User",
+            "email": f"{unique_name('test-user').lower()}@example.com",
+            "first_name": "Test User",
+            "send_welcome_email": 0,
+            "roles": [{"role": role} for role in roles],
+        }
     )
+    # Frappe's production signup throttle is unrelated to test fixtures and
+    # can reject later tests after the full app suite creates many users.
+    with patch.object(frappe.db, "get_creation_count", return_value=0):
+        return user.insert(ignore_permissions=True)
+
+
+def make_investor_user(roles):
+    return make_user(roles).name
+
+
+def allow_user(user, allow, for_value):
+    """Restrict ``user`` to ``for_value`` on every DocType that links ``allow``."""
+    return frappe.get_doc(
+        {
+            "doctype": "User Permission",
+            "user": user,
+            "allow": allow,
+            "for_value": for_value,
+            "apply_to_all_doctypes": 1,
+        }
+    ).insert(ignore_permissions=True)
+
+
+def make_assigned_investor(portfolio_name):
+    """Return a read-only investor assigned to one Bond Portfolio."""
+    investor = make_investor_user([INVESTOR_ROLE])
+    allow_user(investor, "Bond Portfolio", portfolio_name)
+    return investor
 
 
 @contextmanager

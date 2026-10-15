@@ -9,10 +9,13 @@ from bond_management.bond_management.report.portfolio_performance.portfolio_perf
     validate_report_inputs,
 )
 from bond_management.bond_management.tests.factories import (
+    allow_user,
+    make_assigned_investor,
     make_bond,
     make_exchange_rate,
     make_portfolio,
     make_transaction,
+    make_user,
     unique_name,
 )
 from bond_management.bond_management.utils import investor_permissions
@@ -32,29 +35,14 @@ class TestInvestorPermissions(IntegrationTestCase):
 
     def test_cached_investor_scope_follows_role_and_assignment_saves(self):
         assigned = make_portfolio()
-        user = frappe.get_doc(
-            {
-                "doctype": "User",
-                "email": f"{frappe.generate_hash(length=10)}-scope-cache@example.com",
-                "first_name": "Scope Cache",
-                "send_welcome_email": 0,
-            }
-        ).insert(ignore_permissions=True)
+        user = make_user()
 
         self.assertIsNone(investor_permissions.get_allowed_portfolios(user.name))
 
         user.add_roles(investor_permissions.INVESTOR_ROLE)
         self.assertEqual(investor_permissions.get_allowed_portfolios(user.name), [])
 
-        assignment = frappe.get_doc(
-            {
-                "doctype": "User Permission",
-                "user": user.name,
-                "allow": "Bond Portfolio",
-                "for_value": assigned.name,
-                "apply_to_all_doctypes": 1,
-            }
-        ).insert(ignore_permissions=True)
+        assignment = allow_user(user.name, "Bond Portfolio", assigned.name)
         allowed = investor_permissions.get_allowed_portfolios(user.name)
         self.assertEqual(allowed, [assigned.name])
 
@@ -91,29 +79,9 @@ class TestInvestorPermissions(IntegrationTestCase):
         assigned_file = self._make_private_file("Bond Transaction", transaction.name)
         unrelated_file = self._make_private_file("User", "Administrator")
         unattached_file = self._make_private_file(None, None)
-        email = f"{unique_name('investor').lower()}@example.com"
-        frappe.get_doc(
-            {
-                "doctype": "User",
-                "email": email,
-                "first_name": "Investor",
-                "send_welcome_email": 0,
-                "roles": [{"role": investor_permissions.INVESTOR_ROLE}],
-            }
-        ).insert(ignore_permissions=True)
-        frappe.get_doc(
-            {
-                "doctype": "User Permission",
-                "user": email,
-                "allow": "Bond Portfolio",
-                "for_value": portfolio.name,
-                "apply_to_all_doctypes": 1,
-            }
-        ).insert(ignore_permissions=True)
+        email = make_assigned_investor(portfolio.name)
 
-        previous_user = frappe.session.user
-        try:
-            frappe.set_user(email)
+        with self.set_user(email):
             visible_files = frappe.qb.get_query(
                 "File",
                 fields=["name"],
@@ -123,8 +91,6 @@ class TestInvestorPermissions(IntegrationTestCase):
             self.assertIn(assigned_file.name, visible_files)
             self.assertNotIn(unrelated_file.name, visible_files)
             self.assertNotIn(unattached_file.name, visible_files)
-        finally:
-            frappe.set_user(previous_user)
 
     @staticmethod
     def _make_private_file(attached_to_doctype, attached_to_name):
@@ -147,29 +113,9 @@ class TestInvestorPermissions(IntegrationTestCase):
         bond = make_bond()
         assigned_transaction = make_transaction(bond, assigned_portfolio)
         other_transaction = make_transaction(bond, other_portfolio)
-        email = f"{unique_name('investor').lower()}@example.com"
-        frappe.get_doc(
-            {
-                "doctype": "User",
-                "email": email,
-                "first_name": "Investor",
-                "send_welcome_email": 0,
-                "roles": [{"role": investor_permissions.INVESTOR_ROLE}],
-            }
-        ).insert(ignore_permissions=True)
-        frappe.get_doc(
-            {
-                "doctype": "User Permission",
-                "user": email,
-                "allow": "Bond Portfolio",
-                "for_value": assigned_portfolio.name,
-                "apply_to_all_doctypes": 1,
-            }
-        ).insert(ignore_permissions=True)
+        email = make_assigned_investor(assigned_portfolio.name)
 
-        previous_user = frappe.session.user
-        try:
-            frappe.set_user(email)
+        with self.set_user(email):
             visible_transactions = frappe.qb.get_query(
                 "Bond Transaction",
                 fields=["name"],
@@ -187,31 +133,11 @@ class TestInvestorPermissions(IntegrationTestCase):
             )
             with self.assertRaises(frappe.PermissionError):
                 validate_report_inputs(other_portfolio.name, "2025-12-31")
-        finally:
-            frappe.set_user(previous_user)
 
     def test_legacy_share_cannot_override_investor_report_or_list_scope(self):
         assigned_portfolio = make_portfolio()
         other_portfolio = make_portfolio()
-        email = f"{unique_name('investor').lower()}@example.com"
-        frappe.get_doc(
-            {
-                "doctype": "User",
-                "email": email,
-                "first_name": "Investor",
-                "send_welcome_email": 0,
-                "roles": [{"role": investor_permissions.INVESTOR_ROLE}],
-            }
-        ).insert(ignore_permissions=True)
-        frappe.get_doc(
-            {
-                "doctype": "User Permission",
-                "user": email,
-                "allow": "Bond Portfolio",
-                "for_value": assigned_portfolio.name,
-                "apply_to_all_doctypes": 1,
-            }
-        ).insert(ignore_permissions=True)
+        email = make_assigned_investor(assigned_portfolio.name)
         frappe.get_doc(
             {
                 "doctype": "DocShare",
@@ -224,9 +150,7 @@ class TestInvestorPermissions(IntegrationTestCase):
             }
         ).db_insert()
 
-        previous_user = frappe.session.user
-        try:
-            frappe.set_user(email)
+        with self.set_user(email):
             with self.assertRaises(frappe.PermissionError):
                 frappe.has_permission("Bond Portfolio", "read", doc=other_portfolio.name)
             with self.assertRaises(frappe.PermissionError):
@@ -235,8 +159,6 @@ class TestInvestorPermissions(IntegrationTestCase):
                 frappe.qb.get_query("Bond Portfolio", fields=["name"], ignore_permissions=False).run(
                     pluck=True
                 )
-        finally:
-            frappe.set_user(previous_user)
 
     def test_exchange_rate_query_condition_is_registered(self):
         self.assertEqual(
@@ -430,26 +352,13 @@ class TestInvestorPermissions(IntegrationTestCase):
 
     def test_system_manager_can_manage_exchange_rates(self):
         ensure_exchange_rate_permissions()
-        email = f"{unique_name('system-manager').lower()}@example.com"
-        frappe.get_doc(
-            {
-                "doctype": "User",
-                "email": email,
-                "first_name": "System Manager",
-                "send_welcome_email": 0,
-                "roles": [{"role": "System Manager"}],
-            }
-        ).insert(ignore_permissions=True)
+        email = make_user(["System Manager"]).name
 
-        previous_user = frappe.session.user
-        try:
-            frappe.set_user(email)
+        with self.set_user(email):
             exchange_rate = make_exchange_rate()
             exchange_rate.rate = "0.0078"
             exchange_rate.save()
             exchange_rate.delete()
-        finally:
-            frappe.set_user(previous_user)
 
         self.assertFalse(frappe.db.exists("Bond Exchange Rate", exchange_rate.name))
 
