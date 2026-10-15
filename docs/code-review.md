@@ -105,62 +105,37 @@ is identified; report the failure separately and use a lower score when a
 confirmed finding warrants one. Verification requirements come from
 [verification.md](verification.md).
 
-### Weekly usage estimate
+### 5-hour usage estimate
 
 When the review environment exposes an authenticated usage tool for the
-reviewing agent's own subscription (Codex or Claude), capture the weekly
+reviewing agent's own subscription (Codex or Claude), capture the 300-minute
 window's used percentage, limit/bucket identity, window duration,
 reset timestamp, and observation time immediately before reviewing and again
-after the review work. Use the matching weekly bucket from both snapshots and
+after the review work. Use the matching 5-hour bucket from both snapshots and
 report `after used percentage - before used percentage` in **percentage points
-of the weekly allowance**. For example: `Weekly usage: estimated account-wide
-increase of 2 percentage points (27% to 29% used).`
+of the 5-hour allowance**. For example: `5-hour usage: 27% → 29% used;
+estimated account-wide increase: 2 percentage points; 71% remaining.`
 
 Label this an account-wide estimate: concurrent work on the same account,
 reporting delays, and rounded percentages prevent exact attribution to the
-review. A zero delta
-means no visible change, not proof of zero consumption. Include the observation
+review. A zero delta means no visible change, not proof of zero consumption.
+Include the observation
 times and reset timestamp so the measurement interval is clear. Never convert
 tokens, elapsed time, or a model's price into a subscription-usage percentage.
 
 If either snapshot is missing, the bucket/window/reset changes, the percentage
-decreases, or the review environment lacks usage access, report `Weekly review
-usage: unavailable` with the reason. A current account percentage alone is not
-review consumption. Repository guidance cannot grant GitHub's native reviewer
-access to account usage tools; include this field in the companion summary when
-needed. Report only the reviewing agent's subscription; a Claude Code review
+decreases, or the review environment lacks usage access, report `5-hour review
+usage: unavailable` with the reason. If a current snapshot is available, report
+its used/remaining percentages and reset time separately as current account
+status; a current percentage alone is not review consumption. Repository guidance
+cannot grant GitHub's native reviewer access to account usage tools. An agent
+coordinating a native review may capture snapshots around that review and report
+the account-wide delta, explicitly including its own activity in the measurement.
+Report only the reviewing agent's subscription; a Claude Code review
 reports Codex usage only when it actually invokes Codex and captures matching
 Codex snapshots, and the reverse applies to Codex reviews. Usage availability
-does not change the merge-readiness score or block the review.
-
-### Estimated cost in USD
-
-Convert a valid weekly usage delta into a **proportional subscription-cost
-estimate**, using a user-supplied or verified subscription price in USD. State
-the price and billing period used. For a monthly price `M` and usage increase
-`D` in percentage points:
-
-```text
-Estimated allocated cost (USD) = M × 12 ÷ 52 × D ÷ 100
-```
-
-For annual billing, use `annual USD price ÷ 52 × D ÷ 100`. This convention
-allocates the subscription evenly across 52 weeks and proportionally across
-the weekly allowance. It does not measure actual provider cost, API token
-charges, or an additional bill. The subscription also covers other features;
-this is a budgeting proxy rather than an official provider cost conversion.
-
-For example, a hypothetical $20/month subscription and a 2-percentage-point
-increase give `20 × 12 ÷ 52 × 2 ÷ 100 = $0.0923`, reported as about **$0.09**.
-Show the usage delta beside the estimate and retain its account-wide attribution
-and rounding caveats. For positive estimates below one cent, report `<$0.01`.
-
-If the price is unknown, provide the formula and report `Estimated allocated
-cost: unavailable (subscription price not supplied or verified)`. If the usage
-delta is unavailable, the cost estimate is unavailable too. A plan name alone
-does not establish the user's billed price. Keep credits, paid resets, and other
-charges separate; include them only when directly attributable billing evidence
-exists. Cost availability does not change the score or block the review.
+does not change the merge-readiness score or block the review. Report usage
+percentages only; omit weekly usage and USD cost conversions.
 
 ### Findings
 
@@ -204,15 +179,41 @@ Findings:
 When no actionable findings exist, state `No actionable findings; no fix prompts
 needed.` Report outstanding verification separately instead of inventing fixes.
 
+### Publish GitHub review summaries
+
+For a GitHub PR review, publish the summary as a PR conversation comment when
+the user has authorized posting. The comment must contain the score and rationale,
+reviewed head/base revisions, verification evidence, 5-hour usage or its
+unavailability reason, and both populated fix prompts when actionable findings
+exist. With no findings, explicitly state that no fix prompts are needed.
+Identify the summary's author/source; a coordinating agent's score is its own
+assessment, not a score supplied by the native reviewer. Link to the native
+review when one exists and state its reviewed revision and scope.
+
+Use an existing companion comment authored by the current agent/account for the
+same reviewed revision when possible, or create a new one. Preserve native bot
+comments. Include a marker such as `<!-- bond-management-review-summary -->`
+to find companion comments. Post a new summary for a new revision, and retain
+the old revision's evidence. For CLI posting, write the exact Markdown to a
+temporary file and use `gh pr comment <PR> --repo <owner/repo> --body-file <file>`;
+use the returned comment URL to confirm publication. Read back an updated comment
+to verify its body. If posting lacks authorization or fails, prepare the complete
+comment and report the blocker; a local answer does not satisfy publication.
+
 ### Review surfaces with restricted output
 
 Preserve any required review schema and inline-finding format. Put the score
 and prompts in the summary field when supported; never disguise them as a bug
-finding. If the surface cannot carry the summary, provide a companion summary
-in the review chat using the same revision and evidence. Native GitHub review
+finding. If the native GitHub surface cannot carry the summary, the coordinating
+agent must publish the companion comment above using the same revision and
+evidence. For local-only reviews, provide the summary in the review chat.
+Native GitHub review
 may restrict findings to high-priority issues; state that scope explicitly and
-use a follow-up review chat for a broader assessment. Repository instructions
-guide review behavior but cannot configure the integration's output schema.
+use a follow-up review for a broader assessment. The native integration has
+been observed to omit custom scores and usage fields. Repository instructions
+cannot configure its output schema or schedule companion posting: a supervising
+agent must perform the publication step. A standalone native review may therefore
+need an explicit follow-up request to publish the companion comment.
 
 ## Migration from PR-Agent
 
