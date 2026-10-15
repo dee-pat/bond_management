@@ -36,12 +36,12 @@ Frappe has no down migration: rollback is restoring the pre-migrate backup. Keep
 1. **Expand,** release N. Add the new field/DocType alongside the old one. Write both from the server, but keep reading the old one: it stays authoritative while previous-release workers, or a code-only rollback, can still write only the old shape.
 2. **Migrate,** release N+1, after every deployed site runs N and no pre-N writer can run. A registered, idempotent, batched patch backfills the new shape from the old, catching rows that only old code wrote. Add its legacy rows to the lifecycle fixtures and test results as business data (amounts, `Decimal` precision, provenance), not only row counts.
 3. **Switch,** in the same release N+1. Read only the new shape; keep writing both, because release-N workers or a rollback to N still read the old one.
-4. **Contract,** in a later release after every deployed site ran step 2 and no release that reads the old shape can still run, stop writing it and remove it:
+4. **Contract,** in a later release after every deployed site ran step 2 and no release that reads or writes the old shape can still run (release N+1 still writes it, so it too must be drained and no longer a rollback target), stop writing it and remove it:
    - **Field:** delete it from the DocType JSON. Frappe leaves the database column in place; `bench trim-tables` drops orphan columns.
    - **DocType:** first move or delete what still references it (`Link` and `Table` fields, User Permissions, DocShares, attached Files, reports, workspace entries, `_financial_doctypes` and other `hooks.py` entries), then delete its module folder. `bench migrate` removes the orphan `DocType` record but keeps the table; `bench trim-database` drops it.
    - Both trim commands are destructive and site-wide (`trim-database` drops every deleted DocType's table, other apps' included). Run each with `--dry-run` per site, show the user the list, and run it for real only with their explicit approval, never on the persistent dev or test site as part of a routine gate.
 
-Done when each release passes the lifecycle sequence and no code reads the old shape.
+Done when each release passes the lifecycle sequence and no code reads or writes the old shape.
 
 ## Retirement
 
