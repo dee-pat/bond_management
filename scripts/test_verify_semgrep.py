@@ -1,6 +1,7 @@
 """Exercise the shared security gate with real Semgrep findings in temporary apps."""
 
 import argparse
+import fcntl
 import os
 import shutil
 import signal
@@ -167,40 +168,48 @@ class FrappeRulesCacheTests(unittest.TestCase):
         self.assert_no_staging_left()
 
     def test_publication_waits_for_another_run_holding_the_lock(self):
-        # Another run takes the publish lock as this run starts its fetch. This
-        # run must wait instead of renaming the entry; its first wait publishes
-        # the other run's entry and releases the lock, and that entry is kept.
-        wrapper_root = self.root / "bin"
-        wrapper_root.mkdir()
-        git_wrapper = wrapper_root / "git"
-        git_wrapper.write_text(
-            "#!/usr/bin/env bash\n"
-            'if [[ " $* " == *" fetch "* ]]; then\n'
-            '    mkdir -p "$(dirname "${PUBLISH_CACHE}")" && mkdir "${PUBLISH_CACHE}.lock"\n'
-            "fi\n"
-            'exec "${REAL_GIT}" "$@"\n',
+        # Another run takes the publish lock as this run starts its fetch and
+        # holds it until this run asks for the lock; only then does it publish
+        # its marked entry and exit. This run must wait for the lock and keep
+        # that entry instead of publishing its own.
+        locked = self.root / "holder-locked"
+        requested = self.root / "lock-requested"
+        holder = self.root / "holder.py"
+        holder.write_text(
+            "import fcntl, os, subprocess, sys, time\n"
+            "lock, locked, requested, remote, cache, git = sys.argv[1:]\n"
+            "descriptor = os.open(lock, os.O_RDWR | os.O_CREAT, 0o644)\n"
+            "fcntl.flock(descriptor, fcntl.LOCK_EX)\n"
+            "open(locked, 'w').close()\n"
+            "deadline = time.monotonic() + 10\n"
+            "while not os.path.exists(requested) and time.monotonic() < deadline:\n"
+            "    time.sleep(0.05)\n"
+            "subprocess.run([git, 'clone', '-q', remote, cache], check=True)\n"
+            "open(os.path.join(cache, '.git', 'published-by-another-run'), 'w').close()\n",
             encoding="utf-8",
         )
-        sleep_wrapper = wrapper_root / "sleep"
-        sleep_wrapper.write_text(
-            "#!/usr/bin/env bash\n"
-            'if [[ -d "${PUBLISH_CACHE}.lock" && ! -e "${PUBLISH_CACHE}" ]]; then\n'
-            '    "${REAL_GIT}" clone -q "${PUBLISH_FROM}" "${PUBLISH_CACHE}" &&\n'
-            '        touch "${PUBLISH_CACHE}/.git/published-by-another-run" &&\n'
-            '        rmdir "${PUBLISH_CACHE}.lock"\n'
-            "fi\n",
-            encoding="utf-8",
+        wrapper_root = self.wrapper_root(
+            git=(
+                'if [[ " $* " == *" fetch "* ]]; then\n'
+                '    "${REAL_PYTHON}" "${HOLDER}" "${PUBLISH_LOCK}" "${HOLDER_LOCKED}" \\\n'
+                '        "${LOCK_REQUESTED}" "${PUBLISH_FROM}" "${PUBLISH_CACHE}" "${REAL_GIT}" &\n'
+                '    until [[ -e "${HOLDER_LOCKED}" ]]; do sleep 0.05; done\n'
+                "fi\n"
+                'exec "${REAL_GIT}" "$@"\n'
+            ),
+            python3='touch "${LOCK_REQUESTED}"\nexec "${REAL_PYTHON}" "$@"\n',
         )
-        for wrapper in (git_wrapper, sleep_wrapper):
-            wrapper.chmod(0o755)
 
         result = self.resolve(
             self.reachable_remote(),
-            {
-                "PATH": f"{wrapper_root}{os.pathsep}{os.environ['PATH']}",
-                "REAL_GIT": shutil.which("git"),
+            self.wrapper_environment(wrapper_root)
+            | {
+                "HOLDER": str(holder),
+                "HOLDER_LOCKED": str(locked),
+                "LOCK_REQUESTED": str(requested),
                 "PUBLISH_FROM": str(self.remote),
                 "PUBLISH_CACHE": str(self.cache),
+                "PUBLISH_LOCK": str(self.lock()),
             },
         )
         self.assertEqual(result.returncode, 0, result.stdout)
@@ -210,34 +219,31 @@ class FrappeRulesCacheTests(unittest.TestCase):
 
     def test_lock_left_by_a_killed_run_is_recovered(self):
         # A git wrapper kills this run's process group, as Ctrl-C or a cancelled
-        # CI job would, once it holds the publish lock. The next run must not
-        # wait for that lock and must remove the killed run's staging copy.
-        wrapper_root = self.root / "bin"
-        wrapper_root.mkdir()
-        wrapper = wrapper_root / "git"
-        wrapper.write_text(
-            "#!/usr/bin/env bash\n"
-            'if [[ -d "${PUBLISH_CACHE}.lock" ]]; then\n'
-            "    kill -KILL 0\n"
-            "fi\n"
-            'exec "${REAL_GIT}" "$@"\n',
-            encoding="utf-8",
+        # CI job would, once it holds the publish lock. The kernel releases the
+        # lock, so the next run takes it at once and removes the killed run's
+        # staging copy.
+        wrapper_root = self.wrapper_root(
+            git=(
+                'if [[ -e "${PUBLISH_LOCK}" ]] && ! "${REAL_PYTHON}" -c '
+                "'import fcntl, os, sys; "
+                "fcntl.flock(os.open(sys.argv[1], os.O_RDWR), fcntl.LOCK_EX | fcntl.LOCK_NB)' "
+                '"${PUBLISH_LOCK}" 2>/dev/null; then\n'
+                "    kill -KILL 0\n"
+                "fi\n"
+                'exec "${REAL_GIT}" "$@"\n'
+            ),
         )
-        wrapper.chmod(0o755)
 
         killed = self.resolve(
             self.reachable_remote(),
-            {
-                "PATH": f"{wrapper_root}{os.pathsep}{os.environ['PATH']}",
-                "REAL_GIT": shutil.which("git"),
-                "PUBLISH_CACHE": str(self.cache),
-            },
+            self.wrapper_environment(wrapper_root) | {"PUBLISH_LOCK": str(self.lock())},
             start_new_session=True,
         )
         self.assertEqual(killed.returncode, -signal.SIGKILL, killed.stdout)
         leftovers = sorted(p.name for p in self.cache.parent.iterdir())
         self.assertEqual(len(leftovers), 2, leftovers)
-        self.assertEqual(leftovers[1], f"{self.cache.name}.lock")
+        self.assertTrue(leftovers[0].startswith(".staging."), leftovers)
+        self.assertEqual(leftovers[1], self.lock().name)
 
         result = self.resolve(self.reachable_remote(), {"FRAPPE_SEMGREP_RULES_LOCK_TIMEOUT": "0"})
         self.assertEqual(result.returncode, 0, result.stdout)
@@ -246,14 +252,27 @@ class FrappeRulesCacheTests(unittest.TestCase):
 
     def test_held_lock_times_out_without_publishing(self):
         self.cache.parent.mkdir(parents=True)
-        lock = self.cache.parent / f"{self.cache.name}.lock"
-        lock.mkdir()
+        descriptor = os.open(self.lock(), os.O_RDWR | os.O_CREAT, 0o644)
+        self.addCleanup(os.close, descriptor)
+        fcntl.flock(descriptor, fcntl.LOCK_EX)
+
         result = self.resolve(self.reachable_remote(), {"FRAPPE_SEMGREP_RULES_LOCK_TIMEOUT": "0"})
         self.assertNotEqual(result.returncode, 0, result.stdout)
-        self.assertIn(f"Timed out waiting for {lock}", result.stdout)
+        self.assertIn(f"Timed out waiting for {self.lock()}", result.stdout)
         self.assertFalse(self.cache.exists())
-        lock.rmdir()
         self.assert_no_staging_left()
+
+    def test_lock_directories_from_an_older_version_do_not_block(self):
+        # 148f22b locked with <entry>.lock and <entry>.lock.break directories,
+        # which a killed run could leave behind with no owner.
+        self.cache.parent.mkdir(parents=True)
+        (self.cache.parent / f"{self.cache.name}.lock").mkdir()
+        (self.cache.parent / f"{self.cache.name}.lock.break").mkdir()
+
+        result = self.resolve(self.reachable_remote(), {"FRAPPE_SEMGREP_RULES_LOCK_TIMEOUT": "0"})
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assert_cache_is_pinned()
+        self.assertEqual([p.name for p in self.cache.parent.iterdir() if p.name.startswith(".staging.")], [])
 
     def resolve(self, repository, extra_environment=None, start_new_session=False):
         script = (
@@ -306,7 +325,27 @@ class FrappeRulesCacheTests(unittest.TestCase):
         self.assertEqual(list(self.temporary_root.iterdir()), [])
         cache_parent = self.cache.parent
         leftovers = [p.name for p in cache_parent.iterdir()] if cache_parent.exists() else []
-        self.assertEqual([name for name in leftovers if name != self.cache.name], [])
+        expected = {self.cache.name, self.lock().name}
+        self.assertEqual([name for name in leftovers if name not in expected], [])
+
+    def lock(self):
+        return self.cache.parent / f"{self.cache.name}.publish.lock"
+
+    def wrapper_root(self, **scripts):
+        wrapper_root = self.root / "bin"
+        wrapper_root.mkdir()
+        for name, body in scripts.items():
+            wrapper = wrapper_root / name
+            wrapper.write_text(f"#!/usr/bin/env bash\n{body}", encoding="utf-8")
+            wrapper.chmod(0o755)
+        return wrapper_root
+
+    def wrapper_environment(self, wrapper_root):
+        return {
+            "PATH": f"{wrapper_root}{os.pathsep}{os.environ['PATH']}",
+            "REAL_GIT": shutil.which("git"),
+            "REAL_PYTHON": shutil.which("python3"),
+        }
 
     def create_remote(self, path):
         self.git("init", "-q", str(path))

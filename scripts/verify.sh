@@ -108,12 +108,11 @@ frappe_semgrep_rules_are_pinned() {
 # publishing is a rename on one filesystem. Runs from other worktrees share the
 # cache, so the fetch runs outside a lock and publication inside it: the entry
 # is checked again while holding the lock, one another run published meanwhile
-# is kept, and only an invalid entry is ever removed. The lock and staging
-# directories name their owning process, so those left by a killed run are
-# recovered rather than blocking every later run.
+# is kept, and only an invalid entry is ever removed. The kernel releases the
+# lock when its holder exits, so a killed run never leaves it held.
 publish_frappe_semgrep_rules() {
     local rules_dir="$1"
-    local parent staging lock="${rules_dir}.lock"
+    local parent staging lock="${rules_dir}.publish.lock"
     parent="$(dirname "${rules_dir}")"
     if ! mkdir -p "${parent}" || ! staging="$(mktemp -d "${parent}/.staging.$$.XXXXXX")"; then
         echo "Could not stage Frappe Semgrep rules in ${parent}." >&2
@@ -130,46 +129,63 @@ publish_frappe_semgrep_rules() {
         return 1
     fi
 
-    local waited=0
-    until mkdir "${lock}" 2>/dev/null; do
-        if remove_stale_frappe_semgrep_rules_lock "${lock}"; then
-            continue
-        fi
-        if ((waited >= FRAPPE_SEMGREP_RULES_LOCK_TIMEOUT * 10)); then
-            rm -rf "${staging}"
-            echo "Timed out waiting for ${lock}; remove it if no lint run is active." >&2
-            return 1
-        fi
-        sleep 0.1
-        waited=$((waited + 1))
-    done
-    printf '%s\n' "$$" >"${lock}/owner"
-    remove_stale_frappe_semgrep_rules_staging "${parent}"
-    if ! frappe_semgrep_rules_are_pinned "${rules_dir}"; then
-        if ! rm -rf "${rules_dir}" || ! mv "${staging}" "${rules_dir}"; then
-            rm -rf "${staging}" "${lock}"
+    local status=0
+    run_with_file_lock "${lock}" "${FRAPPE_SEMGREP_RULES_LOCK_TIMEOUT}" \
+        env "FRAPPE_SEMGREP_RULES_SHA=${FRAPPE_SEMGREP_RULES_SHA}" "${BASH}" -c "$(
+            declare -f frappe_semgrep_rules_are_pinned \
+                remove_stale_frappe_semgrep_rules_staging replace_frappe_semgrep_rules
+        )
+replace_frappe_semgrep_rules \"\$@\"" replace-frappe-semgrep-rules "${rules_dir}" "${staging}" ||
+        status=$?
+    if ((status != 0)); then
+        rm -rf "${staging}"
+        if ((status == 75)); then
+            echo "Timed out waiting for ${lock}; another lint run is publishing the rules." >&2
+        else
             echo "Could not cache Frappe Semgrep rules at ${rules_dir}." >&2
-            return 1
         fi
-    fi
-    rm -rf "${staging}" "${lock}"
-}
-
-# Removes a publish lock whose owner has exited, for example after Ctrl-C or a
-# cancelled CI job. Breakers serialize on a guard directory and read the owner
-# again while holding it, so a lock another run took meanwhile is never
-# removed. A lock with no owner yet is treated as held.
-remove_stale_frappe_semgrep_rules_lock() {
-    local lock="$1" owner removed=1
-    owner="$(cat "${lock}/owner" 2>/dev/null)" || return 1
-    if [[ -z "${owner}" ]] || kill -0 "${owner}" 2>/dev/null || ! mkdir "${lock}.break" 2>/dev/null; then
         return 1
     fi
-    if [[ "$(cat "${lock}/owner" 2>/dev/null)" == "${owner}" ]] && rm -rf "${lock}"; then
-        removed=0
+}
+
+# Runs while holding the publish lock. Keeps a valid entry, including one
+# another run published after this run's fetch, and otherwise replaces the
+# entry with the staged checkout.
+replace_frappe_semgrep_rules() {
+    local rules_dir="$1" staging="$2"
+    remove_stale_frappe_semgrep_rules_staging "$(dirname "${rules_dir}")"
+    if frappe_semgrep_rules_are_pinned "${rules_dir}"; then
+        rm -rf "${staging}"
+        return
     fi
-    rmdir "${lock}.break"
-    return "${removed}"
+    rm -rf "${rules_dir}" && mv "${staging}" "${rules_dir}"
+}
+
+# Runs a command while holding an exclusive flock on a file, or exits 75 when
+# the lock stays held for the timeout in seconds. The command inherits the
+# locked descriptor, and the kernel releases the lock when every holder has
+# exited, however it died. Bash 3.2 on macOS has no flock(1), so this uses
+# python3, which the lint gate already needs.
+run_with_file_lock() {
+    local lock="$1" timeout="$2"
+    shift 2
+    python3 -c '
+import fcntl, os, sys, time
+
+lock, timeout, command = sys.argv[1], float(sys.argv[2]), sys.argv[3:]
+descriptor = os.open(lock, os.O_RDWR | os.O_CREAT, 0o644)
+deadline = time.monotonic() + timeout
+while True:
+    try:
+        fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        break
+    except BlockingIOError:
+        if time.monotonic() >= deadline:
+            sys.exit(75)
+        time.sleep(0.1)
+os.set_inheritable(descriptor, True)
+os.execvp(command[0], command)
+' "${lock}" "${timeout}" "$@"
 }
 
 # Removes staging directories whose owning run has exited. Called while holding
