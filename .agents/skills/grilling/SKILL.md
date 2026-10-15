@@ -1,6 +1,6 @@
 ---
 name: grilling
-description: Grill the user one decision at a time to stress-test an ambiguous plan or design before implementation. Use when the user explicitly asks to grill, stress-test, or interview them, or when a change has unresolved high-impact decisions involving bond financial rules, dates, permissions, data integrity, migrations, transaction boundaries, attachments, public APIs, or cross-cutting architecture. Do not use for routine fixes, lint or formatting cleanup, mechanical edits, documentation-only changes, or a clear implementation request with no material decisions left.
+description: Grill the user one decision at a time before implementation. Use when asked to grill or stress-test a plan, or when a financial, permission, migration, or architecture change still has unresolved high-impact decisions.
 ---
 
 Interview me about every unresolved decision until we reach a shared understanding. Walk down each branch of the decision tree, resolving dependencies one at a time. For each question, provide a recommended answer.

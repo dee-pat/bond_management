@@ -36,49 +36,36 @@ Codex reacts while reviewing and posts its findings on the PR. Confirm that a
 review appeared for the intended revision. A reaction alone is not evidence
 that the review completed. Request another review manually after relevant fixes.
 
-Root and nested `AGENTS.md` files supply review guidance. This app's **Code
-Review Rules** cover runtime API validation, portfolio/document permissions,
-framework transactions, migrations, concurrency, financial precision, private
-attachments, and Desk/SPA integration. The domain model and verification guide
-remain the source of truth for relationships and required checks.
+Root and nested `AGENTS.md` files supply review guidance. The root file's
+**Review guidelines** section applies the app's Frappe, financial, attachment,
+and migration rules to the diff. The domain model and verification guide remain
+the source of truth for relationships and required checks. For a local agent
+review, the `frappe-code-review` skill is the general Frappe checklist.
 
 Reviews are advisory. Existing tests, CI checks, and human review still determine
 whether a change is ready to merge. If no review appears, check the repository
 connection, code review access, subscription usage limits, and exact mention.
 
-## Migration from PR-Agent
+## GitHub review conversations
 
-The PR-Agent workflow, configuration, and API setup guide have been removed.
-The old `/review` comment and Actions workflow are replaced by `@codex review`.
-Remove the obsolete `OPENAI_KEY` repository Actions secret and `PR_AGENT_MODEL`
-variable if present. Revoke the dedicated provider key in OpenAI settings.
-GitHub's stored secret and the provider key are separate objects.
+As part of a requested GitHub PR review or review-fix workflow, resolve existing
+review conversations whose findings are verified as addressed by subsequent
+changes; include this reconciliation in completion rather than leaving it for a
+separate user request.
 
-## Verification evidence — 2026-10-09
-
-The command evidence below records the site names in use at the time
-(`dev.local` and `test_site`). The current Bond Management pair is
-`bond-management-dev.localhost` and `bond-management-test.localhost`; use
-`docs/verification.md` for current commands.
-
-- Risk classification: review configuration and agent guidance only; no app
-  runtime, schema, or financial behavior change.
-- Required gates: scoped formatting, diff checks, and the shared pre-push gate.
-- Commands executed / exit statuses:
-  - From the configured bench, `apps/bond_management/scripts/verify.sh pre-push`:
-    **0**, including migration of the existing `test_site`.
-  - From the setup worktree, the configured bench's `env/bin/pre-commit run
-    --files AGENTS.md README.md docs/code-review.md`: **0**.
-  - From the setup worktree, `git diff --check`: **0**.
-- Tests passed: 391 app server tests (48 unit, 334 integration, 9 uncategorized),
-  4 verification-script tests, and 2 Semgrep rule tests.
-- Tests failed: none.
-- Tests not run: a live Codex review; account connection/settings must be
-  verified first. Playwright and fresh app installation are not applicable to
-  this review configuration change.
-- Blockers: ChatGPT sign-in is required to inspect account-side review settings.
-- Unverified local/CI differences: repository files do not prove the GitHub
-  integration is connected, that automatic review is off, or that a subscription
-  review completed. Local gates use the existing macOS bench and `test_site`.
-- Domain-model review: graphs and notes reviewed; no mapped DocType, ownership,
-  attachment, report, API, or service relationship changes.
+- Fetch the current PR head and every page of unresolved review threads. Read
+  each finding and its replies, then check the current code and relevant change
+  history. An outdated marker or a reply claiming a fix is not proof.
+- Resolve only findings fully addressed at the current head. Leave partial
+  fixes, regressions, unanswered questions, and still-applicable findings open.
+  Check each conversation independently, including older duplicates of a newer
+  finding; a fix that was later lost does not qualify.
+- When implementing fixes, run the applicable verification gates and wait for
+  required CI on the pushed revision before resolving its conversations. If
+  the head changes during reconciliation, recheck affected findings against it.
+- Use the platform's resolve-thread operation, preserving the discussion and
+  other reviewers' comments. Resolution alone does not authorize posting replies
+  or changing review approvals.
+- Read back thread states and report the resolved count and remaining open
+  issues, with links when useful. If permissions or tools prevent resolution,
+  report the exact blocker and which verified conversations remain open.
