@@ -20,7 +20,8 @@ This file covers what the code cannot tell you. Nested `AGENTS.md` files in
   data, or a report/API/service data flow. Otherwise record that you reviewed it.
 - Skills live in `.agents/skills/`; never install skills globally. Upstream and
   kit skills are pinned in `skills.lock` and vendored unmodified by
-  `scripts/sync-skills.sh`; only `bond-management-migration` is edited here.
+  `scripts/sync-skills.sh`; only the `bond-management-*` skills are edited
+  here.
 - The _Shared Frappe rules_ block below is generated from
   [frappe-agent-kit](https://github.com/dee-pat/frappe-agent-kit). Never edit it
   here: change the kit, then bump the pin in `skills.lock` and run
@@ -41,6 +42,8 @@ This file covers what the code cannot tell you. Nested `AGENTS.md` files in
   Playwright seed: `tests/investor_ui_seed.py`. Rule-to-test index:
   [testing-matrix.md](docs/testing-matrix.md).
 - Open work and invariants: `ARCHITECTURE_SPEC.md`, `docs/specs/`, `docs/plans/`.
+  Accepted business and architecture decisions:
+  [docs/decisions/](docs/decisions/README.md).
 
 ## Architecture
 
@@ -71,6 +74,10 @@ This file covers what the code cannot tell you. Nested `AGENTS.md` files in
 
 ## Bond financial conventions
 
+- [docs/decisions/](docs/decisions/README.md) records some of these
+  conventions with their reasons and consequences. Read the matching record
+  before changing a convention it covers. Changing any convention below,
+  recorded or not, needs the user's approval and a new or superseding record.
 - Build monetary values, accrued interest, yields and quantities as `Decimal`
   from strings. Keep `Decimal` through calculations and quantize only at the
   business-rule boundary with an explicit rounding mode and documented
@@ -185,6 +192,14 @@ bench --site bond-management-test.localhost run-tests --doctype "Bond Transactio
 
 ## Review guidelines
 
+- Before reviewing a PR, commit, or uncommitted diff, read the
+  [review output contract](docs/code-review.md#review-output-contract). Include
+  a merge-readiness score from **0/5 to 5/5**, revision and verification
+  evidence, 5-hour usage when measurable, and ready-to-copy Codex and Claude
+  Code fix prompts populated with the actionable findings. For GitHub PR
+  reviews, publish the summary on the PR when posting is authorized; a
+  chat-only summary is insufficient. Follow the contract's companion-comment
+  procedure when the native review restricts the output format.
 - Review changed APIs, controllers, metadata, hooks, reports and Desk/SPA
   projections together against the rules above.
 - Report concrete defects the diff introduces, with the affected user or data,

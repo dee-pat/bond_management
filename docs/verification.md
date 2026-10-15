@@ -3,6 +3,35 @@
 Read this file for changes, verification, CI failures, and completion evidence.
 Commands below run from the bench directory unless stated otherwise.
 
+## Definition of done
+
+A change is done when its own acceptance criteria are met and every applicable
+item below holds. Record any item that does not apply, with the reason, in the
+evidence.
+
+- **Proven:** new or changed behavior has a test that fails without the change
+  and passes with it; a bug fix adds its regression test first. Comparison
+  rules cover greater-than, less-than, and equality.
+- **Financial conventions:** values stay `Decimal` from strings through the
+  calculation; rounding mode, cash-flow signs, commission, per-100 market-price
+  basis, and settlement-date effectiveness are unchanged, or changed only with
+  an explicit business decision and boundary tests.
+- **Server-authoritative:** financial, posting, reconciliation, and attachment
+  mutations await the server result in Desk and the SPA.
+- **Permission scope:** a new financial DocType is in `_financial_doctypes` in
+  `hooks.py`; new whitelisted inputs are type-checked; investor reads go
+  through `api/investor*.py` projections scoped to assigned portfolios.
+- **Install and migrate:** a data patch is idempotent and registered; an
+  invariant it creates is also bootstrapped in `after_install`; the
+  fresh-install check below passed.
+- **Docs in step:** `docs/domain-model.md` is updated, or its review is
+  recorded; the testing matrix, specs, and agent guidance describe the new
+  behavior.
+- **Clean diff:** nothing outside the task's scope; no debug output, dead code,
+  or commented-out blocks; no secrets, PDF passwords, or site credentials.
+- **Verified:** every required gate below exited zero on the final commit, and
+  required CI checks passed on it.
+
 ## Verification evidence
 
 Before committing or pushing, record local verification evidence. Before

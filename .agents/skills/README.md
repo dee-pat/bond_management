@@ -14,7 +14,8 @@ adaptations in the root or nested `AGENTS.md` files instead.
   `scripts/sync-skills.sh sync`, and commit the lock and the copies together.
 - **`playwright-cli`**: symlink to `node_modules/@playwright/cli/skills/playwright-cli`,
   pinned by `package.json`; run `yarn install` in the app root to resolve it.
-- **This app** (`bond-management-migration`): edit here.
+- **This app** (`bond-management-debugging`, `bond-management-migration`): edit
+  here.
 
 [frappe-agent-kit.md](../../docs/plans/frappe-agent-kit.md) records how the
 shared kit was split out of this app.
