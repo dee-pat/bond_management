@@ -207,6 +207,8 @@ bench --site bond-management-test.localhost run-tests --doctype "Bond Transactio
   format.
 - Review changed APIs, controllers, metadata, hooks, reports and Desk/SPA
   projections together against the rules above.
+- For a diff touching an entry point, permission scope, shares, attachments,
+  secrets, or rendered HTML, apply [docs/security-review.md](docs/security-review.md).
 - Report concrete defects the diff introduces, with the affected user or data,
   a plausible trigger and the responsible code. Check
   [domain-model.md](docs/domain-model.md) relationships and the evidence that
