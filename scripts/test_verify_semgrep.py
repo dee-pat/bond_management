@@ -165,6 +165,59 @@ class FrappeRulesCacheTests(unittest.TestCase):
         self.assert_cache_is_pinned()
         self.assert_no_staging_left()
 
+    def test_publication_waits_for_another_run_holding_the_lock(self):
+        # Another run takes the publish lock as this run starts its fetch. This
+        # run must wait instead of renaming the entry; its first wait publishes
+        # the other run's entry and releases the lock, and that entry is kept.
+        wrapper_root = self.root / "bin"
+        wrapper_root.mkdir()
+        git_wrapper = wrapper_root / "git"
+        git_wrapper.write_text(
+            "#!/usr/bin/env bash\n"
+            'if [[ " $* " == *" fetch "* ]]; then\n'
+            '    mkdir -p "$(dirname "${PUBLISH_CACHE}")" && mkdir "${PUBLISH_CACHE}.lock"\n'
+            "fi\n"
+            'exec "${REAL_GIT}" "$@"\n',
+            encoding="utf-8",
+        )
+        sleep_wrapper = wrapper_root / "sleep"
+        sleep_wrapper.write_text(
+            "#!/usr/bin/env bash\n"
+            'if [[ -d "${PUBLISH_CACHE}.lock" && ! -e "${PUBLISH_CACHE}" ]]; then\n'
+            '    "${REAL_GIT}" clone -q "${PUBLISH_FROM}" "${PUBLISH_CACHE}" &&\n'
+            '        touch "${PUBLISH_CACHE}/.git/published-by-another-run" &&\n'
+            '        rmdir "${PUBLISH_CACHE}.lock"\n'
+            "fi\n",
+            encoding="utf-8",
+        )
+        for wrapper in (git_wrapper, sleep_wrapper):
+            wrapper.chmod(0o755)
+
+        result = self.resolve(
+            self.reachable_remote(),
+            {
+                "PATH": f"{wrapper_root}{os.pathsep}{os.environ['PATH']}",
+                "REAL_GIT": shutil.which("git"),
+                "PUBLISH_FROM": str(self.remote),
+                "PUBLISH_CACHE": str(self.cache),
+            },
+        )
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertTrue((self.cache / ".git" / "published-by-another-run").exists())
+        self.assert_cache_is_pinned()
+        self.assert_no_staging_left()
+
+    def test_held_lock_times_out_without_publishing(self):
+        self.cache.parent.mkdir(parents=True)
+        lock = self.cache.parent / f"{self.cache.name}.lock"
+        lock.mkdir()
+        result = self.resolve(self.reachable_remote(), {"FRAPPE_SEMGREP_RULES_LOCK_TIMEOUT": "0"})
+        self.assertNotEqual(result.returncode, 0, result.stdout)
+        self.assertIn(f"Timed out waiting for {lock}", result.stdout)
+        self.assertFalse(self.cache.exists())
+        lock.rmdir()
+        self.assert_no_staging_left()
+
     def resolve(self, repository, extra_environment=None):
         script = (
             'source "$1"; '

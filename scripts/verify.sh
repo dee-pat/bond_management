@@ -11,6 +11,7 @@ SEMGREP_VERSION="1.172.0"
 FRAPPE_SEMGREP_RULES_REPOSITORY="https://github.com/frappe/semgrep-rules.git"
 FRAPPE_SEMGREP_RULES_SHA="de085539bc9b4d74eb0a2ac508d21f33495be733"
 FRAPPE_SEMGREP_RULES_CACHE="${BENCH_ROOT}/.cache/frappe-semgrep-rules/${FRAPPE_SEMGREP_RULES_SHA}"
+FRAPPE_SEMGREP_RULES_LOCK_TIMEOUT="${FRAPPE_SEMGREP_RULES_LOCK_TIMEOUT:-120}"
 APP_SEMGREP_RULES_FILE="${APP_ROOT}/semgrep/bond_management.yml"
 APP_SEMGREP_TESTS_FILE="${APP_ROOT}/semgrep/tests/bond_management.py"
 
@@ -105,12 +106,12 @@ frappe_semgrep_rules_are_pinned() {
 
 # Fetches the pinned rules into a staging directory beside the cache entry, so
 # publishing is a rename on one filesystem. Runs from other worktrees share the
-# cache: the entry is checked again after the fetch, so one another run
-# published meanwhile is kept, and only an invalid entry is renamed aside and
-# removed.
+# cache, so the fetch runs outside a lock and publication inside it: the entry
+# is checked again while holding the lock, one another run published meanwhile
+# is kept, and only an invalid entry is ever removed.
 publish_frappe_semgrep_rules() {
     local rules_dir="$1"
-    local parent staging
+    local parent staging lock="${rules_dir}.lock"
     parent="$(dirname "${rules_dir}")"
     if ! mkdir -p "${parent}" || ! staging="$(mktemp -d "${parent}/.staging.XXXXXX")"; then
         echo "Could not stage Frappe Semgrep rules in ${parent}." >&2
@@ -127,23 +128,26 @@ publish_frappe_semgrep_rules() {
         return 1
     fi
 
-    if frappe_semgrep_rules_are_pinned "${rules_dir}"; then
-        rm -rf "${staging}"
-        return
-    fi
-
-    if [[ -e "${rules_dir}" ]] && mv "${rules_dir}" "${staging}.discarded" 2>/dev/null; then
-        rm -rf "${staging}.discarded"
-    fi
-    mv "${staging}" "${rules_dir}" 2>/dev/null || true
-    # If another run published between the check and the rename, mv placed the
-    # staging directory inside that entry; remove it from there.
-    rm -rf "${rules_dir:?}/$(basename "${staging}")" "${staging}"
-
+    local waited=0
+    until mkdir "${lock}" 2>/dev/null; do
+        if ((waited >= FRAPPE_SEMGREP_RULES_LOCK_TIMEOUT * 10)); then
+            rm -rf "${staging}"
+            echo "Timed out waiting for ${lock}; remove it if no lint run is active." >&2
+            return 1
+        fi
+        sleep 0.1
+        waited=$((waited + 1))
+    done
     if ! frappe_semgrep_rules_are_pinned "${rules_dir}"; then
-        echo "Could not cache Frappe Semgrep rules at ${rules_dir}." >&2
-        return 1
+        if ! rm -rf "${rules_dir}" || ! mv "${staging}" "${rules_dir}"; then
+            rm -rf "${staging}"
+            rmdir "${lock}"
+            echo "Could not cache Frappe Semgrep rules at ${rules_dir}." >&2
+            return 1
+        fi
     fi
+    rm -rf "${staging}"
+    rmdir "${lock}"
 }
 
 run_semgrep() {
