@@ -1,8 +1,9 @@
 # Shared Frappe agent kit
 
-Status: proposal. Phase 1 (lock file and sync script for the upstream skills
-already vendored here) is implemented; later phases wait on the decisions at
-the end.
+Status: phases 1 and 2 done. The kit is public at
+[dee-pat/frappe-agent-kit](https://github.com/dee-pat/frappe-agent-kit), tag
+`v0.1.0` (`cfaf4562a00895f7157126d5a8f91fca267409c4`). Phase 3 (adopting it here)
+is next.
 
 ## Goal
 
@@ -32,7 +33,7 @@ credentials or anything from private repos.
 | Layer          | Source                                    | How an app gets it                                       |
 | -------------- | ----------------------------------------- | -------------------------------------------------------- |
 | Upstream       | `frappe/skills`, `frappe/frappe-ui`       | Vendored unmodified at a pinned revision (`skills.lock`) |
-| Kit            | New repo, e.g. `dee-pat/frappe-agent-kit` | Vendored unmodified at a pinned revision (`skills.lock`) |
+| Kit            | `dee-pat/frappe-agent-kit`                | Vendored unmodified at a pinned revision (`skills.lock`) |
 | Kit rules      | `rules/frappe.md` in the kit              | Synced into a marked block in the app's `AGENTS.md`      |
 | App            | This repo                                 | Written here                                             |
 | npm-packaged   | `@playwright/cli`                         | Symlink into `node_modules`, pinned by `package.json`    |
@@ -93,9 +94,14 @@ marker. The sync script owns the block; hand edits inside it fail the check.
 
 1. **Done here:** `skills.lock` and `scripts/sync-skills.sh` for the four
    upstream skills already vendored. `check` passes against the current tree.
-2. **Create the kit repo** with `rules/frappe.md`, `skills/frappe-migration`,
-   `skills/grilling` and `skills/pr-review-threads`, extracted from this app and
-   the bench file. Tag a first revision.
+2. **Done:** created the public kit with `rules/frappe.md`,
+   `skills/frappe-migration`, `skills/grilling`, `skills/pr-review-threads` and
+   `tools/sync-skills.sh`, extracted from this app and the bench file and
+   scrubbed of app names, sites and data. Tagged `v0.1.0`. Verified end to end:
+   the kit's own `sync-skills.sh` synced and checked all three kit skills into a
+   scratch app at that revision. The kit's `tools/sync-skills.sh` is now the
+   canonical copy; this app's `scripts/sync-skills.sh` should be refreshed from
+   it in phase 3.
 3. **Adopt in Bond Management:** add kit lines to `skills.lock`, add rules-block
    support to the script, replace the moved `AGENTS.md` sections with the
    generated block, and thin `bond-management-migration`. Run `sync-skills.sh
@@ -119,5 +125,5 @@ marker. The sync script owns the block; hand edits inside it fail the check.
 - **Network in the lint gate.** `check` fetches pinned revisions. CI has network;
   local runs use the cache after the first fetch. Alternative: run `check` only
   in CI.
-- **Repo name** and whether `grilling` and `pr-review-threads` belong in the kit
-  or in your user-level skills.
+- **Kit license:** MIT. Change it before outside apps adopt the kit if you
+  prefer another.
