@@ -67,9 +67,7 @@ semgrep_binary() {
 
 frappe_semgrep_rules_dir() {
     # Callers run this in a command substitution, which does not inherit
-    # errexit, so every step checks its own result. A cache entry is published
-    # only after it is verified at the pinned revision, and a broken entry left
-    # by an older run is replaced.
+    # errexit, so every step checks its own result.
     if [[ -n "${FRAPPE_SEMGREP_RULES_DIR:-}" ]]; then
         if [[ ! -d "${FRAPPE_SEMGREP_RULES_DIR}/.git" ]]; then
             echo "FRAPPE_SEMGREP_RULES_DIR must be a git checkout." >&2
@@ -88,28 +86,64 @@ frappe_semgrep_rules_dir() {
     fi
 
     local rules_dir="${FRAPPE_SEMGREP_RULES_CACHE}"
-    if [[ "$(git -C "${rules_dir}" rev-parse HEAD 2>/dev/null)" != "${FRAPPE_SEMGREP_RULES_SHA}" ]]; then
-        local staging
-        staging="$(mktemp -d "${TMPDIR:-/tmp}/frappe-semgrep-rules.XXXXXX")" || return 1
-        if ! git init -q "${staging}" ||
-            ! git -C "${staging}" remote add origin "${FRAPPE_SEMGREP_RULES_REPOSITORY}" ||
-            ! git -C "${staging}" fetch -q --depth 1 origin "${FRAPPE_SEMGREP_RULES_SHA}" ||
-            ! git -C "${staging}" checkout -q --detach FETCH_HEAD ||
-            [[ "$(git -C "${staging}" rev-parse HEAD)" != "${FRAPPE_SEMGREP_RULES_SHA}" ]]; then
-            rm -rf "${staging}"
-            echo "Could not fetch Frappe Semgrep rules at ${FRAPPE_SEMGREP_RULES_SHA}; nothing was cached." >&2
-            return 1
-        fi
-        if ! mkdir -p "$(dirname "${rules_dir}")" ||
-            ! rm -rf "${rules_dir}" ||
-            ! mv "${staging}" "${rules_dir}"; then
-            rm -rf "${staging}"
-            echo "Could not cache Frappe Semgrep rules at ${rules_dir}." >&2
-            return 1
-        fi
+    if ! frappe_semgrep_rules_are_pinned "${rules_dir}"; then
+        publish_frappe_semgrep_rules "${rules_dir}" || return 1
     fi
 
     printf '%s\n' "${rules_dir}"
+}
+
+# Succeeds only for a checkout of the pinned commit with no modified, deleted,
+# untracked or ignored files, so local edits never weaken the gate.
+frappe_semgrep_rules_are_pinned() {
+    local checkout="$1"
+    local changes
+    [[ "$(git -C "${checkout}" rev-parse HEAD 2>/dev/null)" == "${FRAPPE_SEMGREP_RULES_SHA}" ]] &&
+        changes="$(git -C "${checkout}" status --porcelain --untracked-files=all --ignored 2>/dev/null)" &&
+        [[ -z "${changes}" ]]
+}
+
+# Fetches the pinned rules into a staging directory beside the cache entry, so
+# publishing is a rename on one filesystem. Runs from other worktrees share the
+# cache: the entry is checked again after the fetch, so one another run
+# published meanwhile is kept, and only an invalid entry is renamed aside and
+# removed.
+publish_frappe_semgrep_rules() {
+    local rules_dir="$1"
+    local parent staging
+    parent="$(dirname "${rules_dir}")"
+    if ! mkdir -p "${parent}" || ! staging="$(mktemp -d "${parent}/.staging.XXXXXX")"; then
+        echo "Could not stage Frappe Semgrep rules in ${parent}." >&2
+        return 1
+    fi
+
+    if ! git init -q "${staging}" ||
+        ! git -C "${staging}" remote add origin "${FRAPPE_SEMGREP_RULES_REPOSITORY}" ||
+        ! git -C "${staging}" fetch -q --depth 1 origin "${FRAPPE_SEMGREP_RULES_SHA}" ||
+        ! git -C "${staging}" checkout -q --detach FETCH_HEAD ||
+        ! frappe_semgrep_rules_are_pinned "${staging}"; then
+        rm -rf "${staging}"
+        echo "Could not fetch Frappe Semgrep rules at ${FRAPPE_SEMGREP_RULES_SHA}; nothing was cached." >&2
+        return 1
+    fi
+
+    if frappe_semgrep_rules_are_pinned "${rules_dir}"; then
+        rm -rf "${staging}"
+        return
+    fi
+
+    if [[ -e "${rules_dir}" ]] && mv "${rules_dir}" "${staging}.discarded" 2>/dev/null; then
+        rm -rf "${staging}.discarded"
+    fi
+    mv "${staging}" "${rules_dir}" 2>/dev/null || true
+    # If another run published between the check and the rename, mv placed the
+    # staging directory inside that entry; remove it from there.
+    rm -rf "${rules_dir:?}/$(basename "${staging}")" "${staging}"
+
+    if ! frappe_semgrep_rules_are_pinned "${rules_dir}"; then
+        echo "Could not cache Frappe Semgrep rules at ${rules_dir}." >&2
+        return 1
+    fi
 }
 
 run_semgrep() {

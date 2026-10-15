@@ -78,40 +78,94 @@ class FrappeRulesCacheTests(unittest.TestCase):
         temporary_directory = tempfile.TemporaryDirectory(prefix="bond-semgrep-cache-")
         self.addCleanup(temporary_directory.cleanup)
         self.root = Path(temporary_directory.name)
-        self.staging_root = self.root / "tmp"
-        self.staging_root.mkdir()
+        self.temporary_root = self.root / "tmp"
+        self.temporary_root.mkdir()
         self.cache = self.root / "cache" / "rules"
         self.remote = self.root / "remote"
         self.remote_sha = self.create_remote(self.remote)
         self.verify_script = Path(__file__).resolve().parent / "verify.sh"
 
     def test_unreachable_remote_leaves_no_cache_entry(self):
-        result = self.resolve(f"file://{self.root / 'missing'}")
+        result = self.resolve(self.missing_remote())
         self.assertNotEqual(result.returncode, 0, result.stdout)
         self.assertFalse(self.cache.exists())
         self.assertIn("nothing was cached", result.stdout)
-        self.assertEqual(list(self.staging_root.iterdir()), [])
+        self.assert_no_staging_left()
 
     def test_fetch_populates_cache_at_pinned_revision(self):
-        result = self.resolve(f"file://{self.remote}")
+        result = self.resolve(self.reachable_remote())
         self.assertEqual(result.returncode, 0, result.stdout)
         self.assertEqual(result.stdout.strip(), str(self.cache))
-        self.assertEqual(self.head(self.cache), self.remote_sha)
-        self.assertEqual(list(self.staging_root.iterdir()), [])
+        self.assert_cache_is_pinned()
+        self.assert_no_staging_left()
+
+    def test_clean_cache_entry_is_reused_without_fetching(self):
+        self.assertEqual(self.resolve(self.reachable_remote()).returncode, 0)
+        result = self.resolve(self.missing_remote())
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assert_cache_is_pinned()
 
     def test_unborn_cache_entry_is_replaced(self):
         self.git("init", "-q", str(self.cache))
-        result = self.resolve(f"file://{self.remote}")
+        result = self.resolve(self.reachable_remote())
         self.assertEqual(result.returncode, 0, result.stdout)
-        self.assertEqual(self.head(self.cache), self.remote_sha)
+        self.assert_cache_is_pinned()
+        self.assert_no_staging_left()
+
+    def test_dirty_cache_entry_is_replaced(self):
+        changes = {
+            "deleted": lambda: (self.cache / "rules" / "rule.yml").unlink(),
+            "modified": lambda: (self.cache / "rules" / "rule.yml").write_text("rules: [x]\n"),
+            "untracked": lambda: (self.cache / "rules" / "extra.yml").write_text("rules: []\n"),
+            "ignored": lambda: (self.cache / "rules" / "extra.pyc").write_text("cached\n"),
+        }
+        for name, change in changes.items():
+            with self.subTest(name):
+                self.assertEqual(self.resolve(self.reachable_remote()).returncode, 0)
+                change()
+                result = self.resolve(self.reachable_remote())
+                self.assertEqual(result.returncode, 0, result.stdout)
+                self.assert_cache_is_pinned()
+                self.assert_no_staging_left()
 
     def test_failed_repair_cleans_up_staging(self):
         self.git("init", "-q", str(self.cache))
-        result = self.resolve(f"file://{self.root / 'missing'}")
+        result = self.resolve(self.missing_remote())
         self.assertNotEqual(result.returncode, 0, result.stdout)
-        self.assertEqual(list(self.staging_root.iterdir()), [])
+        self.assert_no_staging_left()
 
-    def resolve(self, repository):
+    def test_entry_published_by_another_run_during_fetch_is_kept(self):
+        # A git wrapper publishes the cache entry, marked as another run's, as
+        # soon as this run starts its fetch.
+        wrapper_root = self.root / "bin"
+        wrapper_root.mkdir()
+        wrapper = wrapper_root / "git"
+        wrapper.write_text(
+            "#!/usr/bin/env bash\n"
+            'if [[ " $* " == *" fetch "* && ! -e "${PUBLISH_CACHE}" ]]; then\n'
+            '    "${REAL_GIT}" clone -q "${PUBLISH_FROM}" "${PUBLISH_CACHE}" &&\n'
+            '        touch "${PUBLISH_CACHE}/.git/published-by-another-run"\n'
+            "fi\n"
+            'exec "${REAL_GIT}" "$@"\n',
+            encoding="utf-8",
+        )
+        wrapper.chmod(0o755)
+
+        result = self.resolve(
+            self.reachable_remote(),
+            {
+                "PATH": f"{wrapper_root}{os.pathsep}{os.environ['PATH']}",
+                "REAL_GIT": shutil.which("git"),
+                "PUBLISH_FROM": str(self.remote),
+                "PUBLISH_CACHE": str(self.cache),
+            },
+        )
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertTrue((self.cache / ".git" / "published-by-another-run").exists())
+        self.assert_cache_is_pinned()
+        self.assert_no_staging_left()
+
+    def resolve(self, repository, extra_environment=None):
         script = (
             'source "$1"; '
             'FRAPPE_SEMGREP_RULES_REPOSITORY="$2"; '
@@ -120,9 +174,11 @@ class FrappeRulesCacheTests(unittest.TestCase):
             'rules_dir="$(frappe_semgrep_rules_dir)"; '
             'printf "%s\\n" "${rules_dir}"'
         )
-        environment = {
-            key: value for key, value in os.environ.items() if key != "FRAPPE_SEMGREP_RULES_DIR"
-        } | {"TMPDIR": str(self.staging_root)}
+        environment = (
+            {key: value for key, value in os.environ.items() if key != "FRAPPE_SEMGREP_RULES_DIR"}
+            | {"TMPDIR": str(self.temporary_root)}
+            | (extra_environment or {})
+        )
         return subprocess.run(
             [
                 "bash",
@@ -142,11 +198,31 @@ class FrappeRulesCacheTests(unittest.TestCase):
             check=False,
         )
 
+    def reachable_remote(self):
+        return f"file://{self.remote}"
+
+    def missing_remote(self):
+        return f"file://{self.root / 'missing'}"
+
+    def assert_cache_is_pinned(self):
+        self.assertEqual(self.head(self.cache), self.remote_sha)
+        status = self.git(
+            "-C", str(self.cache), "status", "--porcelain", "--untracked-files=all", "--ignored"
+        )
+        self.assertEqual(status.stdout, "")
+
+    def assert_no_staging_left(self):
+        self.assertEqual(list(self.temporary_root.iterdir()), [])
+        cache_parent = self.cache.parent
+        leftovers = [p.name for p in cache_parent.iterdir()] if cache_parent.exists() else []
+        self.assertEqual([name for name in leftovers if name != self.cache.name], [])
+
     def create_remote(self, path):
         self.git("init", "-q", str(path))
         (path / "rules").mkdir()
         (path / "rules" / "rule.yml").write_text("rules: []\n", encoding="utf-8")
-        self.git("-C", str(path), "add", "rules")
+        (path / ".gitignore").write_text("*.pyc\n", encoding="utf-8")
+        self.git("-C", str(path), "add", "rules", ".gitignore")
         self.git(
             "-C",
             str(path),
