@@ -45,7 +45,7 @@ Done when each release passes the lifecycle sequence and no code reads the old s
 
 ## Retirement
 
-A one-time data patch is retirable only after the user confirms every deployed site has run it; a fresh install marks it complete without running it. In one change: remove its `patches.txt` line and module, any `after_install`/`after_migrate` entry, its tests, its lifecycle fixtures and assertions, and the references in migration-lifecycle.md. Invariant patches (DocPerms, manual indexes) stay, because fresh installs and migrates both need them.
+A one-time data patch is retirable only after the user confirms every deployed site has run it and that no backup, staging copy, or offline site still supported for restore and upgrade predates it; such a site would upgrade without the transformation. If those restore paths stay supported, keep the patch registered. A fresh install marks it complete without running it. In one change: remove its `patches.txt` line and module, any `after_install`/`after_migrate` entry, its tests, its lifecycle fixtures and assertions, and the references in migration-lifecycle.md. Invariant patches (DocPerms, manual indexes) stay, because fresh installs and migrates both need them.
 
 For deprecated code paths, find every consumer first (`git grep`, `hooks.py`, whitelisted method names called from Desk JS and the SPA, report JSON) and remove the path only when the count is zero. Done when nothing imports, routes to, or calls the removed name.
 
