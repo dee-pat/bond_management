@@ -1,9 +1,10 @@
 # Shared Frappe agent kit
 
-Status: phases 1–3 done. The kit is public at
+Status: all phases done. The kit is public at
 [dee-pat/frappe-agent-kit](https://github.com/dee-pat/frappe-agent-kit);
-Bond Management pins `v0.2.1` (`57cb2573b7948a98a3d20e224e11ca03892c0388`).
-Phase 4 (Gita and task_list) is next.
+Bond Management, Gita and task_list pin `v0.2.1`
+(`57cb2573b7948a98a3d20e224e11ca03892c0388`), and the bench `AGENTS.md` is
+retired.
 
 ## Goal
 
@@ -113,10 +114,18 @@ marker. The sync script owns the block; hand edits inside it fail the check.
    Kit `v0.2.1` then trimmed the always-on rules to about 250 words and moved
    migration invariants into `frappe-migration`, so Bond's always-loaded
    `AGENTS.md` shrank instead of growing.
-4. **Adopt in Gita and task_list:** copy the script and lock, then replace their
-   stale vendored `frappe-app-dev`/`code-style` and the bench pointer.
-5. **Retire the bench `AGENTS.md`** once no app points to it (keep the backup in
-   `archived/`).
+4. **Done:** Gita and task_list vendor `sync-skills.sh`, pin `frappe-app-dev`,
+   `code-style`, `frappe-code-review`, `frappe-migration` and the rules block in
+   `skills.lock`, and gained `CLAUDE.md` and `.claude/skills` links. task_list's
+   stale `frappe-app-dev` and `code-style` were replaced, and its pre-commit runs
+   `sync-skills.sh check`. Gita has no lint gate, so its `AGENTS.md` asks for the
+   check after guidance changes. Changes are local and uncommitted in both
+   repos, alongside unrelated in-progress work.
+5. **Done:** the bench `AGENTS.md` is deleted. Personal process rules (spec and
+   progress note, tracer bullet, dependencies, backward compatibility, branches
+   and handoff) moved to `~/.codex/AGENTS.md`, with `~/.claude/CLAUDE.md` linked
+   to it. Backups of the original and trimmed bench files are in the bench's
+   `archived/` folder.
 
 ## Acceptance
 
