@@ -19,23 +19,26 @@ npm install frappe-ui@beta vue-router@^4
 
 The exported subpaths are `frappe-ui`, `frappe-ui/list`, `frappe-ui/editor`, `frappe-ui/charts`, `frappe-ui/icons`, `frappe-ui/experimental`, `frappe-ui/tailwind`, `frappe-ui/vite`, `frappe-ui/vite/lucideIconsPlugin`, `frappe-ui/vitepress`, `frappe-ui/style.css` and `frappe-ui/tsconfig.base.json`. The two most common mistakes:
 
-| Mistake                                                  | Use this instead                          |
-| -------------------------------------------------------- | ----------------------------------------- |
+| Mistake | Use this instead |
+|---|---|
 | `import frappeUIPreset from 'frappe-ui/tailwind/preset'` | `import preset from 'frappe-ui/tailwind'` |
-| `@import 'frappe-ui/src/style.css'`                      | `@import 'frappe-ui/style.css'`           |
+| `@import 'frappe-ui/src/style.css'` | `@import 'frappe-ui/style.css'` |
 
 Anything outside the `exports` map (like `frappe-ui/src/*`) fails with `Package subpath '…' is not defined by "exports"`.
 
 ## `vite.config.js`
 
 ```js
-import { defineConfig } from "vite";
-import vue from "@vitejs/plugin-vue";
-import frappeui from "frappe-ui/vite";
+import { defineConfig } from 'vite'
+import vue from '@vitejs/plugin-vue'
+import frappeui from 'frappe-ui/vite'
 
 export default defineConfig({
-  plugins: [frappeui({ frontendRoute: "/todo" }), vue()],
-});
+  plugins: [
+    frappeui({ frontendRoute: '/todo' }),
+    vue(),
+  ],
+})
 ```
 
 Every `frappeui()` sub-plugin except `frappeTypes` is on by default; pass `false` to turn one off, or an options object to configure it. `frontendRoute` is the route the app is served on. It drives the dev-server site banner and the inferred production `indexHtmlPath`.
@@ -43,7 +46,7 @@ Every `frappeui()` sub-plugin except `frappeTypes` is on by default; pass `false
 `frappeProxy`, `jinjaBootData` and `buildConfig` assume a Frappe site around the app. For a prototype that has no Frappe backend, turn those three off:
 
 ```js
-frappeui({ frappeProxy: false, jinjaBootData: false, buildConfig: false });
+frappeui({ frappeProxy: false, jinjaBootData: false, buildConfig: false })
 ```
 
 Leave `optimizeDeps` alone. The plugin declares its own `optimizeDeps.include` (`highlight.js/lib/core`, `reka-ui`, `vue-sonner`, `dompurify`), and its `barrelImports` sub-plugin expects Vite to pre-bundle an installed frappe-ui as one chunk.
@@ -55,13 +58,13 @@ Leave `optimizeDeps` alone. The plugin declares its own `optimizeDeps.include` (
 ## `tailwind.config.js`
 
 ```js
-import preset, { content } from "frappe-ui/tailwind";
+import preset, { content } from 'frappe-ui/tailwind'
 
 /** @type {import('tailwindcss').Config} */
 export default {
   presets: [preset],
-  content: [...content, "./index.html", "./src/**/*.{vue,js,ts,jsx,tsx}"],
-};
+  content: [...content, './index.html', './src/**/*.{vue,js,ts,jsx,tsx}'],
+}
 ```
 
 Spread the exported `content`. Tailwind v3 does not merge a preset's `content` into the app config, so frappe-ui's own source globs have to be listed by the app. A hand-copied `node_modules/frappe-ui/src/**` glob drops `icons/**` and the parked families, and their utility classes then never compile.
@@ -74,13 +77,13 @@ export default {
     tailwindcss: {},
     autoprefixer: {},
   },
-};
+}
 ```
 
 ## CSS entry (`src/style.css`)
 
 ```css
-@import "frappe-ui/style.css";
+@import 'frappe-ui/style.css';
 ```
 
 That one file emits `@tailwind base`, `@tailwind components`, `@tailwind utilities` and the Inter font import. Adding the directives again emits every Tailwind layer twice.
@@ -88,14 +91,14 @@ That one file emits `@tailwind base`, `@tailwind components`, `@tailwind utiliti
 ## App entry (`src/main.js`)
 
 ```js
-import { createApp } from "vue";
-import { router } from "./router";
-import "./style.css";
-import App from "./App.vue";
+import { createApp } from 'vue'
+import { router } from './router'
+import './style.css'
+import App from './App.vue'
 
-const app = createApp(App);
-app.use(router);
-app.mount("#app");
+const app = createApp(App)
+app.use(router)
+app.mount('#app')
 ```
 
 `app.use(FrappeUI)` is optional for a new app: the plugin provides no injections. It installs the v1 resources Options API (`this.$resources`) when called as `app.use(FrappeUI, { resources: true })`, and otherwise only adds dev-mode guards for the removed `$socket` / `$call` / `$resources` globals.
@@ -106,7 +109,7 @@ app.mount("#app");
 
 ```vue
 <script setup>
-import { FrappeUIProvider } from "frappe-ui";
+import { FrappeUIProvider } from 'frappe-ui'
 </script>
 
 <template>
@@ -121,18 +124,14 @@ Mount exactly one. `<ToastProvider>` has no dedup guard, so a second provider re
 ## Router stub (`src/router.js`)
 
 ```js
-import { createRouter, createWebHistory } from "vue-router";
+import { createRouter, createWebHistory } from 'vue-router'
 
 export const router = createRouter({
   history: createWebHistory(),
   routes: [
-    {
-      path: "/",
-      name: "Home",
-      component: () => import("./pages/HomeScreen.vue"),
-    },
+    { path: '/', name: 'Home', component: () => import('./pages/HomeScreen.vue') },
   ],
-});
+})
 ```
 
 ## Sanity check

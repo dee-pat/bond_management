@@ -9,9 +9,8 @@ Find the root cause before changing code. Every fix lands behind a regression te
 
 ## Sources of truth
 
-- [verification.md](../../../docs/verification.md) owns gates, evidence, Playwright setup and recovery, and CI bootstrap.
-- [.codex/context.md](../../../.codex/context.md) owns the MariaDB/Redis/`DocType not found`/build troubleshooting list.
-- [bond-management-testing](../bond-management-testing/SKILL.md) owns where a regression test belongs and how to write it.
+- [verification.md](../../../docs/verification.md) owns gates, evidence, local runtime recovery (MariaDB, Redis, `DocType not found`, build), Playwright setup and recovery, and CI bootstrap.
+- [testing-matrix.md](../../../docs/testing-matrix.md), the test rules in [AGENTS.md](../../../AGENTS.md) and [e2e/AGENTS.md](../../../e2e/AGENTS.md) own where a regression test belongs and how to write it.
 
 ## Steps
 
@@ -25,7 +24,7 @@ Find the root cause before changing code. Every fix lands behind a regression te
 
 3. **Localize.** Trace the wrong value back to the first layer that produces it: controller → `utils/` service → derived writes (exchange rates and their source rows, market prices, reconciliation report) → API projection → Desk/SPA rendering. For a regression on `main`, `git bisect run` with the reproduce command. Done when you can name the file and line where the correct value turns into the wrong one.
 4. **Reduce.** Shrink the input to the smallest fixture that still fails: one bond, one portfolio, one transaction or statement. For boundary rules, test the exact date or amount at the boundary: settlement day, maturity day, coupon/repayment day, `<` vs `<=`. Done when removing any further input makes the failure disappear.
-5. **Write the regression test.** Add it at the layer that owns the rule, per bond-management-testing, and run it _red_ against the unfixed code. For comparison rules, cover greater-than, less-than, and equality.
+5. **Write the regression test.** Add it at the layer that owns the rule, per the test sources above, and run it _red_ against the unfixed code. For comparison rules, cover greater-than, less-than, and equality.
 6. **Fix the root cause.** Change the producing layer found in step 3, not the symptom downstream. Keep `Decimal` from strings, the documented rounding mode, cash-flow signs, and the per-100 market-price basis. If the fix seems to require changing one of those conventions, stop and ask the user: that is a business decision, not a bug fix. Keep the assertion's strength; a fix that loosens an expectation needs the user's explicit agreement.
 7. **Verify.** Run the regression test green, rerun the step 2 command, then every applicable gate from verification.md, and record commands and exit statuses as its evidence format requires.
 
@@ -35,7 +34,7 @@ Steps 3–5 trace a wrong value. When the failure is an exception or a nonzero e
 
 - **Localize** to the first failing command and the frame, patch, or step that raised: the patch's line in `patches.txt`, the import path checked against the actual package tree, the failing build or typecheck file, or the workflow step with its working directory and paths.
 - **Reduce** to the narrowest command that still fails: one `bench --site <site> migrate`, `bench build --app bond_management`, `yarn typecheck`, or a single import.
-- **Regression check.** For a patch or install invariant, add the migration or fresh-install test bond-management-testing places, against representative legacy data with a safe rerun. For a build, import, typecheck, or lint failure, the gate that failed is the check: record it red, then green. For a CI workflow defect, the check is the failing job passing on the fix commit.
+- **Regression check.** For a patch or install invariant, add the migration or fresh-install test that `frappe-migration` and `bond-management-migration` describe, against representative legacy data with a safe rerun. For a build, import, typecheck, or lint failure, the gate that failed is the check: record it red, then green. For a CI workflow defect, the check is the failing job passing on the fix commit.
 
 Steps 6 and 7 apply unchanged.
 

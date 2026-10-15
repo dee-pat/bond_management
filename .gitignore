@@ -59,3 +59,7 @@ e2e/.auth/
 
 # Aider AI Chat
 .aider*
+
+# Claude Code: track only the skills link
+.claude/*
+!.claude/skills

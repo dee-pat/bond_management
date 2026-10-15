@@ -54,39 +54,6 @@ differences in the final field.
 
 ## Required gates
 
-- For an existing bench that still has `dev.local`:
-  - If the site is dedicated to Bond Management, preserve its data and continue
-    interactive work with `DEV_SITE=dev.local` in the
-    [command examples](../.codex/commands.md) until a separate site-data
-    migration is planned. This transition does not rename, recreate, drop, or
-    restore the existing site.
-  - If the site is shared with another app, do not use it for Bond Management.
-    Provision `bond-management-dev.localhost` in the existing bench with
-    `bench new-site bond-management-dev.localhost`, then install
-    `bond_management` on it. Keep the shared `dev.local` intact; do not copy or
-    delete its data as part of this setup.
-- Prefer the existing `bond-management-test.localhost` and configured bench for local verification.
-  Routine server and UI gates migrate and reuse `bond-management-test.localhost`; do not create a
-  separate local site for ordinary test runs. `bond-management-dev.localhost` and `bond-management-test.localhost` are
-  Bond Management's persistent development/test pair; do not install another
-  app on either site.
-- For an existing bench that still has the legacy `test_site`, use this transition:
-  - If `test_site` is dedicated to Bond Management, the existing `TEST_SITE`
-    override can run gates there temporarily:
-    `TEST_SITE=test_site apps/bond_management/scripts/verify.sh pre-push`.
-    For the UI gate, start
-    `bench --site test_site serve --port 8001 --noreload`, then run
-    `TEST_SITE=test_site BASE_URL=http://localhost:8001 apps/bond_management/scripts/verify.sh pre-push-ui`.
-  - If `test_site` is shared with another app, do not run Bond Management gates
-    against it. When `bond-management-test.localhost` is absent, provision the
-    dedicated persistent site in the existing bench with
-    `bench new-site bond-management-test.localhost`, then install and prepare
-    Bond Management:
-    `bench --site bond-management-test.localhost install-app bond_management`,
-    `bench --site bond-management-test.localhost set-config allow_tests true`,
-    and `bench --site bond-management-test.localhost migrate`.
-  - Keep the pre-existing `test_site` intact until its owner approves any
-    cleanup. The transition never recreates, drops, or restores it.
 - Match verification to the risk of the change: documentation, agent-guidance,
   and test-only edits need formatting/lint plus the affected test; backend
   business, permission, migration, hook, or shared utility changes need the
@@ -95,8 +62,9 @@ differences in the final field.
   when they change a shared runtime or critical user journey.
 - From the bench directory, run
   `apps/bond_management/scripts/verify.sh pre-push`. This shared gate runs
-  pre-commit, migrates `bond-management-test.localhost`, and runs the complete server suite. GitHub
-  Actions must call the same script so local and CI commands cannot drift.
+  pre-commit, migrates `bond-management-test.localhost`, and runs the complete
+  server suite. GitHub Actions must call the same script so local and CI
+  commands cannot drift.
 - Changes to JavaScript, reports, DocType metadata, permissions, workspaces, or
   other Desk behavior must run
   `apps/bond_management/scripts/verify.sh pre-push-ui`. It includes the
@@ -106,19 +74,17 @@ differences in the final field.
   investor plus `FRAPPE_ADMIN_USER` and `FRAPPE_ADMIN_PASSWORD` for Desk. Set
   `BASE_URL` (or `PLAYWRIGHT_BASE_URL`) when the test server is not at its
   default address.
+- The individual stages are `lint`, `server`, `frontend`, `ui` and
+  `playwright`. `ui` and `playwright` prepare the configured test site
+  themselves (migrate, enable the investor SPA, seed fixtures) before running
+  Playwright; no manual setup is needed.
 - Changes to patches, schema, hooks, dependencies, installation, or manual
   indexes must also pass a fresh-install check matching the GitHub Actions
   setup. A successful CI clean install on the exact commit satisfies this
   check. Create a local fresh site only when CI cannot cover it or local
-  diagnosis needs one; keep it under the configured bench and use a unique
-  temporary site name. The migration lifecycle uses
-  `bond-management-lifecycle-<32-hex-id>.localhost`; follow its specification
-  for the opt-in and phase sequence. After the check completes, capture the
-  needed logs and results, then drop that temporary site with
-  `bench drop-site <temporary-site> --no-backup`, including after a failed
-  check. This returns the app to its two persistent sites. Obtain approval
-  before recreating, dropping, or restoring either persistent site, or before
-  dropping/restoring any other pre-existing local site.
+  diagnosis needs one, following _Temporary sites_ below. The migration
+  lifecycle uses `bond-management-lifecycle-<32-hex-id>.localhost`; follow its
+  specification for the opt-in and phase sequence.
 
 ## Completion and failure handling
 
@@ -132,11 +98,107 @@ differences in the final field.
   verification steps in the project documentation. For a small bug fix, a
   focused issue note and regression test are sufficient.
 
+## Sites and credentials
+
+### Environment baseline
+
+Local and CI development use Python 3.14, Node 24, MariaDB 11.8 or 12.3, and
+Redis 6 or newer. Check deployment compatibility against the target Frappe v16
+release and hosting environment.
+
+Use the existing configured bench for all development and verification. Keep
+every site under that bench; do not create temporary or copied bench
+directories. Do not record site credentials or machine-specific database
+configuration in repository files.
+
+### Persistent site pair
+
+`bond-management-dev.localhost` (interactive development) and
+`bond-management-test.localhost` (automated server and UI tests) are Bond
+Management's persistent pair. Do not install another app on either site; each
+other installable app in the bench owns its own sites. Routine gates migrate and
+reuse the test site; do not create a separate local site for ordinary test runs.
+Obtain approval before recreating, dropping, or restoring either persistent
+site, or before dropping/restoring any other pre-existing local site.
+
+Prepare the test site once before routine testing:
+
+```bash
+bench --site bond-management-test.localhost install-app bond_management
+bench --site bond-management-test.localhost set-config allow_tests true
+bench --site bond-management-test.localhost migrate
+```
+
+Interactive development:
+
+```bash
+DEV_SITE="${DEV_SITE:-bond-management-dev.localhost}"
+bench --site "$DEV_SITE" migrate
+bench --site "$DEV_SITE" backup --with-files
+```
+
+### Legacy site transition
+
+- For an existing bench that still has `dev.local`:
+  - If the site is dedicated to Bond Management, preserve its data and continue
+    interactive work with `DEV_SITE=dev.local` until a separate site-data
+    migration is planned. This transition does not rename, recreate, drop, or
+    restore the existing site.
+  - If the site is shared with another app, do not use it for Bond Management.
+    Provision `bond-management-dev.localhost` in the existing bench with
+    `bench new-site bond-management-dev.localhost`, then install
+    `bond_management` on it. Keep the shared `dev.local` intact; do not copy or
+    delete its data as part of this setup.
+- For an existing bench that still has the legacy `test_site`:
+  - If `test_site` is dedicated to Bond Management, the existing `TEST_SITE`
+    override can run gates there temporarily:
+    `TEST_SITE=test_site apps/bond_management/scripts/verify.sh pre-push`.
+    For the UI gate, start
+    `bench --site test_site serve --port 8001 --noreload`, then run
+    `TEST_SITE=test_site BASE_URL=http://localhost:8001 apps/bond_management/scripts/verify.sh pre-push-ui`.
+    Prepare it like the persistent test site above.
+  - If `test_site` is shared with another app, do not run Bond Management gates
+    against it. When `bond-management-test.localhost` is absent, provision it
+    with `bench new-site bond-management-test.localhost`, then prepare it as
+    above.
+  - Keep the pre-existing `test_site` intact until its owner approves any
+    cleanup. The transition never recreates, drops, or restores it.
+
+### Temporary sites
+
+When a test genuinely needs an additional local site (including local
+fresh-install checks), create a uniquely named temporary site under the
+configured bench. After the test finishes, capture its required logs and
+results, then drop it with `bench drop-site <temporary-site> --no-backup`,
+whether the test passed or failed. This keeps the persistent pair at two sites.
+Never drop the persistent pair under this rule. The opt-in migration lifecycle
+and share-race helpers follow the site naming and opt-in steps in
+[migration-lifecycle.md](specs/migration-lifecycle.md) and
+[review-fix-3.md](plans/review-fix-3.md).
+
+### Credentials
+
+Local browser-test credentials live outside the app in
+`$HOME/.config/bond_management/test-browser.env`. Load them with
+`set -a; source "$HOME/.config/bond_management/test-browser.env"; set +a`.
+Never copy the file contents into repository files or logs.
+
+## Local runtime recovery
+
+- Start MariaDB when it is unavailable: `brew services start mariadb`. For
+  Redis connection failures, confirm Redis is running with its configured
+  connection details.
+- Inspect this bench's processes before recovering a broken state:
+  `pgrep -af "${PWD}/apps/frappe|${PWD}/Procfile"`, then `bench restart`.
+- `DocType not found`: verify the app is installed on the site, then migrate.
+- Bench build failures: check the Node and Yarn versions.
+
 ## Playwright browser setup and recovery
 
-- Use `bond-management-test.localhost` for automated browser tests. The browser gate migrates it,
-  enables the investor app, and runs the idempotent investor-data seed helper
-  before Playwright. It does not create, drop, or restore a site.
+- Use `bond-management-test.localhost` for automated browser tests. The browser
+  gate migrates it, enables the investor app, and runs the idempotent
+  investor-data seed helper before Playwright. It does not create, drop, or
+  restore a site.
 - When bootstrapping a fresh site, enable the investor app and seed its browser
   user and fixtures before starting the web process. Frappe must load the site
   feature flag at process startup; the CI workflow does this explicitly.
@@ -144,7 +206,8 @@ differences in the final field.
   `yarn playwright install chromium` from the app root. CI installs Chromium
   and its system dependencies in its run-scoped bench.
 - Start the intended local site explicitly so the browser cannot land on a
-  different default site: `bench --site bond-management-test.localhost serve --port 8001 --noreload`.
+  different default site:
+  `bench --site bond-management-test.localhost serve --port 8001 --noreload`.
   Set `BASE_URL=http://localhost:8001` for the browser gate in that case.
 - Keep investor credentials separate from Administrator credentials. The
   investor seed helper uses `FRAPPE_USER` and `FRAPPE_PASSWORD`; the Desk
@@ -152,15 +215,16 @@ differences in the final field.
   write either password to repository files. In CI, the fresh site uses
   `Administrator` with the one-run site password `admin`, while the investor
   password is generated and masked for that job.
-- If login fails, verify each credential against `bond-management-test.localhost` and reset only the
-  local test Administrator with `bench --site bond-management-test.localhost set-admin-password`.
-  Never run destructive credential or cache recovery against `bond-management-dev.localhost` or a
-  non-test site. Do not repeatedly rerun browser tests while an account is
-  locked.
+- If login fails, verify each credential against
+  `bond-management-test.localhost` and reset only the local test Administrator
+  with `bench --site bond-management-test.localhost set-admin-password`. Never
+  run destructive credential or cache recovery against
+  `bond-management-dev.localhost` or a non-test site. Do not repeatedly rerun
+  browser tests while an account is locked.
 - Playwright preserves traces on the first CI retry, screenshots on failure,
-  videos on failure, and the HTML report locally. Keep the exact command,
-  browser logs, trace, screenshot, video, and server log when escalating a
-  browser failure.
+  videos on failure, and the HTML report locally (`playwright-report/`). Keep
+  the exact command, browser logs, trace, screenshot, video, and server log
+  when escalating a browser failure.
 
 ## CI bootstrap and job boundaries
 

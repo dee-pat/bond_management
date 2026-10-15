@@ -10,13 +10,13 @@ frappe-ui ships a Tailwind preset: colour, type, radius and shadow all come from
 
 Five colour categories. `ink`, `surface` and `outline` cover almost every case; the `-alpha` pair are translucent, gray-only variants for overlay work.
 
-| Category        | Utilities                                                | Steps                                                              |
-| --------------- | -------------------------------------------------------- | ------------------------------------------------------------------ |
-| `ink`           | `text-ink-*`, `fill-ink-*`, `placeholder-ink-*`          | `base`, `blue-link`, `gray-1..9`, `<color>-1..9`                   |
-| `surface`       | `bg-surface-*`                                           | `base`, `sidebar`, `elevation-1..3`, `gray-1..10`, `<color>-1..10` |
-| `outline`       | `border-outline-*`, `ring-outline-*`, `divide-outline-*` | `base`, `elevation-1..2`, `gray-1..9`, `<color>-1..10`             |
-| `surface-alpha` | `bg-surface-alpha-*`                                     | `base`, `sidebar`, `elevation-1..3`, `gray-1..10`                  |
-| `outline-alpha` | `border-outline-alpha-*`                                 | `base`, `elevation-1..2`, `gray-1..9`                              |
+| Category | Utilities | Steps |
+|---|---|---|
+| `ink` | `text-ink-*`, `fill-ink-*`, `placeholder-ink-*` | `base`, `blue-link`, `gray-1..9`, `<color>-1..9` |
+| `surface` | `bg-surface-*` | `base`, `sidebar`, `elevation-1..3`, `gray-1..10`, `<color>-1..10` |
+| `outline` | `border-outline-*`, `ring-outline-*`, `divide-outline-*` | `base`, `elevation-1..2`, `gray-1..9`, `<color>-1..10` |
+| `surface-alpha` | `bg-surface-alpha-*` | `base`, `sidebar`, `elevation-1..3`, `gray-1..10` |
+| `outline-alpha` | `border-outline-alpha-*` | `base`, `elevation-1..2`, `gray-1..9` |
 
 `<color>` is one of `red green blue amber orange yellow teal cyan violet purple pink`. Higher step = stronger contrast. Steps are not interchangeable across categories: in light mode `ink-red-5` resolves to red/500 while `surface-red-5` resolves to red/400.
 
@@ -60,12 +60,12 @@ The preset **replaces** `colors`, `screens`, `borderRadius`, `boxShadow` and `fo
 The scheme lives in `data-theme` on `<html>` (`"light"` or `"dark"`). Semantic tokens flip automatically; reach for a `dark:` variant only for a value with no semantic token.
 
 ```js
-import { useColorScheme, resolvedColorScheme } from "frappe-ui";
+import { useColorScheme, resolvedColorScheme } from 'frappe-ui'
 // module-level singleton every caller shares
-const { colorScheme, setColorScheme, toggleColorScheme } = useColorScheme();
+const { colorScheme, setColorScheme, toggleColorScheme } = useColorScheme()
 // colorScheme      Readonly<Ref<'light' | 'dark' | 'system'>>
 // setColorScheme   (scheme) => void — writes data-theme, persists
-resolvedColorScheme(); // 'light' | 'dark', with 'system' already resolved
+resolvedColorScheme() // 'light' | 'dark', with 'system' already resolved
 ```
 
 ### Styling past the prop surface
@@ -92,10 +92,8 @@ Gray first: ink-gray on surface-base, colour only where it encodes information. 
 
 ```html
 <div class="h-screen w-full bg-surface-base text-ink-gray-8">
-  <DesktopShell>
-    <!-- :scroll="false" when inner panes own their own scroll -->
-    <template #rail>…</template>
-    <!-- only multi-workspace apps -->
+  <DesktopShell> <!-- :scroll="false" when inner panes own their own scroll -->
+    <template #rail>…</template>      <!-- only multi-workspace apps -->
     <template #sidebar>
       <Sidebar width="14rem" class="border-r">
         <SidebarHeader title subtitle :show-logo :menu-items />
@@ -104,8 +102,7 @@ Gray first: ink-gray on surface-base, colour only where it encodes information. 
         </ScrollArea>
       </Sidebar>
     </template>
-    <PageHeader>…</PageHeader>
-    <!-- teleports to the pinned header target -->
+    <PageHeader>…</PageHeader>   <!-- teleports to the pinned header target -->
     <div>…page body…</div>
   </DesktopShell>
 </div>
@@ -124,20 +121,15 @@ Geometry: sidebar `14rem`; page header `min-h-12` (48px); gutters `px-3 sm:px-5`
 ### Mobile
 
 ```html
-<MobileShell>
-  <!-- fixed inset-0, owns native scroll; slots: default and #nav -->
+<MobileShell>  <!-- fixed inset-0, owns native scroll; slots: default and #nav -->
   <PageHeaderMobile title="Inbox">
     <template #prefix>…back chevron or menu opener…</template>
     <template #suffix>…actions…</template>
   </PageHeaderMobile>
   <div>…body…</div>
-  <BottomSheet v-model:open="…" title="Spaces"
-    >…the desktop sidebar…</BottomSheet
-  >
+  <BottomSheet v-model:open="…" title="Spaces">…the desktop sidebar…</BottomSheet>
   <template #nav>
-    <MobileNav
-      >…4 `MobileNavItem`s; last is "You": an Avatar in the item…</MobileNav
-    >
+    <MobileNav>…4 `MobileNavItem`s; last is "You": an Avatar in the item…</MobileNav>
   </template>
 </MobileShell>
 ```
@@ -146,16 +138,16 @@ Desktop → mobile: sidebar → `BottomSheet`; persistent nav → `MobileNav` ta
 
 ### Screen archetypes
 
-| Archetype               | Composition                                                                                                                                                       |
-| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Feed list**           | `List` in feed mode (no `:columns`), rows `h-15` desktop / `h-17` mobile, title + meta line, unread signal                                                        |
-| **Data table**          | `List` with `:columns` + `ListHeaderCellSort`, `:row-height="40–60"`                                                                                              |
-| **Two-pane**            | Split panes under a `PageHeaderBase`, `DesktopShell :scroll="false"`, `v-model:active` on the list                                                                |
-| **Board**               | Track `overflow-x-auto`; columns `w-72 shrink-0 rounded-6 bg-surface-gray-1`, each with its own `ScrollArea`; cards `rounded-6 border bg-surface-elevation-1 p-3` |
-| **Compose / editor**    | Focused page, no sidebar; `Editor` + `EditorFixedMenu` + `EditorContent` from `frappe-ui/editor`; prose column `max-w-[770px]`                                    |
-| **Detail + meta panel** | Its own route with the id as a route param (list ↔ detail is two routes); content column + right panel `w-[20rem] shrink-0 border-l` of label/control rows        |
-| **Settings**            | `SettingsDialog`: `SettingsNavGroup` nav → header + body → `space-y-11 pt-6` sections → `divide-y divide-outline-gray-1` of `SettingsRow`                         |
-| **Dashboard**           | Centered `max-w-4xl space-y-6`; KPI strip of `NumberCard`s from `frappe-ui/charts`, charts below in a grid, each sized by its wrapper                             |
+| Archetype | Composition |
+|---|---|
+| **Feed list** | `List` in feed mode (no `:columns`), rows `h-15` desktop / `h-17` mobile, title + meta line, unread signal |
+| **Data table** | `List` with `:columns` + `ListHeaderCellSort`, `:row-height="40–60"` |
+| **Two-pane** | Split panes under a `PageHeaderBase`, `DesktopShell :scroll="false"`, `v-model:active` on the list |
+| **Board** | Track `overflow-x-auto`; columns `w-72 shrink-0 rounded-6 bg-surface-gray-1`, each with its own `ScrollArea`; cards `rounded-6 border bg-surface-elevation-1 p-3` |
+| **Compose / editor** | Focused page, no sidebar; `Editor` + `EditorFixedMenu` + `EditorContent` from `frappe-ui/editor`; prose column `max-w-[770px]` |
+| **Detail + meta panel** | Its own route with the id as a route param (list ↔ detail is two routes); content column + right panel `w-[20rem] shrink-0 border-l` of label/control rows |
+| **Settings** | `SettingsDialog`: `SettingsNavGroup` nav → header + body → `space-y-11 pt-6` sections → `divide-y divide-outline-gray-1` of `SettingsRow` |
+| **Dashboard** | Centered `max-w-4xl space-y-6`; KPI strip of `NumberCard`s from `frappe-ui/charts`, charts below in a grid, each sized by its wrapper |
 
 ## Actions
 
@@ -185,15 +177,15 @@ Menu of actions anchored to a trigger. `Dropdown`'s default slot (or `#trigger`)
 
 ## Overlays
 
-| Component                  | Trigger               | Content                      | Other slots                                                             |
-| -------------------------- | --------------------- | ---------------------------- | ----------------------------------------------------------------------- |
-| `Dialog`                   | — (`v-model:open`)    | default                      | `#title`, `#actions`                                                    |
-| `Popover`                  | `#trigger`            | default                      | —                                                                       |
-| `HoverCard`                | `#trigger`            | default                      | —                                                                       |
-| `Tooltip`                  | **default**           | `#content`                   | —                                                                       |
-| `Dropdown` / `ContextMenu` | default or `#trigger` | the `options` prop           | `#item-prefix`, `#item-label`, `#item-suffix`, `#group-label`, `#empty` |
-| `PageHeader`               | —                     | **default only**             | —                                                                       |
-| `PageHeaderMobile`         | —                     | default (the centered title) | `#prefix`, `#suffix`                                                    |
+| Component | Trigger | Content | Other slots |
+|---|---|---|---|
+| `Dialog` | — (`v-model:open`) | default | `#title`, `#actions` |
+| `Popover` | `#trigger` | default | — |
+| `HoverCard` | `#trigger` | default | — |
+| `Tooltip` | **default** | `#content` | — |
+| `Dropdown` / `ContextMenu` | default or `#trigger` | the `options` prop | `#item-prefix`, `#item-label`, `#item-suffix`, `#group-label`, `#empty` |
+| `PageHeader` | — | **default only** | — |
+| `PageHeaderMobile` | — | default (the centered title) | `#prefix`, `#suffix` |
 
 ### `Dialog`
 
@@ -208,23 +200,17 @@ Menu of actions anchored to a trigger. `Dropdown`'s default slot (or `#trigger`)
 `dialog.confirm`, `dialog.prompt` and `dialog.danger` each return a `DialogHandle` (`{ close }`) **synchronously**. Values and results arrive through callbacks.
 
 ```ts
-import { dialog, toast } from "frappe-ui";
+import { dialog, toast } from 'frappe-ui'
 
 dialog.danger({
-  title: "Delete this item?",
-  message: "This cannot be undone.",
-  confirmLabel: "Delete",
-  onConfirm: async () => {
-    await api.delete(id);
-    toast.success("Deleted");
-  },
-});
+  title: 'Delete this item?', message: 'This cannot be undone.', confirmLabel: 'Delete',
+  onConfirm: async () => { await api.delete(id); toast.success('Deleted') },
+})
 
 dialog.prompt({
-  title: "Rename",
-  fields: [{ name: "title", label: "Title", required: true }],
+  title: 'Rename', fields: [{ name: 'title', label: 'Title', required: true }],
   onConfirm: ({ values }) => rename(values.title),
-});
+})
 ```
 
 - `confirm(args)` — `title`, `message`, `confirmLabel` (default `'Confirm'`), `cancelLabel` (default `'Cancel'`), `theme`, `icon`, `size` (default `'md'`), `dismissible`, `onConfirm(ctx)`, `onCancel()`, `actions[]`. `ctx` is `{ close, setError }`, where `setError` takes a **message string** (or `null`), never an `Error`. Resolving `onConfirm` closes the dialog; rejecting renders the thrown error inline and re-enables the buttons, so call `setError` only when you catch the error yourself.
@@ -333,12 +319,7 @@ The parts:
 Row heights: `:row-height="40"` dense table → 44–60 medium → `h-15` desktop feed → `h-17` mobile feed. Use **one** height mechanism per list: either `:row-height` on the `List` or a height class on every `ListRow`.
 
 ```vue
-<List
-  :columns="['minmax(0,1fr)', '11rem', '6rem']"
-  :row-height="60"
-  selectable
-  v-model:selection="selection"
->
+<List :columns="['minmax(0,1fr)', '11rem', '6rem']" :row-height="60" selectable v-model:selection="selection">
   <ListHeader>
     <ListHeaderCell>Subject</ListHeaderCell>
     <ListHeaderCell>Assigned to</ListHeaderCell>
@@ -366,20 +347,11 @@ TipTap-based rich text. `extensions` is **required**. The kits (`RichTextKit`, `
 
 ```vue
 <script setup>
-import { ref } from "vue";
-import {
-  Editor,
-  EditorContent,
-  EditorFixedMenu,
-  RichTextKit,
-  Bold,
-  Italic,
-  Separator,
-  HeadingGroup,
-  InsertLink,
-} from "frappe-ui/editor";
-const content = ref("");
-const toolbar = [HeadingGroup, Separator, Bold, Italic, InsertLink];
+import { ref } from 'vue'
+import { Editor, EditorContent, EditorFixedMenu, RichTextKit,
+         Bold, Italic, Separator, HeadingGroup, InsertLink } from 'frappe-ui/editor'
+const content = ref('')
+const toolbar = [HeadingGroup, Separator, Bold, Italic, InsertLink]
 </script>
 
 <template>

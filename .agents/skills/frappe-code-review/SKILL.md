@@ -1,5 +1,5 @@
 ---
-name: quality-code-review
+name: frappe-code-review
 description: >-
   Review code for any Frappe application — a checklist distilled from years of
   engineering practice on correctness, security, performance, concurrency,
@@ -11,14 +11,9 @@ description: >-
 # Quality Code Review
 
 A reviewer's checklist for Frappe applications. Protect **correctness, security,
-and the future maintainer**, in that order of consequence — lead with the
-highest-consequence checks. Prefer a root-cause fix over a workaround, and say
-*why* a finding matters (what breaks, for whom).
-
-Review order: **§1 Correctness** and **§2 Security** first (spend most attention
-here) → **§3 Performance**, **§4 Concurrency** (bugs invisible in a casual read)
-→ **§5 Readability**, **§6 API design**, **§7 Testing**, **§8 Errors &
-observability**.
+and the future maintainer**, in that order of consequence. The sections below run
+in that order — spend most attention on §1 and §2. Prefer a root-cause fix over a
+workaround, and say *why* a finding matters (what breaks, for whom).
 
 ---
 
@@ -50,11 +45,6 @@ is not an option"** code.
   *every* row. These must error, not silently operate on the whole table. Flag
   any `set_value`/`delete`/`get_value` where the name/filter could be `None` or
   empty- or attacker-controlled.
-- **Never mutate a list/dict while iterating it.** Removing or adding to a
-  collection mid-loop raises `RuntimeError` or silently skips items — iterate a
-  copy, `reversed()`, or build a new list.
-- **No mutable default arguments.** `def f(items=[])` / `={}` shares one object
-  across every call — use `None` with a guard inside.
 - **Check the types in a condition actually match.** A comparison between
   mismatched types (string vs `datetime`, string vs int) silently never matches
   or is always true — cast explicitly (`cint`/`flt`) at the boundary.
@@ -203,10 +193,6 @@ perceive ~100ms).
 - Docstrings should only mention important things. Keep them short and to the
   point. Don't explain what's trivially understood from function name. Focus on
   "why".
-- **Guard clauses over nesting.** Prefer early-return guards to over-indented
-  if-else soup; merge nested `if`s.
-- **Delete dead code.** Commented-out code never gets merged — git history
-  already keeps it.
 - **Split unrelated changes** into separate commits/PRs — keeps review focused
   and `git blame`/reverts clean.
 

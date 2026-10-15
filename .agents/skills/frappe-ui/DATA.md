@@ -2,13 +2,13 @@
 
 Five composables, all exported from `frappe-ui`. They are siblings on one Frappe fetch layer, not wrappers around each other, so **each one has its own option list**. An option that exists on `useCall` is not automatically accepted by `useDoc`.
 
-| Job                                           | Composable   |
-| --------------------------------------------- | ------------ |
-| Any whitelisted method or REST path           | `useCall`    |
-| A paginated, filterable list of a doctype     | `useList`    |
-| One document, kept reactive                   | `useDoc`     |
-| Writes for a doctype, with no read            | `useDoctype` |
-| A draft of a document that does not exist yet | `useNewDoc`  |
+| Job | Composable |
+|---|---|
+| Any whitelisted method or REST path | `useCall` |
+| A paginated, filterable list of a doctype | `useList` |
+| One document, kept reactive | `useDoc` |
+| Writes for a doctype, with no read | `useDoctype` |
+| A draft of a document that does not exist yet | `useNewDoc` |
 
 `useCall` is the recommended layer for new code. The older `createResource` / `createListResource` / `createDocumentResource` family stays supported and un-deprecated through `1.x`, so existing code keeps working.
 
@@ -24,14 +24,14 @@ No Frappe backend behind the app? See [SETUP.md](SETUP.md) → Prototyping again
 
 ```vue
 <script setup lang="ts">
-import { computed, ref } from "vue";
-import { useCall, Skeleton, ErrorMessage } from "frappe-ui";
+import { computed, ref } from 'vue'
+import { useCall, Skeleton, ErrorMessage } from 'frappe-ui'
 
-const userId = ref("Administrator");
+const userId = ref('Administrator')
 const user = useCall<User>({
   url: computed(() => `/api/v2/document/User/${userId.value}`),
   refetch: true,
-});
+})
 </script>
 
 <template>
@@ -45,17 +45,17 @@ const user = useCall<User>({
 
 ```ts
 const createTask = useCall<Task, { title: string; description?: string }>({
-  url: "/api/v2/method/myapp.api.create_task",
-  method: "POST",
+  url: '/api/v2/method/myapp.api.create_task',
+  method: 'POST',
   immediate: false,
   onSuccess: (task) => {
-    toast.success("Task created");
-    router.push(`/tasks/${task.name}`);
+    toast.success('Task created')
+    router.push(`/tasks/${task.name}`)
   },
   onError: (err) => toast.error(err.message),
-});
+})
 
-await createTask.submit({ title: form.title, description: form.description });
+await createTask.submit({ title: form.title, description: form.description })
 ```
 
 Bind `loading` to the submit button (`<Button :loading="createTask.loading">`) and render `error` through `<ErrorMessage :message="createTask.error" />` next to the form.
@@ -65,12 +65,7 @@ Bind `loading` to the submit button (`<Button :loading="createTask.loading">`) a
 ## `useList`
 
 ```ts
-const todos = useList<Todo>({
-  doctype: "ToDo",
-  fields: ["name", "status"],
-  filters: { status: "Open" },
-  orderBy: "modified desc",
-});
+const todos = useList<Todo>({ doctype: 'ToDo', fields: ['name', 'status'], filters: { status: 'Open' }, orderBy: 'modified desc' })
 ```
 
 **Options** (`src/data-fetching/useList/types.ts:26-46`): `doctype` (required), `fields`, `filters` and `orderBy` (both `MaybeRefOrGetter` — pass a ref or getter and the list refetches when it changes), `start` (default `0`), `limit` (default `20`), `groupBy`, `parent`, `debug`, `cacheKey`, `staleOnError`, `initialData`, `immediate` (default `true`), `refetch` (**default `true`**, unlike `useCall`), `baseUrl`, `url`, `transform`, `onSuccess`, `onError`.
@@ -80,9 +75,9 @@ const todos = useList<Todo>({
 ## `useDoc`
 
 ```ts
-const todoId = "TODO-0001";
-const todo = useDoc<Todo>({ doctype: "ToDo", name: todoId });
-await todo.setValue.submit({ status: "Closed" });
+const todoId = 'TODO-0001'
+const todo = useDoc<Todo>({ doctype: 'ToDo', name: todoId })
+await todo.setValue.submit({ status: 'Closed' })
 ```
 
 **Options — this is the whole list** (`src/data-fetching/useDoc/useDoc.ts:36-44`): `doctype`, `name` (string, `Ref<string>` or getter), `baseUrl`, `url`, `methods`, `immediate` (default `true`), `staleOnError` (default `false`), `transform`.
@@ -100,9 +95,9 @@ There is no `cacheKey`, `refetch`, `params`, `initialData`, `onSuccess` or `onEr
 **Returns:** `insert`, `delete`, `setValue`, `runDocMethod`, `runMethod`. Each has `data`, `error`, `loading`, `isLoading(...)` and `submit(params)`.
 
 ```ts
-const todos = useDoctype<Todo>("ToDo");
-await todos.setValue.submit({ name: id, status: "Closed" });
-await todos.runDocMethod.submit({ name: id, method: "send_reminder" });
+const todos = useDoctype<Todo>('ToDo')
+await todos.setValue.submit({ name: id, status: 'Closed' })
+await todos.runDocMethod.submit({ name: id, method: 'send_reminder' })
 ```
 
 ## `useNewDoc`
@@ -113,11 +108,11 @@ await todos.runDocMethod.submit({ name: id, method: "send_reminder" });
 
 ```vue
 <script setup>
-import { useRouter } from "vue-router";
-import { useNewDoc, FormControl, Button } from "frappe-ui";
-const router = useRouter();
-const todo = useNewDoc("ToDo", { status: "Open" });
-const save = async () => router.push(`/todos/${(await todo.submit()).name}`);
+import { useRouter } from 'vue-router'
+import { useNewDoc, FormControl, Button } from 'frappe-ui'
+const router = useRouter()
+const todo = useNewDoc('ToDo', { status: 'Open' })
+const save = async () => router.push(`/todos/${(await todo.submit()).name}`)
 </script>
 
 <template>

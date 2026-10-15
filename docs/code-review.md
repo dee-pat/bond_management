@@ -42,21 +42,27 @@ Codex reacts while reviewing and posts its findings on the PR. Confirm that a
 review appeared for the intended revision. A reaction alone is not evidence
 that the review completed. Request another review manually after relevant fixes.
 
-Root and nested `AGENTS.md` files supply review guidance. This app's **Code
-Review Rules** cover runtime API validation, portfolio/document permissions,
-framework transactions, migrations, concurrency, financial precision, private
-attachments, and Desk/SPA integration. The domain model and verification guide
-remain the source of truth for relationships and required checks.
+Root and nested `AGENTS.md` files supply review guidance. The root file's
+**Review guidelines** section applies the app's Frappe, financial, attachment,
+and migration rules to the diff. The domain model and verification guide remain
+the source of truth for relationships and required checks. For a local agent
+review, the `frappe-code-review` skill is the general Frappe checklist.
 
 Reviews are advisory. Existing tests, CI checks, and human review still determine
 whether a change is ready to merge. If no review appears, check the repository
 connection, code review access, subscription usage limits, and exact mention.
 
+## GitHub review conversations
+
+During a requested PR review or review-fix workflow, resolve review
+conversations whose findings are verified as fixed at the current head. The
+`pr-review-threads` skill owns the steps and the `gh` commands.
+
 ## Review output contract
 
 Apply this contract to reviews of PRs, commits, and uncommitted changes by
 Codex or Claude Code. Keep findings grounded in the changed code and follow the
-app's Code Review Rules for technical checks.
+_Review guidelines_ in the root `AGENTS.md` for technical checks.
 
 ### Summary and score
 
@@ -219,39 +225,3 @@ been observed to omit custom scores and usage fields. Repository instructions
 cannot configure its output schema or schedule companion posting: a supervising
 agent must perform the publication step. A standalone native review may therefore
 need an explicit follow-up request to publish the companion comment.
-
-## Migration from PR-Agent
-
-The PR-Agent workflow, configuration, and API setup guide have been removed.
-The old `/review` comment and Actions workflow are replaced by `@codex review`.
-Remove the obsolete `OPENAI_KEY` repository Actions secret and `PR_AGENT_MODEL`
-variable if present. Revoke the dedicated provider key in OpenAI settings.
-GitHub's stored secret and the provider key are separate objects.
-
-## Verification evidence — 2026-10-09
-
-The command evidence below records the site names in use at the time
-(`dev.local` and `test_site`). The current Bond Management pair is
-`bond-management-dev.localhost` and `bond-management-test.localhost`; use
-`docs/verification.md` for current commands.
-
-- Risk classification: review configuration and agent guidance only; no app
-  runtime, schema, or financial behavior change.
-- Required gates: scoped formatting, diff checks, and the shared pre-push gate.
-- Commands executed / exit statuses:
-  - From the configured bench, `apps/bond_management/scripts/verify.sh pre-push`:
-    **0**, including migration of the existing `test_site`.
-  - From the setup worktree, the configured bench's `env/bin/pre-commit run --files AGENTS.md README.md docs/code-review.md`: **0**.
-  - From the setup worktree, `git diff --check`: **0**.
-- Tests passed: 391 app server tests (48 unit, 334 integration, 9 uncategorized),
-  4 verification-script tests, and 2 Semgrep rule tests.
-- Tests failed: none.
-- Tests not run: a live Codex review; account connection/settings must be
-  verified first. Playwright and fresh app installation are not applicable to
-  this review configuration change.
-- Blockers: ChatGPT sign-in is required to inspect account-side review settings.
-- Unverified local/CI differences: repository files do not prove the GitHub
-  integration is connected, that automatic review is off, or that a subscription
-  review completed. Local gates use the existing macOS bench and `test_site`.
-- Domain-model review: graphs and notes reviewed; no mapped DocType, ownership,
-  attachment, report, API, or service relationship changes.
