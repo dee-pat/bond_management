@@ -138,15 +138,53 @@ apps/bond_management/scripts/verify.sh pre-push     # lint + server tests
 apps/bond_management/scripts/verify.sh pre-push-ui  # adds frontend checks and Playwright
 ```
 
-[`docs/verification.md`](docs/verification.md) covers the individual gates,
-the dev/test site pair, Playwright setup, and the completion evidence format.
+The individual stages are `lint` (pre-commit, the `skills.lock` check, Semgrep
+and rule tests), `server`, `frontend`, `ui` and `playwright`. The `ui` and
+`playwright` stages migrate and seed the test site themselves. GitHub Actions
+runs the same stages, so local and CI commands do not drift.
 
-### Manual PR reviews
+Browser tests use Playwright with three projects: `investor-desktop`,
+`investor-mobile` and `desk`. The Desk project includes a server-backed
+statement PDF smoke flow. See [`e2e/README.md`](e2e/README.md) for the spec
+layout and Python-versus-Playwright ownership.
 
-Request a Codex review with an `@codex review` PR comment. Reviews follow the
-Frappe v16 and Bond Management rules in `AGENTS.md` and use subscription usage
-when connected through your ChatGPT account. See [`docs/code-review.md`](docs/code-review.md)
-for setup and manual review instructions.
+[`docs/verification.md`](docs/verification.md) covers the gates, the dev/test
+site pair, browser credentials, Playwright setup, and the completion evidence
+format.
+
+### Code reviews
+
+- **Codex:** post an `@codex review` comment on the PR. Reviews use your
+  ChatGPT subscription usage when connected through the GitHub integration.
+- **Local agent review (Codex or Claude Code):** the `frappe-pr-review` skill
+  combines the review checklist, the installed Frappe source and Frappe's
+  Semgrep rules. To list only the Semgrep findings a change introduces, run:
+
+  ```bash
+  scripts/semgrep-pr.sh main
+  ```
+
+Every review follows the output contract in
+[`docs/code-review.md`](docs/code-review.md), including a merge-readiness score.
+Changes to entry points, permissions, shares, attachments or secrets are also
+checked against [`docs/security-review.md`](docs/security-review.md).
+
+### Agent skills and rules
+
+Agent skills live in [`.agents/skills/`](.agents/skills/). Upstream skills, the
+shared Frappe rules block in `AGENTS.md`, and Frappe's Semgrep rules in
+`semgrep/frappe/` are pinned in [`skills.lock`](skills.lock) and vendored
+unmodified from
+[frappe-agent-kit](https://github.com/dee-pat/frappe-agent-kit) and other
+upstreams. Check or refresh the vendored copies from the app directory:
+
+```bash
+scripts/sync-skills.sh check
+```
+
+```bash
+scripts/sync-skills.sh sync
+```
 
 ## Design and security principles
 
@@ -159,8 +197,11 @@ for setup and manual review instructions.
 
 More implementation context:
 
+- [`AGENTS.md`](AGENTS.md): working rules for contributors and coding agents.
 - [`ARCHITECTURE_SPEC.md`](ARCHITECTURE_SPEC.md): open work and invariants.
+- [`docs/decisions/`](docs/decisions/README.md): accepted business and architecture decisions, such as rounding, cash-flow signs and market-price conventions.
 - [`docs/domain-model.md`](docs/domain-model.md): DocType relationships and data flows.
+- [`docs/security-review.md`](docs/security-review.md): access-control and attachment review rules.
 - [`docs/testing-matrix.md`](docs/testing-matrix.md): index from high-risk bond rules to their source modules and regression tests.
 - [`docs/specs/`](docs/specs/) and [`docs/plans/`](docs/plans/): design specs and plans.
 
