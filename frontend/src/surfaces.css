@@ -173,19 +173,6 @@
 	font-size: 12px;
 }
 
-.read-only-badge {
-	display: inline-flex;
-	align-items: center;
-	min-height: 20px;
-	padding: 3px 8px;
-	color: var(--desk-table-text);
-	background: var(--desk-table-header);
-	border: 1px solid var(--desk-border);
-	border-radius: 999px;
-	font-size: 11px;
-	font-weight: 500;
-}
-
 .pdf-attachment-section {
 	margin-top: 18px;
 	padding: 14px;
@@ -203,35 +190,6 @@
 	color: var(--desk-text);
 	font-size: 14px;
 	font-weight: 600;
-}
-
-.pdf-attachment-actions {
-	display: flex;
-	flex-wrap: wrap;
-	gap: 7px;
-}
-
-.pdf-attachment-link {
-	display: inline-flex;
-	align-items: center;
-	min-height: 30px;
-	padding: 5px 9px;
-	color: var(--desk-link);
-	background: var(--desk-surface);
-	border: 1px solid var(--desk-link-border);
-	border-radius: 4px;
-	font-size: 12px;
-	font-weight: 500;
-	text-decoration: none;
-}
-
-.pdf-attachment-link:hover {
-	background: var(--desk-link-surface);
-}
-
-.pdf-attachment-empty {
-	color: var(--desk-muted);
-	font-size: 12px;
 }
 
 .transaction-detail-grid,
@@ -350,11 +308,6 @@
 	font-weight: 500;
 }
 
-.list-filter-status {
-	border: 0;
-	font: inherit;
-}
-
 .list-paging-area {
 	position: sticky;
 	bottom: 0;
@@ -422,37 +375,6 @@
 
 .list-paging-area__load-more {
 	min-width: 86px;
-}
-
-.status-badge {
-	display: inline-flex;
-	align-items: center;
-	gap: 6px;
-	min-height: 20px;
-	padding: 3px 8px;
-	color: var(--desk-table-text);
-	background: var(--desk-table-header);
-	border-radius: 999px;
-	font-size: 11px;
-	font-weight: 500;
-}
-
-.status-badge::before {
-	width: 6px;
-	height: 6px;
-	background: currentColor;
-	border-radius: 50%;
-	content: "";
-}
-
-.status-badge--matched {
-	color: var(--desk-success);
-	background: var(--desk-success-surface);
-}
-
-.status-badge--mismatched {
-	color: var(--desk-danger);
-	background: var(--desk-error-surface);
 }
 
 .holding-section,

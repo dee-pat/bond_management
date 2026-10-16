@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
 import { RouterLink } from "vue-router";
-import { Button, Select } from "frappe-ui";
+import { Badge, Button, Select } from "frappe-ui";
 import { ListCell } from "frappe-ui/list";
 
 import ListFilterBar from "../components/ListFilterBar.vue";
@@ -160,10 +160,9 @@ const sortColumns = [
 				<ListCell data-label="Reconciliation Status">
 					<Button
 						v-if="statement.reconciliation_status"
-						class="status-badge list-filter-status"
-						:class="`status-badge--${statement.reconciliation_status.toLowerCase()}`"
-						variant="ghost"
-						size="sm"
+						:theme="statement.reconciliation_status === 'Matched' ? 'green' : 'red'"
+						variant="subtle"
+						size="xs"
 						:label="`Filter Reconciliation Status by ${statement.reconciliation_status}`"
 						@click="
 							applyFilter(
@@ -173,9 +172,12 @@ const sortColumns = [
 							)
 						"
 					>
+						<template #prefix>
+							<span class="size-1.5 rounded-full bg-current" aria-hidden="true" />
+						</template>
 						{{ statement.reconciliation_status }}
 					</Button>
-					<span v-else class="status-badge status-badge--unset">—</span>
+					<Badge v-else theme="gray" variant="subtle" size="sm">—</Badge>
 				</ListCell>
 			</template>
 		</PagedRecordList>

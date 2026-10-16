@@ -46,6 +46,15 @@ test("browses the assigned statement list and read-only detail", async ({
     0
   );
 
+  await page
+    .getByRole("button", { name: "Filter Reconciliation Status by Matched" })
+    .first()
+    .click();
+  await expect(page.getByTestId("active-filters")).toContainText(
+    "Reconciliation Status"
+  );
+  await page.getByRole("button", { name: "Clear all" }).click();
+
   await selectFrappeOption(page, "Portfolio Name", PORTFOLIO_NAME);
   await selectFrappeOption(page, "Reconciliation Status", "Matched");
   const row = page.getByTestId("statement-row").filter({
@@ -81,17 +90,20 @@ test("browses the assigned statement list and read-only detail", async ({
   await expect(
     page.getByRole("heading", { name: "PDF Attachment" })
   ).toBeVisible();
-  await expect(
-    page.getByRole("link", { name: "View statement dated 31 Dec 2025 PDF" })
-  ).toBeVisible();
+  const viewPdf = page.getByRole("link", {
+    name: "View statement dated 31 Dec 2025 PDF",
+  });
+  await expect(viewPdf).toBeVisible();
+  await expect(viewPdf).toHaveAttribute("target", "_blank");
   await expect(
     page.getByRole("heading", { name: "Quantity Reconciliation Report" })
   ).toBeVisible();
-  await expect(
-    page.getByRole("link", {
-      name: "Download statement dated 31 Dec 2025 reconciliation report",
-    })
-  ).toBeVisible();
+  const downloadReport = page.getByRole("link", {
+    name: "Download statement dated 31 Dec 2025 reconciliation report",
+  });
+  await expect(downloadReport).toBeVisible();
+  await expect(downloadReport).toHaveAttribute("download", "");
+  await expect(downloadReport).toHaveAttribute("target", "_self");
 
   await page.reload();
   await expect(page).toHaveURL(/\/bond-investor\/statements\/BS-\d+$/);
