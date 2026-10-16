@@ -53,6 +53,9 @@ test("browses the assigned statement list and read-only detail", async ({
   await expect(page.getByTestId("active-filters")).toContainText(
     "Reconciliation Status"
   );
+  await expect(
+    page.getByRole("button", { name: "Clear Reconciliation Status filter" })
+  ).toBeVisible();
   await page.getByRole("button", { name: "Clear all" }).click();
 
   await selectFrappeOption(page, "Portfolio Name", PORTFOLIO_NAME);
@@ -87,6 +90,9 @@ test("browses the assigned statement list and read-only detail", async ({
   await expect(holdings).toContainText("1.000000");
   await expect(holdings).toContainText("USD");
   await expect(page.getByText("Read only")).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: "Back to statements" })
+  ).toHaveAttribute("href", "/bond-investor/statements");
   await expect(
     page.getByRole("heading", { name: "PDF Attachment" })
   ).toBeVisible();

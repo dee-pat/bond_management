@@ -13,23 +13,31 @@ const emit = defineEmits<{
 </script>
 
 <template>
-	<div v-if="filters.length" class="list-filter-bar" data-testid="active-filters">
-		<span class="list-filter-bar__label">Filters</span>
+	<div
+		v-if="filters.length"
+		class="mb-3 -mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-ink-gray-5"
+		data-testid="active-filters"
+	>
+		<span class="font-semibold">Filters</span>
 		<Button
 			v-for="filter in filters"
 			:key="filter.field"
-			class="list-filter-chip"
+			variant="outline"
+			size="xs"
 			:label="`Clear ${filter.label} filter`"
 			@click="emit('clear', filter.field)"
 		>
-			<span>{{ filter.label }}</span>
-			<strong>{{ filter.value }}</strong>
-			<span aria-hidden="true">×</span>
+			<span class="inline-flex items-center gap-1">
+				<span>{{ filter.label }}</span>
+				<strong class="font-semibold">{{ filter.value }}</strong>
+				<span aria-hidden="true">×</span>
+			</span>
 		</Button>
 		<Button
-			class="list-filter-clear"
 			label="Clear all"
 			variant="ghost"
+			theme="blue"
+			size="xs"
 			@click="emit('clearAll')"
 		/>
 	</div>

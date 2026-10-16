@@ -66,6 +66,7 @@ test("runs interest difference for the selected portfolio", async ({
 
   const table = page.getByTestId("interest-difference-table");
   await expect(table).toBeVisible();
+  await expect(table.getByRole("table")).toBeVisible();
   const headers = table.getByRole("columnheader");
   await expect(headers).toHaveCount(9);
   const headerLabels = await headers.evaluateAll((elements) =>
@@ -79,6 +80,12 @@ test("runs interest difference for the selected portfolio", async ({
     page.getByTestId("interest-difference-row").first(),
   ).toBeVisible();
   await expect(page.getByTestId("interest-difference-total-row")).toBeVisible();
+  await expect(
+    page.getByTestId("interest-difference-total-row").getByRole("cell", {
+      name: "USD",
+      exact: true,
+    })
+  ).toBeVisible();
 });
 
 test("identifies total rows with a marker instead of their display label", async ({

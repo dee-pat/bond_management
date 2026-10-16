@@ -151,26 +151,8 @@
 	text-decoration: underline;
 }
 
-.back-link {
-	color: var(--desk-link);
-	font-weight: 500;
-	text-decoration: none;
-}
-
-.back-link:hover {
-	text-decoration: underline;
-}
-
 .list-column-button--active {
 	color: var(--desk-text);
-}
-
-.back-link {
-	display: inline-flex;
-	align-items: center;
-	gap: 4px;
-	margin-bottom: 15px;
-	font-size: 12px;
 }
 
 .pdf-attachment-section {
@@ -230,58 +212,6 @@
 	color: var(--desk-text);
 	font-weight: 500;
 	overflow-wrap: anywhere;
-}
-
-.list-filter-bar {
-	display: flex;
-	align-items: center;
-	flex-wrap: wrap;
-	gap: 6px;
-	margin: -2px 0 12px;
-	color: var(--desk-muted);
-	font-size: 12px;
-}
-
-.list-filter-bar__label {
-	font-weight: 600;
-}
-
-.list-filter-chip,
-.list-filter-clear {
-	display: inline-flex;
-	align-items: center;
-	min-height: 24px;
-	gap: 5px;
-	padding: 3px 7px;
-	border-radius: 4px;
-	cursor: pointer;
-	font-size: 11px;
-}
-
-.list-filter-chip {
-	color: var(--desk-table-text);
-	background: var(--desk-table-header);
-	border: 1px solid var(--desk-border);
-}
-
-.list-filter-chip strong {
-	color: var(--desk-text);
-	font-weight: 600;
-}
-
-.list-filter-chip:hover {
-	background: var(--desk-link-surface);
-	border-color: var(--desk-link-border);
-}
-
-.list-filter-clear {
-	color: var(--desk-link);
-	background: transparent;
-	border: 0;
-}
-
-.list-filter-clear:hover {
-	text-decoration: underline;
 }
 
 .list-filter-button {

@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { Badge } from "frappe-ui";
-import { RouterLink, useRoute } from "vue-router";
+import { Badge, Button } from "frappe-ui";
+import { useRoute } from "vue-router";
 
 import PdfAttachmentActions from "../components/PdfAttachmentActions.vue";
 import SurfaceState from "../components/SurfaceState.vue";
@@ -113,7 +113,15 @@ function displayValue(field: DetailField): string {
 
 <template>
 	<section class="transaction-surface" aria-labelledby="transaction-detail-title">
-		<RouterLink class="back-link" to="/transactions"> ← Back to transactions </RouterLink>
+		<Button
+			class="mb-[15px]"
+			route="/transactions"
+			variant="ghost"
+			theme="blue"
+			size="xs"
+			icon-left="lucide-arrow-left"
+			label="Back to transactions"
+		/>
 
 		<SurfaceState v-if="loading" :loading="loading" loading-text="Loading transaction…" />
 

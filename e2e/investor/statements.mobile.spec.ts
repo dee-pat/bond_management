@@ -16,6 +16,9 @@ test("browses an assigned statement without mobile overflow", async ({
   await expect(
     page.getByRole("heading", { name: "31 Dec 2025" })
   ).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: "Back to statements" })
+  ).toBeVisible();
   await expect(page.getByTestId("statement-holdings")).toContainText(
     "UI-TEST-BOND-001"
   );

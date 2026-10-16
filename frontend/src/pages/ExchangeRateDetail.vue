@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { Badge } from "frappe-ui";
-import { RouterLink, useRoute } from "vue-router";
+import { Badge, Button } from "frappe-ui";
+import { useRoute } from "vue-router";
 
 import SurfaceState from "../components/SurfaceState.vue";
 import { useInvestorApi } from "../lib/api";
@@ -61,7 +61,15 @@ function displayValue(field: DetailField): string {
 
 <template>
 	<section class="record-surface" aria-labelledby="exchange-rate-detail-title">
-		<RouterLink class="back-link" to="/exchange-rates"> ← Back to exchange rates </RouterLink>
+		<Button
+			class="mb-[15px]"
+			route="/exchange-rates"
+			variant="ghost"
+			theme="blue"
+			size="xs"
+			icon-left="lucide-arrow-left"
+			label="Back to exchange rates"
+		/>
 
 		<SurfaceState v-if="loading" :loading="loading" loading-text="Loading exchange rate…" />
 

@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from "vue";
 import { Button, FormControl } from "frappe-ui";
+import { ListCell, ListHeaderCell } from "frappe-ui/list";
 
+import DataList from "../components/DataList.vue";
 import SurfaceState from "../components/SurfaceState.vue";
 import { InvestorApiError, redirectToLogin, useInvestorApi } from "../lib/api";
 import { formatDate, formatMoney, formatNumber } from "../lib/format";
@@ -174,43 +176,40 @@ function isNumericColumn(column: InterestDifferenceColumn): boolean {
 		>
 			No interest differences were found for these filters.
 		</div>
-		<div v-else-if="report" class="interest-difference-table-wrap">
-			<table class="interest-difference-table" data-testid="interest-difference-table">
-				<thead>
-					<tr>
-						<th
-							v-for="column in report.columns"
-							:key="column.fieldname"
-							:class="{ 'interest-difference-numeric': isNumericColumn(column) }"
-							scope="col"
-						>
-							{{ column.label }}
-						</th>
-					</tr>
-				</thead>
-				<tbody>
-					<tr
-						v-for="(row, index) in report.rows"
-						:key="`${row.transaction_reference}:${row.currency}:${index}`"
-						:data-testid="
-							row.is_total_row
-								? 'interest-difference-total-row'
-								: 'interest-difference-row'
-						"
-						:class="{
-							'interest-difference-total-row': row.is_total_row,
-						}"
-					>
-						<td
-							v-for="column in report.columns"
-							:key="column.fieldname"
-							:class="{ 'interest-difference-numeric': isNumericColumn(column) }"
-						>
-							{{ displayValue(row, column) }}
-						</td>
-					</tr>
-				</tbody>
-			</table>
-		</div>
+		<DataList
+			v-else-if="report"
+			:items="report.rows"
+			:columns="
+				report.columns.map((column) =>
+					column.label.length > 18 ? 'minmax(15rem, 1fr)' : 'minmax(9rem, 1fr)'
+				)
+			"
+			:row-key="(row, index) => `${row.transaction_reference}:${row.currency}:${index}`"
+			:row-test-id="
+				(row) =>
+					row.is_total_row ? 'interest-difference-total-row' : 'interest-difference-row'
+			"
+			:row-class="(row) => ({ 'interest-difference-total-row': row.is_total_row })"
+			data-testid="interest-difference-table"
+		>
+			<template #header>
+				<ListHeaderCell
+					v-for="column in report.columns"
+					:key="column.fieldname"
+					:class="{ 'justify-end': isNumericColumn(column) }"
+				>
+					{{ column.label }}
+				</ListHeaderCell>
+			</template>
+			<template #row="{ item: row }">
+				<ListCell
+					v-for="column in report.columns"
+					:key="column.fieldname"
+					:class="{ 'justify-end': isNumericColumn(column) }"
+				>
+					{{ displayValue(row, column) }}
+				</ListCell>
+			</template>
+		</DataList>
 	</section>
 </template>
