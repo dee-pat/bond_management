@@ -158,7 +158,7 @@ def cleanup_incompatible_file_shares(user=None, doctype=None, name=None, file=No
             wait=wait,
         )
     try:
-        shares = _lock_file_shares(filters)
+        shares = _lock_shares(filters)
     except frappe.QueryTimeoutError:
         # Frappe locks an updated DocShare row before its hooks wait for the
         # users this cleanup holds. Retry the whole scope after commit: a plain
@@ -220,9 +220,22 @@ def cleanup_incompatible_shares(user=None, doctype=None, name=None, names=None):
             "DocShare", fields=["user"], filters=filters, ignore_permissions=True
         ).run(pluck=True)
         _lock_users(recipients)
-    shares = frappe.qb.get_query(
-        "DocShare", fields=["*"], filters=filters, ignore_permissions=True, for_update=True
-    ).run(as_dict=True)
+    try:
+        shares = _lock_shares(filters)
+    except frappe.QueryTimeoutError:
+        # Frappe locks an updated DocShare row before its hooks wait for the
+        # target and users this cleanup holds. Retry the whole scope after
+        # commit: a plain read here could miss shares committed after this
+        # snapshot. The retry locks targets, then users, like this pass.
+        frappe.enqueue(
+            cleanup_incompatible_shares,
+            user=user,
+            doctype=doctype,
+            name=name,
+            names=names,
+            enqueue_after_commit=True,
+        )
+        return
     for share in shares:
         key = (share.share_doctype, share.share_name)
         if key in targets:
@@ -497,7 +510,7 @@ def _lock_file(name, *, wait=True):
     )
 
 
-def _lock_file_shares(filters):
+def _lock_shares(filters):
     return frappe.qb.get_query(
         "DocShare", fields=["*"], filters=filters, ignore_permissions=True, for_update=True, wait=False
     ).run(as_dict=True)

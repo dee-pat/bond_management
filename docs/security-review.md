@@ -65,6 +65,12 @@ Performance, Bond Yield Comparison, and Interest Difference by Portfolio).
 - DocShare and User Permission changes stay consistent under concurrency;
   changes here run the share-race helper described under _Temporary sites_ in
   `docs/verification.md`.
+- Frappe locks an updated DocShare row in `check_if_latest()` before
+  `before_validate` waits for the target and users. Financial share cleanup
+  already holds those rows, so it locks DocShare rows without waiting and,
+  when one is busy, retries its whole original scope after commit instead of
+  waiting. Retrying the scope, not shares picked by a plain read, also covers
+  shares committed after this request's snapshot.
 
 ## `ignore_permissions=True`
 
