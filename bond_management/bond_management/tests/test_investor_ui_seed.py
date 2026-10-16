@@ -7,6 +7,8 @@ from frappe.utils import getdate
 
 from bond_management.bond_management.tests.investor_ui_seed import (
     DEFAULT_INVESTOR_EMAIL,
+    DESK_SMOKE_ACCOUNT_NUMBER,
+    DESK_SMOKE_PORTFOLIO_NAME,
     TEST_BOND_ISIN,
     TEST_EXCHANGE_RATE_DATE,
     TEST_EXCHANGE_RATE_FROM_CURRENCY,
@@ -37,6 +39,7 @@ class TestInvestorUITestSeed(IntegrationTestCase):
         seed_fixture.return_value = {
             "user": "investor@example.com",
             "portfolio": TEST_PORTFOLIO_NAME,
+            "desk_smoke_portfolio": DESK_SMOKE_PORTFOLIO_NAME,
             "bond": TEST_BOND_ISIN,
             "yield_bond": TEST_YIELD_BOND_ISIN,
             "market_date": "BMD-0001",
@@ -224,6 +227,27 @@ class TestInvestorUITestSeed(IntegrationTestCase):
                     "for_value": TEST_PORTFOLIO_NAME,
                     "apply_to_all_doctypes": 1,
                 },
+            )
+        )
+
+    def test_desk_smoke_portfolio_is_isolated_and_keeps_its_report_password(self):
+        first = seed_investor_ui_test_data()
+        password = frappe.get_doc("Bond Portfolio", DESK_SMOKE_PORTFOLIO_NAME).get_password(
+            "statement_pdf_password"
+        )
+        second = seed_investor_ui_test_data()
+
+        self.assertEqual(first["desk_smoke_portfolio"], DESK_SMOKE_PORTFOLIO_NAME)
+        self.assertEqual(second["desk_smoke_portfolio"], DESK_SMOKE_PORTFOLIO_NAME)
+        portfolio = frappe.get_doc("Bond Portfolio", DESK_SMOKE_PORTFOLIO_NAME)
+        self.assertEqual(portfolio.account_no, DESK_SMOKE_ACCOUNT_NUMBER)
+        self.assertTrue(password)
+        self.assertEqual(portfolio.get_password("statement_pdf_password"), password)
+        self.assertFalse(frappe.db.exists("Bond Transaction", {"portfolio_name": DESK_SMOKE_PORTFOLIO_NAME}))
+        self.assertFalse(
+            frappe.db.exists(
+                "User Permission",
+                {"allow": "Bond Portfolio", "for_value": DESK_SMOKE_PORTFOLIO_NAME},
             )
         )
 

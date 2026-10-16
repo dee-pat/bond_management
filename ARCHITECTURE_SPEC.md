@@ -43,10 +43,11 @@ metadata or relationship-owning services change.
   link remains a deterministic display projection, while source rows own
   replacement and trash cleanup. Manual canonical rows remain as fallback data
   after their last PDF source is removed.
-- Existing Desk Playwright specs cover client state and serialization with
-  focused test doubles. A
-  small server-backed smoke path is still needed for attachment upload,
-  authoritative PDF response, save, and generated report/file behavior.
+- Most Desk Playwright specs cover client state and serialization with
+  focused test doubles. `e2e/desk/bond-statement-server.spec.ts` is the
+  server-backed smoke path: it uploads a generated statement PDF through the
+  Desk dialog, recovers from a rejected PDF, saves, and checks the canonical
+  private attachment and generated reconciliation report.
 - Generated PDFs cover parser-shaped text and malformed/password cases. Add a
   small sanitized real-document corpus before claiming layout/font/encoding
   compatibility.
@@ -141,7 +142,8 @@ Do not duplicate parser or permission logic across adapters.
 
 ### Desk browser coverage (Playwright)
 
-Add one focused server-backed smoke spec covering:
+`e2e/desk/bond-statement-server.spec.ts` is the focused server-backed smoke
+spec. It covers, for Bond Statement:
 
 1. private PDF attachment;
 2. server extraction of portfolio/date or transaction values;
