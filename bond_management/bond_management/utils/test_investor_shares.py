@@ -240,6 +240,28 @@ class TestInvestorShares(IntegrationTestCase):
         self.assertTrue(frappe.db.exists("DocShare", share.name))
         self.assertFalse(frappe.db.exists("DocShare", unrelated.name))
 
+    def test_file_share_deletion_guard_reads_current_file_scope(self):
+        flags = {"ignore_share_permission": True, "ignore_permissions": True}
+        portfolio_file = make_private_file("Bond Portfolio", self.assigned.name)
+        share = add_docshare("File", portfolio_file.name, self.investor.name)
+        get_value = frappe.db.get_value
+
+        def unattached_in_old_snapshot(doctype, name=None, fieldname=None, *args, **kwargs):
+            row = get_value(doctype, name, fieldname, *args, **kwargs)
+            if doctype == "File" and name == portfolio_file.name and not kwargs.get("for_update") and row:
+                row.attached_to_doctype = row.attached_to_name = None
+            return row
+
+        with self.set_user(self.investor.name):
+            with patch.object(frappe.db, "get_value", side_effect=unattached_in_old_snapshot):
+                with self.assertRaises(frappe.PermissionError):
+                    remove("File", portfolio_file.name, self.investor.name, flags=flags)
+            # A File row held by a concurrent save fails closed.
+            with patch.object(investor_shares, "_lock_file", side_effect=frappe.QueryTimeoutError):
+                with self.assertRaises(frappe.PermissionError):
+                    remove("File", portfolio_file.name, self.investor.name, flags=flags)
+        self.assertTrue(frappe.db.exists("DocShare", share.name))
+
     def test_legacy_cleanup_is_idempotent_and_preserves_compatible_and_other_app_shares(self):
         inaccessible = self.legacy_share(self.other, self.investor.name)
         assigned = self.legacy_share(self.assigned, self.investor.name, write=1, share=1)

@@ -47,7 +47,8 @@ Performance, Bond Yield Comparison, and Interest Difference by Portfolio).
   `has_file_permission` denies investors any non-read permission, and cleanup
   drops legacy mutating grants. These checks also run from DocShare
   `before_validate`, so a server caller's `ignore_validate` cannot skip them,
-  and the DocShare `on_trash` guard stops investors deleting these grants.
+  and the DocShare `on_trash` guard stops investors deleting these grants,
+  reading the File's current scope without waiting and failing closed.
   Share validation locks the attached target,
   users, then the File, the order document saves use before locking File rows
   by URL; a File relinked or made private between reads locks its target

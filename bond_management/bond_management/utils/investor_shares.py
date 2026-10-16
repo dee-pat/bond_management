@@ -55,19 +55,27 @@ def reject_investor_mutation(doc, method=None):
 
 
 def reject_investor_share_mutation(doc, method=None):
-    if doc.share_doctype == "File":
-        file = frappe.db.get_value("File", doc.share_name, _FILE_FIELDS, as_dict=True)
-        if not _scoped_attachment(file):
-            return
-    elif doc.share_doctype not in FINANCIAL_DOCTYPES:
+    if doc.share_doctype != "File" and doc.share_doctype not in FINANCIAL_DOCTYPES:
         return
     user = frappe.session.user
     if user in {"Administrator", "Guest"}:
         return
     # delete_doc locks DocShare before on_trash, so this check must not wait on
     # User: cleanup and share saves acquire User before the DocShare row.
-    if is_investor_user(user):
-        _deny()
+    if not is_investor_user(user):
+        return
+    if doc.share_doctype == "File" and not _is_protected_file(doc.share_name):
+        return
+    _deny()
+
+
+def _is_protected_file(name):
+    # A plain read may predate a concurrent relink. File saves wait for this
+    # DocShare row, so read the File currently without waiting; fail closed.
+    try:
+        return bool(_scoped_attachment(_lock_file(name, wait=False)))
+    except frappe.QueryTimeoutError:
+        return True
 
 
 def validate_share(doc, method, share):
