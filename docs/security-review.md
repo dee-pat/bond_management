@@ -35,6 +35,11 @@ Performance, Bond Yield Comparison, and Interest Difference by Portfolio).
 - Exchange rates are shared, but the representative statement link is
   permission level 1 and returned only when the caller can read that statement
   ([PR #19](https://github.com/dee-pat/bond_management/pull/19)).
+- A private `File` attached to a portfolio-owned DocType follows that
+  portfolio's scope for investors. Ownership and shares never widen it: the
+  File `has_permission` hook, list condition and `InvestorFileMixin`
+  (private downloads call core File permission directly) all enforce it, and
+  `validate_file_share` rejects new out-of-scope shares.
 
 ## Shares and User Permissions
 

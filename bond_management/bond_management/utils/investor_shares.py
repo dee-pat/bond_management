@@ -4,19 +4,16 @@ import frappe
 from frappe import _
 
 from bond_management.bond_management.utils.investor_permissions import (
+    PORTFOLIO_DOCTYPES,
     READ_PERMISSION_TYPES,
     get_allowed_portfolios,
     get_statement_portfolio,
     has_explicit_exchange_rate_source_share,
+    is_file_in_investor_scope,
     is_investor_user,
 )
 
 SOURCE_DOCTYPE = "Bond Exchange Rate Source"
-PORTFOLIO_DOCTYPES = {
-    "Bond Portfolio": "name",
-    "Bond Transaction": "portfolio_name",
-    "Bond Statement": "portfolio_name",
-}
 FINANCIAL_DOCTYPES = (
     *PORTFOLIO_DOCTYPES,
     "Bond Master",
@@ -75,6 +72,13 @@ def validate_share(doc, method, share):
     target = _lock_share_target(doc.doctype, doc.name)
     _lock_users([frappe.session.user, share.user])
     _validate_locked_share(target, share)
+
+
+def validate_file_share(doc, method, share):
+    if not doc.is_private or doc.attached_to_doctype not in PORTFOLIO_DOCTYPES:
+        return
+    if share.everyone or not is_file_in_investor_scope(doc, share.user):
+        _deny()
 
 
 def cleanup_incompatible_shares(user=None, doctype=None, name=None, names=None):

@@ -4,8 +4,10 @@ import frappe
 from frappe.tests import IntegrationTestCase
 
 from bond_management.bond_management.report.interest_difference_by_portfolio.interest_difference_by_portfolio import (
+    calculate_interest_difference_days,
     execute,
     get_columns,
+    load_bond_schedules,
 )
 from bond_management.bond_management.tests.factories import (
     make_assigned_investor,
@@ -81,6 +83,29 @@ class TestInterestDifferenceByPortfolio(IntegrationTestCase):
 
         self.assertEqual(days_by_currency["USD"], Decimal("-51.71"))
         self.assertEqual(days_by_currency["KES"], Decimal("-52.00"))
+
+    def test_icma_day_conversion_uses_settlement_period_around_coupon_date(self):
+        bond = make_bond(day_count_convention="Actual/Actual(ICMA)")
+        schedules = load_bond_schedules([frappe._dict(isin=bond.name)])[bond.name]
+        # The 2025-07-01 coupon closes a 181-day period and opens a 184-day one.
+        for settlement_date, period_days in (
+            ("2025-06-30", 181),
+            ("2025-07-01", 184),
+            ("2025-07-02", 184),
+        ):
+            one_day_interest = Decimal(7) / Decimal(100) * 100 * 10 / Decimal(period_days * 2)
+            row = frappe._dict(
+                isin=bond.name,
+                settlement_date=settlement_date,
+                day_count_convention="Actual/Actual(ICMA)",
+                face_value_per_unit=100,
+                coupon_rate=7,
+                coupon_frequency="2",
+                quantity_face_value=10,
+                interest_difference=one_day_interest,
+            )
+            with self.subTest(settlement_date=settlement_date):
+                self.assertEqual(calculate_interest_difference_days(row, schedules), Decimal("1.00"))
 
     def test_kenya_day_conversion_uses_saved_transaction_coupon_rate(self):
         portfolio = make_portfolio()

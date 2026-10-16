@@ -61,6 +61,7 @@ permission_query_conditions = {
 }
 
 has_permission = {
+    "File": "bond_management.bond_management.utils.investor_permissions.has_file_permission",
     "Bond Portfolio": "bond_management.bond_management.utils.investor_permissions.has_portfolio_permission",
     "Bond Transaction": "bond_management.bond_management.utils.investor_permissions.has_transaction_permission",
     "Bond Statement": "bond_management.bond_management.utils.investor_permissions.has_statement_permission",
@@ -80,6 +81,9 @@ _financial_doctypes = (
 extend_doctype_class = {
     doctype: [f"{_investor_shares}.InvestorBoundaryMixin"] for doctype in _financial_doctypes
 }
+extend_doctype_class["File"] = [
+    "bond_management.bond_management.utils.investor_permissions.InvestorFileMixin"
+]
 doc_events = {
     doctype: {
         "validate_share": f"{_investor_shares}.validate_share",
@@ -94,6 +98,7 @@ doc_events = {
 }
 doc_events.update(
     {
+        "File": {"validate_share": f"{_investor_shares}.validate_file_share"},
         "User": {
             "before_validate": f"{_investor_shares}.lock_user_authorization",
             "on_update": f"{_investor_shares}.cleanup_user_shares",
