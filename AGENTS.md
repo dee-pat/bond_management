@@ -26,6 +26,11 @@ This file covers what the code cannot tell you. Nested `AGENTS.md` files in
   [frappe-agent-kit](https://github.com/dee-pat/frappe-agent-kit). Never edit it
   here: change the kit, then bump the pin in `skills.lock` and run
   `scripts/sync-skills.sh sync`.
+- This file and the _Shared Frappe rules_ win over pinned skill examples and
+  checklists. Several upstream examples read records with `frappe.db.get_all`
+  or recommend `get_list`/`get_all`; in this app, user-facing reads follow the
+  `frappe.qb.get_query` rule below, and review findings follow
+  [security-review.md](docs/security-review.md).
 
 ## Layout
 
@@ -54,9 +59,12 @@ This file covers what the code cannot tell you. Nested `AGENTS.md` files in
   - **Investor SPA** (`frontend/`, served at `/bond-investor`) is read-only and
     gated by site config `bond_investor_spa_enabled`. Its only backend is
     `api/investor.py` and `api/investor_reports.py`, which return fixed,
-    permission-scoped projections, never generic DocType reads. Read
-    [investor-ui-migration.md](docs/specs/investor-ui-migration.md) before
-    changing the SPA or these APIs.
+    permission-scoped projections, never generic DocType reads. Before
+    changing the SPA, these APIs, investor redirects, the legacy investor
+    workspace or Playwright setup, read
+    [investor-ui-migration.md](docs/specs/investor-ui-migration.md) and update
+    [the progress note](docs/plans/investor-ui-migration-progress.md) for the
+    current slice.
 - Investor isolation is centralized in `hooks.py`:
   - `permission_query_conditions` and `has_permission`
     (`utils/investor_permissions.py`) scope Portfolio, Transaction, Statement,
