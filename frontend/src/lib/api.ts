@@ -1,3 +1,4 @@
+import { effectScope } from "vue";
 import { useCall } from "frappe-ui";
 
 import type {
@@ -61,12 +62,16 @@ interface InvestorRequest<T> {
 }
 
 function useInvestorRequest<T>(method: string): InvestorRequest<T> {
-	const call = useCall<T, InvestorApiParameters>({
-		url: `${INVESTOR_API_URL}.${method}`,
-		immediate: false,
-	});
+	const url = `${INVESTOR_API_URL}.${method}`;
 
 	async function request(parameters: InvestorApiParameters = {}): Promise<T> {
+		// A shared useCall resolves every submit from one data ref, and a network
+		// failure leaves the previous response there. Each request gets its own
+		// call so a failure can never return another request's data.
+		const scope = effectScope(true);
+		const call = scope.run(() =>
+			useCall<T, InvestorApiParameters>({ url, immediate: false })
+		)!;
 		try {
 			const response = await call.submit(parameters);
 			if (response === null) {
@@ -78,6 +83,8 @@ function useInvestorRequest<T>(method: string): InvestorRequest<T> {
 				throw caughtError;
 			}
 			throw toInvestorApiError(caughtError);
+		} finally {
+			scope.stop();
 		}
 	}
 

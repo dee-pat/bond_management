@@ -45,6 +45,20 @@ server suite, and the Playwright job passed 56 tests across the
 
 ## In progress: Phase 7 — Pilot
 
+### Investor request isolation
+
+A review on 2026-10-16 found that each investor endpoint shared one frappe-ui
+`useCall`. A request that failed before any response (dropped connection,
+server restart) resolved with that call's previous response, so a rerun or
+filter change could show another portfolio's or date's values with no error.
+`frontend/src/lib/api.ts` now sends every request through its own call, so the
+failed state from the specification shows instead. No API, data, permission or
+financial rule changes; the domain model was reviewed and is unchanged.
+The new focused specs failed before the fix (the transaction list showed
+Portfolio A rows under a Portfolio B filter) and pass after it. The
+`pre-push-ui` gate passed on 2026-10-16: lint, 383 server tests, frontend
+lint/typecheck/build, and 60 Playwright tests.
+
 ### Frappe-ui control prototype
 
 Follow-up trial accepted by the user on 2026-10-16: replace five detail back

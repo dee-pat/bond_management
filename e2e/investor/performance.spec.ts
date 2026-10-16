@@ -2,6 +2,8 @@ import { expect, test } from "@playwright/test";
 
 import { selectFrappeOption } from "./helpers/controls";
 
+const INVESTOR_API =
+  "**/api/method/bond_management.bond_management.api.investor";
 const BOND_ISIN = "UI-TEST-BOND-001";
 const PORTFOLIO = "UI Test Portfolio";
 const VALUATION_DATE = "2025-12-31";
@@ -125,4 +127,36 @@ test("copies past cash flows without XIRR and future cash flows", async ({
     () => document.documentElement.scrollWidth <= window.innerWidth
   );
   expect(fitsViewport).toBeTruthy();
+});
+
+test("shows a failure instead of the previous report when a rerun cannot connect", async ({
+  page,
+}) => {
+  let attempts = 0;
+  await page.route(
+    `${INVESTOR_API}.get_portfolio_performance?*`,
+    async (route) => {
+      attempts += 1;
+      if (attempts === 1) {
+        await route.continue();
+        return;
+      }
+      await route.abort("failed");
+    }
+  );
+
+  await page.goto("/bond-investor/performance");
+  await selectFrappeOption(page, "Portfolio (required)", PORTFOLIO);
+  await page.getByLabel("Valuation Date").fill(VALUATION_DATE);
+  await page.getByRole("button", { name: "Run", exact: true }).click();
+  await expect(page.getByTestId("performance-table")).toBeVisible();
+
+  await page.getByLabel("Valuation Date").fill("2026-01-30");
+  await page.getByRole("button", { name: "Run", exact: true }).click();
+
+  await expect(page.getByRole("alert")).toContainText(
+    "Portfolio performance could not be loaded"
+  );
+  await expect(page.getByTestId("performance-table")).toHaveCount(0);
+  expect(attempts).toBe(2);
 });

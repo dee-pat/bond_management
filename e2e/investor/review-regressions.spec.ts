@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page, type Route } from "@playwright/test";
 
 import { selectFrappeOption } from "./helpers/controls";
 
@@ -155,16 +155,7 @@ test("renders one yield-curve line per currency", async ({ page }) => {
 test("restarts pagination after a failed portfolio filter change", async ({
   page,
 }) => {
-  await page.route(`${API}.get_bootstrap*`, async (route) => {
-    const response = await route.fetch();
-    const payload = await response.json();
-    payload.message.portfolios = [
-      { name: "PORTFOLIO-A", label: "Portfolio A" },
-      { name: "PORTFOLIO-B", label: "Portfolio B" },
-    ];
-    payload.data.portfolios = payload.message.portfolios;
-    await route.fulfill({ response, json: payload });
-  });
+  await stubTwoPortfolioBootstrap(page);
 
   const portfolioBOffsets: number[] = [];
   await page.route(`${API}.get_transactions?*`, async (route) => {
@@ -178,22 +169,7 @@ test("restarts pagination after a failed portfolio filter change", async ({
         return;
       }
     }
-    const transactionPage = {
-      data: Array.from({ length: start === 0 ? 20 : 1 }, (_, index) => ({
-        name: `${portfolio}-${start + index}`,
-        portfolio_name: portfolio,
-        settlement_date: "2026-01-02",
-        trade_date: "2026-01-01",
-        transaction_type: "Purchase",
-        isin: "UI-TEST-BOND-001",
-        quantity_face_value: 10,
-        price: 100,
-      })),
-      pagination: { start, page_length: 20, has_more: start === 0 },
-    };
-    await route.fulfill({
-      json: { message: transactionPage, data: transactionPage },
-    });
+    await fulfillTransactionPage(route, portfolio, start);
   });
 
   await page.goto("/bond-investor/transactions");
@@ -221,6 +197,41 @@ test("restarts pagination after a failed portfolio filter change", async ({
   await expect(rows).toHaveCount(21);
   await expect(rows.filter({ hasText: "PORTFOLIO-A" })).toHaveCount(0);
   expect(portfolioBOffsets).toEqual([0, 0, 20]);
+});
+
+test("does not show the previous portfolio when a filter change cannot connect", async ({
+  page,
+}) => {
+  await stubTwoPortfolioBootstrap(page);
+
+  let portfolioBAttempts = 0;
+  await page.route(`${API}.get_transactions?*`, async (route) => {
+    const parameters = new URL(route.request().url()).searchParams;
+    const portfolio = parameters.get("portfolio") || "PORTFOLIO-A";
+    if (portfolio === "PORTFOLIO-B") {
+      portfolioBAttempts += 1;
+      await route.abort("failed");
+      return;
+    }
+    await fulfillTransactionPage(
+      route,
+      portfolio,
+      Number(parameters.get("start") || 0)
+    );
+  });
+
+  await page.goto("/bond-investor/transactions");
+  await selectFrappeOption(page, "Portfolio Name", "Portfolio A");
+  const rows = page.getByTestId("transaction-row");
+  await expect(rows).toHaveCount(20);
+  await expect(rows.first()).toContainText("PORTFOLIO-A");
+
+  await selectFrappeOption(page, "Portfolio Name", "Portfolio B");
+  await expect(page.getByRole("alert")).toContainText(
+    "Transactions could not be loaded"
+  );
+  await expect(rows).toHaveCount(0);
+  expect(portfolioBAttempts).toBe(1);
 });
 
 test("shows an accessible yield value for a single market date", async ({
@@ -256,4 +267,40 @@ function marketPrice(
     weighted_avg_repayment_years: options.years ?? 3,
     maturity_date: "2029-01-01",
   };
+}
+
+async function stubTwoPortfolioBootstrap(page: Page): Promise<void> {
+  await page.route(`${API}.get_bootstrap*`, async (route) => {
+    const response = await route.fetch();
+    const payload = await response.json();
+    payload.message.portfolios = [
+      { name: "PORTFOLIO-A", label: "Portfolio A" },
+      { name: "PORTFOLIO-B", label: "Portfolio B" },
+    ];
+    payload.data.portfolios = payload.message.portfolios;
+    await route.fulfill({ response, json: payload });
+  });
+}
+
+async function fulfillTransactionPage(
+  route: Route,
+  portfolio: string,
+  start: number
+): Promise<void> {
+  const transactionPage = {
+    data: Array.from({ length: start === 0 ? 20 : 1 }, (_, index) => ({
+      name: `${portfolio}-${start + index}`,
+      portfolio_name: portfolio,
+      settlement_date: "2026-01-02",
+      trade_date: "2026-01-01",
+      transaction_type: "Purchase",
+      isin: "UI-TEST-BOND-001",
+      quantity_face_value: 10,
+      price: 100,
+    })),
+    pagination: { start, page_length: 20, has_more: start === 0 },
+  };
+  await route.fulfill({
+    json: { message: transactionPage, data: transactionPage },
+  });
 }
