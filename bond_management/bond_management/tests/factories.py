@@ -137,6 +137,21 @@ def make_transaction(bond, portfolio, *, insert=True, **overrides):
     return document.insert() if insert else document
 
 
+def make_private_file(attached_to_doctype=None, attached_to_name=None):
+    filename = f"{unique_name('private-attachment')}.txt"
+    return frappe.get_doc(
+        {
+            "doctype": "File",
+            "file_name": filename,
+            "file_url": f"/private/files/{filename}",
+            "content": b"private test attachment",
+            "is_private": 1,
+            "attached_to_doctype": attached_to_doctype,
+            "attached_to_name": attached_to_name,
+        }
+    ).insert(ignore_permissions=True)
+
+
 def make_market_date(bond, market_price=100, date=None, *, market_date=None):
     if market_date is not None:
         if date is not None:

@@ -18,6 +18,7 @@ from bond_management.bond_management.tests.factories import (
     make_exchange_rate,
     make_market_date,
     make_portfolio,
+    make_private_file,
     make_statement,
     make_transaction,
     make_user,
@@ -34,6 +35,7 @@ from bond_management.bond_management.utils.statement_exchange_rates import (
     sync_statement_exchange_rates,
 )
 from bond_management.patches.add_bond_exchange_rate_source_permission import execute as repair_source_shares
+from bond_management.patches.cleanup_incompatible_file_shares import execute as repair_file_shares
 from bond_management.patches.enforce_investor_share_boundary import execute
 
 
@@ -511,6 +513,46 @@ class TestInvestorShares(IntegrationTestCase):
             self.assertNotIn(self.assigned.name, self.visible_portfolios())
             with self.assertRaises(frappe.PermissionError):
                 read_doc("Bond Portfolio", self.assigned.name)
+
+    def test_assignment_delete_revokes_portfolio_file_share_and_keeps_file_list_working(self):
+        portfolio_file = make_private_file("Bond Portfolio", self.assigned.name)
+        unrelated_file = make_private_file("User", "Administrator")
+        file_share = add_docshare("File", portfolio_file.name, self.investor.name)
+        unrelated_share = add_docshare("File", unrelated_file.name, self.investor.name)
+        allow_user(self.investor.name, "Bond Portfolio", self.other.name)
+
+        self.assignment.delete(ignore_permissions=True)
+
+        self.assertFalse(frappe.db.exists("DocShare", file_share.name))
+        self.assertTrue(frappe.db.exists("DocShare", unrelated_share.name))
+        with self.set_user(self.investor.name):
+            visible_files = frappe.qb.get_query("File", fields=["name"], ignore_permissions=False).run(
+                pluck=True
+            )
+        self.assertNotIn(portfolio_file.name, visible_files)
+        self.assertIn(unrelated_file.name, visible_files)
+
+    def test_attachment_portfolio_change_revokes_file_share(self):
+        transaction = make_transaction(make_bond(), self.assigned)
+        transaction_file = make_private_file("Bond Transaction", transaction.name)
+        file_share = add_docshare("File", transaction_file.name, self.investor.name)
+
+        transaction.portfolio_name = self.other.name
+        transaction.save()
+
+        self.assertFalse(frappe.db.exists("DocShare", file_share.name))
+
+    def test_file_share_repair_patch_removes_only_incompatible_shares_and_reruns(self):
+        assigned_file = make_private_file("Bond Portfolio", self.assigned.name)
+        other_file = make_private_file("Bond Portfolio", self.other.name)
+        compatible = add_docshare("File", assigned_file.name, self.investor.name)
+        stale = self.legacy_share(other_file, self.investor.name)
+
+        repair_file_shares()
+        repair_file_shares()
+
+        self.assertTrue(frappe.db.exists("DocShare", compatible.name))
+        self.assertFalse(frappe.db.exists("DocShare", stale.name))
 
     def test_bulk_clear_endpoint_revokes_share_and_remains_safe_to_rerun(self):
         share = add_docshare("Bond Portfolio", self.assigned.name, self.investor.name)

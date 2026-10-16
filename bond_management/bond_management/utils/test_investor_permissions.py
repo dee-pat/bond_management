@@ -15,6 +15,7 @@ from bond_management.bond_management.tests.factories import (
     make_bond,
     make_exchange_rate,
     make_portfolio,
+    make_private_file,
     make_transaction,
     make_user,
     unique_name,
@@ -81,12 +82,12 @@ class TestInvestorPermissions(IntegrationTestCase):
         other_portfolio = make_portfolio()
         bond = make_bond()
         other_transaction = make_transaction(bond, other_portfolio)
-        assigned_file = self._make_private_file("Bond Portfolio", assigned_portfolio.name)
+        assigned_file = make_private_file("Bond Portfolio", assigned_portfolio.name)
         other_files = [
-            self._make_private_file("Bond Portfolio", other_portfolio.name),
-            self._make_private_file("Bond Transaction", other_transaction.name),
+            make_private_file("Bond Portfolio", other_portfolio.name),
+            make_private_file("Bond Transaction", other_transaction.name),
         ]
-        unrelated_file = self._make_private_file("User", "Administrator")
+        unrelated_file = make_private_file("User", "Administrator")
         email = make_assigned_investor(assigned_portfolio.name)
         frappe.share.add("File", unrelated_file.name, email, read=1)
         for file in other_files:
@@ -135,9 +136,9 @@ class TestInvestorPermissions(IntegrationTestCase):
         portfolio = make_portfolio()
         bond = make_bond()
         transaction = make_transaction(bond, portfolio)
-        assigned_file = self._make_private_file("Bond Transaction", transaction.name)
-        unrelated_file = self._make_private_file("User", "Administrator")
-        unattached_file = self._make_private_file(None, None)
+        assigned_file = make_private_file("Bond Transaction", transaction.name)
+        unrelated_file = make_private_file("User", "Administrator")
+        unattached_file = make_private_file(None, None)
         email = make_assigned_investor(portfolio.name)
 
         with self.set_user(email):
@@ -150,21 +151,6 @@ class TestInvestorPermissions(IntegrationTestCase):
             self.assertIn(assigned_file.name, visible_files)
             self.assertNotIn(unrelated_file.name, visible_files)
             self.assertNotIn(unattached_file.name, visible_files)
-
-    @staticmethod
-    def _make_private_file(attached_to_doctype, attached_to_name):
-        filename = f"{unique_name('private-attachment')}.txt"
-        return frappe.get_doc(
-            {
-                "doctype": "File",
-                "file_name": filename,
-                "file_url": f"/private/files/{filename}",
-                "content": b"private test attachment",
-                "is_private": 1,
-                "attached_to_doctype": attached_to_doctype,
-                "attached_to_name": attached_to_name,
-            }
-        ).insert(ignore_permissions=True)
 
     def test_real_user_permissions_isolate_lists_documents_and_reports(self):
         assigned_portfolio = make_portfolio()

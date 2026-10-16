@@ -9,7 +9,7 @@ from bond_management.bond_management.utils.investor_permissions import (
     get_allowed_portfolios,
     get_statement_portfolio,
     has_explicit_exchange_rate_source_share,
-    is_file_in_investor_scope,
+    is_file_in_portfolios,
     is_investor_user,
 )
 
@@ -75,10 +75,62 @@ def validate_share(doc, method, share):
 
 
 def validate_file_share(doc, method, share):
-    if not doc.is_private or doc.attached_to_doctype not in PORTFOLIO_DOCTYPES:
+    if not _is_portfolio_attachment(doc):
         return
-    if share.everyone or not is_file_in_investor_scope(doc, share.user):
+    # Assignment cleanup also locks the recipient before reading File shares.
+    _lock_users([frappe.session.user, share.user])
+    if _inaccessible_file_share(doc, share):
         _deny()
+
+
+def cleanup_incompatible_file_shares(user=None, doctype=None, name=None):
+    """Remove File shares that portfolio scope no longer allows.
+
+    A stale share would make the recipient's File list fail closed. Like
+    cleanup_incompatible_shares, this administrative repair reads rows the
+    caller cannot see and leaves the transaction to the caller. A caller that
+    passes ``user`` already holds that user's lock.
+    """
+    filters = {"share_doctype": "File"}
+    if user:
+        filters["user"] = user
+    if doctype:
+        attached_files = frappe.qb.get_query(
+            "File",
+            fields=["name"],
+            filters={"attached_to_doctype": doctype, "attached_to_name": name},
+            ignore_permissions=True,
+        ).run(pluck=True)
+        if not attached_files:
+            return
+        filters["share_name"] = ["in", attached_files]
+
+    if not user:
+        _lock_users(
+            frappe.qb.get_query("DocShare", fields=["user"], filters=filters, ignore_permissions=True).run(
+                pluck=True
+            )
+        )
+    shares = frappe.qb.get_query(
+        "DocShare", fields=["*"], filters=filters, ignore_permissions=True, for_update=True
+    ).run(as_dict=True)
+    if not shares:
+        return
+    files = {
+        file.name: file
+        for file in frappe.qb.get_query(
+            "File",
+            fields=["name", "is_private", "attached_to_doctype", "attached_to_name"],
+            filters={"name": ["in", sorted({share.share_name for share in shares})]},
+            ignore_permissions=True,
+        ).run(as_dict=True)
+    }
+    for share in shares:
+        file = files.get(share.share_name)
+        if file and _inaccessible_file_share(file, share):
+            frappe.delete_doc(
+                "DocShare", share.name, ignore_permissions=True, flags={"ignore_share_permission": True}
+            )
 
 
 def cleanup_incompatible_shares(user=None, doctype=None, name=None, names=None):
@@ -133,6 +185,9 @@ def cleanup_incompatible_shares(user=None, doctype=None, name=None, names=None):
                 "DocShare", share.name, dict.fromkeys(MUTATING_SHARE_FIELDS, 0), update_modified=False
             )
             frappe.clear_document_cache("DocShare", share.name)
+
+    if doctype is None or (doctype in PORTFOLIO_DOCTYPES and name):
+        cleanup_incompatible_file_shares(user=user, doctype=doctype, name=name)
 
 
 def lock_user_authorization(doc, method=None):
@@ -370,6 +425,19 @@ def _validate_locked_share(target, share):
         _deny()
     if _restricted_recipient(share) and any(share.get(field) for field in MUTATING_SHARE_FIELDS):
         _deny()
+
+
+def _is_portfolio_attachment(file):
+    return bool(file.is_private) and file.attached_to_doctype in PORTFOLIO_DOCTYPES
+
+
+def _inaccessible_file_share(file, share):
+    if not _is_portfolio_attachment(file):
+        return False
+    if share.everyone:
+        return True
+    portfolios = _recipient_portfolios(share.user)
+    return portfolios is not None and not is_file_in_portfolios(file, portfolios)
 
 
 def _inaccessible_share(doc, share):

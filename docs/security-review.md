@@ -39,7 +39,9 @@ Performance, Bond Yield Comparison, and Interest Difference by Portfolio).
   portfolio's scope for investors. Ownership and shares never widen it: the
   File `has_permission` hook, list condition and `InvestorFileMixin`
   (private downloads call core File permission directly) all enforce it, and
-  `validate_file_share` rejects new out-of-scope shares.
+  `validate_file_share` rejects new out-of-scope shares. Assignment, role and
+  attached-document changes remove File shares that become stale, because a
+  stale share makes the investor's whole File list fail closed.
 
 ## Shares and User Permissions
 
