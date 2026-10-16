@@ -45,7 +45,9 @@ Performance, Bond Yield Comparison, and Interest Difference by Portfolio).
   closed. Investors stay read-only on these files: share validation rejects
   an investor sharer and write or share grants to investors or everyone,
   `has_file_permission` denies investors any non-read permission, and cleanup
-  drops legacy mutating grants. Share validation locks the attached target,
+  drops legacy mutating grants. These checks also run from DocShare
+  `before_validate`, so a server caller's `ignore_validate` cannot skip them.
+  Share validation locks the attached target,
   users, then the File, the order document saves use before locking File rows
   by URL; a File relinked or made private between reads locks its target
   without waiting. Cleanup and File saves already hold users or the File, so

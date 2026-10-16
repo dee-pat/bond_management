@@ -75,12 +75,16 @@ def validate_share(doc, method, share):
 
 
 def validate_file_share(doc, method, share):
+    _validate_file_share(doc.name, share)
+
+
+def _validate_file_share(file_name, share):
     # Match document saves: target, users, then File. A save locks its users
     # before File rows matched by URL, which may be attached elsewhere.
-    seen = frappe.db.get_value("File", doc.name, _FILE_FIELDS, as_dict=True)
+    seen = frappe.db.get_value("File", file_name, _FILE_FIELDS, as_dict=True)
     target = _lock_attachment_target(seen)
     _lock_users([frappe.session.user, share.user])
-    file = _lock_file(doc.name)
+    file = _lock_file(file_name)
     if _scoped_attachment(file) != _scoped_attachment(seen):
         # Relinked or made private after the first read. Waiting for the new
         # target while holding users and File would invert the order.
@@ -224,7 +228,10 @@ def lock_assignment_authorization(doc, method=None):
 
 
 def lock_share_authorization(doc, method=None):
-    if doc.share_doctype in FINANCIAL_DOCTYPES:
+    if doc.share_doctype == "File":
+        # before_validate still runs when a server caller sets ignore_validate.
+        _validate_file_share(doc.share_name, doc)
+    elif doc.share_doctype in FINANCIAL_DOCTYPES:
         # Sharing and portfolio reassignment acquire target, then recipients.
         target = _lock_share_target(doc.share_doctype, doc.share_name)
         previous = doc.get_doc_before_save()

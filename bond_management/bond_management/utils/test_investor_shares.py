@@ -565,8 +565,10 @@ class TestInvestorShares(IntegrationTestCase):
         ):
             add_docshare("File", transaction_file.name, self.investor.name)
 
-        # Saves lock their row and users before File rows matched by URL.
-        self.assertEqual(events, ["target", "recipient", "file"])
+        # Saves lock their row and users before File rows matched by URL. The
+        # check runs from each DocShare lifecycle hook, always in this order.
+        self.assertTrue(events)
+        self.assertEqual(events, ["target", "recipient", "file"] * (len(events) // 3))
 
     def test_file_relinked_during_share_validation_locks_new_target_without_waiting(self):
         transaction_file = make_private_file(
@@ -667,7 +669,8 @@ class TestInvestorShares(IntegrationTestCase):
             share = add_docshare("File", portfolio_file.name, self.investor.name)
 
         self.assertTrue(frappe.db.exists("DocShare", share.name))
-        self.assertEqual(target_waits, [(self.assigned.name, False)])
+        self.assertTrue(target_waits)
+        self.assertEqual(set(target_waits), {(self.assigned.name, False)})
 
     def test_portfolio_file_shares_stay_read_only_for_investors(self):
         portfolio_file = make_private_file("Bond Portfolio", self.assigned.name)
@@ -695,6 +698,30 @@ class TestInvestorShares(IntegrationTestCase):
         repair_file_shares()
         repaired = frappe.db.get_value("DocShare", share.name, ["read", "write", "share"], as_dict=True)
         self.assertEqual((repaired.read, repaired.write, repaired.share), (1, 0, 0))
+
+    def test_server_share_flags_cannot_skip_file_share_boundary(self):
+        flags = {"ignore_share_permission": True, "ignore_validate": True}
+        assigned_file = make_private_file("Bond Portfolio", self.assigned.name)
+        other_file = make_private_file("Bond Portfolio", self.other.name)
+        cases = (
+            (other_file, {"user": self.investor.name}),
+            (assigned_file, {"user": self.investor.name, "write": 1}),
+            (assigned_file, {"everyone": 1}),
+        )
+        for file, permissions in cases:
+            with self.subTest(permissions=permissions):
+                with self.assertRaises(frappe.PermissionError):
+                    add_docshare("File", file.name, flags=flags, **permissions)
+                self.assertFalse(
+                    frappe.db.exists("DocShare", {"share_doctype": "File", "share_name": file.name})
+                )
+
+        share = add_docshare("File", assigned_file.name, self.investor.name, flags=flags)
+        with self.assertRaises(frappe.PermissionError):
+            add_docshare("File", assigned_file.name, self.investor.name, write=1, flags=flags)
+        share.reload()
+        self.assertTrue(share.read)
+        self.assertFalse(share.write)
 
     def test_file_relink_cleanup_defers_instead_of_waiting_for_recipients(self):
         shared_file = make_private_file()
