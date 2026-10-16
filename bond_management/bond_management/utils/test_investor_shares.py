@@ -542,7 +542,7 @@ class TestInvestorShares(IntegrationTestCase):
 
         self.assertFalse(frappe.db.exists("DocShare", file_share.name))
 
-    def test_file_share_validation_locks_target_then_file_then_recipient(self):
+    def test_file_share_validation_locks_target_then_recipient_then_file(self):
         transaction_file = make_private_file(
             "Bond Transaction", make_transaction(make_bond(), self.assigned).name
         )
@@ -565,8 +565,8 @@ class TestInvestorShares(IntegrationTestCase):
         ):
             add_docshare("File", transaction_file.name, self.investor.name)
 
-        # Saving the transaction locks its row before standardizing its File.
-        self.assertEqual(events, ["target", "file", "recipient"])
+        # Saves lock their row and users before File rows matched by URL.
+        self.assertEqual(events, ["target", "recipient", "file"])
 
     def test_file_relinked_during_share_validation_locks_new_target_without_waiting(self):
         transaction_file = make_private_file(
@@ -642,6 +642,85 @@ class TestInvestorShares(IntegrationTestCase):
 
             investor_shares.cleanup_incompatible_file_shares(user=self.investor.name)
 
+        self.assertFalse(frappe.db.exists("DocShare", share.name))
+
+    def test_file_made_private_between_reads_locks_its_target_and_keeps_allowed_share(self):
+        portfolio_file = make_private_file("Bond Portfolio", self.assigned.name)
+        get_value = frappe.db.get_value
+        lock_target = investor_shares._lock_share_target
+        target_waits = []
+
+        def public_on_first_read(doctype, name=None, fieldname=None, *args, **kwargs):
+            row = get_value(doctype, name, fieldname, *args, **kwargs)
+            if doctype == "File" and name == portfolio_file.name and not kwargs.get("for_update") and row:
+                row.is_private = 0
+            return row
+
+        def trace_target(doctype, name, *, wait=True):
+            target_waits.append((name, wait))
+            return lock_target(doctype, name, wait=wait)
+
+        with (
+            patch.object(frappe.db, "get_value", side_effect=public_on_first_read),
+            patch.object(investor_shares, "_lock_share_target", side_effect=trace_target),
+        ):
+            share = add_docshare("File", portfolio_file.name, self.investor.name)
+
+        self.assertTrue(frappe.db.exists("DocShare", share.name))
+        self.assertEqual(target_waits, [(self.assigned.name, False)])
+
+    def test_portfolio_file_shares_stay_read_only_for_investors(self):
+        portfolio_file = make_private_file("Bond Portfolio", self.assigned.name)
+        for right in ("write", "share"):
+            with self.subTest(right=right), self.assertRaises(frappe.PermissionError):
+                add_docshare("File", portfolio_file.name, self.investor.name, **{right: 1})
+        add_docshare("File", portfolio_file.name, self.investor.name)
+
+        with self.set_user(self.investor.name), self.assertRaises(frappe.PermissionError):
+            investor_shares.validate_file_share(
+                portfolio_file, "validate_share", frappe._dict(user=self.manager.name, read=1)
+            )
+
+    def test_legacy_mutating_file_share_is_denied_and_repaired_to_read(self):
+        portfolio_file = make_private_file("Bond Portfolio", self.assigned.name)
+        share = self.legacy_share(portfolio_file, self.investor.name, write=1, share=1)
+
+        with self.set_user(self.investor.name):
+            file = frappe.get_doc("File", portfolio_file.name)
+            file.check_permission("read")
+            for ptype in ("write", "share", "delete"):
+                with self.subTest(ptype=ptype), self.assertRaises(frappe.PermissionError):
+                    file.check_permission(ptype)
+
+        repair_file_shares()
+        repaired = frappe.db.get_value("DocShare", share.name, ["read", "write", "share"], as_dict=True)
+        self.assertEqual((repaired.read, repaired.write, repaired.share), (1, 0, 0))
+
+    def test_file_relink_cleanup_defers_instead_of_waiting_for_recipients(self):
+        shared_file = make_private_file()
+        share = add_docshare("File", shared_file.name, self.investor.name)
+        lock_users = investor_shares._lock_users
+
+        def busy_recipient(users, *, wait=True):
+            if not wait:
+                raise frappe.QueryTimeoutError
+            return lock_users(users, wait=wait)
+
+        shared_file.attached_to_doctype = "Bond Portfolio"
+        shared_file.attached_to_name = self.other.name
+        with (
+            patch.object(investor_shares, "_lock_users", side_effect=busy_recipient),
+            patch("frappe.enqueue") as enqueue,
+        ):
+            shared_file.save(ignore_permissions=True)
+
+        self.assertTrue(frappe.db.exists("DocShare", share.name))
+        enqueue.assert_called_once_with(
+            investor_shares.cleanup_incompatible_file_shares,
+            file=shared_file.name,
+            enqueue_after_commit=True,
+        )
+        investor_shares.cleanup_incompatible_file_shares(file=shared_file.name)
         self.assertFalse(frappe.db.exists("DocShare", share.name))
 
     def test_file_share_repair_patch_removes_only_incompatible_shares_and_reruns(self):

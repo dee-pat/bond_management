@@ -179,22 +179,23 @@ def file_query_condition(user: str | None = None) -> str | None:
 
 
 def has_file_permission(doc, user: str | None = None, ptype: str | None = None, **_kwargs):
-    if not is_file_in_investor_scope(doc, user or frappe.session.user):
+    if not is_file_in_investor_scope(doc, user or frappe.session.user, ptype):
         # Core File permission grants a direct share before this hook can
         # matter, so a false result would not deny access.
         frappe.throw(_("Not permitted"), frappe.PermissionError)
     return True
 
 
-def is_file_in_investor_scope(file, user: str) -> bool:
-    """Return False for an investor's private attachment on an unassigned portfolio."""
+def is_file_in_investor_scope(file, user: str, ptype: str | None = "read") -> bool:
+    """Return False when an investor reaches beyond a read of an assigned portfolio's attachment."""
     portfolios = get_allowed_portfolios(user)
     if portfolios is None or not file.is_private:
         return True
     field = PORTFOLIO_DOCTYPES.get(file.attached_to_doctype)
     if not field:
         return True
-    return _attached_portfolio(file, field) in portfolios
+    # Shares cannot make investors writers: they are read-only, as for portfolio documents.
+    return ptype in READ_PERMISSION_TYPES and _attached_portfolio(file, field) in portfolios
 
 
 class InvestorFileMixin:
