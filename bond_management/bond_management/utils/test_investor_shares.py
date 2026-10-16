@@ -542,7 +542,7 @@ class TestInvestorShares(IntegrationTestCase):
 
         self.assertFalse(frappe.db.exists("DocShare", file_share.name))
 
-    def test_file_share_validation_locks_file_then_target_then_recipient(self):
+    def test_file_share_validation_locks_target_then_file_then_recipient(self):
         transaction_file = make_private_file(
             "Bond Transaction", make_transaction(make_bond(), self.assigned).name
         )
@@ -565,7 +565,36 @@ class TestInvestorShares(IntegrationTestCase):
         ):
             add_docshare("File", transaction_file.name, self.investor.name)
 
-        self.assertEqual(events, ["file", "target", "recipient"])
+        # Saving the transaction locks its row before standardizing its File.
+        self.assertEqual(events, ["target", "file", "recipient"])
+
+    def test_file_relinked_during_share_validation_locks_new_target_without_waiting(self):
+        transaction_file = make_private_file(
+            "Bond Transaction", make_transaction(make_bond(), self.assigned).name
+        )
+        moved_to = make_transaction(make_bond(), self.other)
+        get_value = frappe.db.get_value
+        lock_target = investor_shares._lock_share_target
+        target_waits = []
+
+        def relinked_after_first_read(doctype, name=None, fieldname=None, *args, **kwargs):
+            row = get_value(doctype, name, fieldname, *args, **kwargs)
+            if doctype == "File" and name == transaction_file.name and kwargs.get("for_update"):
+                row.attached_to_name = moved_to.name
+            return row
+
+        def trace_target(doctype, name, *, wait=True):
+            target_waits.append((name, wait))
+            return lock_target(doctype, name, wait=wait)
+
+        with (
+            patch.object(frappe.db, "get_value", side_effect=relinked_after_first_read),
+            patch.object(investor_shares, "_lock_share_target", side_effect=trace_target),
+        ):
+            with self.assertRaises(frappe.PermissionError):
+                add_docshare("File", transaction_file.name, self.investor.name)
+
+        self.assertEqual(target_waits, [(transaction_file.attached_to_name, True), (moved_to.name, False)])
 
     def test_relinking_shared_file_revokes_share_only_outside_assignment(self):
         kept_file = make_private_file()

@@ -42,9 +42,11 @@ Performance, Bond Yield Comparison, and Interest Difference by Portfolio).
   `validate_file_share` rejects new out-of-scope shares. Assignment, role,
   attached-document and File relink changes remove File shares that become
   stale, because a stale share makes the investor's whole File list fail
-  closed. Share validation locks the File, its attached target, then users;
-  cleanup already holds users, so it reads File and target rows with
-  non-waiting locks and defers a busy row to a retry after commit.
+  closed. Share validation locks the attached target, the File, then users,
+  the order document saves use when they standardize an attachment; a File
+  relinked between reads locks its new target without waiting. Cleanup already
+  holds users, so it reads File and target rows with non-waiting locks and
+  defers a busy row to a retry after commit.
 
 ## Shares and User Permissions
 

@@ -21,6 +21,7 @@ FINANCIAL_DOCTYPES = (
     SOURCE_DOCTYPE,
 )
 MUTATING_SHARE_FIELDS = ("write", "submit", "share")
+_FILE_FIELDS = ["name", "is_private", "attached_to_doctype", "attached_to_name"]
 _DEFERRED_SHARE_TARGET = object()
 
 
@@ -74,13 +75,9 @@ def validate_share(doc, method, share):
 
 
 def validate_file_share(doc, method, share):
-    # Lock the File, its attached target, then recipients: the order that File
-    # saves, portfolio moves and assignment cleanup follow. Core may have loaded
-    # the File earlier, so reread both rows under their locks.
-    file = _lock_file(doc.name)
-    target = None
-    if file and _is_portfolio_attachment(file):
-        target = _lock_share_target(file.attached_to_doctype, file.attached_to_name)
+    # Lock the attached target, the File, then recipients: document saves lock
+    # their row before standardizing its File, and cleanup holds recipients.
+    file, target = _lock_file_and_target(doc.name)
     _lock_users([frappe.session.user, share.user])
     if file and _inaccessible_file_share(file, target, share):
         _deny()
@@ -440,11 +437,28 @@ def _lock_file(name, *, wait=True):
     return frappe.db.get_value(
         "File",
         name,
-        ["name", "is_private", "attached_to_doctype", "attached_to_name"],
+        _FILE_FIELDS,
         as_dict=True,
         for_update=True,
         wait=wait,
     )
+
+
+def _lock_file_and_target(name):
+    seen = frappe.db.get_value("File", name, _FILE_FIELDS, as_dict=True)
+    target = None
+    if seen and _is_portfolio_attachment(seen):
+        target = _lock_share_target(seen.attached_to_doctype, seen.attached_to_name)
+    file = _lock_file(name)
+    if file and _is_portfolio_attachment(file) and _attachment(file) != _attachment(seen):
+        # Relinked after the first read. Waiting for the new target while holding
+        # the File would invert the lock order, so fail fast if it is busy.
+        target = _lock_share_target(file.attached_to_doctype, file.attached_to_name, wait=False)
+    return file, target
+
+
+def _attachment(file):
+    return (file.attached_to_doctype, file.attached_to_name) if file else None
 
 
 def _lock_unseen_file(name):
