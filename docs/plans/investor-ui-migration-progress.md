@@ -47,6 +47,19 @@ server suite, and the Playwright job passed 56 tests across the
 
 ### Frappe-ui control prototype
 
+Follow-up trial accepted by the user on 2026-10-16: replace five detail back
+links with frappe-ui route Buttons, use Button variants and semantic utilities
+for active filter chips, and reuse the existing frappe-ui-backed `DataList` for
+Interest Difference. Link destinations, clear-filter actions, report labels,
+row markers, values, and total-row styling remain intact.
+The domain model was reviewed; this slice changes no data, permissions, or API.
+Frontend source is 53 net lines smaller. Back Buttons add markup overall; filter
+chips and the reused report list supply the reduction. The focused desktop and
+mobile browser run passed 8 tests. The final `pre-push-ui` gate passed lint,
+331 server tests, frontend lint/typecheck/build, and 58 Playwright tests after
+the filter-chip spacing adjustment. This visual acceptance applies to the
+follow-up trial; the broader Phase 7 pilot acceptance remains pending.
+
 Trial a small reduction in custom Investor SPA styling: use frappe-ui badges
 for read-only labels, frappe-ui link buttons for private PDF actions, and a
 themed frappe-ui button for the reconciliation status filter. Preserve the

@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { Badge } from "frappe-ui";
-import { RouterLink, useRoute } from "vue-router";
+import { Badge, Button } from "frappe-ui";
+import { useRoute } from "vue-router";
 import { ListCell, ListHeaderCell } from "frappe-ui/list";
 
 import DataList from "../components/DataList.vue";
@@ -82,7 +82,15 @@ function displayValue(field: DetailField): string {
 
 <template>
 	<section class="record-surface" aria-labelledby="bond-detail-title">
-		<RouterLink class="back-link" to="/bonds"> ← Back to bonds </RouterLink>
+		<Button
+			class="mb-[15px]"
+			route="/bonds"
+			variant="ghost"
+			theme="blue"
+			size="xs"
+			icon-left="lucide-arrow-left"
+			label="Back to bonds"
+		/>
 
 		<SurfaceState v-if="loading" :loading="loading" loading-text="Loading bond…" />
 
