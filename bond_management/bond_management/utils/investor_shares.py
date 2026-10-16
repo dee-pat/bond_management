@@ -145,9 +145,14 @@ def cleanup_incompatible_file_shares(user=None, doctype=None, name=None, file=No
             ),
             wait=wait,
         )
-    shares = frappe.qb.get_query(
-        "DocShare", fields=["*"], filters=filters, ignore_permissions=True, for_update=True
-    ).run(as_dict=True)
+    try:
+        shares = _lock_file_shares(filters)
+    except frappe.QueryTimeoutError:
+        # Frappe locks an updated DocShare row before its hooks wait for the
+        # users this cleanup holds, so retry each File after commit instead.
+        for name in _file_share_names(filters):
+            frappe.enqueue(cleanup_incompatible_file_shares, file=name, enqueue_after_commit=True)
+        return
     if not shares:
         return
     locked = {name: _lock_unseen_file(name) for name in sorted({share.share_name for share in shares})}
@@ -463,6 +468,22 @@ def _lock_file(name, *, wait=True):
         as_dict=True,
         for_update=True,
         wait=wait,
+    )
+
+
+def _lock_file_shares(filters):
+    return frappe.qb.get_query(
+        "DocShare", fields=["*"], filters=filters, ignore_permissions=True, for_update=True, wait=False
+    ).run(as_dict=True)
+
+
+def _file_share_names(filters):
+    return sorted(
+        set(
+            frappe.qb.get_query(
+                "DocShare", fields=["share_name"], filters=filters, ignore_permissions=True
+            ).run(pluck=True)
+        )
     )
 
 

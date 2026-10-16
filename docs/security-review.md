@@ -51,8 +51,9 @@ Performance, Bond Yield Comparison, and Interest Difference by Portfolio).
   users, then the File, the order document saves use before locking File rows
   by URL; a File relinked or made private between reads locks its target
   without waiting. Cleanup and File saves already hold users or the File, so
-  they take the other rows without waiting and defer a busy row to a retry
-  after commit.
+  they take the other rows, including DocShare rows that an update locks
+  before its hooks run, without waiting and defer a busy row to a retry after
+  commit.
 
 ## Shares and User Permissions
 

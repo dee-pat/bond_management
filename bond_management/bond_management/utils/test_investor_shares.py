@@ -1,6 +1,7 @@
 """Regressions for Frappe's share fallback and strict investor access."""
 
 from types import SimpleNamespace
+from unittest.mock import call as mock_call
 from unittest.mock import patch
 
 import frappe
@@ -722,6 +723,30 @@ class TestInvestorShares(IntegrationTestCase):
         share.reload()
         self.assertTrue(share.read)
         self.assertFalse(share.write)
+
+    def test_assignment_cleanup_defers_when_a_file_share_row_is_being_updated(self):
+        portfolio_file = make_private_file("Bond Portfolio", self.assigned.name)
+        share = add_docshare("File", portfolio_file.name, self.investor.name)
+
+        # A concurrent share update holds the DocShare row and waits for the User.
+        with (
+            patch.object(investor_shares, "_lock_file_shares", side_effect=frappe.QueryTimeoutError),
+            patch("frappe.enqueue") as enqueue,
+        ):
+            self.assignment.delete(ignore_permissions=True)
+
+        self.assertTrue(frappe.db.exists("DocShare", share.name))
+        # Frappe also enqueues its own delete work; this cleanup defers the File.
+        self.assertIn(
+            mock_call(
+                investor_shares.cleanup_incompatible_file_shares,
+                file=portfolio_file.name,
+                enqueue_after_commit=True,
+            ),
+            enqueue.call_args_list,
+        )
+        investor_shares.cleanup_incompatible_file_shares(file=portfolio_file.name)
+        self.assertFalse(frappe.db.exists("DocShare", share.name))
 
     def test_file_relink_cleanup_defers_instead_of_waiting_for_recipients(self):
         shared_file = make_private_file()
