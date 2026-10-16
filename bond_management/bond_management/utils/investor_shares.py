@@ -55,7 +55,11 @@ def reject_investor_mutation(doc, method=None):
 
 
 def reject_investor_share_mutation(doc, method=None):
-    if doc.share_doctype not in FINANCIAL_DOCTYPES:
+    if doc.share_doctype == "File":
+        file = frappe.db.get_value("File", doc.share_name, _FILE_FIELDS, as_dict=True)
+        if not _scoped_attachment(file):
+            return
+    elif doc.share_doctype not in FINANCIAL_DOCTYPES:
         return
     user = frappe.session.user
     if user in {"Administrator", "Guest"}:
@@ -149,9 +153,16 @@ def cleanup_incompatible_file_shares(user=None, doctype=None, name=None, file=No
         shares = _lock_file_shares(filters)
     except frappe.QueryTimeoutError:
         # Frappe locks an updated DocShare row before its hooks wait for the
-        # users this cleanup holds, so retry each File after commit instead.
-        for name in _file_share_names(filters):
-            frappe.enqueue(cleanup_incompatible_file_shares, file=name, enqueue_after_commit=True)
+        # users this cleanup holds. Retry the whole scope after commit: a plain
+        # read here could miss shares committed after this snapshot.
+        frappe.enqueue(
+            retry_file_share_cleanup,
+            user=user,
+            doctype=doctype,
+            name=name,
+            file=file,
+            enqueue_after_commit=True,
+        )
         return
     if not shares:
         return
@@ -166,6 +177,13 @@ def cleanup_incompatible_file_shares(user=None, doctype=None, name=None, file=No
             )
         elif _restricted_recipient(share) and any(share.get(field) for field in MUTATING_SHARE_FIELDS):
             _drop_mutating_rights(share)
+
+
+def retry_file_share_cleanup(user=None, doctype=None, name=None, file=None):
+    """Background retry; unlike a hook caller, it does not yet hold ``user``."""
+    if user:
+        _lock_users([user])
+    cleanup_incompatible_file_shares(user=user, doctype=doctype, name=name, file=file)
 
 
 def cleanup_incompatible_shares(user=None, doctype=None, name=None, names=None):
@@ -475,16 +493,6 @@ def _lock_file_shares(filters):
     return frappe.qb.get_query(
         "DocShare", fields=["*"], filters=filters, ignore_permissions=True, for_update=True, wait=False
     ).run(as_dict=True)
-
-
-def _file_share_names(filters):
-    return sorted(
-        set(
-            frappe.qb.get_query(
-                "DocShare", fields=["share_name"], filters=filters, ignore_permissions=True
-            ).run(pluck=True)
-        )
-    )
 
 
 def _drop_mutating_rights(share):

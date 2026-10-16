@@ -227,6 +227,19 @@ class TestInvestorShares(IntegrationTestCase):
         self.assertTrue(frappe.db.exists("DocShare", share.name))
         self.assertFalse(frappe.db.exists("DocShare", other_app.name))
 
+    def test_investor_actor_cannot_remove_portfolio_file_share_with_server_flags(self):
+        flags = {"ignore_share_permission": True, "ignore_permissions": True}
+        portfolio_file = make_private_file("Bond Portfolio", self.assigned.name)
+        unrelated_file = make_private_file()
+        share = add_docshare("File", portfolio_file.name, self.investor.name)
+        unrelated = add_docshare("File", unrelated_file.name, self.investor.name)
+        with self.set_user(self.investor.name):
+            with self.assertRaises(frappe.PermissionError):
+                remove("File", portfolio_file.name, self.investor.name, flags=flags)
+            remove("File", unrelated_file.name, self.investor.name, flags=flags)
+        self.assertTrue(frappe.db.exists("DocShare", share.name))
+        self.assertFalse(frappe.db.exists("DocShare", unrelated.name))
+
     def test_legacy_cleanup_is_idempotent_and_preserves_compatible_and_other_app_shares(self):
         inaccessible = self.legacy_share(self.other, self.investor.name)
         assigned = self.legacy_share(self.assigned, self.investor.name, write=1, share=1)
@@ -736,17 +749,27 @@ class TestInvestorShares(IntegrationTestCase):
             self.assignment.delete(ignore_permissions=True)
 
         self.assertTrue(frappe.db.exists("DocShare", share.name))
-        # Frappe also enqueues its own delete work; this cleanup defers the File.
+        # Frappe also enqueues its own delete work; this cleanup retries its
+        # whole scope rather than shares picked from an older snapshot.
         self.assertIn(
             mock_call(
-                investor_shares.cleanup_incompatible_file_shares,
-                file=portfolio_file.name,
+                investor_shares.retry_file_share_cleanup,
+                user=self.investor.name,
+                doctype=None,
+                name=None,
+                file=None,
                 enqueue_after_commit=True,
             ),
             enqueue.call_args_list,
         )
-        investor_shares.cleanup_incompatible_file_shares(file=portfolio_file.name)
+
+        # A share committed after that snapshot is still covered by the retry.
+        late_share = self.legacy_share(
+            make_private_file("Bond Portfolio", self.assigned.name), self.investor.name
+        )
+        investor_shares.retry_file_share_cleanup(user=self.investor.name)
         self.assertFalse(frappe.db.exists("DocShare", share.name))
+        self.assertFalse(frappe.db.exists("DocShare", late_share.name))
 
     def test_file_relink_cleanup_defers_instead_of_waiting_for_recipients(self):
         shared_file = make_private_file()
