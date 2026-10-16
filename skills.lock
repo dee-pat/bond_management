@@ -11,9 +11,9 @@ code-style          frappe/skills             skills/code-style          c1118cb
 frappe-code-review  frappe/skills             skills/frappe-code-review  c1118cbf175a3d4393fb7d02d749876eaf8a86e8  -
 frappe-ui           frappe/frappe-ui          skills/frappe-ui           15ed4fecee1c906befdf23cc14f7b7bb0d7acbf4  evals
 playwright-cli      microsoft/playwright-cli  skills/playwright-cli      74354ecc7a43da16d91a9bc54fa8db8283a3fcf5  -
-frappe-migration    dee-pat/frappe-agent-kit  skills/frappe-migration    c4fd0a943af95fdabeed48b4e242d2b4f01c8190  -
-grilling            dee-pat/frappe-agent-kit  skills/grilling            c4fd0a943af95fdabeed48b4e242d2b4f01c8190  -
-pr-review-threads   dee-pat/frappe-agent-kit  skills/pr-review-threads   c4fd0a943af95fdabeed48b4e242d2b4f01c8190  -
-frappe-pr-review    dee-pat/frappe-agent-kit  skills/frappe-pr-review    c4fd0a943af95fdabeed48b4e242d2b4f01c8190  -
-rule                dee-pat/frappe-agent-kit  rules/frappe.md            c4fd0a943af95fdabeed48b4e242d2b4f01c8190  AGENTS.md
+frappe-migration    dee-pat/frappe-agent-kit  skills/frappe-migration    bed4d3e7b3f7bd9e32939bdf5bec963e0a7a06ea  -
+grilling            dee-pat/frappe-agent-kit  skills/grilling            bed4d3e7b3f7bd9e32939bdf5bec963e0a7a06ea  -
+pr-review-threads   dee-pat/frappe-agent-kit  skills/pr-review-threads   bed4d3e7b3f7bd9e32939bdf5bec963e0a7a06ea  -
+frappe-pr-review    dee-pat/frappe-agent-kit  skills/frappe-pr-review    bed4d3e7b3f7bd9e32939bdf5bec963e0a7a06ea  -
+rule                dee-pat/frappe-agent-kit  rules/frappe.md            bed4d3e7b3f7bd9e32939bdf5bec963e0a7a06ea  AGENTS.md
 vendor              frappe/semgrep-rules      rules                      81a6e3d47a328249e8ddf04c586e493dd5553002  semgrep/frappe
