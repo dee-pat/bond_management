@@ -41,7 +41,10 @@ SPA, then calls
 as Administrator. The idempotent helper ensures deterministic synthetic
 portfolios, bonds, market data, transactions, statements, private PDF fixtures,
 and a user named by `FRAPPE_USER`. That user receives the Investor role and a
-portfolio assignment; `FRAPPE_PASSWORD` sets its password.
+portfolio assignment; `FRAPPE_PASSWORD` sets its password. It also ensures a
+Desk-only `UI Desk Smoke Portfolio` with no transactions or investor
+assignment; `desk/bond-statement-server.spec.ts` deletes that portfolio's
+statements before each run, then uploads and saves a generated statement PDF.
 
 CI applies this setup before starting its fresh-site web server so the process
 loads the enabled feature flag. The `ui` verification mode repeats migration,

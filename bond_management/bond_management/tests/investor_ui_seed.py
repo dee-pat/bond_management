@@ -27,6 +27,8 @@ TEST_STATEMENT_DATE = "2025-12-31"
 TEST_TRANSACTION_ATTACHMENT = "ui-test-transaction.pdf"
 TEST_STATEMENT_ATTACHMENT = "ui-test-statement.pdf"
 TEST_RECONCILIATION_REPORT = "ui-test-reconciliation-report.pdf"
+DESK_SMOKE_PORTFOLIO_NAME = "UI Desk Smoke Portfolio"
+DESK_SMOKE_ACCOUNT_NUMBER = "UI-DESK-SMOKE-001"
 
 
 def seed_investor_ui_browser_test_data() -> dict[str, str]:
@@ -67,12 +69,14 @@ def seed_investor_ui_test_data(
         TEST_RECONCILIATION_REPORT,
         fieldname="quantity_reconciliation_report",
     )
+    desk_smoke_portfolio = _ensure_desk_smoke_portfolio()
     user = _ensure_user(email, password)
     _ensure_user_permission(email, portfolio.name)
 
     return {
         "user": user.name,
         "portfolio": portfolio.name,
+        "desk_smoke_portfolio": desk_smoke_portfolio.name,
         "bond": bond.name,
         "yield_bond": yield_bond.name,
         "market_date": market_date.name,
@@ -95,6 +99,30 @@ def _ensure_portfolio():
             "account_no": TEST_ACCOUNT_NUMBER,
         }
     ).insert(ignore_permissions=True)
+
+
+def _ensure_desk_smoke_portfolio():
+    """Return the Desk-only portfolio for the server-backed statement smoke test.
+
+    It has no transactions and no investor assignment. Browser uploads are
+    unencrypted, so the random password only encrypts the generated
+    reconciliation report and is never needed by the test.
+    """
+    if frappe.db.exists("Bond Portfolio", DESK_SMOKE_PORTFOLIO_NAME):
+        portfolio = frappe.get_doc("Bond Portfolio", DESK_SMOKE_PORTFOLIO_NAME)
+    else:
+        portfolio = frappe.get_doc(
+            {
+                "doctype": "Bond Portfolio",
+                "portfolio_name": DESK_SMOKE_PORTFOLIO_NAME,
+                "account_no": DESK_SMOKE_ACCOUNT_NUMBER,
+            }
+        )
+    if portfolio.is_new() or not portfolio.get_password("statement_pdf_password", raise_exception=False):
+        portfolio.statement_pdf_password = frappe.generate_hash(length=24)
+        # Same Administrator-only fixture boundary as _ensure_portfolio.
+        portfolio.save(ignore_permissions=True)
+    return portfolio
 
 
 def _ensure_bond(
