@@ -43,6 +43,12 @@ covers the shared paging, sort, and filter validation for every list endpoint.
 checks native/reporting and bond/TOTAL exports against report cash flows before,
 on, and after maturity, with historical versus valuation-date FX rates.
 
+Each investor SPA request is independent (`frontend/src/lib/api.ts`), so a
+request that fails before any response shows the failed state instead of an
+earlier response. `e2e/investor/performance.spec.ts` (rerun after a lost
+connection) and `e2e/investor/review-regressions.spec.ts` (portfolio filter
+change after a lost connection) cover it.
+
 ## Registered migration and fresh-install lifecycle
 
 The opt-in `tests/migration_lifecycle.py` CLI helper verifies manual index and
