@@ -4,15 +4,16 @@
 # skill, or "-"); the last column is the target file for a "rule" line and the
 # target directory for a "vendor" line. Edit a revision, run
 # scripts/sync-skills.sh sync, and commit the lock and the copies together.
-# scripts/sync-skills.sh is copied from dee-pat/frappe-agent-kit tools/ at the
-# revision of the kit lines below.
+# scripts/sync-skills.sh and scripts/semgrep-pr.sh are copied from
+# dee-pat/frappe-agent-kit tools/ at the revision of the kit lines below.
 frappe-app-dev      frappe/skills             skills/frappe-app-dev      c1118cbf175a3d4393fb7d02d749876eaf8a86e8  -
 code-style          frappe/skills             skills/code-style          c1118cbf175a3d4393fb7d02d749876eaf8a86e8  -
 frappe-code-review  frappe/skills             skills/frappe-code-review  c1118cbf175a3d4393fb7d02d749876eaf8a86e8  -
 frappe-ui           frappe/frappe-ui          skills/frappe-ui           15ed4fecee1c906befdf23cc14f7b7bb0d7acbf4  evals
 playwright-cli      microsoft/playwright-cli  skills/playwright-cli      74354ecc7a43da16d91a9bc54fa8db8283a3fcf5  -
-frappe-migration    dee-pat/frappe-agent-kit  skills/frappe-migration    3512bc7d03c844664fe86dd18bfb3c35bc5e8a11  -
-grilling            dee-pat/frappe-agent-kit  skills/grilling            3512bc7d03c844664fe86dd18bfb3c35bc5e8a11  -
-pr-review-threads   dee-pat/frappe-agent-kit  skills/pr-review-threads   3512bc7d03c844664fe86dd18bfb3c35bc5e8a11  -
-rule                dee-pat/frappe-agent-kit  rules/frappe.md            3512bc7d03c844664fe86dd18bfb3c35bc5e8a11  AGENTS.md
-vendor              frappe/semgrep-rules      rules                      de085539bc9b4d74eb0a2ac508d21f33495be733  semgrep/frappe
+frappe-migration    dee-pat/frappe-agent-kit  skills/frappe-migration    c4fd0a943af95fdabeed48b4e242d2b4f01c8190  -
+grilling            dee-pat/frappe-agent-kit  skills/grilling            c4fd0a943af95fdabeed48b4e242d2b4f01c8190  -
+pr-review-threads   dee-pat/frappe-agent-kit  skills/pr-review-threads   c4fd0a943af95fdabeed48b4e242d2b4f01c8190  -
+frappe-pr-review    dee-pat/frappe-agent-kit  skills/frappe-pr-review    c4fd0a943af95fdabeed48b4e242d2b4f01c8190  -
+rule                dee-pat/frappe-agent-kit  rules/frappe.md            c4fd0a943af95fdabeed48b4e242d2b4f01c8190  AGENTS.md
+vendor              frappe/semgrep-rules      rules                      81a6e3d47a328249e8ddf04c586e493dd5553002  semgrep/frappe

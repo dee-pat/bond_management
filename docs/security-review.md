@@ -3,8 +3,7 @@
 Bond Management's attack surfaces, with what a reviewer checks on each. Use it
 alongside §2 Security of the `frappe-code-review` skill
 (`.agents/skills/frappe-code-review/SKILL.md`) whenever a diff touches one of
-these surfaces. Each finding names the affected user or data, a plausible
-trigger, and the changed line.
+these surfaces. Findings use the format in [code-review.md](code-review.md).
 
 ## Whitelisted methods
 
@@ -33,10 +32,6 @@ Performance, Bond Yield Comparison, and Interest Difference by Portfolio).
   functions in `utils/investor_permissions.py`. A DocType left out of either
   map states why in the PR (for example, shared reference data such as
   Bond Master).
-- Permission-query SQL uses fixed DocType and field identifiers and escapes
-  every value with `frappe.db.escape`.
-- Multi-record reads use `frappe.qb.get_query(..., ignore_permissions=False)` or
-  an equivalent permission-scoped path.
 - Exchange rates are shared, but the representative statement link is
   permission level 1 and returned only when the caller can read that statement
   ([PR #19](https://github.com/dee-pat/bond_management/pull/19)).
@@ -117,4 +112,6 @@ Services with no prior permission check to rely on are allowed without one:
 `scripts/verify.sh lint` runs Frappe's Semgrep rules plus
 `semgrep/bond_management.yml` (no manual transaction boundaries, no `Decimal`
 from float literals). A recurring finding above that a pattern can catch belongs
-there as a new rule with a test in `semgrep/tests/`.
+there as a new rule with a test in `semgrep/tests/`. For a PR review,
+`scripts/semgrep-pr.sh <base>` lists only the Frappe findings the change
+introduces.

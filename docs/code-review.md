@@ -46,7 +46,8 @@ Root and nested `AGENTS.md` files supply review guidance. The root file's
 **Review guidelines** section applies the app's Frappe, financial, attachment,
 and migration rules to the diff. The domain model and verification guide remain
 the source of truth for relationships and required checks. For a local agent
-review, the `frappe-code-review` skill is the general Frappe checklist.
+review, the `frappe-pr-review` skill owns the procedure, including untrusted PR
+content and `scripts/semgrep-pr.sh`.
 
 Reviews are advisory. Existing tests, CI checks, and human review still determine
 whether a change is ready to merge. If no review appears, check the repository
@@ -74,7 +75,8 @@ For uncommitted changes, identify the base commit and the staged/unstaged scope;
 the score applies only to that inspected snapshot. Reassess after fixes rather
 than carrying the previous score forward.
 
-Assign each actionable finding one priority:
+Assign each actionable finding one priority. These meanings replace the P0–P3
+definitions in `frappe-pr-review`'s report format:
 
 - **P0**: immediate, broad risk such as unrestricted financial-data exposure,
   destructive data corruption, or a broken critical operation.
@@ -97,14 +99,13 @@ from finding counts:
 | **4/5** | No actionable findings, but required verification is missing, stale, or blocked, or a specific residual concern remains.  |
 | **5/5** | No actionable findings, required verification passed for the reviewed revision, and no specific residual concern remains. |
 
-Report review scope and residual concerns explicitly. Distinguish an established
-defect from a question needing investigation; uncertainty alone does not justify
-a defect finding or 0/5. Scores express an evidence-based assessment, not a
+Report review scope and residual concerns explicitly. Only _confirmed_ findings,
+as `frappe-pr-review` defines them, set the score; a _needs verification_ item
+never justifies 0/5. Scores express an evidence-based assessment, not a
 guarantee that the code is bug-free or authorization to merge.
 
-Include verification commands and observed exit statuses, required CI results
-for the exact revision, and checks not run or blocked. Cite existing CI evidence
-as such rather than claiming to have executed it. Mark the score **provisional**
+Report checks as the skill's report format requires, including required CI
+results for the exact revision. Mark the score **provisional**
 when required verification is missing, stale, or blocked; the maximum then is
 **4/5**. A failed required check caps the score at **3/5** even when no defect
 is identified; report the failure separately and use a lower score when a
@@ -145,11 +146,10 @@ percentages only; omit weekly usage and USD cost conversions.
 
 ### Findings
 
-List actionable findings in priority order. Give each a review-local ID (`F1`,
-`F2`, and so on), priority, file and tight line range, concrete trigger, affected
-user or data, and evidence connecting the changed code to the impact. Include
-the intended correction and a meaningful regression check. Keep questions and
-optional suggestions separate from findings and the fix prompt.
+Use the finding format of `frappe-pr-review`'s report, and prefix each heading
+with a review-local ID (`F1`, `F2`, and so on). Each finding's trigger names the
+affected user or data, and its fix includes a meaningful regression check. Keep
+questions and optional suggestions separate from findings and the fix prompt.
 
 ### Ready-to-copy fix prompt
 

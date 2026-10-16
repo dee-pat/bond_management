@@ -10,8 +10,7 @@ item below holds. Record any item that does not apply, with the reason, in the
 evidence.
 
 - **Proven:** new or changed behavior has a test that fails without the change
-  and passes with it; a bug fix adds its regression test first. Comparison
-  rules cover greater-than, less-than, and equality.
+  and passes with it; a bug fix adds its regression test first.
 - **Conventions held:** the financial, attachment, and investor-isolation rules
   in `AGENTS.md` (_Architecture_, _Bond financial conventions_, _Attachments
   and secrets_) still hold, or changed only with an explicit business decision
@@ -89,7 +88,7 @@ differences in the final field.
   and remaining verification. Do not substitute an unrelated check.
 - When GitHub Actions fails, inspect the traceback and reproduce the failing
   test in isolation and in the full suite before changing implementation or
-  assertions. Do not weaken an assertion merely to make CI pass.
+  assertions.
 - Before implementing a multi-phase feature, record the intended slice and
   verification steps in the project documentation. For a small bug fix, a
   focused issue note and regression test are sufficient.

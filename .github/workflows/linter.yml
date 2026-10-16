@@ -22,6 +22,10 @@ jobs:
 
     steps:
       - uses: actions/checkout@v6
+        with:
+          # semgrep-pr.sh needs the merge base with the PR's base branch.
+          fetch-depth: 0
+          persist-credentials: false
       - uses: actions/setup-python@v6
         with:
           python-version: '3.14'
@@ -33,6 +37,14 @@ jobs:
 
       - name: Run shared lint gate
         run: ./scripts/verify.sh lint
+
+      - name: Report new Frappe Semgrep findings
+        # Report only: lists the findings the PR introduces and exits 0.
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: ./scripts/semgrep-pr.sh "$BASE_SHA" "$HEAD_SHA"
 
   deps-vulnerable-check:
     name: 'Vulnerable Dependency Check'
