@@ -542,6 +542,79 @@ class TestInvestorShares(IntegrationTestCase):
 
         self.assertFalse(frappe.db.exists("DocShare", file_share.name))
 
+    def test_file_share_validation_locks_file_then_target_then_recipient(self):
+        transaction_file = make_private_file(
+            "Bond Transaction", make_transaction(make_bond(), self.assigned).name
+        )
+        events = []
+        lock_file = investor_shares._lock_file
+        lock_target = investor_shares._lock_share_target
+        lock_users = investor_shares._lock_users
+
+        def trace(label, lock):
+            def traced(*args, **kwargs):
+                events.append(label)
+                return lock(*args, **kwargs)
+
+            return traced
+
+        with (
+            patch.object(investor_shares, "_lock_file", side_effect=trace("file", lock_file)),
+            patch.object(investor_shares, "_lock_share_target", side_effect=trace("target", lock_target)),
+            patch.object(investor_shares, "_lock_users", side_effect=trace("recipient", lock_users)),
+        ):
+            add_docshare("File", transaction_file.name, self.investor.name)
+
+        self.assertEqual(events, ["file", "target", "recipient"])
+
+    def test_relinking_shared_file_revokes_share_only_outside_assignment(self):
+        kept_file = make_private_file()
+        moved_file = make_private_file()
+        kept = add_docshare("File", kept_file.name, self.investor.name)
+        moved = add_docshare("File", moved_file.name, self.investor.name)
+
+        for file, portfolio in ((kept_file, self.assigned), (moved_file, self.other)):
+            file.attached_to_doctype = "Bond Portfolio"
+            file.attached_to_name = portfolio.name
+            file.save(ignore_permissions=True)
+
+        self.assertTrue(frappe.db.exists("DocShare", kept.name))
+        self.assertFalse(frappe.db.exists("DocShare", moved.name))
+        with self.set_user(self.investor.name):
+            visible_files = frappe.qb.get_query("File", fields=["name"], ignore_permissions=False).run(
+                pluck=True
+            )
+        self.assertIn(kept_file.name, visible_files)
+        self.assertNotIn(moved_file.name, visible_files)
+
+    def test_file_cleanup_reads_current_rows_and_defers_busy_files(self):
+        stale_file = make_private_file("Bond Portfolio", self.other.name)
+        share = self.legacy_share(stale_file, self.investor.name)
+        get_value = frappe.db.get_value
+
+        def old_snapshot(doctype, name=None, fieldname=None, *args, **kwargs):
+            # A File committed after this snapshot is invisible to plain attachment reads.
+            if doctype == "File" and "attached_to_name" in (fieldname or ()) and not kwargs.get("for_update"):
+                return None
+            return get_value(doctype, name, fieldname, *args, **kwargs)
+
+        with patch.object(frappe.db, "get_value", side_effect=old_snapshot):
+            with (
+                patch.object(investor_shares, "_lock_file", side_effect=frappe.QueryTimeoutError),
+                patch("frappe.enqueue") as enqueue,
+            ):
+                investor_shares.cleanup_incompatible_file_shares(user=self.investor.name)
+            self.assertTrue(frappe.db.exists("DocShare", share.name))
+            enqueue.assert_called_once_with(
+                investor_shares.cleanup_incompatible_file_shares,
+                file=stale_file.name,
+                enqueue_after_commit=True,
+            )
+
+            investor_shares.cleanup_incompatible_file_shares(user=self.investor.name)
+
+        self.assertFalse(frappe.db.exists("DocShare", share.name))
+
     def test_file_share_repair_patch_removes_only_incompatible_shares_and_reruns(self):
         assigned_file = make_private_file("Bond Portfolio", self.assigned.name)
         other_file = make_private_file("Bond Portfolio", self.other.name)

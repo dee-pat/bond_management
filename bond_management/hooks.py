@@ -98,7 +98,10 @@ doc_events = {
 }
 doc_events.update(
     {
-        "File": {"validate_share": f"{_investor_shares}.validate_file_share"},
+        "File": {
+            "validate_share": f"{_investor_shares}.validate_file_share",
+            "on_update": f"{_investor_shares}.cleanup_file_shares",
+        },
         "User": {
             "before_validate": f"{_investor_shares}.lock_user_authorization",
             "on_update": f"{_investor_shares}.cleanup_user_shares",

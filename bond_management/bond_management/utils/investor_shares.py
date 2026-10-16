@@ -9,7 +9,6 @@ from bond_management.bond_management.utils.investor_permissions import (
     get_allowed_portfolios,
     get_statement_portfolio,
     has_explicit_exchange_rate_source_share,
-    is_file_in_portfolios,
     is_investor_user,
 )
 
@@ -75,15 +74,29 @@ def validate_share(doc, method, share):
 
 
 def validate_file_share(doc, method, share):
-    if not _is_portfolio_attachment(doc):
-        return
-    # Assignment cleanup also locks the recipient before reading File shares.
+    # Lock the File, its attached target, then recipients: the order that File
+    # saves, portfolio moves and assignment cleanup follow. Core may have loaded
+    # the File earlier, so reread both rows under their locks.
+    file = _lock_file(doc.name)
+    target = None
+    if file and _is_portfolio_attachment(file):
+        target = _lock_share_target(file.attached_to_doctype, file.attached_to_name)
     _lock_users([frappe.session.user, share.user])
-    if _inaccessible_file_share(doc, share):
+    if file and _inaccessible_file_share(file, target, share):
         _deny()
 
 
-def cleanup_incompatible_file_shares(user=None, doctype=None, name=None):
+def cleanup_file_shares(doc, method=None):
+    """Drop shares made stale when a shared File is made private or relinked."""
+    if not doc.get_doc_before_save():
+        return
+    if any(
+        doc.has_value_changed(field) for field in ("is_private", "attached_to_doctype", "attached_to_name")
+    ):
+        cleanup_incompatible_file_shares(file=doc.name)
+
+
+def cleanup_incompatible_file_shares(user=None, doctype=None, name=None, file=None):
     """Remove File shares that portfolio scope no longer allows.
 
     A stale share would make the recipient's File list fail closed. Like
@@ -104,6 +117,8 @@ def cleanup_incompatible_file_shares(user=None, doctype=None, name=None):
         if not attached_files:
             return
         filters["share_name"] = ["in", attached_files]
+    if file:
+        filters["share_name"] = file
 
     if not user:
         _lock_users(
@@ -116,18 +131,12 @@ def cleanup_incompatible_file_shares(user=None, doctype=None, name=None):
     ).run(as_dict=True)
     if not shares:
         return
-    files = {
-        file.name: file
-        for file in frappe.qb.get_query(
-            "File",
-            fields=["name", "is_private", "attached_to_doctype", "attached_to_name"],
-            filters={"name": ["in", sorted({share.share_name for share in shares})]},
-            ignore_permissions=True,
-        ).run(as_dict=True)
-    }
+    locked = {name: _lock_unseen_file(name) for name in sorted({share.share_name for share in shares})}
     for share in shares:
-        file = files.get(share.share_name)
-        if file and _inaccessible_file_share(file, share):
+        file, target = locked[share.share_name]
+        if file is _DEFERRED_SHARE_TARGET or not file:
+            continue
+        if _inaccessible_file_share(file, target, share):
             frappe.delete_doc(
                 "DocShare", share.name, ignore_permissions=True, flags={"ignore_share_permission": True}
             )
@@ -427,17 +436,46 @@ def _validate_locked_share(target, share):
         _deny()
 
 
+def _lock_file(name, *, wait=True):
+    return frappe.db.get_value(
+        "File",
+        name,
+        ["name", "is_private", "attached_to_doctype", "attached_to_name"],
+        as_dict=True,
+        for_update=True,
+        wait=wait,
+    )
+
+
+def _lock_unseen_file(name):
+    """Read a File and its target currently without waiting behind the held User lock.
+
+    Cleanup holds recipients, while share validation locks File, target, then
+    recipients. A plain read could miss a File committed after this snapshot.
+    """
+    try:
+        file = _lock_file(name, wait=False)
+        target = None
+        if file and _is_portfolio_attachment(file):
+            target = _lock_share_target(file.attached_to_doctype, file.attached_to_name, wait=False)
+        return file, target
+    except frappe.QueryTimeoutError:
+        frappe.enqueue(cleanup_incompatible_file_shares, file=name, enqueue_after_commit=True)
+        return _DEFERRED_SHARE_TARGET, None
+
+
 def _is_portfolio_attachment(file):
     return bool(file.is_private) and file.attached_to_doctype in PORTFOLIO_DOCTYPES
 
 
-def _inaccessible_file_share(file, share):
+def _inaccessible_file_share(file, target, share):
     if not _is_portfolio_attachment(file):
         return False
     if share.everyone:
         return True
     portfolios = _recipient_portfolios(share.user)
-    return portfolios is not None and not is_file_in_portfolios(file, portfolios)
+    portfolio = target.get(PORTFOLIO_DOCTYPES[file.attached_to_doctype]) if target else None
+    return portfolios is not None and portfolio not in portfolios
 
 
 def _inaccessible_share(doc, share):

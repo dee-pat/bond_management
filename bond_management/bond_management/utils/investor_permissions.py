@@ -189,11 +189,7 @@ def has_file_permission(doc, user: str | None = None, ptype: str | None = None, 
 def is_file_in_investor_scope(file, user: str) -> bool:
     """Return False for an investor's private attachment on an unassigned portfolio."""
     portfolios = get_allowed_portfolios(user)
-    return portfolios is None or is_file_in_portfolios(file, portfolios)
-
-
-def is_file_in_portfolios(file, portfolios) -> bool:
-    if not file.is_private:
+    if portfolios is None or not file.is_private:
         return True
     field = PORTFOLIO_DOCTYPES.get(file.attached_to_doctype)
     if not field:
