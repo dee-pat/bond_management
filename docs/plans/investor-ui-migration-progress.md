@@ -1,6 +1,6 @@
 # Investor UI Migration Progress
 
-Last updated: 2026-10-15
+Last updated: 2026-10-16
 Specification: [investor-ui-migration.md](../specs/investor-ui-migration.md)
 Current phase: Phase 7 — Pilot
 Overall status: Phase 7 in progress; pilot acceptance pending
@@ -44,6 +44,36 @@ server suite, and the Playwright job passed 56 tests across the
 `investor-desktop`, `investor-mobile` and `desk` projects.
 
 ## In progress: Phase 7 — Pilot
+
+### Frappe-ui control prototype
+
+Trial a small reduction in custom Investor SPA styling: use frappe-ui badges
+for read-only labels, frappe-ui link buttons for private PDF actions, and a
+themed frappe-ui button for the reconciliation status filter. Preserve the
+read-only API contract, filter action, attachment URLs, accessible names, and
+separate View and Download behavior. No data, permission, or financial rule
+changes are in scope. If the components fail visual or browser verification,
+revert this isolated UI slice. Acceptance requires frontend lint, typecheck,
+build, and browser coverage of statement list/detail and attachments. The
+domain model was reviewed; no data relationship or service flow changes.
+
+Verified locally on 2026-10-16: frontend ESLint, `vue-tsc`, and `yarn build`
+passed; the complete Playwright UI gate passed (57 tests); and the
+focused statement browser spec passed after adding checks for the status
+filter button and separate PDF link attributes (2 tests including setup).
+The `verify.sh frontend` wrapper reached its `bench build` step but bench
+could not write `logs/bench.log` inside the sandbox, so the direct Vite build
+supplies the build evidence. Pilot acceptance remains pending.
+
+After visual review, the PDF actions needed clearer separation from the old
+link styling. View now uses a blue solid button with an eye icon; Download
+uses a gray outline button with a download icon. Both retain their link and
+accessible-name behavior. The revised controls passed frontend lint,
+typecheck, Vite build, and the focused desktop and mobile statement browser
+specs (3 tests including setup) on 2026-10-16.
+The user reviewed the statement and transaction controls and accepted this
+UI slice on 2026-10-16. This does not close the separate Phase 7 pilot
+acceptance items below.
 
 Validate the read-only SPA with real pilot workflows while keeping the legacy
 investor Workspace as the Apps fallback. Investor login targets the Vue

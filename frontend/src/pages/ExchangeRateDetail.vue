@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { Badge } from "frappe-ui";
 import { RouterLink, useRoute } from "vue-router";
 
 import SurfaceState from "../components/SurfaceState.vue";
@@ -74,7 +75,7 @@ function displayValue(field: DetailField): string {
 						{{ exchangeRate.from_currency }}
 					</h2>
 				</div>
-				<span class="read-only-badge">Read only</span>
+				<Badge theme="gray" variant="outline" size="sm">Read only</Badge>
 			</div>
 
 			<dl class="record-detail-grid" data-testid="exchange-rate-detail">

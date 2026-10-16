@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { Badge } from "frappe-ui";
 import { RouterLink, useRoute } from "vue-router";
 
 import PdfAttachmentActions from "../components/PdfAttachmentActions.vue";
@@ -126,7 +127,7 @@ function displayValue(field: DetailField): string {
 						{{ transaction.transaction_reference }}
 					</h2>
 				</div>
-				<span class="read-only-badge">Read only</span>
+				<Badge theme="gray" variant="outline" size="sm">Read only</Badge>
 			</div>
 
 			<dl class="transaction-detail-grid" data-testid="transaction-detail">

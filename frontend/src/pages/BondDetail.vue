@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { Badge } from "frappe-ui";
 import { RouterLink, useRoute } from "vue-router";
 import { ListCell, ListHeaderCell } from "frappe-ui/list";
 
@@ -95,7 +96,7 @@ function displayValue(field: DetailField): string {
 						{{ bond.isin }}
 					</h2>
 				</div>
-				<span class="read-only-badge">Read only</span>
+				<Badge theme="gray" variant="outline" size="sm">Read only</Badge>
 			</div>
 
 			<dl class="record-detail-grid" data-testid="bond-detail">
