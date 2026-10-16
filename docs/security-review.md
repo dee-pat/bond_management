@@ -83,7 +83,10 @@ Services with no prior permission check to rely on are allowed without one:
   source is absent, and the primary source wins when both exist. For example,
   `utils/statement_pdf.py` uses the original filename's account hint only for
   legacy statements whose PDF body omits the account number; keep its
-  regression coverage when changing it.
+  regression coverage when changing it. When neither the body nor the filename
+  names an account, the portfolio selected on a new statement may supply it,
+  but only for a PDF unlocked with that portfolio's own password. The selection
+  is a client value, so an unencrypted accountless PDF is rejected.
 - Filenames are standardized only after the document is identified, and stay
   private.
 

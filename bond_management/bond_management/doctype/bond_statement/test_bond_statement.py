@@ -567,6 +567,42 @@ class TestBondStatement(IntegrationTestCase):
         self.assertEqual(preview["statement_date"].isoformat(), "2020-11-30")
         statement.insert()
 
+    def test_accountless_pdf_requires_the_selected_portfolios_own_password(self):
+        portfolio = make_portfolio(statement_pdf_password="test-password")
+        other_password = unique_name("OTHER-PASSWORD")
+        make_portfolio(statement_pdf_password=other_password)
+        cases = (
+            ("not password-protected", None),
+            ("does not unlock this attachment", other_password),
+        )
+
+        for message, password in cases:
+            with self.subTest(message=message):
+                attachment = self._attach_pdf(
+                    f"SUMMARY OF ACCOUNT As of 30/11/2020\n{unique_name('LEGACY')}",
+                    password,
+                    file_name="KEUTS03Dec20075717763794.pdf",
+                )
+                with self.assertRaisesRegex(frappe.ValidationError, message):
+                    read_statement_pdf(None, attachment, portfolio.name)
+                with self.assertRaisesRegex(frappe.ValidationError, message):
+                    frappe.get_doc(
+                        {
+                            "doctype": "Bond Statement",
+                            "portfolio_name": portfolio.name,
+                            "attachment": attachment,
+                        }
+                    ).insert()
+
+        # The documented filename fallback is unchanged for unencrypted legacy PDFs.
+        filename_hint_attachment = self._attach_pdf(
+            f"SUMMARY OF ACCOUNT As of 30/11/2020\n{unique_name('LEGACY')}",
+            None,
+            file_name=f"PortfolioStatement-{portfolio.account_no}-20201130.pdf",
+        )
+        preview = read_statement_pdf(None, filename_hint_attachment, portfolio.name)
+        self.assertEqual(preview["portfolio_name"], portfolio.name)
+
     def test_legacy_named_bond_row_populates_market_price(self):
         bond = make_bond(bond_name="Kenya Treasury Bond FXD3-2019-15")
         portfolio = make_portfolio()

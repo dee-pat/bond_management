@@ -157,6 +157,7 @@ class TestStatementPdf(UnitTestCase):
         )
 
         self.assertEqual(parsed.account_no, "1110700431101")
+        self.assertTrue(parsed.account_from_hint)
         self.assertEqual(parsed.statement_date, date(2022, 10, 31))
         self.assertEqual(parsed.market_prices[0].market_price, Decimal("98.750000"))
         self.assertEqual(parsed.market_prices[0].reported_quantity, Decimal("3900000.00"))
@@ -173,6 +174,7 @@ class TestStatementPdf(UnitTestCase):
             account_no_hint="FILENAME-ACCOUNT",
         )
         self.assertEqual(embedded_account.account_no, "EMBEDDED-ACCOUNT")
+        self.assertFalse(embedded_account.account_from_hint)
 
     def test_uses_explicit_account_hint_when_legacy_pdf_omits_account(self):
         parsed = extract_statement_pdf(

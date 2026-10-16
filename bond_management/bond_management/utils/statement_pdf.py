@@ -103,6 +103,7 @@ class ParsedStatementPdf:
     statement_date: date
     market_prices: tuple[ParsedMarketPrice, ...] = ()
     exchange_rates: tuple[ParsedExchangeRate, ...] = ()
+    account_from_hint: bool = False
     unlock_password: str | None = field(default=None, repr=False)
 
 
@@ -122,6 +123,7 @@ def parse_statement_pdf_text(
 ) -> ParsedStatementPdf:
     """Extract the account and statement date from supported bank statement layouts."""
     account_numbers = _unique_matches(text, ACCOUNT_PATTERNS, normalize_account_number)
+    account_from_hint = not account_numbers
     if not account_numbers:
         if re.search(
             r"\bBonds\s*-\s*Confirmation\s+Notice\b|\bTransaction\s+Reference\b",
@@ -152,6 +154,7 @@ def parse_statement_pdf_text(
     return ParsedStatementPdf(
         account_no=account_numbers[0],
         statement_date=statement_dates[0],
+        account_from_hint=account_from_hint,
     )
 
 
@@ -371,19 +374,30 @@ def get_statement_attachment_details(
             )
         )
     hinted_portfolio = hinted_portfolios[0] if hinted_portfolios else None
+    filename_account_hint = _get_filename_account_hint(original_filename)
 
     try:
         parsed = extract_statement_pdf(
             content,
             [credential.password for credential in credentials if credential.password],
             account_no_hint=(
-                _get_filename_account_hint(original_filename)
+                filename_account_hint
                 or (normalize_account_number(hinted_portfolio.account_no) if hinted_portfolio else None)
             ),
             bond_name_to_isin=bond_name_to_isin,
         )
     except StatementPdfError as error:
         frappe.throw(str(error))
+
+    # The selected portfolio is a client value. It may identify an accountless
+    # PDF only when that portfolio's own password unlocked it (checked below).
+    if parsed.account_from_hint and not filename_account_hint and parsed.unlock_password is None:
+        frappe.throw(
+            _(
+                "This statement PDF has no account number and is not password-protected, so it cannot "
+                "be matched to the selected portfolio. Attach the password-protected statement from the bank."
+            )
+        )
 
     portfolio = match_account_portfolio(
         credentials, parsed.account_no, reattach=_("attach the statement again")
@@ -419,9 +433,8 @@ def _parse_reader(
     page_texts = extract_page_texts(reader, error_class=StatementPdfError, label="statement")
     all_text = "\n".join(page_texts)
     parsed = parse_statement_pdf_text(page_texts[0], account_no_hint)
-    return ParsedStatementPdf(
-        account_no=parsed.account_no,
-        statement_date=parsed.statement_date,
+    return replace(
+        parsed,
         market_prices=parse_statement_market_prices(all_text, bond_name_to_isin),
         exchange_rates=parse_statement_exchange_rates(all_text),
     )
