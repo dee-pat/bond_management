@@ -26,11 +26,8 @@ This file covers what the code cannot tell you. Nested `AGENTS.md` files in
   [frappe-agent-kit](https://github.com/dee-pat/frappe-agent-kit). Never edit it
   here: change the kit, then bump the pin in `skills.lock` and run
   `scripts/sync-skills.sh sync`.
-- This file and the _Shared Frappe rules_ win over pinned skill examples and
-  checklists. Several upstream examples read records with `frappe.db.get_all`
-  or recommend `get_list`/`get_all`; in this app, user-facing reads follow the
-  `frappe.qb.get_query` rule below, and review findings follow
-  [security-review.md](docs/security-review.md).
+- This file also wins over pinned skills: judge access-control review findings
+  by [security-review.md](docs/security-review.md).
 
 ## Layout
 
@@ -140,7 +137,7 @@ This file covers what the code cannot tell you. Nested `AGENTS.md` files in
 - Attachment parsers cover current, supported legacy, malformed, conflicting,
   encrypted, wrong-password and non-PDF cases.
 
-<!-- BEGIN synced-rules: dee-pat/frappe-agent-kit/rules/frappe.md@bed4d3e7b3f7bd9e32939bdf5bec963e0a7a06ea -->
+<!-- BEGIN synced-rules: dee-pat/frappe-agent-kit/rules/frappe.md@9f1d0fce815615c7b261bb553572c0d1c421c987 -->
 ## Shared Frappe rules
 
 Frappe v16 rules shared across apps; the app's own rules win on conflict. Use
@@ -149,6 +146,8 @@ Frappe v16 rules shared across apps; the app's own rules win on conflict. Use
 `frappe-code-review` as the review checklist, and `frappe-pr-review` to review a
 PR, branch or diff, including your own before opening a PR. Review is read-only
 unless the user asks for fixes.
+These rules and the app's own rules win over examples and checklists in the
+pinned upstream skills, some of which read records with `get_all`/`get_list`.
 
 - The installed framework at `<bench>/apps/frappe` is the authority on Frappe
   behaviour: when correctness depends on a lifecycle, permission, transaction or

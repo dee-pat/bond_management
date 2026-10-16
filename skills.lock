@@ -15,5 +15,5 @@ frappe-migration    dee-pat/frappe-agent-kit  skills/frappe-migration    bed4d3e
 grilling            dee-pat/frappe-agent-kit  skills/grilling            bed4d3e7b3f7bd9e32939bdf5bec963e0a7a06ea  -
 pr-review-threads   dee-pat/frappe-agent-kit  skills/pr-review-threads   bed4d3e7b3f7bd9e32939bdf5bec963e0a7a06ea  -
 frappe-pr-review    dee-pat/frappe-agent-kit  skills/frappe-pr-review    bed4d3e7b3f7bd9e32939bdf5bec963e0a7a06ea  -
-rule                dee-pat/frappe-agent-kit  rules/frappe.md            bed4d3e7b3f7bd9e32939bdf5bec963e0a7a06ea  AGENTS.md
+rule                dee-pat/frappe-agent-kit  rules/frappe.md            9f1d0fce815615c7b261bb553572c0d1c421c987  AGENTS.md
 vendor              frappe/semgrep-rules      rules                      81a6e3d47a328249e8ddf04c586e493dd5553002  semgrep/frappe
