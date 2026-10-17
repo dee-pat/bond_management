@@ -5,6 +5,7 @@ package init, and bench code imports it as ``bond_management.agent_policy``.
 scripts/verify.sh runs it as a script to check a temporary site; see main().
 """
 
+import json
 import re
 import sys
 from pathlib import PurePosixPath
@@ -28,6 +29,10 @@ SECRET_ENV_VARS = (
     "BOND_SHARE_LOCK_USER",
     "BOND_SHARE_LOCK_PASSWORD",
 )
+
+PERSISTENT_REASON = "Never destroy or overwrite the persistent Bond Management sites."
+# Example only: the not_match case showing that Codex rules leave temporary sites to the hook.
+EXAMPLE_TEMPORARY_SITE = f"bond-management-example-{'0' * 32}.localhost"
 
 PERSISTENT = "persistent"
 TEMPORARY = "temporary"
@@ -56,7 +61,7 @@ def destructive_site_violation(argv):
             return "Ambiguous destructive bench command."
         kind = classify_site(_site_argument(arguments, verbs[0]))
         if kind == PERSISTENT:
-            return "Never destroy or overwrite the persistent Bond Management sites."
+            return PERSISTENT_REASON
         if kind != TEMPORARY:
             return "Destructive bench commands require one literal temporary Bond Management site."
     return None
@@ -74,12 +79,83 @@ def claude_read_deny_rules():
     return [f"Read(//**/{name})" for name in site_config] + [f"Read(~/{BROWSER_CREDENTIALS})"]
 
 
+def codex_rule_prefixes():
+    """Canonical bench argv prefixes that destroy or recreate a persistent site."""
+    prefixes = []
+    option_verbs = sorted(DESTRUCTIVE_VERBS - POSITIONAL_SITE_VERBS)
+    for site in sorted(PERSISTENT_SITES):
+        prefixes += [["bench", "--site", site, verb] for verb in option_verbs]
+        prefixes += [["bench", verb, site] for verb in sorted(POSITIONAL_SITE_VERBS)]
+    return prefixes
+
+
+def codex_rules():
+    """Text of .codex/rules/bond_management.rules: one forbidden prefix_rule per prefix.
+
+    Codex matches literal argv prefixes only; other spellings reach the
+    PreToolUse hook (scripts/claude_guard.py), which applies the full check.
+    """
+    justification = json.dumps(f"{PERSISTENT_REASON} See docs/verification.md.")
+    lines = _generated_header("--codex-rules")
+    for prefix in codex_rule_prefixes():
+        example = [EXAMPLE_TEMPORARY_SITE if word in PERSISTENT_SITES else word for word in prefix]
+        lines += [
+            "prefix_rule(",
+            f"    pattern = {json.dumps(prefix)},",
+            '    decision = "forbidden",',
+            f"    justification = {justification},",
+            f"    match = {json.dumps([' '.join(prefix)])},",
+            f"    not_match = {json.dumps([' '.join(example)])},",
+            ")",
+            "",
+        ]
+    return "\n".join(lines)
+
+
+def codex_environment_filters():
+    """Names Codex removes from agent shells: every password, plus the other secret variables."""
+    names = [name for name in SECRET_ENV_VARS if "PASSWORD" not in name]
+    return ["*PASSWORD*", *names]
+
+
+def codex_config():
+    """Text of .codex/config.toml: the environment filter only.
+
+    The permission profile stays user-level; see docs/agents/codex-user-config.md.
+    """
+    filters = [f'"{name}" = "exclude"' for name in codex_environment_filters()]
+    return "\n".join(
+        [*_generated_header("--codex-config"), "[shell_environment_policy.filters]", *filters, ""]
+    )
+
+
+GENERATED_FILES = {
+    "--codex-rules": (".codex/rules/bond_management.rules", codex_rules),
+    "--codex-config": (".codex/config.toml", codex_config),
+}
+
+
 def main(argv):
-    """Exit 0 only for exactly one temporary site name; never echo the input."""
+    """Exit 0 only for exactly one temporary site name; never echo the input.
+
+    A GENERATED_FILES flag prints that generated file instead.
+    """
+    if len(argv) == 1 and argv[0] in GENERATED_FILES:
+        sys.stdout.write(GENERATED_FILES[argv[0]][1]())
+        return 0
     if len(argv) == 1 and classify_site(argv[0]) == TEMPORARY:
         return 0
     print("Refusing a site that is not one temporary Bond Management site.", file=sys.stderr)
     return 1
+
+
+def _generated_header(flag):
+    path = GENERATED_FILES[flag][0]
+    return [
+        "# Generated from bond_management/agent_policy.py; do not edit. Regenerate with:",
+        f"# python3 -I bond_management/agent_policy.py {flag} > {path}",
+        "",
+    ]
 
 
 def _site_argument(words, verb):

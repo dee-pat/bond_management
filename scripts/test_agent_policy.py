@@ -1,9 +1,13 @@
 """Cases for the stdlib-only policy core, bond_management/agent_policy.py."""
 
 import ast
+import fnmatch
 import json
+import shutil
 import subprocess
 import sys
+import tempfile
+import tomllib
 import unittest
 from pathlib import Path
 
@@ -12,6 +16,10 @@ from claude_guard import agent_policy
 APP_ROOT = Path(__file__).resolve().parent.parent
 CORE = APP_ROOT / "bond_management" / "agent_policy.py"
 CLAUDE_SETTINGS = APP_ROOT / ".claude" / "settings.json"
+CODEX_DIR = APP_ROOT / ".codex"
+CODEX_RULES = CODEX_DIR / "rules" / "bond_management.rules"
+CODEX_CONFIG = CODEX_DIR / "config.toml"
+CODEX_HOOK_COMMAND = 'python3 "$(git rev-parse --show-toplevel)/scripts/claude_guard.py"'
 CONSUMERS = (
     APP_ROOT / "scripts" / "claude_guard.py",
     APP_ROOT / "bond_management" / "bond_management" / "tests" / "temporary_site_guard.py",
@@ -187,6 +195,124 @@ class ClaudeSettingsSyncTests(unittest.TestCase):
         # The sandbox block lands only after its tracer passes (spec, decision 3).
         self.assertEqual(set(self.settings), {"permissions", "hooks"})
         self.assertEqual(set(self.settings["permissions"]), {"deny"})
+
+
+class CodexConfigSyncTests(unittest.TestCase):
+    """.codex/ carries rules generated from the core and the shared guard hook."""
+
+    def test_generated_files_match_the_core(self):
+        self.assertEqual(set(agent_policy.GENERATED_FILES), {"--codex-rules", "--codex-config"})
+        for flag, (path, generate) in agent_policy.GENERATED_FILES.items():
+            with self.subTest(path=path):
+                regenerate = f"Regenerate: python3 -I bond_management/agent_policy.py {flag} > {path}"
+                self.assertEqual((APP_ROOT / path).read_text(), generate(), regenerate)
+                result = subprocess.run(
+                    [sys.executable, "-I", str(CORE), flag], capture_output=True, text=True, check=True
+                )
+                self.assertEqual(result.stdout, generate())
+
+    def test_environment_filter_excludes_every_secret_variable(self):
+        filters = tomllib.loads(CODEX_CONFIG.read_text())["shell_environment_policy"]["filters"]
+        self.assertEqual(set(filters.values()), {"exclude"})
+        # Codex matches filters case-insensitively.
+        for name in (*agent_policy.SECRET_ENV_VARS, "frappe_password", "OTHER_PASSWORD"):
+            self.assertTrue(any(fnmatch.fnmatch(name.upper(), key.upper()) for key in filters), name)
+        for name in ("PATH", "HOME", "BOND_INVESTOR_SPA", "TEST_SITE"):
+            self.assertFalse(any(fnmatch.fnmatch(name, key.upper()) for key in filters), name)
+
+    def test_rules_forbid_every_destructive_verb_on_every_persistent_site(self):
+        prefixes = agent_policy.codex_rule_prefixes()
+        expected = []
+        option_verbs = ("partial-restore", "reinstall", "restore", "trim-database", "trim-tables")
+        for site in sorted(agent_policy.PERSISTENT_SITES):
+            expected += [["bench", "--site", site, verb] for verb in option_verbs]
+            expected += [["bench", "drop-site", site], ["bench", "new-site", site]]
+        self.assertEqual(prefixes, expected)
+        for prefix in prefixes:
+            argv = [*prefix, "--force"] if "new-site" in prefix else prefix
+            self.assertEqual(agent_policy.destructive_site_violation(argv), PERSISTENT_REASON, argv)
+
+    def test_project_layer_has_no_unreviewed_files(self):
+        # The permission profile stays user-level (spec, decision 2): its paths are per machine.
+        files = {path.relative_to(CODEX_DIR).as_posix() for path in CODEX_DIR.rglob("*") if path.is_file()}
+        self.assertEqual(files, {"config.toml", "hooks.json", "rules/bond_management.rules"})
+        self.assertEqual(set(tomllib.loads(CODEX_CONFIG.read_text())), {"shell_environment_policy"})
+
+    def test_hook_runs_the_shared_guard_on_shell_calls(self):
+        hook = {"type": "command", "command": CODEX_HOOK_COMMAND}
+        expected = {"hooks": {"PreToolUse": [{"matcher": "Bash", "hooks": [hook]}]}}
+        self.assertEqual(json.loads((CODEX_DIR / "hooks.json").read_text()), expected)
+
+    def test_hook_blocks_with_the_codex_payload(self):
+        # Shape built by codex-rs exec_command.rs at rust-v0.163.0: tool_input.command is a string.
+        cases = [
+            ("cat sites/common_site_config.json", 2),
+            (f"bench --site {sorted(agent_policy.PERSISTENT_SITES)[0]} reinstall", 2),
+            ("git status", 0),
+        ]
+        for command, expected in cases:
+            payload = {
+                "session_id": "s",
+                "turn_id": "t",
+                "transcript_path": None,
+                "cwd": str(APP_ROOT),
+                "hook_event_name": "PreToolUse",
+                "model": "m",
+                "permission_mode": "default",
+                "tool_name": "Bash",
+                "tool_input": {"command": command},
+                "tool_use_id": "u",
+            }
+            with self.subTest(command=command):
+                result = subprocess.run(
+                    ["sh", "-c", CODEX_HOOK_COMMAND],
+                    cwd=APP_ROOT,
+                    input=json.dumps(payload),
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+                self.assertEqual(result.returncode, expected, result.stderr)
+                # Codex blocks on exit 2 only with a reason on stderr.
+                self.assertEqual(bool(result.stderr.strip()), expected == 2)
+
+    def test_hook_blocks_outside_a_checkout(self):
+        # Codex runs hooks from the session cwd; without a checkout the guard is not found.
+        with tempfile.TemporaryDirectory() as directory:
+            result = subprocess.run(
+                ["sh", "-c", CODEX_HOOK_COMMAND],
+                cwd=directory,
+                input='{"tool_name": "Bash", "tool_input": {"command": "git status"}}',
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+        self.assertEqual(result.returncode, 2)
+        self.assertTrue(result.stderr.strip())
+
+    @unittest.skipUnless(shutil.which("codex"), "codex CLI not installed; the sync test above is the gate")
+    def test_codex_loads_and_applies_the_rules(self):
+        for prefix in agent_policy.codex_rule_prefixes():
+            temporary = [TEMPORARY if word in agent_policy.PERSISTENT_SITES else word for word in prefix]
+            with self.subTest(prefix=prefix):
+                self.assertEqual(self.codex_check(CODEX_RULES, [*prefix, "--yes"])["decision"], "forbidden")
+                self.assertEqual(self.codex_check(CODEX_RULES, temporary)["matchedRules"], [])
+        # A not_match example that the rule matches fails at load.
+        persistent = sorted(agent_policy.PERSISTENT_SITES)[0]
+        with tempfile.TemporaryDirectory() as directory:
+            broken = Path(directory) / "broken.rules"
+            text = CODEX_RULES.read_text().replace(agent_policy.EXAMPLE_TEMPORARY_SITE, persistent, 1)
+            broken.write_text(text)
+            self.assertIsNone(self.codex_check(broken, ["bench", "version"]))
+
+    def codex_check(self, rules, argv):
+        result = subprocess.run(
+            ["codex", "execpolicy", "check", "--rules", str(rules), *argv],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        return json.loads(result.stdout) if result.returncode == 0 else None
 
 
 if __name__ == "__main__":

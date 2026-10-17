@@ -2,7 +2,7 @@
 
 Status: design accepted with the decisions below (2026-10-17); rollout steps 1
 and 2 implemented; step 3 `Read` deny rules implemented, sandbox tracer passed,
-sandbox not yet enabled.
+sandbox not yet enabled; step 4 Codex project layer implemented.
 Progress:
 [agent-safety-policy-progress.md](../plans/agent-safety-policy-progress.md).
 The current hook's grammar and guarantee stay as defined in
@@ -151,8 +151,9 @@ pages.
   Seatbelt and refuses to run a command it cannot enforce. Profiles do not
   combine with `sandbox_mode`.
 - `shell_environment_policy`: `inherit`, `exclude`/`include_only` (legacy) or
-  `filters`; default excludes names containing `KEY`, `SECRET`, `TOKEN` — not
-  `PASSWORD`.
+  `filters` (case-insensitive). The automatic exclusion of names containing
+  `KEY`, `SECRET`, `TOKEN` applies only with `ignore_default_excludes = false`
+  (the documented default is `true`), and never covers `PASSWORD`.
 - Exec policy rules (experimental): Starlark `prefix_rule(pattern, decision,
   justification, match, not_match)` in `.codex/rules/*.rules`; `forbidden`
   wins; plain `bash -lc` chains are split, but anything with redirection,
@@ -164,10 +165,40 @@ pages.
   per-user trust by hash.
 - Project `.codex/config.toml`, `hooks.json` and `rules/` load only when the
   user trusts the project.
-- Unverified here: whether a project `.codex/config.toml` may define
-  permission profiles; whether `tool_input.command` for `Bash`/`exec_command`
-  is a string (as the current hook requires) or an argv list; macOS glob
-  deny-read behaviour.
+
+Verified for step 4 (2026-10-17, Codex CLI 0.163.0 on macOS; probes used a
+scratch `CODEX_HOME`, decoy files and dummy variables, never the protected
+files):
+
+- **Hook payload.** From the source at tag `rust-v0.163.0`
+  (`129b8ec`): `exec_command`'s `pre_tool_use_payload` sends
+  `tool_name: "Bash"` and `tool_input: {"command": args.cmd}`, where `cmd` is a
+  `String` (`ExecCommandArgs`). `shell_spec.rs` defines `exec_command` as the
+  only shell tool; there is no argv-list shell tool in that tree. The payload also carries `session_id`, `turn_id`, `cwd`,
+  `hook_event_name`, `model`, `permission_mode` and `tool_use_id`, which the
+  guard ignores. Exit 2 blocks only with a non-empty stderr reason; any other
+  non-zero exit marks the hook failed and does not block. `write_stdin` (input
+  to a running exec session) emits no `PreToolUse`. The hook command runs with
+  the session cwd and no project-directory variable. Not exercised in a live
+  model session.
+- **Project permission profiles.** Yes, when the project is trusted:
+  `codex sandbox -C <project> -P <name>` applied a profile defined only in the
+  project's `.codex/config.toml`. Untrusted, the project `[permissions]` table
+  was dropped and the command refused to run
+  (`default_permissions requires a [permissions] table`).
+  A project `shell_environment_policy.filters` table also applied, with globs
+  and exact names.
+- **macOS glob deny-read.** Under Seatbelt, `"**/*.x" = "deny"` in
+  `":workspace_roots"` and absolute keys such as `"/abs/sites/**/x" = "deny"`
+  blocked `cat`, `grep -r` and `python3 -c open()` with "Operation not
+  permitted", matched files at any depth including directly under the glob's
+  base, and blocked creating a new matching file. `"~/..." = "deny"` resolved
+  against `HOME`. Deny wins over `":root" = "read"`.
+- **Rules.** `codex execpolicy check` loads `.codex/rules/bond_management.rules`
+  and returns `forbidden` for each prefix; a `not_match` example that the rule
+  matches makes loading fail. `execpolicy check` does not split `bash -lc`
+  scripts, and matches `bench` only as a literal first word: `--site=SITE`,
+  an absolute bench path and redirected scripts are not matched.
 
 ## Design
 
@@ -187,15 +218,25 @@ pages.
   (`scripts/test_agent_policy.py` regenerates in memory and diffs):
   - `.claude/settings.json`: `Read(...)` deny rules, sandbox `denyRead`,
     `credentials.envVars` deny entries, the existing hook.
-  - `.codex/rules/bond_management.rules`: `forbidden` `prefix_rule`s for each
-    destructive verb against each persistent site in the canonical
-    `bench --site SITE VERB` and `bench drop-site SITE` spellings, with
+  - `.codex/rules/bond_management.rules` (`agent_policy.py --codex-rules`):
+    `forbidden` `prefix_rule`s for each destructive verb against each
+    persistent site in the canonical `bench --site SITE VERB` spelling, and
+    `bench drop-site SITE` / `bench new-site SITE` for the positional verbs
+    (`POSITIONAL_SITE_VERBS`; `new-site` on a persistent site is forbidden in
+    any form, since recreating one needs approval anyway), with
     `match`/`not_match` examples.
-  - `.codex/hooks.json`: `PreToolUse` on `Bash` running the same guard, once
-    the payload shape is confirmed.
-  - `docs/agents/codex-user-config.md` (or a section in verification.md): the
-    user-level snippet for permission profile and `shell_environment_policy`
-    if a project file cannot carry them.
+  - `.codex/hooks.json`: `PreToolUse` on `Bash` running the same guard, resolved
+    from `git rev-parse --show-toplevel` because Codex has no project-directory
+    variable. The payload matches the guard's contract, so there is no adapter.
+  - `.codex/config.toml` (`agent_policy.py --codex-config`):
+    `shell_environment_policy.filters` excluding `*PASSWORD*` and the other
+    `SECRET_ENV_VARS`. A trusted project file carries it, so it is not in the
+    user snippet.
+  - [docs/agents/codex-user-config.md](../agents/codex-user-config.md): the
+    trust steps and the user-level permission profile. A project file could
+    carry a profile, but the denied paths (the bench's `sites/`) are outside
+    the workspace and differ per machine, and a project `default_permissions`
+    would override each user's sandbox choice.
 
 ### Rules that move into project scripts (a)
 
@@ -313,7 +354,9 @@ only after step 2 gives callers a replacement.
 
 ## Follow-ups
 
-- Confirm the Codex hook payload shape and project-level profile support.
+- Run a live Codex session tracer once a user has trusted the project and
+  hook: a blocked `cat` of a protected file through the hook, a `forbidden`
+  rule decision, and the profile denying `grep -r` from the sandbox.
 - Decide whether the persistent dev site's `site_config.json` should move to a
   path the sandbox denies by directory rather than by basename.
 - Consider `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB` for hooks and MCP servers.

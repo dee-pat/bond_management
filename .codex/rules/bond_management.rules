@@ -1,0 +1,114 @@
+# Generated from bond_management/agent_policy.py; do not edit. Regenerate with:
+# python3 -I bond_management/agent_policy.py --codex-rules > .codex/rules/bond_management.rules
+
+prefix_rule(
+    pattern = ["bench", "--site", "bond-management-dev.localhost", "partial-restore"],
+    decision = "forbidden",
+    justification = "Never destroy or overwrite the persistent Bond Management sites. See docs/verification.md.",
+    match = ["bench --site bond-management-dev.localhost partial-restore"],
+    not_match = ["bench --site bond-management-example-00000000000000000000000000000000.localhost partial-restore"],
+)
+
+prefix_rule(
+    pattern = ["bench", "--site", "bond-management-dev.localhost", "reinstall"],
+    decision = "forbidden",
+    justification = "Never destroy or overwrite the persistent Bond Management sites. See docs/verification.md.",
+    match = ["bench --site bond-management-dev.localhost reinstall"],
+    not_match = ["bench --site bond-management-example-00000000000000000000000000000000.localhost reinstall"],
+)
+
+prefix_rule(
+    pattern = ["bench", "--site", "bond-management-dev.localhost", "restore"],
+    decision = "forbidden",
+    justification = "Never destroy or overwrite the persistent Bond Management sites. See docs/verification.md.",
+    match = ["bench --site bond-management-dev.localhost restore"],
+    not_match = ["bench --site bond-management-example-00000000000000000000000000000000.localhost restore"],
+)
+
+prefix_rule(
+    pattern = ["bench", "--site", "bond-management-dev.localhost", "trim-database"],
+    decision = "forbidden",
+    justification = "Never destroy or overwrite the persistent Bond Management sites. See docs/verification.md.",
+    match = ["bench --site bond-management-dev.localhost trim-database"],
+    not_match = ["bench --site bond-management-example-00000000000000000000000000000000.localhost trim-database"],
+)
+
+prefix_rule(
+    pattern = ["bench", "--site", "bond-management-dev.localhost", "trim-tables"],
+    decision = "forbidden",
+    justification = "Never destroy or overwrite the persistent Bond Management sites. See docs/verification.md.",
+    match = ["bench --site bond-management-dev.localhost trim-tables"],
+    not_match = ["bench --site bond-management-example-00000000000000000000000000000000.localhost trim-tables"],
+)
+
+prefix_rule(
+    pattern = ["bench", "drop-site", "bond-management-dev.localhost"],
+    decision = "forbidden",
+    justification = "Never destroy or overwrite the persistent Bond Management sites. See docs/verification.md.",
+    match = ["bench drop-site bond-management-dev.localhost"],
+    not_match = ["bench drop-site bond-management-example-00000000000000000000000000000000.localhost"],
+)
+
+prefix_rule(
+    pattern = ["bench", "new-site", "bond-management-dev.localhost"],
+    decision = "forbidden",
+    justification = "Never destroy or overwrite the persistent Bond Management sites. See docs/verification.md.",
+    match = ["bench new-site bond-management-dev.localhost"],
+    not_match = ["bench new-site bond-management-example-00000000000000000000000000000000.localhost"],
+)
+
+prefix_rule(
+    pattern = ["bench", "--site", "bond-management-test.localhost", "partial-restore"],
+    decision = "forbidden",
+    justification = "Never destroy or overwrite the persistent Bond Management sites. See docs/verification.md.",
+    match = ["bench --site bond-management-test.localhost partial-restore"],
+    not_match = ["bench --site bond-management-example-00000000000000000000000000000000.localhost partial-restore"],
+)
+
+prefix_rule(
+    pattern = ["bench", "--site", "bond-management-test.localhost", "reinstall"],
+    decision = "forbidden",
+    justification = "Never destroy or overwrite the persistent Bond Management sites. See docs/verification.md.",
+    match = ["bench --site bond-management-test.localhost reinstall"],
+    not_match = ["bench --site bond-management-example-00000000000000000000000000000000.localhost reinstall"],
+)
+
+prefix_rule(
+    pattern = ["bench", "--site", "bond-management-test.localhost", "restore"],
+    decision = "forbidden",
+    justification = "Never destroy or overwrite the persistent Bond Management sites. See docs/verification.md.",
+    match = ["bench --site bond-management-test.localhost restore"],
+    not_match = ["bench --site bond-management-example-00000000000000000000000000000000.localhost restore"],
+)
+
+prefix_rule(
+    pattern = ["bench", "--site", "bond-management-test.localhost", "trim-database"],
+    decision = "forbidden",
+    justification = "Never destroy or overwrite the persistent Bond Management sites. See docs/verification.md.",
+    match = ["bench --site bond-management-test.localhost trim-database"],
+    not_match = ["bench --site bond-management-example-00000000000000000000000000000000.localhost trim-database"],
+)
+
+prefix_rule(
+    pattern = ["bench", "--site", "bond-management-test.localhost", "trim-tables"],
+    decision = "forbidden",
+    justification = "Never destroy or overwrite the persistent Bond Management sites. See docs/verification.md.",
+    match = ["bench --site bond-management-test.localhost trim-tables"],
+    not_match = ["bench --site bond-management-example-00000000000000000000000000000000.localhost trim-tables"],
+)
+
+prefix_rule(
+    pattern = ["bench", "drop-site", "bond-management-test.localhost"],
+    decision = "forbidden",
+    justification = "Never destroy or overwrite the persistent Bond Management sites. See docs/verification.md.",
+    match = ["bench drop-site bond-management-test.localhost"],
+    not_match = ["bench drop-site bond-management-example-00000000000000000000000000000000.localhost"],
+)
+
+prefix_rule(
+    pattern = ["bench", "new-site", "bond-management-test.localhost"],
+    decision = "forbidden",
+    justification = "Never destroy or overwrite the persistent Bond Management sites. See docs/verification.md.",
+    match = ["bench new-site bond-management-test.localhost"],
+    not_match = ["bench new-site bond-management-example-00000000000000000000000000000000.localhost"],
+)

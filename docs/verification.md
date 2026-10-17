@@ -174,7 +174,15 @@ file tools and the file commands Claude Code recognises in Bash (`cat`, `head`,
 themselves. The Bash sandbox that would close that gap is not enabled yet; see
 the [agent safety policy](specs/agent-safety-policy.md).
 
-The same file runs `scripts/claude_guard.py` before
+For Codex, `.codex/` carries exec-policy rules that forbid destructive bench
+verbs on the persistent sites, a `PreToolUse` hook that runs the same
+`scripts/claude_guard.py` on shell calls, and an environment filter for
+password and share-lock variables, all generated from the core and checked by
+the same test. Codex loads them only after you trust the checkout and the
+hook; the per-user steps and the permission profile that denies reads of the
+protected files are in [codex-user-config.md](agents/codex-user-config.md).
+
+`.claude/settings.json` also runs `scripts/claude_guard.py` before
 each Bash or Read call. The [bounded shell policy](specs/claude-guard-shell-policy.md)
 defines its supported grammar and its deliberately limited static guarantee;
 [the executable matrix](../scripts/claude_guard_cases.json) covers acceptance
