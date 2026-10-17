@@ -473,6 +473,30 @@ class TestPortfolioPerformance(IntegrationTestCase):
         self.assertEqual(past_coupon["amount"], 45)
         self.assertEqual(future_coupon["amount"], 45)
 
+    def test_market_value_and_gain_use_accrued_interest_net_of_withholding_tax(self):
+        bond = make_bond(coupon_rate=10, withholding_tax=10)
+        portfolio = make_portfolio()
+        make_transaction(
+            bond,
+            portfolio,
+            trade_date="2025-01-01",
+            settlement_date="2025-01-02",
+            price=100,
+            accrued_interest_paid=0,
+            commission=0,
+        )
+        make_market_date(bond, market_price=100, date="2025-04-01")
+
+        rows, past_cashflows, _, _, _ = get_data(portfolio.name, "2025-04-01")
+
+        # 90/360 of a 10% coupon is 2.50 gross accrued per unit; 10% tax leaves 2.25.
+        terminal_value = sum(
+            flow["amount"] for flow in past_cashflows if flow["type"] in {"market_price", "accrued_interest"}
+        )
+        self.assertEqual(terminal_value, Decimal("1022.50"))
+        self.assertEqual(rows[0]["market_value"], terminal_value)
+        self.assertEqual(rows[0]["gain_value"], Decimal("22.50"))
+
     def test_real_report_arithmetic_preserves_bank_price_convention(self):
         bond = make_bond(
             coupon_rate=10,

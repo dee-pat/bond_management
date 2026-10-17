@@ -25,6 +25,7 @@ from bond_management.bond_management.utils.performance import load_portfolio_per
 from bond_management.bond_management.utils.portfolio import get_ledger_position_from_transactions
 from bond_management.bond_management.utils.validation import optional_string, required_string
 from bond_management.bond_management.utils.xirr import (
+    apply_withholding_tax,
     bounded_xirr_guess,
     calculate_xirr,
     consolidate_cashflows,
@@ -307,7 +308,8 @@ def get_data(portfolio, valuation_date, context=None):
         )
 
         # ---------- MARKET DATA ----------
-        accrued_interest = unit_accrued_interest_from_bond(bond, valuation_date)
+        # The bank deducts withholding tax before paying interest (decision 0011).
+        accrued_interest = apply_withholding_tax(unit_accrued_interest_from_bond(bond, valuation_date), bond)
         quantity_factor = calculate_quantity_factor_from_bond(bond, valuation_date)
         effective_quantity = quantity * quantity_factor
         market_value = effective_quantity * (

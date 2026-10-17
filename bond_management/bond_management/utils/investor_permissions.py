@@ -15,6 +15,11 @@ from frappe import _
 INVESTOR_ROLE = "Bond Investor Read Only"
 BOND_MANAGER_ROLE = "Bond Management Manager"
 READ_PERMISSION_TYPES = {"read", "report", "print", "email", "select"}
+PORTFOLIO_DOCTYPES = {
+    "Bond Portfolio": "name",
+    "Bond Transaction": "portfolio_name",
+    "Bond Statement": "portfolio_name",
+}
 
 
 def has_investor_desk_access() -> bool:
@@ -137,9 +142,13 @@ def file_query_condition(user: str | None = None) -> str | None:
     portfolios = get_allowed_portfolios(user)
     if portfolios is None:
         return None
+    _reject_out_of_scope_file_shares(user)
 
     portfolio_values = ", ".join(frappe.db.escape(portfolio) for portfolio in portfolios)
+    scoped_doctypes = ", ".join(frappe.db.escape(doctype) for doctype in PORTFOLIO_DOCTYPES)
     file_owner = frappe.db.escape(user)
+    # Ownership and shares never widen access to portfolio-scoped attachments.
+    outside_portfolio_scope = f"COALESCE(`tabFile`.`attached_to_doctype`, '') NOT IN ({scoped_doctypes})"
     shared_file = (
         "EXISTS (SELECT 1 FROM `tabDocShare` "
         "WHERE `tabDocShare`.`share_doctype` = 'File' "
@@ -164,10 +173,60 @@ def file_query_condition(user: str | None = None) -> str | None:
 
     return (
         "(`tabFile`.`is_private` = 0 "
-        f"OR `tabFile`.`owner` = {file_owner} "
-        f"OR {shared_file} "
+        f"OR ({outside_portfolio_scope} AND (`tabFile`.`owner` = {file_owner} OR {shared_file})) "
         f"OR ({visible_portfolio}))"
     )
+
+
+def has_file_permission(doc, user: str | None = None, ptype: str | None = None, **_kwargs):
+    if not is_file_in_investor_scope(doc, user or frappe.session.user, ptype):
+        # Core File permission grants a direct share before this hook can
+        # matter, so a false result would not deny access.
+        frappe.throw(_("Not permitted"), frappe.PermissionError)
+    return True
+
+
+def is_file_in_investor_scope(file, user: str, ptype: str | None = "read") -> bool:
+    """Return False when an investor reaches beyond a read of an assigned portfolio's attachment."""
+    portfolios = get_allowed_portfolios(user)
+    if portfolios is None or not file.is_private:
+        return True
+    field = PORTFOLIO_DOCTYPES.get(file.attached_to_doctype)
+    if not field:
+        return True
+    # Shares cannot make investors writers: they are read-only, as for portfolio documents.
+    return ptype in READ_PERMISSION_TYPES and _attached_portfolio(file, field) in portfolios
+
+
+class InvestorFileMixin:
+    def is_downloadable(self):
+        # Private downloads call core File permission directly, not app hooks.
+        return super().is_downloadable() and is_file_in_investor_scope(self, frappe.session.user)
+
+
+def _reject_out_of_scope_file_shares(user):
+    """Fail closed: Frappe ORs shared names around the File query condition."""
+    shared_names = frappe.share.get_shared("File", user)
+    if not shared_names:
+        return
+    # This boundary inspects shared files before the caller's scope applies.
+    shared_files = frappe.qb.get_query(
+        "File",
+        fields=["name", "is_private", "attached_to_doctype", "attached_to_name"],
+        filters={"name": ["in", shared_names]},
+        ignore_permissions=True,
+    ).run(as_dict=True)
+    if not all(is_file_in_investor_scope(file, user) for file in shared_files):
+        frappe.throw(_("Not permitted"), frappe.PermissionError)
+
+
+def _attached_portfolio(file, field):
+    if not file.attached_to_name:
+        return None
+    if field == "name":
+        return file.attached_to_name
+    # This boundary must read the portfolio of a document the caller may not see.
+    return frappe.db.get_value(file.attached_to_doctype, file.attached_to_name, field)
 
 
 def exchange_rate_source_query_condition(user: str | None = None) -> str | None:

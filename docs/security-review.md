@@ -35,6 +35,27 @@ Performance, Bond Yield Comparison, and Interest Difference by Portfolio).
 - Exchange rates are shared, but the representative statement link is
   permission level 1 and returned only when the caller can read that statement
   ([PR #19](https://github.com/dee-pat/bond_management/pull/19)).
+- A private `File` attached to a portfolio-owned DocType follows that
+  portfolio's scope for investors. Ownership and shares never widen it: the
+  File `has_permission` hook, list condition and `InvestorFileMixin`
+  (private downloads call core File permission directly) all enforce it, and
+  `validate_file_share` rejects new out-of-scope shares. Assignment, role,
+  attached-document and File relink changes remove File shares that become
+  stale, because a stale share makes the investor's whole File list fail
+  closed. Investors stay read-only on these files: share validation rejects
+  an investor sharer and write or share grants to investors or everyone,
+  `has_file_permission` denies investors any non-read permission, and cleanup
+  drops legacy mutating grants. These checks also run from DocShare
+  `before_validate`, so a server caller's `ignore_validate` cannot skip them,
+  and the DocShare `on_trash` guard stops investors deleting these grants,
+  reading the File's current scope without waiting and failing closed.
+  Share validation locks the attached target,
+  users, then the File, the order document saves use before locking File rows
+  by URL; a File relinked or made private between reads locks its target
+  without waiting. Cleanup and File saves already hold users or the File, so
+  they take the other rows, including DocShare rows that an update locks
+  before its hooks run, without waiting and defer a busy row to a retry after
+  commit.
 
 ## Shares and User Permissions
 
@@ -44,6 +65,12 @@ Performance, Bond Yield Comparison, and Interest Difference by Portfolio).
 - DocShare and User Permission changes stay consistent under concurrency;
   changes here run the share-race helper described under _Temporary sites_ in
   `docs/verification.md`.
+- Frappe locks an updated DocShare row in `check_if_latest()` before
+  `before_validate` waits for the target and users. Financial share cleanup
+  already holds those rows, so it locks DocShare rows without waiting and,
+  when one is busy, retries its whole original scope after commit instead of
+  waiting. Retrying the scope, not shares picked by a plain read, also covers
+  shares committed after this request's snapshot.
 
 ## `ignore_permissions=True`
 

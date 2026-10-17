@@ -4,6 +4,7 @@ import frappe
 from frappe import _
 
 from bond_management.bond_management.utils.investor_permissions import (
+    PORTFOLIO_DOCTYPES,
     READ_PERMISSION_TYPES,
     get_allowed_portfolios,
     get_statement_portfolio,
@@ -12,11 +13,6 @@ from bond_management.bond_management.utils.investor_permissions import (
 )
 
 SOURCE_DOCTYPE = "Bond Exchange Rate Source"
-PORTFOLIO_DOCTYPES = {
-    "Bond Portfolio": "name",
-    "Bond Transaction": "portfolio_name",
-    "Bond Statement": "portfolio_name",
-}
 FINANCIAL_DOCTYPES = (
     *PORTFOLIO_DOCTYPES,
     "Bond Master",
@@ -25,6 +21,7 @@ FINANCIAL_DOCTYPES = (
     SOURCE_DOCTYPE,
 )
 MUTATING_SHARE_FIELDS = ("write", "submit", "share")
+_FILE_FIELDS = ["name", "is_private", "attached_to_doctype", "attached_to_name"]
 _DEFERRED_SHARE_TARGET = object()
 
 
@@ -58,15 +55,27 @@ def reject_investor_mutation(doc, method=None):
 
 
 def reject_investor_share_mutation(doc, method=None):
-    if doc.share_doctype not in FINANCIAL_DOCTYPES:
+    if doc.share_doctype != "File" and doc.share_doctype not in FINANCIAL_DOCTYPES:
         return
     user = frappe.session.user
     if user in {"Administrator", "Guest"}:
         return
     # delete_doc locks DocShare before on_trash, so this check must not wait on
     # User: cleanup and share saves acquire User before the DocShare row.
-    if is_investor_user(user):
-        _deny()
+    if not is_investor_user(user):
+        return
+    if doc.share_doctype == "File" and not _is_protected_file(doc.share_name):
+        return
+    _deny()
+
+
+def _is_protected_file(name):
+    # A plain read may predate a concurrent relink. File saves wait for this
+    # DocShare row, so read the File currently without waiting; fail closed.
+    try:
+        return bool(_scoped_attachment(_lock_file(name, wait=False)))
+    except frappe.QueryTimeoutError:
+        return True
 
 
 def validate_share(doc, method, share):
@@ -75,6 +84,145 @@ def validate_share(doc, method, share):
     target = _lock_share_target(doc.doctype, doc.name)
     _lock_users([frappe.session.user, share.user])
     _validate_locked_share(target, share)
+
+
+def validate_file_share(doc, method, share):
+    _validate_file_share(doc.name, share)
+
+
+def _validate_file_share(file_name, share):
+    # Match document saves: target, users, then File. A save locks its users
+    # before File rows matched by URL, which may be attached elsewhere.
+    seen = frappe.db.get_value("File", file_name, _FILE_FIELDS, as_dict=True)
+    target = _lock_attachment_target(seen)
+    _lock_users([frappe.session.user, share.user])
+    file = _lock_file(file_name)
+    if _scoped_attachment(file) != _scoped_attachment(seen):
+        # Relinked or made private after the first read. Waiting for the new
+        # target while holding users and File would invert the order.
+        target = _lock_attachment_target(file, wait=False)
+    if not _scoped_attachment(file):
+        return
+    if is_investor_user(frappe.session.user, for_update=True):
+        _deny()
+    if _restricted_recipient(share) and any(share.get(field) for field in MUTATING_SHARE_FIELDS):
+        _deny()
+    if _inaccessible_file_share(file, target, share):
+        _deny()
+
+
+def cleanup_file_shares(doc, method=None):
+    """Drop shares made stale when a shared File is made private or relinked."""
+    if not doc.get_doc_before_save():
+        return
+    if not any(
+        doc.has_value_changed(field) for field in ("is_private", "attached_to_doctype", "attached_to_name")
+    ):
+        return
+    try:
+        # This save holds the File; waiting for recipients would invert the order.
+        cleanup_incompatible_file_shares(file=doc.name, wait=False)
+    except frappe.QueryTimeoutError:
+        frappe.enqueue(cleanup_incompatible_file_shares, file=doc.name, enqueue_after_commit=True)
+
+
+def cleanup_incompatible_file_shares(user=None, doctype=None, name=None, file=None, *, wait=True):
+    """Remove File shares that portfolio scope no longer allows.
+
+    A stale share would make the recipient's File list fail closed. Like
+    cleanup_incompatible_shares, this administrative repair reads rows the
+    caller cannot see and leaves the transaction to the caller. A caller that
+    passes ``user`` already holds that user's lock.
+    """
+    filters = {"share_doctype": "File"}
+    if user:
+        filters["user"] = user
+    if doctype:
+        try:
+            attached_files = _lock_attachment_share_scope(doctype, name, user=user)
+        except frappe.QueryTimeoutError:
+            _defer_file_share_cleanup(user, doctype, name, file)
+            return
+        if not attached_files:
+            return
+        filters["share_name"] = ["in", attached_files]
+    if file:
+        filters["share_name"] = file
+
+    if not user and not doctype:
+        _lock_users(
+            frappe.qb.get_query("DocShare", fields=["user"], filters=filters, ignore_permissions=True).run(
+                pluck=True
+            ),
+            wait=wait,
+        )
+    try:
+        shares = _lock_shares(filters)
+    except frappe.QueryTimeoutError:
+        # Frappe locks an updated DocShare row before its hooks wait for the
+        # users this cleanup holds. Retry the whole scope after commit: a plain
+        # read here could miss shares committed after this snapshot.
+        _defer_file_share_cleanup(user, doctype, name, file)
+        return
+    if not shares:
+        return
+    locked = {name: _lock_unseen_file(name) for name in sorted({share.share_name for share in shares})}
+    for share in shares:
+        file, target = locked[share.share_name]
+        if file is _DEFERRED_SHARE_TARGET or not _scoped_attachment(file):
+            continue
+        if _inaccessible_file_share(file, target, share):
+            deleted = frappe.delete_doc(
+                "DocShare", share.name, ignore_permissions=True, flags={"ignore_share_permission": True}
+            )
+            if deleted is False:
+                # Core delete_doc checks existence with a snapshot read before
+                # locking. A newly committed share needs a fresh transaction.
+                _defer_file_share_cleanup(user, doctype, name, file.name)
+        elif _restricted_recipient(share) and any(share.get(field) for field in MUTATING_SHARE_FIELDS):
+            _drop_mutating_rights(share)
+
+
+def retry_file_share_cleanup(user=None, doctype=None, name=None, file=None):
+    """Background retry; unlike a hook caller, it does not yet hold ``user``."""
+    if user:
+        _lock_users([user])
+    cleanup_incompatible_file_shares(user=user, doctype=doctype, name=name, file=file)
+
+
+def _lock_attachment_share_scope(doctype, name, *, user):
+    # Administrative share repair must discover attachments committed after
+    # the mover's snapshot. File and DocShare precede User here, so never wait.
+    files = frappe.qb.get_query(
+        "File",
+        fields=["name"],
+        filters={"attached_to_doctype": doctype, "attached_to_name": name},
+        ignore_permissions=True,
+        for_update=True,
+        wait=False,
+    ).run(pluck=True)
+    if files and not user:
+        recipients = frappe.qb.get_query(
+            "DocShare",
+            fields=["user"],
+            filters={"share_doctype": "File", "share_name": ["in", files]},
+            ignore_permissions=True,
+            for_update=True,
+            wait=False,
+        ).run(pluck=True)
+        _lock_users(recipients, wait=False)
+    return files
+
+
+def _defer_file_share_cleanup(user, doctype, name, file):
+    frappe.enqueue(
+        retry_file_share_cleanup,
+        user=user,
+        doctype=doctype,
+        name=name,
+        file=file,
+        enqueue_after_commit=True,
+    )
 
 
 def cleanup_incompatible_shares(user=None, doctype=None, name=None, names=None):
@@ -103,9 +251,22 @@ def cleanup_incompatible_shares(user=None, doctype=None, name=None, names=None):
             "DocShare", fields=["user"], filters=filters, ignore_permissions=True
         ).run(pluck=True)
         _lock_users(recipients)
-    shares = frappe.qb.get_query(
-        "DocShare", fields=["*"], filters=filters, ignore_permissions=True, for_update=True
-    ).run(as_dict=True)
+    try:
+        shares = _lock_shares(filters)
+    except frappe.QueryTimeoutError:
+        # Frappe locks an updated DocShare row before its hooks wait for the
+        # target and users this cleanup holds. Retry the whole scope after
+        # commit: a plain read here could miss shares committed after this
+        # snapshot. The retry locks targets, then users, like this pass.
+        frappe.enqueue(
+            cleanup_incompatible_shares,
+            user=user,
+            doctype=doctype,
+            name=name,
+            names=names,
+            enqueue_after_commit=True,
+        )
+        return
     for share in shares:
         key = (share.share_doctype, share.share_name)
         if key in targets:
@@ -123,12 +284,10 @@ def cleanup_incompatible_shares(user=None, doctype=None, name=None, names=None):
                 "DocShare", share.name, ignore_permissions=True, flags={"ignore_share_permission": True}
             )
         elif _restricted_recipient(share) and any(share.get(field) for field in MUTATING_SHARE_FIELDS):
-            # Narrow administrative repair avoids target validation and retains
-            # the original owner and read grant; DocShare has no derived fields.
-            frappe.db.set_value(
-                "DocShare", share.name, dict.fromkeys(MUTATING_SHARE_FIELDS, 0), update_modified=False
-            )
-            frappe.clear_document_cache("DocShare", share.name)
+            _drop_mutating_rights(share)
+
+    if doctype is None or (doctype in PORTFOLIO_DOCTYPES and name):
+        cleanup_incompatible_file_shares(user=user, doctype=doctype, name=name)
 
 
 def lock_user_authorization(doc, method=None):
@@ -144,7 +303,10 @@ def lock_assignment_authorization(doc, method=None):
 
 
 def lock_share_authorization(doc, method=None):
-    if doc.share_doctype in FINANCIAL_DOCTYPES:
+    if doc.share_doctype == "File":
+        # before_validate still runs when a server caller sets ignore_validate.
+        _validate_file_share(doc.share_name, doc)
+    elif doc.share_doctype in FINANCIAL_DOCTYPES:
         # Sharing and portfolio reassignment acquire target, then recipients.
         target = _lock_share_target(doc.share_doctype, doc.share_name)
         previous = doc.get_doc_before_save()
@@ -368,6 +530,71 @@ def _validate_locked_share(target, share):
         _deny()
 
 
+def _lock_file(name, *, wait=True):
+    return frappe.db.get_value(
+        "File",
+        name,
+        _FILE_FIELDS,
+        as_dict=True,
+        for_update=True,
+        wait=wait,
+    )
+
+
+def _lock_shares(filters):
+    return frappe.qb.get_query(
+        "DocShare", fields=["*"], filters=filters, ignore_permissions=True, for_update=True, wait=False
+    ).run(as_dict=True)
+
+
+def _drop_mutating_rights(share):
+    # Narrow administrative repair avoids target validation and retains the
+    # original owner and read grant; DocShare has no derived fields.
+    frappe.db.set_value(
+        "DocShare", share.name, dict.fromkeys(MUTATING_SHARE_FIELDS, 0), update_modified=False
+    )
+    frappe.clear_document_cache("DocShare", share.name)
+
+
+def _lock_attachment_target(file, *, wait=True):
+    attachment = _scoped_attachment(file)
+    return _lock_share_target(*attachment, wait=wait) if attachment else None
+
+
+def _scoped_attachment(file):
+    if not file or not _is_portfolio_attachment(file):
+        return None
+    return file.attached_to_doctype, file.attached_to_name
+
+
+def _lock_unseen_file(name):
+    """Read a File and its target currently without waiting behind held User locks.
+
+    Cleanup holds recipients, which share validation locks before File. A
+    plain read could miss a File committed after this transaction's snapshot.
+    """
+    try:
+        file = _lock_file(name, wait=False)
+        return file, _lock_attachment_target(file, wait=False)
+    except frappe.QueryTimeoutError:
+        frappe.enqueue(cleanup_incompatible_file_shares, file=name, enqueue_after_commit=True)
+        return _DEFERRED_SHARE_TARGET, None
+
+
+def _is_portfolio_attachment(file):
+    return bool(file.is_private) and file.attached_to_doctype in PORTFOLIO_DOCTYPES
+
+
+def _inaccessible_file_share(file, target, share):
+    if not _is_portfolio_attachment(file):
+        return False
+    if share.everyone:
+        return True
+    portfolios = _recipient_portfolios(share.user)
+    portfolio = target.get(PORTFOLIO_DOCTYPES[file.attached_to_doctype]) if target else None
+    return portfolios is not None and portfolio not in portfolios
+
+
 def _inaccessible_share(doc, share):
     if doc.doctype not in PORTFOLIO_DOCTYPES and doc.doctype != SOURCE_DOCTYPE:
         return False
@@ -404,11 +631,11 @@ def _recipient_portfolios(user):
     ).run(pluck=True)
 
 
-def _lock_users(users):
+def _lock_users(users, *, wait=True):
     # The primary key is the common authorization lock for shares, roles, and
     # assignments. Sorted acquisition also covers assignment-recipient changes.
     for user in sorted({user for user in users if user}):
-        frappe.db.get_value("User", user, "name", for_update=True)
+        frappe.db.get_value("User", user, "name", for_update=True, wait=wait)
 
 
 def _deny():

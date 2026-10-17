@@ -212,7 +212,7 @@ bench --site bond-management-test.localhost run-tests --doctype "Bond Transactio
 - Before reviewing a PR, commit, or uncommitted diff, read the
   [review output contract](docs/code-review.md#review-output-contract). Include
   a merge-readiness score from **0/5 to 5/5**, revision and verification
-  evidence, 5-hour usage when measurable, and one ready-to-copy fix prompt,
+  evidence, and one ready-to-copy fix prompt,
   usable in Codex and Claude Code alike, populated with the actionable
   findings. For GitHub PR reviews, publish the summary on the PR when posting
   is authorized; a chat-only summary is insufficient. Follow the contract's

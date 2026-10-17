@@ -112,38 +112,6 @@ is identified; report the failure separately and use a lower score when a
 confirmed finding warrants one. Verification requirements come from
 [verification.md](verification.md).
 
-### 5-hour usage estimate
-
-When the review environment exposes an authenticated usage tool for the
-reviewing agent's own subscription (Codex or Claude), capture the 300-minute
-window's used percentage, limit/bucket identity, window duration,
-reset timestamp, and observation time immediately before reviewing and again
-after the review work. Use the matching 5-hour bucket from both snapshots and
-report `after used percentage - before used percentage` in **percentage points
-of the 5-hour allowance**. For example: `5-hour usage: 27% → 29% used;
-estimated account-wide increase: 2 percentage points; 71% remaining.`
-
-Label this an account-wide estimate: concurrent work on the same account,
-reporting delays, and rounded percentages prevent exact attribution to the
-review. A zero delta means no visible change, not proof of zero consumption.
-Include the observation
-times and reset timestamp so the measurement interval is clear. Never convert
-tokens, elapsed time, or a model's price into a subscription-usage percentage.
-
-If either snapshot is missing, the bucket/window/reset changes, the percentage
-decreases, or the review environment lacks usage access, report `5-hour review
-usage: unavailable` with the reason. If a current snapshot is available, report
-its used/remaining percentages and reset time separately as current account
-status; a current percentage alone is not review consumption. Repository guidance
-cannot grant GitHub's native reviewer access to account usage tools. An agent
-coordinating a native review may capture snapshots around that review and report
-the account-wide delta, explicitly including its own activity in the measurement.
-Report only the reviewing agent's subscription; a Claude Code review
-reports Codex usage only when it actually invokes Codex and captures matching
-Codex snapshots, and the reverse applies to Codex reviews. Usage availability
-does not change the merge-readiness score or block the review. Report usage
-percentages only; omit weekly usage and USD cost conversions.
-
 ### Findings
 
 Use the finding format of `frappe-pr-review`'s report, and prefix each heading
@@ -190,9 +158,8 @@ needed.` Report outstanding verification separately instead of inventing fixes.
 
 For a GitHub PR review, publish the summary as a PR conversation comment when
 the user has authorized posting. The comment must contain the score and rationale,
-reviewed head/base revisions, verification evidence, 5-hour usage or its
-unavailability reason, and the populated fix prompt when actionable findings
-exist. With no findings, explicitly state that no fix prompt is needed.
+reviewed head/base revisions, verification evidence, and the populated fix
+prompt when actionable findings exist. With no findings, explicitly state that no fix prompt is needed.
 Identify the summary's author/source; a coordinating agent's score is its own
 assessment, not a score supplied by the native reviewer. Link to the native
 review when one exists and state its reviewed revision and scope.
@@ -222,7 +189,7 @@ evidence. For local-only reviews, provide the summary in the review chat.
 Native GitHub review
 may restrict findings to high-priority issues; state that scope explicitly and
 use a follow-up review for a broader assessment. The native integration has
-been observed to omit custom scores and usage fields. Repository instructions
+been observed to omit custom scores. Repository instructions
 cannot configure its output schema or schedule companion posting: a supervising
 agent must perform the publication step. A standalone native review may therefore
 need an explicit follow-up request to publish the companion comment.

@@ -128,10 +128,12 @@ def calculate_interest_difference_days(row: dict, schedules: dict | None) -> Dec
     if convention == "30E/360" and not is_kenya:
         daily_fraction = Decimal(1) / Decimal(360)
     else:
+        # Measure the settlement day itself: on a coupon date the day before
+        # belongs to the previous period, whose ICMA length may differ.
         daily_fraction = year_fraction(
             convention,
-            settlement_date - timedelta(days=1),
             settlement_date,
+            settlement_date + timedelta(days=1),
             row.coupon_frequency,
             reference_end_date=period.coupon_date,
         )
