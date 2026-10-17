@@ -27,7 +27,28 @@
       "Bash(bench --site bond-management-test.localhost trim-database *)",
       "Bash(bench trim-database bond-management-test.localhost *)",
       "Bash(bench --site bond-management-test.localhost trim-tables *)",
-      "Bash(bench trim-tables bond-management-test.localhost *)"
+      "Bash(bench trim-tables bond-management-test.localhost *)",
+      "Bash(bench db-console *)",
+      "Bash(bench mariadb *)",
+      "Bash(bench postgres *)",
+      "Bash(bench show-config *)",
+      "Bash(bench --site bond-management-dev.localhost db-console *)",
+      "Bash(bench --site bond-management-dev.localhost mariadb *)",
+      "Bash(bench --site bond-management-dev.localhost postgres *)",
+      "Bash(bench --site bond-management-dev.localhost show-config *)",
+      "Bash(bench --site bond-management-dev.localhost uninstall-app *)",
+      "Bash(bench --site bond-management-dev.localhost remove-from-installed-apps *)",
+      "Bash(bench new-site bond-management-dev.localhost *)",
+      "Bash(bench --site bond-management-test.localhost db-console *)",
+      "Bash(bench --site bond-management-test.localhost mariadb *)",
+      "Bash(bench --site bond-management-test.localhost postgres *)",
+      "Bash(bench --site bond-management-test.localhost show-config *)",
+      "Bash(bench --site bond-management-test.localhost uninstall-app *)",
+      "Bash(bench --site bond-management-test.localhost remove-from-installed-apps *)",
+      "Bash(bench new-site bond-management-test.localhost *)",
+      "Bash(bench --site bond-management-dev.localhost set-config *)",
+      "Bash(bench --site bond-management-dev.localhost set-admin-password *)",
+      "Bash(bench --site bond-management-test.localhost set-config db_password *)"
     ]
   }
 }
