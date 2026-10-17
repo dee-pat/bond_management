@@ -164,7 +164,17 @@ configured bench. Before creating or dropping a site, `verify.sh` checks the
 name with the shared policy core (`bond_management/agent_policy.py`) and stops
 without calling bench, or echoing the name, unless it is one temporary site.
 
-For Claude Code, `.claude/settings.json` runs `scripts/claude_guard.py` before
+For Claude Code, `.claude/settings.json` also carries `Read` deny rules for
+`site_config.json` and `common_site_config.json` at any path and for
+`~/.config/bond_management/test-browser.env`, generated from
+`bond_management/agent_policy.py`;
+`scripts/test_agent_policy.py` fails when the file drifts. They stop Claude's
+file tools and the file commands Claude Code recognises in Bash (`cat`, `head`,
+`tail`, `sed`, redirects), not scripts or recursive reads that open the file
+themselves. The Bash sandbox that would close that gap is not enabled yet; see
+the [agent safety policy](specs/agent-safety-policy.md).
+
+The same file runs `scripts/claude_guard.py` before
 each Bash or Read call. The [bounded shell policy](specs/claude-guard-shell-policy.md)
 defines its supported grammar and its deliberately limited static guarantee;
 [the executable matrix](../scripts/claude_guard_cases.json) covers acceptance
