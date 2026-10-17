@@ -606,6 +606,56 @@ class TestInvestorShares(IntegrationTestCase):
 
         self.assertFalse(frappe.db.exists("DocShare", file_share.name))
 
+    def test_attachment_discovery_defers_busy_recipients_and_retries_scope(self):
+        transaction = make_transaction(make_bond(), self.assigned)
+        attachment = make_private_file("Bond Transaction", transaction.name)
+        share = add_docshare("File", attachment.name, self.investor.name)
+        lock_users = investor_shares._lock_users
+
+        def busy_recipient(users, *, wait=True):
+            if not wait:
+                raise frappe.QueryTimeoutError
+            return lock_users(users, wait=wait)
+
+        with (
+            patch.object(investor_shares, "_lock_users", side_effect=busy_recipient),
+            patch("frappe.enqueue") as enqueue,
+        ):
+            transaction.portfolio_name = self.other.name
+            transaction.save()
+
+        self.assertTrue(frappe.db.exists("DocShare", share.name))
+        enqueue.assert_called_once_with(
+            investor_shares.retry_file_share_cleanup,
+            user=None,
+            doctype=transaction.doctype,
+            name=transaction.name,
+            file=None,
+            enqueue_after_commit=True,
+        )
+        investor_shares.retry_file_share_cleanup(doctype=transaction.doctype, name=transaction.name)
+        self.assertFalse(frappe.db.exists("DocShare", share.name))
+
+    def test_attachment_discovery_defers_busy_file_scope(self):
+        transaction = make_transaction(make_bond(), self.assigned)
+        with (
+            patch.object(
+                investor_shares, "_lock_attachment_share_scope", side_effect=frappe.QueryTimeoutError
+            ),
+            patch("frappe.enqueue") as enqueue,
+        ):
+            transaction.portfolio_name = self.other.name
+            transaction.save()
+
+        enqueue.assert_called_once_with(
+            investor_shares.retry_file_share_cleanup,
+            user=None,
+            doctype=transaction.doctype,
+            name=transaction.name,
+            file=None,
+            enqueue_after_commit=True,
+        )
+
     def test_file_share_validation_locks_target_then_recipient_then_file(self):
         transaction_file = make_private_file(
             "Bond Transaction", make_transaction(make_bond(), self.assigned).name

@@ -104,6 +104,16 @@ linked Bond Statement. Investors can read only explicitly shared provenance
 rows, and list queries enforce that same scope. Migration and fresh-install
 bootstraps repair incompatible legacy source shares.
 
+Private File shares follow their attached document's portfolio. Portfolio moves
+discover attachments and recipients using current locking reads, including rows
+committed after the mover's snapshot. Discovery never waits while acquiring File,
+DocShare and recipient locks out of the normal order; contention schedules the
+whole attachment scope for cleanup after commit. This preserves the investor's
+File list, which fails closed when an incompatible share remains. If core's
+snapshot-based deletion check cannot see a discovered share, deletion is retried
+after commit through the normal DocShare API. Strict snapshot conflicts still
+abort the request and require a fresh transaction.
+
 ## Important behavior
 
 - `Bond Transaction` is the portfolio ledger.

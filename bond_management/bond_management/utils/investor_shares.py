@@ -138,19 +138,18 @@ def cleanup_incompatible_file_shares(user=None, doctype=None, name=None, file=No
     if user:
         filters["user"] = user
     if doctype:
-        attached_files = frappe.qb.get_query(
-            "File",
-            fields=["name"],
-            filters={"attached_to_doctype": doctype, "attached_to_name": name},
-            ignore_permissions=True,
-        ).run(pluck=True)
+        try:
+            attached_files = _lock_attachment_share_scope(doctype, name, user=user)
+        except frappe.QueryTimeoutError:
+            _defer_file_share_cleanup(user, doctype, name, file)
+            return
         if not attached_files:
             return
         filters["share_name"] = ["in", attached_files]
     if file:
         filters["share_name"] = file
 
-    if not user:
+    if not user and not doctype:
         _lock_users(
             frappe.qb.get_query("DocShare", fields=["user"], filters=filters, ignore_permissions=True).run(
                 pluck=True
@@ -163,14 +162,7 @@ def cleanup_incompatible_file_shares(user=None, doctype=None, name=None, file=No
         # Frappe locks an updated DocShare row before its hooks wait for the
         # users this cleanup holds. Retry the whole scope after commit: a plain
         # read here could miss shares committed after this snapshot.
-        frappe.enqueue(
-            retry_file_share_cleanup,
-            user=user,
-            doctype=doctype,
-            name=name,
-            file=file,
-            enqueue_after_commit=True,
-        )
+        _defer_file_share_cleanup(user, doctype, name, file)
         return
     if not shares:
         return
@@ -180,9 +172,13 @@ def cleanup_incompatible_file_shares(user=None, doctype=None, name=None, file=No
         if file is _DEFERRED_SHARE_TARGET or not _scoped_attachment(file):
             continue
         if _inaccessible_file_share(file, target, share):
-            frappe.delete_doc(
+            deleted = frappe.delete_doc(
                 "DocShare", share.name, ignore_permissions=True, flags={"ignore_share_permission": True}
             )
+            if deleted is False:
+                # Core delete_doc checks existence with a snapshot read before
+                # locking. A newly committed share needs a fresh transaction.
+                _defer_file_share_cleanup(user, doctype, name, file.name)
         elif _restricted_recipient(share) and any(share.get(field) for field in MUTATING_SHARE_FIELDS):
             _drop_mutating_rights(share)
 
@@ -192,6 +188,41 @@ def retry_file_share_cleanup(user=None, doctype=None, name=None, file=None):
     if user:
         _lock_users([user])
     cleanup_incompatible_file_shares(user=user, doctype=doctype, name=name, file=file)
+
+
+def _lock_attachment_share_scope(doctype, name, *, user):
+    # Administrative share repair must discover attachments committed after
+    # the mover's snapshot. File and DocShare precede User here, so never wait.
+    files = frappe.qb.get_query(
+        "File",
+        fields=["name"],
+        filters={"attached_to_doctype": doctype, "attached_to_name": name},
+        ignore_permissions=True,
+        for_update=True,
+        wait=False,
+    ).run(pluck=True)
+    if files and not user:
+        recipients = frappe.qb.get_query(
+            "DocShare",
+            fields=["user"],
+            filters={"share_doctype": "File", "share_name": ["in", files]},
+            ignore_permissions=True,
+            for_update=True,
+            wait=False,
+        ).run(pluck=True)
+        _lock_users(recipients, wait=False)
+    return files
+
+
+def _defer_file_share_cleanup(user, doctype, name, file):
+    frappe.enqueue(
+        retry_file_share_cleanup,
+        user=user,
+        doctype=doctype,
+        name=name,
+        file=file,
+        enqueue_after_commit=True,
+    )
 
 
 def cleanup_incompatible_shares(user=None, doctype=None, name=None, names=None):
