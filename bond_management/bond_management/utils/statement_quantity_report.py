@@ -108,6 +108,7 @@ def delete_quantity_reconciliation_reports(statement_name: str) -> None:
 
 
 def _get_report_files(statement_name: str) -> list:
+    # Generated report service behind the Bond Statement save/trash permission check.
     return frappe.qb.get_query(
         "File",
         fields=["name", "file_name", "file_url", "content_hash"],

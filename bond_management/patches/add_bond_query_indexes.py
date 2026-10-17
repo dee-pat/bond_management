@@ -61,6 +61,7 @@ def reapply_bond_query_indexes():
 
 
 def _validate_duplicates():
+    """Migration check: read every row, regardless of permissions, to find duplicates."""
     duplicate_dates = frappe.qb.get_query(
         "Bond Market Date",
         fields=["date", {"COUNT": "name", "as": "snapshot_count"}],
