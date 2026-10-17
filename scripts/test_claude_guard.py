@@ -32,6 +32,20 @@ class ClaudeGuardTests(unittest.TestCase):
         self.assert_blocked("bench --site=bond-management-dev.localhost trim-database")
         self.assert_blocked("bench new-site bond-management-test.localhost --force")
 
+    def test_disclosure_and_unsafe_site_changes_are_blocked(self):
+        for site in ("bond-management-dev.localhost", "bond-management-test.localhost"):
+            for command in (
+                "show-config",
+                "mariadb",
+                "db-console",
+                "uninstall-app bond_management",
+                "remove-from-installed-apps bond_management",
+                "set-config db_password synthetic-value",
+            ):
+                self.assert_blocked(f"bench --site {site} {command}")
+        self.assert_blocked("bench --site bond-management-dev.localhost set-admin-password")
+        self.assert_allowed("bench --site bond-management-test.localhost set-admin-password")
+
     def test_destructive_commands_without_a_site_are_blocked(self):
         self.assert_blocked("bench restore backup.sql.gz")
         self.assert_blocked("cd ../.. && bench trim-tables")

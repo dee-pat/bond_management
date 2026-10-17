@@ -295,6 +295,17 @@ assert, and three historical plan notes, for no behaviour change.
 
 ## Contract
 
+- Bench disclosure commands (`show-config`, `mariadb`, `db-console`, `postgres`)
+  are denied for every site, including temporary sites. They are independent of
+  the destructive-site classification. `uninstall-app` and
+  `remove-from-installed-apps` require one literal temporary site, like restore.
+- `set-config` accepts only a boolean (`true`, `false`, `1`, `0`) for
+  `allow_tests`, `bond_investor_spa_enabled`, or `bond_migration_lifecycle_test`,
+  on the persistent test site or one temporary site. Global, parse and unknown
+  options/keys are denied. `set-admin-password` is allowed only on those sites
+  to preserve documented test recovery. Other bench setup and verification
+  commands retain their existing policy. The hook handles argument-sensitive
+  exceptions; generated Codex rules forbid canonical unsafe prefixes.
 - Hook contract unchanged: JSON on stdin, exit 0 allows, exit 2 blocks,
   diagnostics never echo input. A Codex adapter must keep the same contract.
 - The core's checks are pure functions over literal strings; same input, same
@@ -318,8 +329,8 @@ assert, and three historical plan notes, for no behaviour change.
 - `scripts/test_agent_policy.py` (lint): core checks for persistent, temporary
   and foreign sites across every destructive verb; generated-file sync for
   `.claude/settings.json` and `.codex/` files.
-- Existing guard matrix unchanged and still green; it now imports constants
-  from the core.
+- The guard matrix includes disclosure, app removal and supported test setup
+  cases; it imports policy checks from the core.
 - `temporary_site_guard` tests keep passing with the shared constants.
 - Codex rules: `codex execpolicy check --rules ...` cases when `codex` is
   installed; the inline `match`/`not_match` examples are validated by Codex at

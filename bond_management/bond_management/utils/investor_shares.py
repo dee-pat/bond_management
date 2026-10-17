@@ -317,7 +317,7 @@ def lock_share_authorization(doc, method=None):
         _validate_locked_share(target, doc)
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def clear_user_permissions(user: str, for_doctype: str):
     from frappe.core.doctype.user_permission.user_permission import (
         clear_user_permissions as clear_permissions,
