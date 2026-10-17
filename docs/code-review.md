@@ -59,6 +59,39 @@ During a requested PR review or review-fix workflow, resolve review
 conversations whose findings are verified as fixed at the current head. The
 `pr-review-threads` skill owns the steps and the `gh` commands.
 
+## When a finding blocks merge
+
+Use this rule to decide whether a review finding reopens work. Priorities are
+the P0–P3 meanings in the [review output contract](#summary-and-score); the
+score rubric is unchanged.
+
+- A finding blocks merge only when it is P0, P1 or P2 **and** falls inside the
+  changed component's documented guarantee: the goal, guarantee or acceptance
+  criteria in its spec, or the repository rules in `AGENTS.md` when no spec
+  narrows them.
+- A finding outside a spec's stated guarantee is not a defect of the change.
+  Reply in one line citing the spec section that excludes it, then resolve the
+  conversation without code changes. It is not an actionable finding and does
+  not set the score. If it shows the guarantee itself is wrong, propose a spec
+  change as a follow-up; do not widen the guarantee inside the PR.
+- A P3 finding becomes a tracked follow-up unless the fix is trivial and
+  low-risk, in which case fix it in the PR. While it remains open it still sets
+  the score as the rubric says.
+- After the final planned review, a new reviewer finding reopens work only if it
+  meets the blocking bar above. Otherwise reply, resolve or record a follow-up,
+  and do not request another review round for it.
+
+Example: the Claude guard (`scripts/claude_guard.py`) is bounded by
+[Goal and guarantee](specs/claude-guard-shell-policy.md#goal-and-guarantee) in
+its shell-policy spec. A literal protected basename or destructive `bench` word
+that an accepted command spelling lets through is inside the guarantee and
+blocks merge. These are outside it and are closed by reference to that section:
+recursive or directory reads that reach a protected file without naming it
+(`tar -c .`, `grep -r`, `cp -R`), interpreter one-liners (`python -c`,
+`node -e`), symlinks or other filesystem aliases, and scripts or programs whose
+own behaviour reads a secret. Protecting secrets against those needs an
+execution or storage control, not another syntax rule.
+
 ## Review output contract
 
 Apply this contract to reviews of PRs, commits, and uncommitted changes by
