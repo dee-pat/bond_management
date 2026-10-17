@@ -220,6 +220,52 @@ class ClaudeGuardTests(unittest.TestCase):
         self.assertEqual(run_guard("Read", file_path="/repo/docs/verification.md"), 0)
         self.assertEqual(run_guard("Edit", file_path="/repo/sites/common_site_config.json"), 0)
 
+    def test_ansi_c_quotes_cannot_hide_protected_words(self):
+        commands = (
+            "$'bench' --site bond-management-dev.localhost reinstall --yes",
+            "bench --site bond-management-dev.localhost re$''install --yes",
+            "bench --site $'bond-management-dev.localhost' reinstall --yes",
+            "$'cat' $'sites/x/site_config.json'",
+            "cat site_$'config'.json",
+            "cat $'test-browser.env'",
+            "$'printenv'",
+            '$"bench" --site bond-management-dev.localhost reinstall --yes',
+            'cat $"test-browser.env"',
+            "echo \"$($'bench' --site bond-management-dev.localhost reinstall --yes)\"",
+            r"$'\x62ench' --site bond-management-dev.localhost reinstall --yes",
+            r"bench --site bond-management-dev.localhost $'\162einstall' --yes",
+            r"cat $'site_\u0063onfig.json'",
+            r"printf $'escaped\'quote'",
+        )
+        for command in commands:
+            with self.subTest(command=command):
+                self.assert_blocked(command)
+        temporary = "bond-management-lifecycle-0123456789abcdef0123456789abcdef.localhost"
+        self.assert_allowed(f"$'bench' --site $'{temporary}' re$''install --yes")
+        self.assert_allowed("git $'restore' x")
+        self.assert_allowed("echo $'plain literal'")
+        self.assert_allowed("echo $'$FRAPPE_PASSWORD'")
+        self.assert_allowed(r"echo 'literal \x62'")
+        self.assert_allowed("echo \"$'bench'\"")
+        self.assert_allowed("echo '$\"bench\"'")
+
+    def test_indirect_parameter_expansions_are_blocked(self):
+        commands = (
+            "X=FRAPPE_PASSWORD; printf '%s' \"${!X}\"",
+            'cat <<< "${!X}"',
+            'VALUE="${!X}" yarn test:e2e',
+            'cat > "${!X}"',
+            'echo "${!FRAPPE_@}"',
+        )
+        for command in commands:
+            with self.subTest(command=command):
+                self.assert_blocked(command)
+        self.assert_allowed("echo '${!X}'")
+        self.assert_allowed('echo "\\${!X}"')
+        self.assert_allowed("echo $'${!X}'")
+        self.assert_allowed('echo "$!"')
+        self.assert_allowed("FRAPPE_USER=x yarn test:e2e")
+
 
 if __name__ == "__main__":
     unittest.main()

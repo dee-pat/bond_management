@@ -63,10 +63,10 @@ credential exception, and continue allowing unrelated brace paths.
 Progress: regression cases reproduced the finding (10 initial failures).
 The pattern check and guard paragraph are updated; further regression cases
 also proved and closed nested-literal-brace, basename-changing-slash and
-brace/bracket-glob gaps. All 16 guard tests now pass. Pre-push passed before
-the last bracket-glob hardening; the final snapshot is being verified before
-commit/push.
-Reply to the new thread and resolve only after CI on the fixing commit is green.
+brace/bracket-glob gaps. All 16 guard tests and the final pre-push gate passed.
+Committed and pushed as `ad5d61c`; all six CI checks passed, and the new thread
+was replied to and resolved. The next review's ANSI-C quote and indirect
+expansion fixes are tracked in `claude-guard-quote-indirection-fixes.md`.
 
 Local verification evidence for this follow-up:
 
@@ -75,8 +75,8 @@ Local verification evidence for this follow-up:
   full server suite); CI on the fixing commit before resolving the thread.
 - Commands executed: `python3 scripts/test_claude_guard.py` from the app root;
   `apps/bond_management/scripts/verify.sh pre-push` from the bench root.
-- Exit statuses: initial regression proof 1; final guard suite 0; initial
-  pre-push gate 0. Final pre-push snapshot verification follows this note.
+- Exit statuses: initial regression proof 1; final guard suite 0; final
+  pre-push gate 0. CI and thread-resolution evidence is recorded on PR #61.
 - Tests passed: 16 guard tests, four Semgrep harness tests, two rule tests;
   all server test categories passed (including 345 integration tests and
   10 unspecified-category tests). Pre-commit and skills-lock checks passed;

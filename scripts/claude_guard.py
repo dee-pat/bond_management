@@ -23,7 +23,7 @@ COMMAND_PREFIXES = {"sudo", "command", "exec", "nohup", "time", "builtin"}
 ENV_WRAPPERS = COMMAND_PREFIXES | {"timeout", "nice", "xargs"}
 ASSIGNMENT = re.compile(r"[A-Za-z_]\w*=")
 SECRET_NAME = re.compile(r"\w*(PASSWORD|SECRET|TOKEN|API_KEY)\w*")
-SECRET_REFERENCE = re.compile(r"\$\{?\w*(PASSWORD|SECRET|TOKEN|API_KEY)")
+SECRET_REFERENCE = re.compile(r"\$(?:\{!|\{?\w*(PASSWORD|SECRET|TOKEN|API_KEY))")
 VARIABLE_LISTERS = {"export", "declare", "typeset", "readonly"}
 REDIRECTIONS = {"<", ">"}
 GLOB_ONLY = re.compile(r"[*?]+")
@@ -39,6 +39,7 @@ def segments(command):
 
     Quotes are honoured: single-quoted text is literal, while $( ) and
     backticks, bare or inside double quotes, become nested commands of their own.
+    Unsupported ANSI-C escapes and locale-dependent quotes raise ValueError.
     """
     found = []
     _scan(command.replace("\\\n", ""), 0, found, closer=None)
@@ -67,10 +68,16 @@ def _scan(text, index, found, closer):
         if char == "\\":
             word.append(text[index + 1 : index + 2].replace("$", LITERAL).replace("`", LITERAL) or "\\")
             index += 2
-        elif char == "'":
-            end = _find(text, "'", index + 1)
-            word.append(text[index + 1 : end].replace("$", LITERAL).replace("`", LITERAL))
+        elif char == "'" or text.startswith("$'", index):
+            start = index + (2 if char == "$" else 1)
+            end = _find(text, "'", start)
+            literal = text[start:end]
+            if char == "$" and "\\" in literal:
+                raise ValueError("Unsupported ANSI-C quote escape")
+            word.append(literal.replace("$", LITERAL).replace("`", LITERAL))
             index = end + 1
+        elif text.startswith('$"', index):
+            raise ValueError("Unsupported locale-dependent quoting")
         elif char == '"':
             index = _scan_double(text, index + 1, word, found)
         elif text.startswith("$(", index):
@@ -153,9 +160,13 @@ def split_redirections(words):
 
 
 def bash_violation(command):
-    for words in segments(command):
+    try:
+        commands = segments(command)
+    except ValueError:
+        return "This shell quoting cannot be checked safely; use literal words."
+    for words in commands:
         if any(SECRET_REFERENCE.search(word) for word in words):
-            return "Do not expand passwords or tokens."
+            return "Do not expand passwords or tokens, directly or indirectly."
         plain, targets = split_redirections(words)
         reason = segment_violation(plain, targets)
         if reason:

@@ -164,16 +164,18 @@ configured bench.
 
 For Claude Code, `.claude/settings.json` runs `scripts/claude_guard.py` before
 each Bash or Read call. It splits commands the way Bash does (quotes,
-separators, redirections, `$( )` and backticks) and fails closed: drop, trim,
-restore, reinstall and forced new-site commands need a literal
+separators, redirections, `$( )` and backticks). Plain ANSI-C quoted words are
+normalised; ANSI-C strings containing escapes and locale-dependent quoted
+strings are blocked rather than decoded or translated. It fails closed: drop,
+trim, restore, reinstall and forced new-site commands need a literal
 `bond-management-<name>-<32-hex-id>.localhost` temporary site. `bench` and
 `printenv` are recognised by basename in any position in a segment; `env` is
 also checked after wrapper commands and their options. Any command naming the
 credential file or a site configuration file (literally, by a wildcard, or by a
 brace pattern conservatively checked as wildcards) is blocked except `source`
-of the credential file. Environment dumps and any real expansion of a
-secret-named variable are blocked, whatever the program;
-single-quoted and escaped references remain literal. Heredoc bodies are checked
+of the credential file. Environment dumps, any real expansion of a secret-named
+variable, and all indirect parameter expansions are blocked, whatever the
+program; single-quoted and escaped references remain literal. Heredoc bodies are checked
 like commands, so put text that quotes these forms in a file. A path built from
 a variable or a bare `*` cannot be checked before the command runs: the hook
 rejects variable sites for destructive commands, but not variable paths. It
