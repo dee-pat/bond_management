@@ -12,6 +12,10 @@ concurrency:
   group: version-16-bond_management-${{ github.event.number }}
   cancel-in-progress: true
 
+env:
+  # Exact Frappe tag so a green run is reproducible; bump it deliberately.
+  FRAPPE_VERSION: v16.51.0
+
 jobs:
   tests:
     runs-on: ubuntu-latest
@@ -80,7 +84,7 @@ jobs:
           pip install frappe-bench
           BENCH_ROOT="$RUNNER_TEMP/frappe-bench"
           echo "BENCH_ROOT=$BENCH_ROOT" >> "$GITHUB_ENV"
-          bench init --frappe-branch version-16 --skip-redis-config-generation --skip-assets --python "$(which python)" "$BENCH_ROOT"
+          bench init --frappe-branch "$FRAPPE_VERSION" --skip-redis-config-generation --skip-assets --python "$(which python)" "$BENCH_ROOT"
           test -f "$BENCH_ROOT/sites/common_site_config.json"
 
       - name: Install
@@ -179,7 +183,7 @@ jobs:
           pip install frappe-bench
           BENCH_ROOT="$RUNNER_TEMP/frappe-bench"
           echo "BENCH_ROOT=$BENCH_ROOT" >> "$GITHUB_ENV"
-          bench init --frappe-branch version-16 --skip-redis-config-generation --skip-assets --python "$(which python)" "$BENCH_ROOT"
+          bench init --frappe-branch "$FRAPPE_VERSION" --skip-redis-config-generation --skip-assets --python "$(which python)" "$BENCH_ROOT"
           test -f "$BENCH_ROOT/sites/common_site_config.json"
 
       - name: Install App and Build Assets

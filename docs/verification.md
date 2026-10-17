@@ -73,6 +73,15 @@ differences in the final field.
   `playwright`. `ui` and `playwright` prepare the configured test site
   themselves (migrate, enable the investor SPA, seed fixtures) before running
   Playwright; no manual setup is needed.
+- The opt-in stages `lifecycle` and `share-race` each create a uniquely named
+  temporary site, run every phase of their helper, and drop the site whether
+  the run passed or failed. Set `DB_ROOT_PASSWORD` when the bench has no
+  `root_password`; `share-race` also needs the `BOND_SHARE_LOCK_*` observer
+  variables. The _Opt-in suites_ workflow runs both nightly, on
+  `workflow_dispatch`, and on PRs that change its harness; run them locally for changes to patches, install hooks,
+  or share and User Permission consistency.
+- CI pins Frappe to the exact tag in `FRAPPE_VERSION` (in `ci.yml` and
+  `opt-in.yml`). Bump both together, deliberately, after checking the release.
 - Changes to patches, schema, hooks, dependencies, installation, or manual
   indexes must also pass a fresh-install check matching the GitHub Actions
   setup. A successful CI clean install on the exact commit satisfies this
@@ -149,8 +158,15 @@ on a uniquely named `bond-management-race-<32-hex-id>.localhost` site with Bond
 Management installed and `allow_tests` enabled. Set `BOND_SHARE_RACE_BENCH` to
 the configured bench path and provide the observer credentials privately as the
 module docstring describes. Run its `seed` and then `run` phases, capture the
-results, and drop the site even when a phase fails. The helper rejects both
-persistent sites and sites outside the configured bench.
+results, and drop the site even when a phase fails; `verify.sh share-race` does
+all of this. The helper rejects both persistent sites and sites outside the
+configured bench.
+
+For Claude Code, `.claude/settings.json` runs `scripts/claude_guard.py` before
+each Bash or Read call. It blocks drop, trim, restore, reinstall and forced
+new-site commands against the persistent pair or an unnamed default site, and
+blocks printing the credential file, site configuration, password variables or
+the environment. It backs up these rules; it does not replace them.
 
 ### Credentials
 

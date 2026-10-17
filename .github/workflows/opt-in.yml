@@ -1,0 +1,108 @@
+name: Opt-in suites
+
+# The migration lifecycle and investor share-race helpers need their own
+# temporary sites, so they run nightly and on demand rather than in CI.
+on:
+  schedule:
+    - cron: "17 2 * * *"
+  workflow_dispatch:
+  # Also exercise the harness itself when a PR changes it.
+  pull_request:
+    paths:
+      - .github/workflows/opt-in.yml
+      - scripts/verify.sh
+      - bond_management/bond_management/tests/migration_lifecycle*.py
+      - bond_management/bond_management/tests/investor_share_concurrency.py
+      - bond_management/bond_management/tests/temporary_site_guard.py
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Keep in step with ci.yml.
+  FRAPPE_VERSION: v16.51.0
+  DB_ROOT_PASSWORD: root
+
+jobs:
+  opt-in:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    name: ${{ matrix.name }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Migration lifecycle
+            mode: lifecycle
+          - name: Investor share race
+            mode: share-race
+
+    services:
+      redis-cache:
+        image: redis:alpine
+        ports:
+          - 13000:6379
+      redis-queue:
+        image: redis:alpine
+        ports:
+          - 11000:6379
+      mariadb:
+        image: mariadb:11.8
+        env:
+          MYSQL_ROOT_PASSWORD: root
+        ports:
+          - 3306:3306
+        # The share-race lock observer connects through the server socket.
+        volumes:
+          - /tmp/mysqld:/run/mysqld
+        options: --health-cmd="mariadb-admin ping" --health-interval=5s --health-timeout=2s --health-retries=3
+
+    steps:
+      - name: Clone
+        uses: actions/checkout@v6
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          check-latest: true
+
+      - name: Install MariaDB Client
+        run: |
+          sudo apt update
+          sudo apt-get install mariadb-client
+
+      - name: Setup Bench
+        run: |
+          pip install frappe-bench
+          BENCH_ROOT="$RUNNER_TEMP/frappe-bench"
+          echo "BENCH_ROOT=$BENCH_ROOT" >> "$GITHUB_ENV"
+          bench init --frappe-branch "$FRAPPE_VERSION" --skip-redis-config-generation --skip-assets --python "$(which python)" "$BENCH_ROOT"
+          test -f "$BENCH_ROOT/sites/common_site_config.json"
+
+      - name: Install App
+        working-directory: ${{ env.BENCH_ROOT }}
+        run: |
+          bench get-app bond_management "file://$GITHUB_WORKSPACE"
+          bench setup requirements --dev
+        env:
+          CI: "Yes"
+
+      - name: Run ${{ matrix.name }}
+        working-directory: ${{ env.BENCH_ROOT }}
+        run: apps/bond_management/scripts/verify.sh "${{ matrix.mode }}"
+        env:
+          CI: "Yes"
+          BOND_SHARE_LOCK_SOCKET: /tmp/mysqld/mysqld.sock
+          BOND_SHARE_LOCK_USER: root
+          BOND_SHARE_LOCK_PASSWORD: root
