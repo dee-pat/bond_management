@@ -163,10 +163,14 @@ all of this. The helper rejects both persistent sites and sites outside the
 configured bench.
 
 For Claude Code, `.claude/settings.json` runs `scripts/claude_guard.py` before
-each Bash or Read call. It blocks drop, trim, restore, reinstall and forced
-new-site commands against the persistent pair or an unnamed default site, and
-blocks printing the credential file, site configuration, password variables or
-the environment. It backs up these rules; it does not replace them.
+each Bash or Read call. It splits commands the way Bash does (quotes,
+separators, `$( )` and backticks) and fails closed: drop, trim, restore,
+reinstall and forced new-site commands need a literal temporary site name, any
+command naming the credential file or a site configuration file is blocked
+except `source` of the credential file, and environment dumps and echoed
+password variables are blocked. Heredoc bodies are checked like commands, so
+put text that quotes these forms in a file. It backs up these rules; it does
+not replace them, since code that runs other code can always get past it.
 
 ### Credentials
 

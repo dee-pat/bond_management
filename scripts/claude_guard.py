@@ -2,61 +2,198 @@
 
 Reads the hook payload on stdin. Exit status 2 blocks the tool call and shows
 stderr to the agent; 0 allows it. The rules mirror docs/verification.md, which
-stays the source of truth; this hook only catches the clear-cut cases.
+stays the source of truth. The hook fails closed on the forms it recognises,
+but it is a backstop: code that runs other code (python -c, eval, scripts) can
+always get past it.
 """
 
 import json
 import re
 import sys
+from pathlib import PurePosixPath
 
-PERSISTENT_SITES = ("bond-management-dev.localhost", "bond-management-test.localhost")
-# Bash runs each of these pieces as its own command, so each is checked alone.
-SEGMENT_BREAK = re.compile(r"\|\||&&|[;&|\n()`]|\$\(|<\(")
-CONTINUATION = re.compile(r"\\\n")
-DESTRUCTIVE = re.compile(
-    r"\bbench\b.*\b(drop-site|trim-database|trim-tables|restore|partial-restore|reinstall)\b"
-)
-OVERWRITE = re.compile(r"\bbench\b.*\bnew-site\b.*--force\b")
-EXPLICIT_SITE = re.compile(r"--site[ =]\S+|\bdrop-site\s+\S+|\bnew-site\s+\S+")
+PERSISTENT_SITES = {"bond-management-dev.localhost", "bond-management-test.localhost", "all"}
+DESTRUCTIVE_VERBS = {"drop-site", "trim-database", "trim-tables", "restore", "partial-restore", "reinstall"}
+POSITIONAL_SITE_VERBS = {"drop-site", "new-site"}
+PROTECTED_FILES = {"site_config.json", "common_site_config.json", "test-browser.env"}
 CREDENTIAL_FILE = "test-browser.env"
-SOURCE_COMMAND = re.compile(r"(source|\.)\s")
-SITE_CONFIG = re.compile(r"\b(common_)?site_config\.json\b")
-PRINT_FILE = re.compile(r"\b(cat|head|tail|less|more|bat|strings|xxd|od|grep|rg|sed|awk|cut|cp)\b")
-SECRET_NAME = r"\w*(PASSWORD|SECRET|TOKEN|API_KEY)\w*"
-ECHO_SECRET = re.compile(r"\b(echo|printf)\b.*\$\{?" + SECRET_NAME)
-DUMP_ENV = re.compile(r"printenv|env|export -p|set|printenv\s+" + SECRET_NAME)
+COMMAND_PREFIXES = {"sudo", "command", "exec", "nohup", "time", "builtin"}
+ASSIGNMENT = re.compile(r"[A-Za-z_]\w*=")
+SECRET_REFERENCE = re.compile(r"\$\{?\w*(PASSWORD|SECRET|TOKEN|API_KEY)")
+# Stands in for a $ or backtick that Bash treats as literal (single quotes or
+# an escape), so only real expansions read as "$" below.
+LITERAL = "\x00"
+SEPARATORS = set(";&|\n()")
 
 
 def segments(command):
-    command = CONTINUATION.sub(" ", command)
-    return [part.strip(" \t\"'") for part in SEGMENT_BREAK.split(command)]
+    """Split a Bash command into simple commands, each a list of words.
+
+    Quotes are honoured: single-quoted text is literal, while $( ) and
+    backticks, bare or inside double quotes, become nested commands of their own.
+    """
+    found = []
+    _scan(command.replace("\\\n", ""), 0, found, closer=None)
+    return found
+
+
+def _scan(text, index, found, closer):
+    words, word = [], []
+
+    def end_word():
+        if word:
+            words.append("".join(word))
+            word.clear()
+
+    def end_segment():
+        end_word()
+        if words:
+            found.append(list(words))
+            words.clear()
+
+    while index < len(text):
+        char = text[index]
+        if closer and char == closer:
+            end_segment()
+            return index + 1
+        if char == "\\":
+            word.append(text[index + 1 : index + 2].replace("$", LITERAL).replace("`", LITERAL) or "\\")
+            index += 2
+        elif char == "'":
+            end = _find(text, "'", index + 1)
+            word.append(text[index + 1 : end].replace("$", LITERAL).replace("`", LITERAL))
+            index = end + 1
+        elif char == '"':
+            index = _scan_double(text, index + 1, word, found)
+        elif text.startswith("$(", index):
+            index = _scan(text, index + 2, found, closer=")")
+            word.append("$")
+        elif char == "`":
+            end = _find(text, "`", index + 1)
+            _scan(text[index + 1 : end], 0, found, closer=None)
+            word.append("$")
+            index = end + 1
+        elif char in " \t":
+            end_word()
+            index += 1
+        elif char in SEPARATORS:
+            end_segment()
+            index += 1
+        else:
+            word.append(char)
+            index += 1
+    end_segment()
+    return index
+
+
+def _scan_double(text, index, word, found):
+    while index < len(text) and text[index] != '"':
+        char = text[index]
+        if char == "\\" and text[index + 1 : index + 2] in ('"', "\\", "$", "`"):
+            word.append(text[index + 1].replace("$", LITERAL).replace("`", LITERAL))
+            index += 2
+        elif text.startswith("$(", index):
+            index = _scan(text, index + 2, found, closer=")")
+            word.append("$")
+        elif char == "`":
+            end = _find(text, "`", index + 1)
+            _scan(text[index + 1 : end], 0, found, closer=None)
+            word.append("$")
+            index = end + 1
+        else:
+            word.append(char)
+            index += 1
+    return index + 1
+
+
+def _find(text, char, start):
+    end = text.find(char, start)
+    return len(text) if end < 0 else end
+
+
+def command_words(words):
+    """Drop leading assignments and transparent prefixes such as sudo."""
+    while words and (ASSIGNMENT.match(words[0]) or words[0] in COMMAND_PREFIXES):
+        words = words[1:]
+    return words
+
+
+def name(word):
+    return PurePosixPath(word).name
 
 
 def bash_violation(command):
-    for segment in segments(command):
-        reason = segment_violation(segment)
+    for words in segments(command):
+        reason = segment_violation(command_words(words))
         if reason:
             return reason
     return None
 
 
-def segment_violation(segment):
-    if DESTRUCTIVE.search(segment) or OVERWRITE.search(segment):
-        if any(site in segment for site in PERSISTENT_SITES):
-            return "Never drop, trim, restore, reinstall or overwrite the persistent Bond Management sites."
-        if not EXPLICIT_SITE.search(segment):
-            return "Name the temporary site explicitly; the default site may be a persistent one."
-    if CREDENTIAL_FILE in segment and PRINT_FILE.search(segment) and not SOURCE_COMMAND.match(segment):
-        return f"Load {CREDENTIAL_FILE} with `source`; never print its contents."
-    if SITE_CONFIG.search(segment) and PRINT_FILE.search(segment):
-        return "Site configuration holds database and encryption secrets; read only the keys you need."
-    if ECHO_SECRET.search(segment) or DUMP_ENV.fullmatch(segment):
-        return "Do not print passwords, tokens or the environment."
+def segment_violation(words):
+    if not words:
+        return None
+    return destructive_violation(words) or protected_file_violation(words) or environment_violation(words)
+
+
+def destructive_violation(words):
+    if name(words[0]) != "bench":
+        return None
+    verb = next((word for word in words[1:] if word in DESTRUCTIVE_VERBS | {"new-site"}), None)
+    if verb is None or (verb == "new-site" and "--force" not in words):
+        return None
+    site = site_argument(words, verb)
+    if site in PERSISTENT_SITES:
+        return "Never drop, trim, restore, reinstall or overwrite the persistent Bond Management sites."
+    if not site or "$" in site:
+        return "Name the temporary site literally; the default site or a variable may be a persistent one."
+    return None
+
+
+def site_argument(words, verb):
+    for index, word in enumerate(words):
+        if word.startswith("--site="):
+            return word.removeprefix("--site=")
+        if word == "--site" and index + 1 < len(words):
+            return words[index + 1]
+    if verb in POSITIONAL_SITE_VERBS:
+        after = words[words.index(verb) + 1 :]
+        return next((word for word in after if not word.startswith("-")), None)
+    return None
+
+
+def protected_file_violation(words):
+    names = {name(word) for word in words}
+    if not names & PROTECTED_FILES:
+        return None
+    if words[0] in ("source", ".") and names & PROTECTED_FILES == {CREDENTIAL_FILE}:
+        return None
+    return "This file holds credentials or site secrets; load test-browser.env with `source` and read nothing else."
+
+
+def environment_violation(words):
+    program, arguments = name(words[0]), words[1:]
+    if program == "env":
+        index = 0
+        while index < len(arguments) and (
+            arguments[index].startswith("-") or ASSIGNMENT.match(arguments[index])
+        ):
+            index += 2 if arguments[index] in ("-u", "--unset", "-C", "--chdir", "-S") else 1
+        if index >= len(arguments):
+            return "Do not print the environment."
+        return segment_violation(command_words(arguments[index:]))
+    if program == "printenv":
+        return "Do not print the environment."
+    if program in ("export", "declare", "typeset", "set") and all(arg.startswith("-") for arg in arguments):
+        if program != "set" or not arguments:
+            return "Do not print the environment."
+    if program in ("echo", "printf") and any(SECRET_REFERENCE.search(arg) for arg in arguments):
+        return "Do not print passwords or tokens."
     return None
 
 
 def read_violation(file_path):
-    if file_path.endswith(CREDENTIAL_FILE) or SITE_CONFIG.search(file_path):
+    if name(file_path) in PROTECTED_FILES:
         return "This file holds credentials or site secrets; do not read it into the conversation."
     return None
 

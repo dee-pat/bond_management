@@ -40,6 +40,13 @@ class ClaudeGuardTests(unittest.TestCase):
         self.assert_blocked(f"bench --site {temporary} migrate; bench restore backup.sql.gz")
         self.assert_allowed(f"bench --site {temporary} migrate && bench --site {temporary} reinstall --yes")
 
+    def test_destructive_sites_must_be_literal(self):
+        temporary = "bond-management-lifecycle-0123456789abcdef0123456789abcdef.localhost"
+        self.assert_blocked('SITE=bond-management-dev.localhost; bench --site "$SITE" reinstall --yes')
+        self.assert_blocked("bench --site $(cat site.txt) restore backup.sql.gz")
+        self.assert_blocked("bench --site all reinstall --yes")
+        self.assert_allowed(f'bench --site "{temporary}" reinstall --yes')
+
     def test_line_continuations_are_joined(self):
         self.assert_blocked("bench --site bond-management-dev.localhost \\\n reinstall --yes")
         self.assert_blocked("bench \\\n restore backup.sql.gz")
@@ -61,11 +68,15 @@ class ClaudeGuardTests(unittest.TestCase):
         self.assert_allowed("gh pr create --body 'Blocks printing test-browser.env.'")
         self.assert_allowed("rg -n TODO README.md && gh pr create --body 'Do not print test-browser.env.'")
         self.assert_blocked(f"source {path} && cat {path}")
+        self.assert_blocked(f"nl {path}")
+        self.assert_blocked(f"cp {path} /tmp/copy")
         self.assertEqual(run_guard("Read", file_path="/Users/x/.config/bond_management/test-browser.env"), 2)
 
     def test_site_config_contents_are_not_printed(self):
         self.assert_blocked("cat sites/bond-management-dev.localhost/site_config.json")
         self.assert_blocked("head sites/common_site_config.json")
+        self.assert_blocked("jq . sites/bond-management-dev.localhost/site_config.json")
+        self.assert_blocked('python3 -c "print(1)" < sites/common_site_config.json')
         self.assertEqual(run_guard("Read", file_path="/bench/sites/common_site_config.json"), 2)
         self.assert_allowed("bench --site bond-management-test.localhost set-config allow_tests true")
 
@@ -79,8 +90,23 @@ class ClaudeGuardTests(unittest.TestCase):
         self.assert_blocked("x=$(env); echo ok")
         self.assert_blocked("echo `env`")
         self.assert_blocked('echo "$(echo $FRAPPE_PASSWORD)"')
+        self.assert_blocked("env -0")
+        self.assert_blocked("/usr/bin/env")
+        self.assert_blocked("env -i FOO=1")
+        self.assert_blocked("env CI=Yes printenv")
+        self.assert_blocked("export -p")
+        self.assert_blocked("declare -x")
+        self.assert_blocked("set")
         self.assert_allowed("set -euo pipefail; echo done")
         self.assert_allowed("env CI=Yes yarn lint")
+        self.assert_allowed("export CI=Yes")
+
+    def test_single_quoted_text_is_literal(self):
+        self.assert_allowed("gh pr create --body 'avoid $(printenv)'")
+        self.assert_allowed("printf '%s\\n' '$(env)'")
+        self.assert_allowed("echo '$FRAPPE_PASSWORD'")
+        self.assert_allowed("echo \\$FRAPPE_PASSWORD")
+        self.assert_blocked('gh pr create --body "avoid $(printenv)"')
 
     def test_other_tools_are_allowed(self):
         self.assertEqual(run_guard("Read", file_path="/repo/docs/verification.md"), 0)
