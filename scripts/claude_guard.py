@@ -6,7 +6,7 @@ import sys
 from fnmatch import fnmatchcase
 from pathlib import PurePosixPath
 
-from claude_guard_shell import Command, UnsupportedShell, commands
+from claude_guard_shell import Command, UnsupportedShell, bounded_text, commands
 
 PERSISTENT_SITES = {"bond-management-dev.localhost", "bond-management-test.localhost"}
 TEMPORARY_SITE = re.compile(r"bond-management-[a-z0-9-]+-[0-9a-f]{32}\.localhost")
@@ -70,7 +70,7 @@ def violation(payload):
     if not isinstance(value, str):
         return "Invalid tool input."
     if tool == "Read":
-        if not value or any(ord(char) < 32 for char in value):
+        if not value or not bounded_text(value):
             return "Invalid file path."
         return protected_file_reason() if name(value) in PROTECTED_FILES else None
     try:

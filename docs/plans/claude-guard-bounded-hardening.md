@@ -51,3 +51,21 @@ Verification evidence (in progress):
 - Blockers: none.
 - Differences: local macOS versus Linux CI; CI also exercises clean install,
   UI and opt-in suites. Domain model reviewed; no mapped changes.
+
+## Final design review follow-up
+
+The single final design review completed on `9eaa97a`, with no P1/P2 findings
+and one P3: Read paths did not share the declared input-length/DEL boundary.
+All six CI jobs on that commit passed, and the prior four threads were
+replied to and resolved. Keep the grammar frozen. Add failing Read boundary
+tests, share the text-boundary validator across Bash/Read, run pre-push and
+CI, then reply to and resolve this final finding. No further design-review
+request is needed; final results remain recorded on PR #61.
+
+Regression proof: the new Read-boundary test failed on DEL and a 65,537-character
+path before the fix (both wrongly returned 0). Bash and Read now share one text
+validator, with tab/newline permitted only for Bash. The Read matrix checks
+empty/C0/DEL/over-limit inputs, non-echoing diagnostics and the accepted exact
+65,536-character boundary. Before the follow-up commit, `verify.sh pre-push`
+exited 0 locally (24 guard methods and the full server suite passed). The final
+exact-commit CI and the thread resolution are reported in the PR thread.

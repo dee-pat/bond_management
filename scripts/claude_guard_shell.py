@@ -29,6 +29,12 @@ class Command:
     targets: tuple[Token, ...]
 
 
+def bounded_text(text, allowed_controls=""):
+    return len(text) <= MAX_INPUT and all(
+        ord(char) != 127 and (ord(char) >= 32 or char in allowed_controls) for char in text
+    )
+
+
 def commands(text):
     found, current, pending = [], [], False
     for token in Scanner(text).scan():
@@ -72,7 +78,7 @@ def _command(tokens):
 
 class Scanner:
     def __init__(self, text):
-        if len(text) > MAX_INPUT or any((ord(c) < 32 and c not in "\t\n") or ord(c) == 127 for c in text):
+        if not bounded_text(text, allowed_controls="\t\n"):
             raise UnsupportedShell("Input limit or control character")
         self.text = text
         self.index = 0

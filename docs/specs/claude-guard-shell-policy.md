@@ -64,8 +64,10 @@ subset. Previously blocked unsafe regressions must remain blocked.
 Keep a standard-library scanner with explicit word/operator tokens and quote,
 glob and variable provenance. Separate syntax validation from semantic policy;
 do not guess wrapper option arity or emulate additional expansion families.
-Validate complete input before allowing any segment. Bound input length/token
-count and reject control/NUL characters, invalid JSON and wrong runtime types.
+Validate complete input before allowing any segment. A shared validator bounds
+both the Bash command string and Read path to 65,536 characters and rejects
+ASCII C0/DEL controls; Bash alone permits tab/newline as grammar or literal text.
+Bash is also limited to 4,096 tokens. Reject invalid JSON and wrong runtime types.
 The public hook payload and valid-input exit contract remain unchanged: 0
 allows, 2 blocks; diagnostics never echo input or secret values.
 

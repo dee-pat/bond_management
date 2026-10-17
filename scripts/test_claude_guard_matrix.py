@@ -105,6 +105,19 @@ class ClaudeGuardMatrixTests(unittest.TestCase):
         source = commands('source "${HOME}/.config/bond_management/test-browser.env"')[0]
         self.assertEqual(source.words[1].references, ("HOME",))
 
+    def test_read_input_boundaries_and_private_diagnostics(self):
+        canary = "synthetic-private-canary"
+        for path in ("", canary + "\x7f", canary + "\x00", canary + "\t", canary + "\n", "x" * 65537):
+            with self.subTest(path_length=len(path)):
+                result = invoke(json.dumps({"tool_name": "Read", "tool_input": {"file_path": path}}))
+                self.assertEqual(result.returncode, 2)
+                self.assertEqual(result.stdout, "")
+                self.assertNotIn(canary, result.stderr)
+                self.assertNotIn("Traceback", result.stderr)
+        at_limit = invoke(json.dumps({"tool_name": "Read", "tool_input": {"file_path": "x" * 65536}}))
+        self.assertEqual(at_limit.returncode, 0)
+        self.assertEqual(at_limit.stdout + at_limit.stderr, "")
+
 
 if __name__ == "__main__":
     unittest.main()
