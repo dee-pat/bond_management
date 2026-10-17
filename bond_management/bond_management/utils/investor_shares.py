@@ -41,6 +41,8 @@ def reject_investor_mutation(doc, method=None):
     if not doc.is_new():
         _lock_share_target(doc.doctype, doc.name)
         if doc.doctype in PORTFOLIO_DOCTYPES or doc.doctype == SOURCE_DOCTYPE:
+            # Share-maintenance boundary: lock every recipient, including shares
+            # the caller cannot read.
             recipients = frappe.qb.get_query(
                 "DocShare",
                 fields=["user"],
@@ -356,6 +358,7 @@ def cleanup_document_shares(doc, method=None):
 
     previous = doc.get_doc_before_save()
     if previous and previous.portfolio_name != doc.portfolio_name:
+        # Share-maintenance boundary: find provenance rows the editor may not read.
         source_names = frappe.qb.get_query(
             SOURCE_DOCTYPE,
             fields=["name"],
@@ -458,6 +461,8 @@ def _lock_unseen_share_target(doctype, name):
 
 
 def _lock_share_targets(filters):
+    # Share-maintenance boundary: lock every target and linked statement,
+    # whatever the caller can read.
     references = frappe.qb.get_query(
         "DocShare",
         fields=["share_doctype", "share_name"],
@@ -542,6 +547,7 @@ def _lock_file(name, *, wait=True):
 
 
 def _lock_shares(filters):
+    # Share-maintenance boundary: lock every matching DocShare row.
     return frappe.qb.get_query(
         "DocShare", fields=["*"], filters=filters, ignore_permissions=True, for_update=True, wait=False
     ).run(as_dict=True)
@@ -620,6 +626,7 @@ def _restricted_recipient(share):
 def _recipient_portfolios(user):
     if not is_investor_user(user, for_update=True):
         return None
+    # Permission-boundary internal: investors cannot read User Permission rows.
     # Locking reads see committed changes after waiting for the recipient lock,
     # even when the request established an older repeatable-read snapshot.
     return frappe.qb.get_query(

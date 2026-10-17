@@ -85,6 +85,7 @@ def _collect_desired_rates(exchange_rates):
 
 
 def _get_statement_sources(statement_name):
+    # Derived statement write behind BondStatement's permission check.
     return frappe.qb.get_query(
         SOURCE_DOCTYPE,
         filters={"statement": statement_name},
@@ -107,6 +108,8 @@ def _get_or_create_exchange_rate(statement, parsed_rate):
         "from_currency": parsed_rate.from_currency,
         "to_currency": parsed_rate.to_currency,
     }
+    # Derived statement write behind BondStatement's permission check;
+    # canonical rates are global, so the caller's read scope does not apply.
     existing_name = frappe.qb.get_query(
         "Bond Exchange Rate",
         fields=["name"],
@@ -147,6 +150,8 @@ def _get_or_create_exchange_rate(statement, parsed_rate):
 
 
 def _validate_source_rate(exchange_rate, statement_name, desired_rate):
+    # System-wide invariant: compare every statement's source for this rate,
+    # including statements the caller cannot read.
     sources = frappe.qb.get_query(
         SOURCE_DOCTYPE,
         filters={"exchange_rate": exchange_rate.name},
@@ -183,6 +188,7 @@ def _upsert_statement_source(exchange_rate, statement, parsed_rate):
         "rate": rate,
         "reverse_rate": _reverse_rate(rate),
     }
+    # Derived statement write behind BondStatement's permission check.
     if source_name:
         source = frappe.get_doc(SOURCE_DOCTYPE, source_name)
         for fieldname, value in values.items():
@@ -195,6 +201,8 @@ def _upsert_statement_source(exchange_rate, statement, parsed_rate):
 
 def _recompute_canonical_rate(exchange_rate_name):
     exchange_rate = frappe.get_doc("Bond Exchange Rate", exchange_rate_name)
+    # Derived statement write behind BondStatement's permission check; the
+    # canonical row follows every source, visible to the caller or not.
     sources = frappe.qb.get_query(
         SOURCE_DOCTYPE,
         filters={"exchange_rate": exchange_rate_name},
@@ -224,6 +232,7 @@ def _recompute_canonical_rate(exchange_rate_name):
 
 
 def _delete_source(source_name):
+    # Derived statement write behind BondStatement's permission check.
     frappe.delete_doc(SOURCE_DOCTYPE, source_name, ignore_permissions=True)
 
 

@@ -61,6 +61,8 @@ class BondExchangeRate(Document):
         if not self.is_new():
             filters["name"] = ["!=", self.name]
 
+        # Uniqueness is a system-wide integrity rule: a rate the user cannot
+        # read must still block a duplicate.
         existing = frappe.qb.get_query(
             "Bond Exchange Rate",
             fields=["name"],

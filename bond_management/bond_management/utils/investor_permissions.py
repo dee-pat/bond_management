@@ -114,6 +114,8 @@ def _reject_incompatible_shared_documents(doctype, fieldname, user, portfolios):
     if not shared_names:
         return
 
+    # Fail-closed boundary check: inspect every shared row, including rows
+    # outside the caller's portfolio scope.
     shared_documents = frappe.qb.get_query(
         doctype,
         fields=["name", fieldname],

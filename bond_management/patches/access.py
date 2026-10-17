@@ -13,6 +13,7 @@ MANAGER_ROLE = "Bond Management Manager"
 
 def ensure_role(role: str) -> None:
     if not frappe.db.exists("Role", role):
+        # Install/migrate bootstrap: runs at the migration boundary, not a request.
         frappe.get_doc({"doctype": "Role", "role_name": role, "desk_access": 1, "is_custom": 1}).insert(
             ignore_permissions=True
         )
@@ -29,6 +30,7 @@ def upsert_docperm(doctype: str, role: str, values: dict, *, permlevel: int = 0)
         frappe.db.set_value("DocPerm", permission_name, values, update_modified=False)
         return
 
+    # Install/migrate bootstrap: runs at the migration boundary, not a request.
     frappe.get_doc(
         {
             "doctype": "DocPerm",
@@ -45,4 +47,5 @@ def ensure_report_role(report_name: str, role: str) -> None:
     report = frappe.get_doc("Report", report_name)
     if role not in {row.role for row in report.roles}:
         report.append("roles", {"role": role})
+        # Install/migrate bootstrap: runs at the migration boundary, not a request.
         report.save(ignore_permissions=True)
