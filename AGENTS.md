@@ -230,6 +230,5 @@ bench --site bond-management-test.localhost run-tests --doctype "Bond Transactio
   contract in [code-review.md](docs/code-review.md) wins on conflict.
 - Process and GitHub thread handling: [code-review.md](docs/code-review.md).
 - Only P0–P2 findings inside the changed component's documented guarantee
-  block merge; close the rest by reference as
-  [When a finding blocks merge](docs/code-review.md#when-a-finding-blocks-merge)
-  describes.
+  block merge, and only the user can waive a P2; P3s never block. See
+  [When a finding blocks merge](docs/code-review.md#when-a-finding-blocks-merge).

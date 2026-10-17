@@ -74,9 +74,13 @@ score rubric is unchanged.
   conversation without code changes. It is not an actionable finding and does
   not set the score. If it shows the guarantee itself is wrong, propose a spec
   change as a follow-up; do not widen the guarantee inside the PR.
-- A P3 finding becomes a tracked follow-up unless the fix is trivial and
-  low-risk, in which case fix it in the PR. While it remains open it still sets
-  the score as the rubric says.
+- A P3 finding never blocks merge and needs no follow-up. Fix it in the PR only
+  when the fix is trivial and low-risk or the user asks; otherwise reply and
+  resolve. While it remains open it still sets the score as the rubric says.
+- The user may waive a P2 finding. Only the user's explicit authorization, given
+  for that finding, counts; an agent or reviewer never waives one. Reply in the
+  thread with the waiver and the reason, then resolve it. The waived finding
+  still sets the score. P0 and P1 findings cannot be waived.
 - After the final planned review, a new reviewer finding reopens work only if it
   meets the blocking bar above. Otherwise reply, resolve or record a follow-up,
   and do not request another review round for it.
