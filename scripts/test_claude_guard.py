@@ -157,11 +157,12 @@ class ClaudeGuardTests(unittest.TestCase):
         for command in commands:
             with self.subTest(command=command):
                 self.assert_blocked(command)
-        self.assert_allowed("cat {notes,readme}.md")
-        self.assert_allowed("ls {src,tests}/*.py")
-        self.assert_allowed('echo "${FRAPPE_USER}"')
-        self.assert_allowed('cat "${PUBLIC_PATH}"')
-        self.assert_allowed('echo "${PUBLIC_PATH:-notes,readme}"')
+        # The bounded policy rejects these expansion families even for public data.
+        self.assert_blocked("cat {notes,readme}.md")
+        self.assert_blocked("ls {src,tests}/*.py")
+        self.assert_blocked('echo "${FRAPPE_USER}"')
+        self.assert_blocked('cat "${PUBLIC_PATH}"')
+        self.assert_blocked('echo "${PUBLIC_PATH:-notes,readme}"')
 
     def test_single_quoted_text_is_literal(self):
         self.assert_allowed("gh pr create --body 'avoid $(printenv)'")
@@ -212,8 +213,8 @@ class ClaudeGuardTests(unittest.TestCase):
             with self.subTest(command=command):
                 self.assert_blocked(command)
         self.assert_allowed("echo '$FRAPPE_PASSWORD'")
-        self.assert_allowed("cat <<< '$FRAPPE_PASSWORD'")
-        self.assert_allowed('cat <<< "\\$FRAPPE_PASSWORD"')
+        self.assert_blocked("cat <<< '$FRAPPE_PASSWORD'")
+        self.assert_blocked('cat <<< "\\$FRAPPE_PASSWORD"')
         self.assert_allowed("FRAPPE_USER=x yarn test:e2e")
 
     def test_other_tools_are_allowed(self):
@@ -263,8 +264,15 @@ class ClaudeGuardTests(unittest.TestCase):
         self.assert_allowed("echo '${!X}'")
         self.assert_allowed('echo "\\${!X}"')
         self.assert_allowed("echo $'${!X}'")
-        self.assert_allowed('echo "$!"')
+        self.assert_blocked('echo "$!"')
         self.assert_allowed("FRAPPE_USER=x yarn test:e2e")
+
+
+def load_tests(loader, tests, _pattern):
+    from test_claude_guard_matrix import ClaudeGuardMatrixTests
+
+    tests.addTests(loader.loadTestsFromTestCase(ClaudeGuardMatrixTests))
+    return tests
 
 
 if __name__ == "__main__":

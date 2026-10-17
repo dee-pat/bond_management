@@ -163,24 +163,30 @@ all of this. The helper rejects both persistent sites and sites outside the
 configured bench.
 
 For Claude Code, `.claude/settings.json` runs `scripts/claude_guard.py` before
-each Bash or Read call. It splits commands the way Bash does (quotes,
-separators, redirections, `$( )` and backticks). Plain ANSI-C quoted words are
-normalised; ANSI-C strings containing escapes and locale-dependent quoted
-strings are blocked rather than decoded or translated. It fails closed: drop,
-trim, restore, reinstall and forced new-site commands need a literal
-`bond-management-<name>-<32-hex-id>.localhost` temporary site. `bench` and
-`printenv` are recognised by basename in any position in a segment; `env` is
-also checked after wrapper commands and their options. Any command naming the
-credential file or a site configuration file (literally, by a wildcard, or by a
-brace pattern conservatively checked as wildcards) is blocked except `source`
-of the credential file. Environment dumps, any real expansion of a secret-named
-variable, and all indirect parameter expansions are blocked, whatever the
-program; single-quoted and escaped references remain literal. Heredoc bodies are checked
-like commands, so put text that quotes these forms in a file. A path built from
-a variable or a bare `*` cannot be checked before the command runs: the hook
-rejects variable sites for destructive commands, but not variable paths. It
-backs up these rules; it does not replace them, since code that runs other code
-can always get past it.
+each Bash or Read call. The [bounded shell policy](specs/claude-guard-shell-policy.md)
+defines its supported grammar and its deliberately limited static guarantee;
+[the executable matrix](../scripts/claude_guard_cases.json) covers acceptance
+and rejection cases. The scanner preserves quote/expansion/glob provenance and
+rejects unsupported syntax instead of guessing how Bash will execute it.
+
+Supported forms include literal words and quotes, simple command chains and
+pipelines, word-start comments, basic redirections, literal assignments and
+the documented wrapper/setup forms. All active variable expansions are
+rejected except the exact HOME-based credential-source argument. Substitutions,
+advanced parameters, brace/bracket expansions, here-documents/strings and
+compound shell grammar are rejected; put literal examples in files or quotes.
+Unknown wrapper options, malformed syntax/payloads and excessive inputs fail
+closed with exit 2; diagnostics never echo the command.
+
+Destructive `bench` commands require one literal temporary site named
+`bond-management-<name>-<32-hex-id>.localhost` in the same segment. Duplicate or
+conflicting site selectors are rejected. Literal `bench`/`printenv` basenames
+are recognised in any position. Protected basenames and matching supported
+globs (including bare `*`) are blocked in arguments and file targets; only the
+exact credential-source command is exempt. Environment dumps and xtrace setup
+are blocked. This is a backstop, not a sandbox: transitive program/script
+execution, sourced-file contents, ambient shell state and filesystem aliases
+are outside its guarantee. Never use those exclusions to bypass the working rules.
 
 ### Credentials
 
