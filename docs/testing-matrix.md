@@ -16,8 +16,11 @@ resource bounds and non-echoing diagnostics. The policy constants and the
 destructive-site check live once in `bond_management/agent_policy.py`
 ([agent safety policy](specs/agent-safety-policy.md)); `scripts/test_agent_policy.py`
 covers persistent, temporary and foreign sites across every destructive verb,
-the 32-hex suffix boundary and the core's stdlib-only imports. `verify.sh lint`
-runs both suites. Tests pass command text only to the hook, never execute those
+the 32-hex suffix boundary, the core's stdlib-only imports and its script
+check. `scripts/test_verify_helpers.py` covers `verify.sh` loading the browser
+credentials file (synthetic values in a temporary HOME), exported variables
+winning, no value reaching output or xtrace, and the temporary-site check
+before any stubbed bench call. `verify.sh lint` runs all three suites. Tests pass command text only to the hook, never execute those
 commands.
 
 Implementation and test paths beginning with `doctype/`, `api/`, `report/`, or

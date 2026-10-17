@@ -23,11 +23,6 @@ agent_policy = load_policy()
 PROTECTED_FILES = agent_policy.PROTECTED_FILES
 SECRET_NAME = agent_policy.SECRET_NAME
 destructive_violation = agent_policy.destructive_site_violation
-CREDENTIAL_FILE = "test-browser.env"
-HOME_CREDENTIAL_PATHS = {
-    "$HOME/.config/bond_management/test-browser.env",
-    "${HOME}/.config/bond_management/test-browser.env",
-}
 ASSIGNMENT = re.compile(r"[A-Za-z_][A-Za-z0-9_]*=")
 WRAPPERS = {"sudo", "command", "exec", "nohup", "time", "builtin", "timeout", "nice", "xargs"}
 UNSUPPORTED_COMMANDS = {
@@ -95,7 +90,6 @@ def violation(payload):
 
 def command_violation(command: Command):
     words = command.words
-    source = credential_source(command)
     bench_seen = False
     for word in words:
         bench_seen |= name(word.value) == "bench"
@@ -104,9 +98,9 @@ def command_violation(command: Command):
     for word in (*words, *command.targets):
         if any(SECRET_NAME.search(reference) for reference in word.references):
             return "Do not expand secret-named variables."
-        if word.references and not source:
+        if word.references:
             raise UnsupportedShell("Variable expansion")
-    if any(protected_names(word) for word in (*words, *command.targets)) and not source:
+    if any(protected_names(word) for word in (*words, *command.targets)):
         return protected_file_reason()
     if any(name(word.value) == "printenv" for word in words):
         return "Do not print the environment."
@@ -120,24 +114,13 @@ def command_violation(command: Command):
     arguments = [word.value for word in words[index + 1 :]]
     if program in UNSUPPORTED_COMMANDS:
         raise UnsupportedShell("Unsupported shell command")
-    if program in ("source", ".") and not source:
-        return "Only the credential file may be sourced, without extra arguments."
+    if program in ("source", "."):
+        return "Do not source files; scripts/verify.sh loads browser credentials itself."
     if program == "set":
         validate_set(arguments)
     if program == "export" and (not arguments or any(not ASSIGNMENT.match(arg) for arg in arguments)):
         return "Only literal export assignments are supported."
     return None
-
-
-def credential_source(command):
-    if command.targets or len(command.words) != 2:
-        return False
-    program, path = command.words
-    if program.value not in ("source", ".") or program.references or program.glob or path.glob:
-        return False
-    if path.references:
-        return path.references == ("HOME",) and path.value in HOME_CREDENTIAL_PATHS
-    return name(path.value) == CREDENTIAL_FILE
 
 
 def protected_names(word):
@@ -159,7 +142,7 @@ def short_option(value):
 
 
 def protected_file_reason():
-    return "Protected credential/configuration file; only the exact credential source command is allowed."
+    return "Protected credential/configuration file."
 
 
 def name(word):

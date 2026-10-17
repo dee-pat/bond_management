@@ -160,7 +160,9 @@ the configured bench path and provide the observer credentials privately as the
 module docstring describes. Run its `seed` and then `run` phases, capture the
 results, and drop the site even when a phase fails; `verify.sh share-race` does
 all of this. The helper rejects both persistent sites and sites outside the
-configured bench.
+configured bench. Before creating or dropping a site, `verify.sh` checks the
+name with the shared policy core (`bond_management/agent_policy.py`) and stops
+without calling bench, or echoing the name, unless it is one temporary site.
 
 For Claude Code, `.claude/settings.json` runs `scripts/claude_guard.py` before
 each Bash or Read call. The [bounded shell policy](specs/claude-guard-shell-policy.md)
@@ -172,7 +174,7 @@ rejects unsupported syntax instead of guessing how Bash will execute it.
 Supported forms include literal words and quotes, simple command chains and
 pipelines, word-start comments, basic redirections, literal assignments and
 the documented wrapper/setup forms. All active variable expansions are
-rejected except the exact HOME-based credential-source argument. Substitutions,
+rejected, and so is every `source`/`.` command. Substitutions,
 advanced parameters, brace/bracket expansions, here-documents/strings and
 compound shell grammar are rejected; put literal examples in files or quotes.
 Unknown wrapper options, malformed syntax/payloads and excessive inputs fail
@@ -182,8 +184,8 @@ Destructive `bench` commands require one literal temporary site named
 `bond-management-<name>-<32-hex-id>.localhost` in the same segment. Duplicate or
 conflicting site selectors are rejected. Literal `bench`/`printenv` basenames
 are recognised in any position. Protected basenames and matching supported
-globs (including bare `*`) are blocked in arguments and file targets; only the
-exact credential-source command is exempt. Environment dumps and xtrace setup
+globs (including bare `*`) are blocked in arguments and file targets, with no
+exception. Environment dumps and xtrace setup
 are blocked. This is a backstop, not a sandbox: transitive program/script
 execution, sourced-file contents, ambient shell state and filesystem aliases
 are outside its guarantee. Never use those exclusions to bypass the working rules.
@@ -191,9 +193,14 @@ are outside its guarantee. Never use those exclusions to bypass the working rule
 ### Credentials
 
 Local browser-test credentials live outside the app in
-`$HOME/.config/bond_management/test-browser.env`. Load them with
-`set -a; source "$HOME/.config/bond_management/test-browser.env"; set +a`.
-Never copy the file contents into repository files or logs.
+`$HOME/.config/bond_management/test-browser.env`. `scripts/verify.sh ui` (and
+`playwright`/`pre-push-ui`) loads that file itself when any of
+`FRAPPE_USER`, `FRAPPE_PASSWORD`, `FRAPPE_ADMIN_USER` or
+`FRAPPE_ADMIN_PASSWORD` is unset; variables the caller already exported win,
+as in CI. It discards the file's output and errors and pauses xtrace, so no
+value is printed. Never source, print or copy the file yourself; agent hooks
+block it. Extra arguments after `ui` go to Playwright, for example
+`verify.sh ui e2e/investor/bonds.spec.ts --project=investor-desktop`.
 
 ## Local runtime recovery
 

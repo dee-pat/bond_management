@@ -15,10 +15,45 @@ tree clean at start. Spec and this note only; no code or config changes.
 3. Done: design proposed. On 2026-10-17 the user chose the recommended option
    for all five open decisions; they are recorded below and in the spec's
    _Decisions_ section.
-4. Done (uncommitted, branch `claude/optimistic-booth-775d4e`, base `6922b06`):
-   rollout step 1. See _Step 1_ below.
-5. Next: rollout step 2 (`verify.sh` loads credentials and checks sites
-   through the core).
+4. Done (merged in #65 as `54c3011`): rollout step 1. See _Step 1_ below.
+5. Done (uncommitted, branch `claude/affectionate-franklin-509d8d`, base
+   `54c3011`): rollout step 2. See _Step 2_ below.
+6. Next: rollout step 3 (Claude `Read` deny rules, then the sandbox tracer).
+
+## Step 2: verify.sh owns credentials and site checks
+
+- `verify.sh ui|playwright|pre-push-ui` call `prepare_browser_credentials`,
+  which pauses xtrace, runs `load_browser_credentials` and then the existing
+  required-variable checks. The loader sources
+  `$HOME/.config/bond_management/test-browser.env` only when one of the four
+  `FRAPPE_*` variables is unset and the file exists, with `set -a`, errexit
+  and nounset paused and the file's stdout/stderr discarded; values the caller
+  already set are restored afterwards, so they win. A non-zero status from the
+  file fails closed with a message that names only the path. The CI UI job
+  exports all four, so it never reads a file.
+- Extra arguments after `ui`/`playwright` go to `yarn test:e2e`, so the single
+  spec flow in `e2e/AGENTS.md` runs through the gate instead of sourcing.
+- `agent_policy.py` gained `main(argv)`: run as a script
+  (`python3 -I bond_management/agent_policy.py SITE`) it exits 0 only for
+  exactly one temporary site and prints a fixed message otherwise.
+  `verify.sh`'s `require_temporary_site` calls it in `create_temporary_site`
+  (before `bench new-site`) and `drop_temporary_site` (before
+  `bench drop-site`).
+- Hook: `CREDENTIAL_FILE`, `HOME_CREDENTIAL_PATHS` and `credential_source` are
+  gone. Every variable expansion is now unsupported, every `source`/`.` is
+  blocked, and a protected basename is blocked in every command. Matrix:
+  `source-home`, `source-braced-home`, `source-literal` now expect a block;
+  new `source-set-a`, `source-literal-dot` (blocked) and `verify-ui` (allowed);
+  `set-setup`, `xtrace` and the two nameref cases no longer mix in a source.
+- Docs: `verification.md` (credentials, temporary-site check, hook summary),
+  `e2e/AGENTS.md` (single spec via `verify.sh ui`), `claude-guard-shell-policy.md`
+  (sourcing row, compatibility note), the safety spec's status and
+  inventory row, `testing-matrix.md`. Historical plan notes are left as written.
+- Bash 3.2 (macOS `/usr/bin/env bash`) exits inside a sourced file on a failing
+  command even under `if !`, so the loader turns errexit off around the
+  `source` and checks its status explicitly.
+- `docs/domain-model.md` reviewed: no DocType, link, attachment or data-flow
+  change.
 
 ## Step 1: policy core (no behaviour change)
 
@@ -71,6 +106,40 @@ should not be the main control.
 
 No open decisions remain. The unverified tool behaviours listed in the spec
 are checked during the matching rollout step.
+
+## Verification evidence (step 2)
+
+- Risk classification: verification tooling and agent hook; no application,
+  schema, permission or financial-rule change. Browser credentials are handled
+  by a project script, so the UI gate was also run.
+- Required gates: `verify.sh pre-push` (lint + server), plus `verify.sh ui`.
+- Commands executed:
+  - `verify.sh lint` from this worktree with the bench `env/bin` on `PATH` and
+    `scripts/test_verify_helpers.py` marked intent-to-add. Exit 0 on the second
+    run; the first run's ruff-format reformatted the new test file.
+  - `PYTHONPATH=<worktree> apps/bond_management/scripts/verify.sh server`
+    (the main checkout's script, importing `bond_management` from this
+    worktree, as in step 1). Exit 0.
+  - UI: `bench --site bond-management-test.localhost serve --port 8001
+    --noreload` in the background, then a scratch driver that unsets the four
+    `FRAPPE_*` variables, sources this worktree's `verify.sh`, points
+    `BENCH_ROOT` at the bench and calls `run_playwright_tests` with
+    `BASE_URL=http://localhost:8001` and `PYTHONPATH=<worktree>`. Exit 0. With
+    nothing exported, the investor and Desk logins could only succeed if the
+    loader read the local file.
+- Tests passed: pre-commit, skills.lock check, Semgrep and rule tests, guard
+  suite (24), `test_agent_policy.py` (13), `test_verify_helpers.py` (12),
+  server suite (345 + 51 + 10), Playwright (60).
+- Mutation check: removing the loader's output redirect, or its xtrace pause,
+  makes the no-echo tests fail.
+- Tests failed: none.
+- Tests not run: frontend gate (no client change); opt-in `lifecycle` and
+  `share-race` (they create real temporary sites; the _Opt-in suites_
+  workflow runs them on the PR because `verify.sh` and `agent_policy.py`
+  change). The stubbed-bench tests cover the new site check.
+- Blockers: none.
+- Unverified local/CI differences: CI has not run; CI Linux bash 5 runs the
+  helper tests that were checked here on macOS bash 3.2.
 
 ## Verification evidence (step 1)
 

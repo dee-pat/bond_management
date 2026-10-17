@@ -1,6 +1,7 @@
 """Cases for the stdlib-only policy core, bond_management/agent_policy.py."""
 
 import ast
+import subprocess
 import sys
 import unittest
 from pathlib import Path
@@ -129,6 +130,20 @@ class AgentPolicyTests(unittest.TestCase):
         for name in ("db_password", "API_KEY", "GITHUB_TOKEN", "CLIENT_SECRET"):
             self.assertRegex(name, agent_policy.SECRET_NAME)
         self.assertIsNone(agent_policy.SECRET_NAME.search("FRAPPE_USER"))
+
+    def test_script_accepts_only_one_temporary_site(self):
+        # scripts/verify.sh runs the core this way before every temporary-site bench call.
+        cases = [([TEMPORARY], 0), ([], 1), ([TEMPORARY, TEMPORARY], 1)]
+        cases += [([site], 1) for site in (*sorted(agent_policy.PERSISTENT_SITES), *FOREIGN)]
+        for argv, expected in cases:
+            with self.subTest(argv=argv):
+                result = subprocess.run(
+                    [sys.executable, "-I", str(CORE), *argv], capture_output=True, text=True, check=False
+                )
+                self.assertEqual(result.returncode, expected)
+                self.assertEqual(result.stdout, "")
+                for site in argv:
+                    self.assertNotIn(site or "\0", result.stderr)
 
     def test_protected_files(self):
         expected = {"site_config.json", "common_site_config.json", "test-browser.env"}
