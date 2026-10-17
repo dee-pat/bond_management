@@ -11,7 +11,9 @@ class WorkflowConcurrencyTests(unittest.TestCase):
         for workflow, name in (("ci.yml", "CI"), ("linter.yml", "Linters")):
             source = (Path(__file__).resolve().parent.parent / ".github/workflows" / workflow).read_text()
             group = re.search(r"^  group: (.+)$", source, re.MULTILINE).group(1)
-            self.assertIn("  cancel-in-progress: true", source)
+            # CI cancels only superseded pull request runs; push and manual runs keep their own group.
+            cancel = "${{ github.event_name == 'pull_request' }}" if workflow == "ci.yml" else "true"
+            self.assertIn(f"  cancel-in-progress: {cancel}", source)
             contexts = (
                 ("pull_request", "refs/pull/42/merge", 42, 100),
                 ("pull_request", "refs/pull/42/merge", 42, 101),
@@ -34,6 +36,7 @@ class WorkflowConcurrencyTests(unittest.TestCase):
                             "event_name": event,
                             "ref": ref,
                             "run_id": run_id,
+                            "sha": f"sha{run_id}",
                             "event": {"number": number, "pull_request": {"number": number}} if number else {},
                         }
                     },

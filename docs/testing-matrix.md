@@ -1,13 +1,13 @@
 # Bond Management rule-to-test index
 
-Agent bench policy is covered by `scripts/test_agent_policy.py`,
-`scripts/test_claude_guard.py`, and the `bench-policy` cases in
-`scripts/claude_guard_cases.json`: disclosure denial across site classes,
-destructive-site isolation, supported test configuration and password recovery,
-and generated Codex rule consistency. `scripts/test_workflow_concurrency.py`
-checks PR supersession and independent push/manual groups in CI and Linters.
+Agent safety: `scripts/test_agent_policy.py` covers site classification and
+the exit codes of `bond_management/agent_policy.py`; `scripts/test_verify_helpers.py`
+covers `verify.sh` credential loading and the temporary-site check before any
+bench call; `scripts/test_workflow_concurrency.py` checks PR supersession and
+independent push/manual groups in CI and Linters. The investor-share dispatch tests
 `utils/test_investor_shares.py::test_bulk_clear_dispatch_rejects_get_before_mutating`,
-`::test_bulk_clear_dispatch_authorized_post_repairs_shares`, and
+`::test_bulk_clear_dispatch_authorized_post_repairs_shares`,
+`::test_bulk_clear_dispatch_system_manager_post_repairs_shares`, and
 `::test_bulk_clear_dispatch_unauthorized_post_preserves_assignments_and_shares`
 exercise HTTP method and role enforcement through the overridden core route.
 
@@ -16,28 +16,6 @@ regression tests. See [domain-model.md](domain-model.md) for data relationships
 and [verification.md](verification.md) for required commands and completion
 evidence. Server tests own business rules and permission boundaries; browser
 specs cover visible wiring and routing.
-
-The local Claude Bash/Read backstop has a separate
-[bounded shell contract](specs/claude-guard-shell-policy.md) and
-[executable syntax matrix](../scripts/claude_guard_cases.json).
-`scripts/test_claude_guard.py` retains historical unsafe regressions and loads
-`test_claude_guard_matrix.py`: supported/rejected syntax, quoted/wrapped
-temporary-versus-persistent sites, every destructive verb, malformed payloads,
-resource bounds and non-echoing diagnostics. The policy constants and the
-destructive-site check live once in `bond_management/agent_policy.py`
-([agent safety policy](specs/agent-safety-policy.md)); `scripts/test_agent_policy.py`
-covers persistent, temporary and foreign sites across every destructive verb,
-the 32-hex suffix boundary, the core's stdlib-only imports, its script
-check, and that `.claude/settings.json` holds exactly the `Read` deny rules the
-core generates plus the unchanged guard hook, that the `.codex/` rules and
-environment filter match the core, and that the Codex hook blocks through the
-guard with Codex's payload shape and outside a checkout. When `codex` is
-installed it also loads the rules with `codex execpolicy check`; CI skips that
-case. `scripts/test_verify_helpers.py` covers `verify.sh` loading the browser
-credentials file (synthetic values in a temporary HOME), exported variables
-winning, no value reaching output or xtrace, and the temporary-site check
-before any stubbed bench call. `verify.sh lint` runs all three suites. Tests pass command text only to the hook, never execute those
-commands.
 
 Implementation and test paths beginning with `doctype/`, `api/`, `report/`, or
 `utils/` are relative to `bond_management/bond_management/`; `patches/`,

@@ -1,6 +1,3 @@
-# Generated from bond_management/agent_policy.py; do not edit. Regenerate with:
-# python3 -I bond_management/agent_policy.py --codex-rules > .codex/rules/bond_management.rules
-
 prefix_rule(
     pattern = ["bench", "db-console"],
     decision = "forbidden",

@@ -190,6 +190,8 @@ pinned upstream skills, some of which read records with `get_all`/`get_list`.
   restore either without approval.
 - Temporary sites and credentials: follow
   [verification.md](docs/verification.md#sites-and-credentials).
+- Never restore a Frappe Cloud backup, or use real statement PDFs or PDF
+  passwords, on a local site; seed test data instead.
 
 ## Commands
 

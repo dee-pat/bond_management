@@ -164,91 +164,17 @@ configured bench. Before creating or dropping a site, `verify.sh` checks the
 name with the shared policy core (`bond_management/agent_policy.py`) and stops
 without calling bench, or echoing the name, unless it is one temporary site.
 
-For Claude Code, `.claude/settings.json` also carries `Read` deny rules for
-`site_config.json` and `common_site_config.json` at any path and for
-`~/.config/bond_management/test-browser.env`, generated from
-`bond_management/agent_policy.py`;
-`scripts/test_agent_policy.py` fails when the file drifts. They stop Claude's
-file tools and the file commands Claude Code recognises in Bash (`cat`, `head`,
-`tail`, `sed`, redirects), not scripts or recursive reads that open the file
-themselves.
+### Agent safety
 
-The same file turns on Claude Code's Bash sandbox in strict mode, also generated
-from the core (`claude_sandbox_settings()`) and checked by the same test. Every
-command Claude runs, and every process it starts, is denied reads of the three
-protected paths at the OS level (scripts, `grep -r`, interpreters and symlinks
-included), runs without the secret variables in `SECRET_ENV_VARS`, and can
-write only to the working directory, the temporary directory and the
-exceptions below. A command that fails in the sandbox is never retried outside
-it, and Claude Code refuses to start if the sandbox is unavailable. Claude Code
-loads these project settings only after you trust the checkout; `/sandbox`
-then shows strict sandbox mode. The sandbox does not cover Claude's file tools
-(the `Read` deny rules do), hooks or MCP servers. See the
-[agent safety policy](specs/agent-safety-policy.md).
-
-- **bench and verify.sh run outside the sandbox.** bench reads the protected
-  config in-process, so `bench *`, `scripts/verify.sh *` and
-  `apps/bond_management/scripts/verify.sh *` are excluded. They still go
-  through the hook and the normal permission prompt. That an excluded
-  `bench execute`/`console` or an edited `verify.sh` can read the config is an
-  accepted gap, covered by instructions and review.
-- **Run gates from Claude as `scripts/verify.sh <stage>` in the app
-  checkout.** Claude Code moves the shell back into the project after a `cd`
-  outside it, a call that contains a `cd`, a redirect or a substitution stays
-  sandboxed, and `bash scripts/verify.sh ...` matches no exclusion, so the
-  bench-root form and the `bash` spelling fail there for server and UI stages.
-  `verify.sh` finds the bench from its own path. `bash scripts/verify.sh lint`
-  also passes sandboxed.
-- **Worktree sessions cannot run the server, UI or opt-in gates.** From a
-  worktree under `.claude/worktrees/`, `verify.sh` resolves the bench to the
-  wrong directory, and the `cd <bench> && apps/bond_management/scripts/verify.sh`
-  form stays sandboxed, where bench cannot read its config. Run those gates
-  yourself, or from a session in the app checkout. Lint runs sandboxed from a
-  worktree with the bench `env/bin` on `PATH`.
-- **`~/.semgrep` is writable** because Semgrep opens its log there at startup
-  and the lint gate fails without it. Semgrep also prints a harmless
-  permission error for its `~/.cache/semgrep_version` update check; the scans
-  still pass.
-
-For Codex, `.codex/` carries exec-policy rules that forbid destructive bench
-verbs on the persistent sites, a `PreToolUse` hook that runs the same
-`scripts/claude_guard.py` on shell calls, and an environment filter for
-password and share-lock variables, all generated from the core and checked by
-the same test. Codex loads them only after you trust the checkout and the
-hook; the per-user steps and the permission profile that denies reads of the
-protected files are in [codex-user-config.md](agents/codex-user-config.md).
-
-`.claude/settings.json` also runs `scripts/claude_guard.py` before
-each Bash or Read call. The [bounded shell policy](specs/claude-guard-shell-policy.md)
-defines its supported grammar and its deliberately limited static guarantee;
-[the executable matrix](../scripts/claude_guard_cases.json) covers acceptance
-and rejection cases. The scanner preserves quote/expansion/glob provenance and
-rejects unsupported syntax instead of guessing how Bash will execute it.
-
-Supported forms include literal words and quotes, simple command chains and
-pipelines, word-start comments, basic redirections, literal assignments and
-the documented wrapper/setup forms. All active variable expansions are
-rejected, and so is every `source`/`.` command. Substitutions,
-advanced parameters, brace/bracket expansions, here-documents/strings and
-compound shell grammar are rejected; put literal examples in files or quotes.
-Unknown wrapper options, malformed syntax/payloads and excessive inputs fail
-closed with exit 2; diagnostics never echo the command.
-
-Bench disclosure commands (`show-config`, `mariadb`, `db-console`, `postgres`)
-are blocked for all sites. `set-config` accepts only the boolean verification
-flags listed in the [agent safety contract](specs/agent-safety-policy.md#contract)
-on the test site or a temporary site; global and secret configuration changes
-are blocked. Test Administrator password recovery remains supported there.
-
-Destructive `bench` commands (including app uninstall/removal) require one literal temporary site named
-`bond-management-<name>-<32-hex-id>.localhost` in the same segment. Duplicate or
-conflicting site selectors are rejected. Literal `bench`/`printenv` basenames
-are recognised in any position. Protected basenames and matching supported
-globs (including bare `*`) are blocked in arguments and file targets, with no
-exception. Environment dumps and xtrace setup
-are blocked. This is a backstop, not a sandbox: transitive program/script
-execution, sourced-file contents, ambient shell state and filesystem aliases
-are outside its guarantee. Never use those exclusions to bypass the working rules.
+1. `.claude/settings.json` denies Claude Code reads of `site_config.json`,
+   `common_site_config.json` and `~/.config/bond_management/test-browser.env`,
+   and denies `bench` drop, reinstall, restore, partial-restore and trim commands
+   on both persistent sites (`--site` and positional forms).
+2. Persistent sites are protected by name. A temporary site must be
+   `bond-management-<name>-<32-hex-id>.localhost`; `verify.sh` checks that name
+   with `bond_management/agent_policy.py` before any bench call on one.
+3. Never restore a Frappe Cloud backup locally or use real statement PDFs or
+   passwords; seed test data instead.
 
 ### Credentials
 
@@ -316,3 +242,10 @@ block it. Extra arguments after `ui` go to Playwright, for example
   password, enable `bond_investor_spa_enabled`, and seed the investor browser
   user and fixture records. The web process must start after the feature flag
   is set. `scripts/verify.sh ui` repeats the idempotent seed before Playwright.
+
+## Frappe Cloud
+
+- CI's `FRAPPE_VERSION` (in `ci.yml` and `opt-in.yml`) must match the Frappe Cloud
+  bench group; bump them together.
+- Each release goes to the Frappe Cloud staging site and passes a smoke check
+  there before production.

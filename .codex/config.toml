@@ -1,7 +1,0 @@
-# Generated from bond_management/agent_policy.py; do not edit. Regenerate with:
-# python3 -I bond_management/agent_policy.py --codex-config > .codex/config.toml
-
-[shell_environment_policy.filters]
-"*PASSWORD*" = "exclude"
-"BOND_SHARE_LOCK_SOCKET" = "exclude"
-"BOND_SHARE_LOCK_USER" = "exclude"
