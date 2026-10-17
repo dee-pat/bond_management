@@ -8,7 +8,9 @@ shell subset, then applies policy to the resulting literal words. It never
 executes input, reads variable values, follows files or expands globs.
 
 For accepted Bash input, protected basenames and matching supported glob
-patterns are checked in every argument and redirection target. Destructive
+patterns are checked in every argument and redirection target, including the
+value after the first or last `=` (`if=FILE`, `--opt=FILE`, `NAME=FILE`) and the
+tail of a single-dash option (`-fFILE`, `-xfFILE`). Destructive
 `bench` words require a literal temporary site in their own command segment.
 All `bench` arguments, assignment values and wrapper operands must be literal;
 globs cannot be used to hide verbs or change wrapper argument positions.
@@ -35,7 +37,7 @@ program cannot read or output a secret internally.
 | Sequences | `;`, newline, `&&`, `||`, and pipelines `|`; each segment is checked independently. No background execution or compound grammar. |
 | Comments | An unquoted `#` at the start of a word is ignored through the newline. Quoted/escaped hashes and hashes inside words are literal. Commands on following lines are checked. |
 | Redirections | `<`, `>`, `>>`, optional unquoted numeric descriptors, and `<&`/`>&` with a literal descriptor or `-`. Every file target is checked. Missing targets and other operators are rejected. |
-| Globs | Only unquoted `*` and `?`, in arguments/targets, checked conservatively against protected basenames. A bare `*` is blocked because it can include a protected file. Executable globs are rejected. |
+| Globs | Only unquoted `*` and `?`, in arguments/targets, checked conservatively against protected basenames. A bare `*` is blocked because it can include a protected file. Executable and single-dash option globs are rejected. |
 | Assignments | Raw unquoted `NAME=` followed by a literal value, alone or before a command; literal assignment arguments after `export`/`env`. Assignment-shaped words are not executable names, and post-wrapper assignments are unsupported. No append assignments, parameter evaluation or variable declarations. |
 | Credential setup | Exactly `source PATH` or `. PATH`, where PATH has literal basename `test-browser.env`. The exact `$HOME/.config/bond_management/test-browser.env` and `${HOME}/.config/bond_management/test-browser.env` arguments are the only variable-expansion exception. No extra source arguments or leading assignments for that exception. |
 | Shell setup | `set` may toggle only `a`, `e`, `u`, and `o pipefail`; xtrace and environment dumps are rejected. |

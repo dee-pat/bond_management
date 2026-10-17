@@ -69,3 +69,16 @@ empty/C0/DEL/over-limit inputs, non-echoing diagnostics and the accepted exact
 65,536-character boundary. Before the follow-up commit, `verify.sh pre-push`
 exited 0 locally (24 guard methods and the full server suite passed). The final
 exact-commit CI and the thread resolution are reported in the PR thread.
+
+## Greptile follow-up
+
+Greptile reviewed `620f21c` and raised one valid finding (rated P2 here):
+protected names attached to an option or assignment escaped the basename
+check, so `dd if=site_config.json`, `cat --input=common_site_config.json` and
+`grep -fsite_config.json` were allowed while `dd if=sites/x/site_config.json`
+was blocked. Twelve matrix cases now cover `=` values (first, last and nested),
+assignment values, single-dash and combined short options, option globs, and
+non-matching option values, similar names and quoted mentions that stay
+allowed. Eight failed before the fix. Globs in single-dash option words are
+now rejected rather than parsed. Run pre-push and CI on the follow-up commit,
+then reply to and resolve the Greptile thread.

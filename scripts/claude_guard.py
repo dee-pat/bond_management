@@ -90,8 +90,8 @@ def command_violation(command: Command):
     bench_seen = False
     for word in words:
         bench_seen |= name(word.value) == "bench"
-        if word.glob and (bench_seen or ASSIGNMENT.match(word.value)):
-            raise UnsupportedShell("Nonliteral bench argument or assignment")
+        if word.glob and (bench_seen or ASSIGNMENT.match(word.value) or short_option(word.value)):
+            raise UnsupportedShell("Nonliteral bench argument, assignment or short option")
     for word in (*words, *command.targets):
         if any(SECRET_NAME.search(reference) for reference in word.references):
             return "Do not expand secret-named variables."
@@ -132,10 +132,21 @@ def credential_source(command):
 
 
 def protected_names(word):
-    pattern = name(word.value)
-    return pattern in PROTECTED_FILES or (
-        word.glob and any(fnmatchcase(file, pattern) for file in PROTECTED_FILES)
+    base = name(word.value)
+    # Option and assignment values name files too: if=FILE, --opt=FILE, -fFILE.
+    patterns = {base, base.partition("=")[2], base.rpartition("=")[2]}
+    if short_option(base) and base.endswith(tuple(PROTECTED_FILES)):
+        return True
+    return any(
+        pattern in PROTECTED_FILES
+        or (word.glob and any(fnmatchcase(file, pattern) for file in PROTECTED_FILES))
+        for pattern in patterns
+        if pattern
     )
+
+
+def short_option(value):
+    return value.startswith("-") and not value.startswith("--")
 
 
 def protected_file_reason():

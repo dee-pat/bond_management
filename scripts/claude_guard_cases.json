@@ -125,6 +125,18 @@
     {"id":"protected-read","group":"files","allow":false,"command":"cat sites/x/site_config.json"},
     {"id":"credential-copy","group":"files","allow":false,"command":"cp test-browser.env copy.env"},
     {"id":"safe-read","group":"files","allow":true,"command":"cat README.md"},
+    {"id":"protected-operand-value","group":"files","allow":false,"command":"dd if=site_config.json"},
+    {"id":"protected-operand-relative","group":"files","allow":false,"command":"dd if=./sites/SITE_CONFIG.JSON"},
+    {"id":"protected-long-option","group":"files","allow":false,"command":"cat --input=common_site_config.json"},
+    {"id":"protected-nested-equals","group":"files","allow":false,"command":"tool --opt=key=test-browser.env"},
+    {"id":"protected-short-option","group":"files","allow":false,"command":"grep -fsite_config.json x"},
+    {"id":"protected-combined-short-option","group":"files","allow":false,"command":"tar -xfsite_config.json"},
+    {"id":"protected-assignment-value","group":"files","allow":false,"command":"CONFIG=site_config.json python3 scripts/x.py"},
+    {"id":"protected-option-glob","group":"files","allow":false,"command":"cat --input=site_conf*.json"},
+    {"id":"short-option-glob","group":"files","allow":false,"command":"grep -fsite_conf*.json x"},
+    {"id":"safe-option-values","group":"files","allow":true,"command":"ls --color=auto -la; dd if=input.bin of=out.bin; grep -fpatterns.txt x"},
+    {"id":"safe-similar-name","group":"files","allow":true,"command":"cat site_config.json.example --label=mysite_config.json.bak"},
+    {"id":"safe-quoted-mention","group":"files","allow":true,"command":"git commit -m 'document site_config.json handling'"},
     {"id":"opaque-script","group":"boundary","allow":true,"command":"python3 scripts/test_claude_guard.py"}
   ]
 }
