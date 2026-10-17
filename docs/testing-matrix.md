@@ -6,6 +6,15 @@ and [verification.md](verification.md) for required commands and completion
 evidence. Server tests own business rules and permission boundaries; browser
 specs cover visible wiring and routing.
 
+The local Claude Bash/Read backstop has a separate
+[bounded shell contract](specs/claude-guard-shell-policy.md) and
+[executable syntax matrix](../scripts/claude_guard_cases.json).
+`scripts/test_claude_guard.py` retains historical unsafe regressions and loads
+`test_claude_guard_matrix.py`: supported/rejected syntax, quoted/wrapped
+temporary-versus-persistent sites, every destructive verb, malformed payloads,
+resource bounds and non-echoing diagnostics. `verify.sh lint` runs the combined
+suite. Tests pass command text only to the hook, never execute those commands.
+
 Implementation and test paths beginning with `doctype/`, `api/`, `report/`, or
 `utils/` are relative to `bond_management/bond_management/`; `patches/`,
 `patches.txt`, and `hooks.py` are relative to the app root.

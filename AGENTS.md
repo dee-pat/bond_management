@@ -203,6 +203,8 @@ apps/bond_management/scripts/verify.sh frontend     # yarn lint + typecheck + be
 apps/bond_management/scripts/verify.sh ui           # seed fixtures + full Playwright suite
 apps/bond_management/scripts/verify.sh pre-push     # lint + server
 apps/bond_management/scripts/verify.sh pre-push-ui  # lint + server + frontend + ui
+apps/bond_management/scripts/verify.sh lifecycle    # opt-in migration lifecycle on a temporary site
+apps/bond_management/scripts/verify.sh share-race   # opt-in share race; needs BOND_SHARE_LOCK_* observer
 bench --site bond-management-test.localhost run-tests --module bond_management.bond_management.utils.test_accrual [--test <method>]
 bench --site bond-management-test.localhost run-tests --doctype "Bond Transaction"
 ```

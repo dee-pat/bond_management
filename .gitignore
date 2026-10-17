@@ -60,6 +60,7 @@ e2e/.auth/
 # Aider AI Chat
 .aider*
 
-# Claude Code: track only the skills link
+# Claude Code: track only the skills link and the shared guard hooks
 .claude/*
 !.claude/skills
+!.claude/settings.json

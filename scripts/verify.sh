@@ -14,7 +14,7 @@ APP_SEMGREP_RULES_FILE="${APP_ROOT}/semgrep/bond_management.yml"
 APP_SEMGREP_TESTS_FILE="${APP_ROOT}/semgrep/tests/bond_management.py"
 
 usage() {
-    echo "Usage: scripts/verify.sh [lint|server|frontend|ui|playwright|pre-push|pre-push-ui]" >&2
+    echo "Usage: scripts/verify.sh [lint|server|frontend|ui|playwright|pre-push|pre-push-ui|lifecycle|share-race]" >&2
 }
 
 prepare_test_site() {
@@ -124,6 +124,7 @@ run_lint() {
     local binary
     binary="$(semgrep_binary)"
     python3 "${APP_ROOT}/scripts/test_verify_semgrep.py" --semgrep "${binary}"
+    python3 "${APP_ROOT}/scripts/test_claude_guard.py"
 }
 
 run_server_tests() {
@@ -169,6 +170,84 @@ run_playwright_tests() {
     BASE_URL="${base_url}" yarn test:e2e
 }
 
+TEMPORARY_SITE=""
+# Without DB_ROOT_PASSWORD, bench falls back to the bench's root_password.
+DB_ROOT_ARGS=()
+if [[ -n "${DB_ROOT_PASSWORD:-}" ]]; then
+    DB_ROOT_ARGS=(--db-root-password "${DB_ROOT_PASSWORD}")
+fi
+
+drop_temporary_site() {
+    if [[ -n "${TEMPORARY_SITE}" ]]; then
+        cd "${BENCH_ROOT}"
+        # Archive into a run-scoped directory and remove it once the drop succeeds,
+        # so repeated runs do not accumulate site trees under archived/sites.
+        local archive
+        archive="$(mktemp -d "${TMPDIR:-/tmp}/bond-management-archive.XXXXXX")"
+        bench drop-site "${TEMPORARY_SITE}" --no-backup --archived-sites-path "${archive}" \
+            ${DB_ROOT_ARGS[@]+"${DB_ROOT_ARGS[@]}"}
+        rm -rf "${archive}"
+        TEMPORARY_SITE=""
+    fi
+}
+
+# Create a uniquely named <prefix><32-hex-id>.localhost site with the app
+# installed and the given boolean flags set. The site is dropped on exit,
+# whether the run passed or failed, after bench has printed its output.
+create_temporary_site() {
+    local prefix="$1"
+    shift
+    local site
+    site="${prefix}$(python3 -c 'import uuid; print(uuid.uuid4().hex)').localhost"
+
+    cd "${BENCH_ROOT}"
+    TEMPORARY_SITE="${site}"
+    trap drop_temporary_site EXIT
+    bench new-site "${site}" --admin-password "$(python3 -c 'import secrets; print(secrets.token_hex(24))')" \
+        ${DB_ROOT_ARGS[@]+"${DB_ROOT_ARGS[@]}"}
+    local flag
+    for flag in allow_tests "$@"; do
+        bench --site "${site}" set-config "${flag}" true
+    done
+    bench --site "${site}" install-app bond_management
+}
+
+run_migration_lifecycle() {
+    create_temporary_site "bond-management-lifecycle-" bond_migration_lifecycle_test
+    local site="${TEMPORARY_SITE}"
+    local phase="bond_management.bond_management.tests.migration_lifecycle"
+
+    bench --site "${site}" execute "${phase}.fresh"
+    bench --site "${site}" execute "${phase}.prepare"
+    bench --site "${site}" migrate
+    bench --site "${site}" execute "${phase}.verify"
+    bench --site "${site}" execute "${phase}.requeue"
+    bench --site "${site}" migrate
+    bench --site "${site}" execute "${phase}.verify"
+    bench --site "${site}" migrate
+    bench --site "${site}" execute "${phase}.verify"
+}
+
+run_share_race() {
+    local name
+    for name in BOND_SHARE_LOCK_SOCKET BOND_SHARE_LOCK_USER; do
+        if [[ -z "${!name:-}" ]]; then
+            echo "${name} is required for the share-race check; see investor_share_concurrency.py." >&2
+            exit 1
+        fi
+    done
+
+    create_temporary_site "bond-management-race-"
+    local site="${TEMPORARY_SITE}"
+    local helper="bond_management.bond_management.tests.investor_share_concurrency"
+
+    BOND_SHARE_RACE_BENCH="${BENCH_ROOT}"
+    BOND_SHARE_RACE_TOKEN="$(python3 -c 'import secrets; print(secrets.token_hex(6))')"
+    export BOND_SHARE_RACE_BENCH BOND_SHARE_RACE_TOKEN
+    bench --site "${site}" execute "${helper}.seed"
+    bench --site "${site}" execute "${helper}.run"
+}
+
 if [[ "${BASH_SOURCE[0]}" != "$0" ]]; then
     return
 fi
@@ -198,6 +277,12 @@ case "${MODE}" in
         run_server_tests
         run_frontend_checks
         run_playwright_tests
+        ;;
+    lifecycle)
+        run_migration_lifecycle
+        ;;
+    share-race)
+        run_share_race
         ;;
     *)
         usage

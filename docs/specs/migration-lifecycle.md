@@ -81,5 +81,6 @@ manages each CLI transaction; the helper does not commit independently.
 ## Acceptance
 
 A run passes when formatting/lint, the guard tests, the shared server gate, and
-every temporary-site lifecycle command above exit zero. CI automation of this
-opt-in sequence is follow-up work; the helper is invoked explicitly.
+every temporary-site lifecycle command above exit zero.
+`scripts/verify.sh lifecycle` runs the sequence above, including the cleanup,
+and the _Opt-in suites_ GitHub workflow runs it nightly and on demand.

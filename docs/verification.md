@@ -73,6 +73,15 @@ differences in the final field.
   `playwright`. `ui` and `playwright` prepare the configured test site
   themselves (migrate, enable the investor SPA, seed fixtures) before running
   Playwright; no manual setup is needed.
+- The opt-in stages `lifecycle` and `share-race` each create a uniquely named
+  temporary site, run every phase of their helper, and drop the site whether
+  the run passed or failed. Set `DB_ROOT_PASSWORD` when the bench has no
+  `root_password`; `share-race` also needs the `BOND_SHARE_LOCK_*` observer
+  variables. The _Opt-in suites_ workflow runs both nightly, on
+  `workflow_dispatch`, and on PRs that change its harness; run them locally for changes to patches, install hooks,
+  or share and User Permission consistency.
+- CI pins Frappe to the exact tag in `FRAPPE_VERSION` (in `ci.yml` and
+  `opt-in.yml`). Bump both together, deliberately, after checking the release.
 - Changes to patches, schema, hooks, dependencies, installation, or manual
   indexes must also pass a fresh-install check matching the GitHub Actions
   setup. A successful CI clean install on the exact commit satisfies this
@@ -149,8 +158,35 @@ on a uniquely named `bond-management-race-<32-hex-id>.localhost` site with Bond
 Management installed and `allow_tests` enabled. Set `BOND_SHARE_RACE_BENCH` to
 the configured bench path and provide the observer credentials privately as the
 module docstring describes. Run its `seed` and then `run` phases, capture the
-results, and drop the site even when a phase fails. The helper rejects both
-persistent sites and sites outside the configured bench.
+results, and drop the site even when a phase fails; `verify.sh share-race` does
+all of this. The helper rejects both persistent sites and sites outside the
+configured bench.
+
+For Claude Code, `.claude/settings.json` runs `scripts/claude_guard.py` before
+each Bash or Read call. The [bounded shell policy](specs/claude-guard-shell-policy.md)
+defines its supported grammar and its deliberately limited static guarantee;
+[the executable matrix](../scripts/claude_guard_cases.json) covers acceptance
+and rejection cases. The scanner preserves quote/expansion/glob provenance and
+rejects unsupported syntax instead of guessing how Bash will execute it.
+
+Supported forms include literal words and quotes, simple command chains and
+pipelines, word-start comments, basic redirections, literal assignments and
+the documented wrapper/setup forms. All active variable expansions are
+rejected except the exact HOME-based credential-source argument. Substitutions,
+advanced parameters, brace/bracket expansions, here-documents/strings and
+compound shell grammar are rejected; put literal examples in files or quotes.
+Unknown wrapper options, malformed syntax/payloads and excessive inputs fail
+closed with exit 2; diagnostics never echo the command.
+
+Destructive `bench` commands require one literal temporary site named
+`bond-management-<name>-<32-hex-id>.localhost` in the same segment. Duplicate or
+conflicting site selectors are rejected. Literal `bench`/`printenv` basenames
+are recognised in any position. Protected basenames and matching supported
+globs (including bare `*`) are blocked in arguments and file targets; only the
+exact credential-source command is exempt. Environment dumps and xtrace setup
+are blocked. This is a backstop, not a sandbox: transitive program/script
+execution, sourced-file contents, ambient shell state and filesystem aliases
+are outside its guarantee. Never use those exclusions to bypass the working rules.
 
 ### Credentials
 
