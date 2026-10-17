@@ -136,6 +136,33 @@ class ClaudeGuardTests(unittest.TestCase):
         self.assert_allowed("env CI=Yes yarn lint")
         self.assert_allowed("export CI=Yes")
 
+    def test_brace_expanded_protected_paths_are_blocked(self):
+        commands = (
+            "cat sites/x/{site_config,other}.json",
+            "cat sites/x/{common_site_config,other}.json",
+            "cat test-{browser,other}.env",
+            "cat {test-browser.env,README.md}",
+            "cat sites/x/site_confi{g..h}.json",
+            "cat sites/{x/site_config,y/other}.json",
+            "cat sites/x/prefix{dir/site_config,other}.json",
+            "cat sites/x/{other,{site_config,public}}.json",
+            "cat sites/x/{site_config,{literal}}.json",
+            "cat sites/x/{literal,{site_config,{other}}}.json",
+            "cat sites/x/{s,x}ite_{config,other}.json",
+            "cat sites/x/[s{]ite_config,foo}.json",
+            "cat sites/x/{[s,foo}]ite_config.json",
+            "cat < sites/x/{site_config,other}.json",
+            "source {test-browser.env,site_config.json}",
+        )
+        for command in commands:
+            with self.subTest(command=command):
+                self.assert_blocked(command)
+        self.assert_allowed("cat {notes,readme}.md")
+        self.assert_allowed("ls {src,tests}/*.py")
+        self.assert_allowed('echo "${FRAPPE_USER}"')
+        self.assert_allowed('cat "${PUBLIC_PATH}"')
+        self.assert_allowed('echo "${PUBLIC_PATH:-notes,readme}"')
+
     def test_single_quoted_text_is_literal(self):
         self.assert_allowed("gh pr create --body 'avoid $(printenv)'")
         self.assert_allowed("printf '%s\\n' '$(env)'")

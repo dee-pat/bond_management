@@ -20,8 +20,9 @@ statuses and payloads remain compatible. Recovery is a normal code revert.
 Progress: regression cases added first and reproduced both findings (22
 failures on the old guard). The checks and verification paragraph are updated;
 the full lint gate passed, including the final guard regressions. Local fixes
-are ready for commit and push. CI results and review-thread replies/resolution
-will be recorded on PR #61; resolve only after CI on the fixing commit is green.
+were committed and pushed as `c481cc4`. All six CI checks passed and both
+threads were replied to and resolved. A subsequent Codex review found the
+brace-expanded protected-path bypass below.
 
 Domain-model review: `docs/domain-model.md` reviewed; no mapped relationship,
 attachment, derived data or application API/service flow changes.
@@ -46,3 +47,47 @@ Local verification evidence:
 - Blockers: none.
 - Unverified local/CI differences: remote CI runs the broader application
   suites; local verification covers the standard-library hook and lint.
+
+## Follow-up: brace-expanded protected paths
+
+Codex's review of `c481cc4` found one P1: the scanner retains brace patterns,
+but protected-file matching treats braces literally, so Bash can expand an
+allowed word into a protected filename. Conservatively replace comma/range
+brace groups with wildcard patterns before checking protected basenames;
+check nested groups and groups containing path separators without enumerating
+their expansions. Mixed brace/bracket globs fail closed because alternatives
+can change character-class boundaries. Parameter references such as `${PUBLIC_PATH}` must retain
+their existing behavior. Keep the scanner, standard library and source-only
+credential exception, and continue allowing unrelated brace paths.
+
+Progress: regression cases reproduced the finding (10 initial failures).
+The pattern check and guard paragraph are updated; further regression cases
+also proved and closed nested-literal-brace, basename-changing-slash and
+brace/bracket-glob gaps. All 16 guard tests now pass. Pre-push passed before
+the last bracket-glob hardening; the final snapshot is being verified before
+commit/push.
+Reply to the new thread and resolve only after CI on the fixing commit is green.
+
+Local verification evidence for this follow-up:
+
+- Risk classification: local safety-hook correctness and secret protection.
+- Required gates: guard suite and bench-root `verify.sh pre-push` (lint and
+  full server suite); CI on the fixing commit before resolving the thread.
+- Commands executed: `python3 scripts/test_claude_guard.py` from the app root;
+  `apps/bond_management/scripts/verify.sh pre-push` from the bench root.
+- Exit statuses: initial regression proof 1; final guard suite 0; initial
+  pre-push gate 0. Final pre-push snapshot verification follows this note.
+- Tests passed: 16 guard tests, four Semgrep harness tests, two rule tests;
+  all server test categories passed (including 345 integration tests and
+  10 unspecified-category tests). Pre-commit and skills-lock checks passed;
+  blocking and advisory Semgrep scans had no findings.
+- Tests failed: expected regression failures before the fix; none remain.
+- Tests not run locally: frontend, UI, lifecycle and share-race; no changes
+  to application runtime, schemas, permissions, install hooks or UI behavior.
+- Blockers: none.
+- Unverified local/CI differences: macOS locally versus Linux in CI; remote
+  CI also runs UI and opt-in suites. Final CI evidence will be in the PR thread.
+
+No application data, API, schema or relationship changes; the domain-model
+review above still applies. No dependencies or migrations; recovery is a normal
+code revert.

@@ -27,6 +27,7 @@ SECRET_REFERENCE = re.compile(r"\$\{?\w*(PASSWORD|SECRET|TOKEN|API_KEY)")
 VARIABLE_LISTERS = {"export", "declare", "typeset", "readonly"}
 REDIRECTIONS = {"<", ">"}
 GLOB_ONLY = re.compile(r"[*?]+")
+BRACE_PATTERN = re.compile(r"(?<!\$)\{.*(?:,|\.\.).*\}")
 # Stands in for a $ or backtick that Bash treats as literal (single quotes or
 # an escape), so only real expansions read as "$" below.
 LITERAL = "\x00"
@@ -205,13 +206,20 @@ def site_argument(words, verb):
 
 
 def protected_names(words):
-    """Protected files a word names, literally or through a wildcard such as site_conf*."""
+    """Protected basenames, including conservative wildcard and brace matches."""
     found = set()
     for word in words:
-        pattern = name(word)
+        # Collapse across nested groups and slashes before taking the basename.
+        # Wildcards avoid enumerating huge expansions, including literal braces.
+        candidate = BRACE_PATTERN.sub(lambda match: "/*" if "/" in match[0] else "*", word)
+        if candidate != word and ("[" in word or "]" in word):
+            # A brace alternative can open or close a glob character class.
+            found.update(PROTECTED_FILES)
+            continue
+        pattern = name(candidate)
         if pattern in PROTECTED_FILES:
             found.add(pattern)
-        elif not GLOB_ONLY.fullmatch(pattern):
+        elif candidate != word or not GLOB_ONLY.fullmatch(pattern):
             found.update(file for file in PROTECTED_FILES if fnmatchcase(file, pattern))
     return found
 

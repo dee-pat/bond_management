@@ -169,9 +169,10 @@ restore, reinstall and forced new-site commands need a literal
 `bond-management-<name>-<32-hex-id>.localhost` temporary site. `bench` and
 `printenv` are recognised by basename in any position in a segment; `env` is
 also checked after wrapper commands and their options. Any command naming the
-credential file or a site configuration file (literally or by a wildcard) is
-blocked except `source` of the credential file. Environment dumps and any real
-expansion of a secret-named variable are blocked, whatever the program;
+credential file or a site configuration file (literally, by a wildcard, or by a
+brace pattern conservatively checked as wildcards) is blocked except `source`
+of the credential file. Environment dumps and any real expansion of a
+secret-named variable are blocked, whatever the program;
 single-quoted and escaped references remain literal. Heredoc bodies are checked
 like commands, so put text that quotes these forms in a file. A path built from
 a variable or a bare `*` cannot be checked before the command runs: the hook
