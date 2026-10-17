@@ -79,6 +79,26 @@ def claude_read_deny_rules():
     return [f"Read(//**/{name})" for name in site_config] + [f"Read(~/{BROWSER_CREDENTIALS})"]
 
 
+def claude_sandbox_settings():
+    """The `sandbox` block of .claude/settings.json: a strict OS sandbox for Claude's shell.
+
+    denyRead repeats the Read deny paths (sandbox paths take the same `//` and `~/`
+    prefixes). bench and verify.sh run outside it because bench reads the protected
+    config in-process (spec decision 1); Semgrep opens its log under ~/.semgrep.
+    """
+    return {
+        "enabled": True,
+        "failIfUnavailable": True,
+        "allowUnsandboxedCommands": False,
+        "excludedCommands": ["bench *", "scripts/verify.sh *", "apps/bond_management/scripts/verify.sh *"],
+        "filesystem": {
+            "denyRead": [rule.removeprefix("Read(").removesuffix(")") for rule in claude_read_deny_rules()],
+            "allowWrite": ["~/.semgrep"],
+        },
+        "credentials": {"envVars": [{"name": name, "mode": "deny"} for name in SECRET_ENV_VARS]},
+    }
+
+
 def codex_rule_prefixes():
     """Canonical bench argv prefixes that destroy or recreate a persistent site."""
     prefixes = []

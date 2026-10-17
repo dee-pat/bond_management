@@ -191,10 +191,47 @@ class ClaudeSettingsSyncTests(unittest.TestCase):
         expected = {"PreToolUse": [{"matcher": "Bash|Read", "hooks": [hook]}]}
         self.assertEqual(self.settings["hooks"], expected)
 
+    def test_sandbox_block_matches_the_core(self):
+        self.assertEqual(self.settings["sandbox"], agent_policy.claude_sandbox_settings())
+
+    def test_sandbox_is_strict(self):
+        sandbox = agent_policy.claude_sandbox_settings()
+        self.assertIs(sandbox["enabled"], True)
+        self.assertIs(sandbox["failIfUnavailable"], True)
+        self.assertIs(sandbox["allowUnsandboxedCommands"], False)
+        # Only bench and verify.sh leave the sandbox (spec, decision 1).
+        self.assertEqual(
+            sandbox["excludedCommands"],
+            ["bench *", "scripts/verify.sh *", "apps/bond_management/scripts/verify.sh *"],
+        )
+        self.assertEqual(sandbox["filesystem"]["allowWrite"], ["~/.semgrep"])
+
+    def test_sandbox_denies_the_read_deny_paths(self):
+        denied = agent_policy.claude_sandbox_settings()["filesystem"]["denyRead"]
+        rules = agent_policy.claude_read_deny_rules()
+        self.assertEqual([f"Read({path})" for path in denied], rules)
+
+    def test_sandbox_unsets_every_secret_variable(self):
+        entries = agent_policy.claude_sandbox_settings()["credentials"]["envVars"]
+        self.assertEqual([entry["name"] for entry in entries], list(agent_policy.SECRET_ENV_VARS))
+        self.assertTrue(all(entry == {"name": entry["name"], "mode": "deny"} for entry in entries))
+
     def test_no_unreviewed_settings(self):
-        # The sandbox block lands only after its tracer passes (spec, decision 3).
-        self.assertEqual(set(self.settings), {"permissions", "hooks"})
+        self.assertEqual(set(self.settings), {"permissions", "hooks", "sandbox"})
         self.assertEqual(set(self.settings["permissions"]), {"deny"})
+        self.assertEqual(
+            set(self.settings["sandbox"]),
+            {
+                "enabled",
+                "failIfUnavailable",
+                "allowUnsandboxedCommands",
+                "excludedCommands",
+                "filesystem",
+                "credentials",
+            },
+        )
+        self.assertEqual(set(self.settings["sandbox"]["filesystem"]), {"denyRead", "allowWrite"})
+        self.assertEqual(set(self.settings["sandbox"]["credentials"]), {"envVars"})
 
 
 class CodexConfigSyncTests(unittest.TestCase):

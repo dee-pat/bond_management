@@ -1,8 +1,8 @@
 # Agent-neutral safety policy
 
 Status: design accepted with the decisions below (2026-10-17); rollout steps 1
-and 2 implemented; step 3 `Read` deny rules implemented, sandbox tracer passed,
-sandbox not yet enabled; step 4 Codex project layer implemented.
+to 4 implemented. Step 3's Claude sandbox is enabled in `.claude/settings.json`
+after the tracer and the interactive checks passed.
 Progress:
 [agent-safety-policy-progress.md](../plans/agent-safety-policy-progress.md).
 The current hook's grammar and guarantee stay as defined in
@@ -263,8 +263,12 @@ files):
   true`, `excludedCommands` for `bench *` and the two `verify.sh` spellings
   (decision 1), and `filesystem.allowWrite: ["~/.semgrep"]`, the one extra
   write path the lint gate needs (Semgrep opens its log there at startup).
-  Step 3 committed only the `Read` deny rules; the tracer passed, and the
-  block waits for the user's approval and the open checks in the progress note.
+  `agent_policy.claude_sandbox_settings()` generates the block; the interactive
+  checks that preceded it are in the progress note. Claude sessions run the
+  excluded gates as `scripts/verify.sh <stage>` from the app checkout, because
+  Claude Code resets a `cd` outside the project and a `cd ... &&` call stays
+  sandboxed; worktree sessions cannot run the server, UI or opt-in gates
+  (documented in verification.md).
 - Codex: a permission profile with `deny` on the same paths, writes limited to
   the workspace, and a `shell_environment_policy` filter excluding
   `*PASSWORD*` and the `BOND_SHARE_LOCK_*` names.
@@ -360,6 +364,10 @@ only after step 2 gives callers a replacement.
 - Decide whether the persistent dev site's `site_config.json` should move to a
   path the sandbox denies by directory rather than by basename.
 - Consider `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB` for hooks and MCP servers.
+- Decide whether to allow writes to `~/.cache/semgrep_version` (silences a
+  harmless Semgrep warning; untested whether `allowWrite` accepts a file path).
+- Find out why the Claude desktop app's `/sandbox` panel showed the sandbox
+  off while the session's commands ran under the project's sandbox paths.
 - `~/.config/bond_management/` also holds a `test-site-ui.env` that is not in
   `PROTECTED_FILES` (its contents were not read). Decide whether it holds
   credentials and should be protected or removed.

@@ -171,8 +171,44 @@ For Claude Code, `.claude/settings.json` also carries `Read` deny rules for
 `scripts/test_agent_policy.py` fails when the file drifts. They stop Claude's
 file tools and the file commands Claude Code recognises in Bash (`cat`, `head`,
 `tail`, `sed`, redirects), not scripts or recursive reads that open the file
-themselves. The Bash sandbox that would close that gap is not enabled yet; see
-the [agent safety policy](specs/agent-safety-policy.md).
+themselves.
+
+The same file turns on Claude Code's Bash sandbox in strict mode, also generated
+from the core (`claude_sandbox_settings()`) and checked by the same test. Every
+command Claude runs, and every process it starts, is denied reads of the three
+protected paths at the OS level (scripts, `grep -r`, interpreters and symlinks
+included), runs without the secret variables in `SECRET_ENV_VARS`, and can
+write only to the working directory, the temporary directory and the
+exceptions below. A command that fails in the sandbox is never retried outside
+it, and Claude Code refuses to start if the sandbox is unavailable. Claude Code
+loads these project settings only after you trust the checkout; `/sandbox`
+then shows strict sandbox mode. The sandbox does not cover Claude's file tools
+(the `Read` deny rules do), hooks or MCP servers. See the
+[agent safety policy](specs/agent-safety-policy.md).
+
+- **bench and verify.sh run outside the sandbox.** bench reads the protected
+  config in-process, so `bench *`, `scripts/verify.sh *` and
+  `apps/bond_management/scripts/verify.sh *` are excluded. They still go
+  through the hook and the normal permission prompt. That an excluded
+  `bench execute`/`console` or an edited `verify.sh` can read the config is an
+  accepted gap, covered by instructions and review.
+- **Run gates from Claude as `scripts/verify.sh <stage>` in the app
+  checkout.** Claude Code moves the shell back into the project after a `cd`
+  outside it, a call that contains a `cd`, a redirect or a substitution stays
+  sandboxed, and `bash scripts/verify.sh ...` matches no exclusion, so the
+  bench-root form and the `bash` spelling fail there for server and UI stages.
+  `verify.sh` finds the bench from its own path. `bash scripts/verify.sh lint`
+  also passes sandboxed.
+- **Worktree sessions cannot run the server, UI or opt-in gates.** From a
+  worktree under `.claude/worktrees/`, `verify.sh` resolves the bench to the
+  wrong directory, and the `cd <bench> && apps/bond_management/scripts/verify.sh`
+  form stays sandboxed, where bench cannot read its config. Run those gates
+  yourself, or from a session in the app checkout. Lint runs sandboxed from a
+  worktree with the bench `env/bin` on `PATH`.
+- **`~/.semgrep` is writable** because Semgrep opens its log there at startup
+  and the lint gate fails without it. Semgrep also prints a harmless
+  permission error for its `~/.cache/semgrep_version` update check; the scans
+  still pass.
 
 For Codex, `.codex/` carries exec-policy rules that forbid destructive bench
 verbs on the persistent sites, a `PreToolUse` hook that runs the same
