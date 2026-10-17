@@ -6,6 +6,11 @@ on:
   schedule:
     - cron: "17 2 * * *"
   workflow_dispatch:
+    inputs:
+      force_failure:
+        description: Fail each job after its suite to exercise the failure report
+        type: boolean
+        default: false
   # Also exercise the harness itself when a PR changes it.
   pull_request:
     paths:
@@ -111,6 +116,13 @@ jobs:
           BOND_SHARE_LOCK_USER: root
           BOND_SHARE_LOCK_PASSWORD: root
 
+      # Manual runs only: prove the report step below without breaking a suite.
+      - name: Force failure
+        if: github.event_name == 'workflow_dispatch' && inputs.force_failure
+        run: |
+          echo "Forced failure to exercise the report step"
+          exit 1
+
       # Report nightly and manual failures to one labelled issue; never on PRs.
       - name: Report failure
         if: failure() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
@@ -132,4 +144,27 @@ jobs:
           open=$(gh issue list --label nightly-failure --state open --json number --jq 'sort_by(.number) | .[].number')
           for dup in $(echo "$open" | tail -n +2); do
             gh issue close "$dup" --comment "Duplicate of #$(echo "$open" | head -n 1)."
+          done
+
+  # Close the failure issue once a whole scheduled run passes. A separate job
+  # waits for every matrix entry, so one entry's success cannot close an issue
+  # the other entry is still reporting to.
+  recovered:
+    needs: opt-in
+    if: success() && github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      issues: write
+    steps:
+      - name: Close recovered failure issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          for issue in $(gh issue list --label nightly-failure --state open --json number --jq '.[].number'); do
+            gh issue comment "$issue" --body "Recovered: $RUN_URL (commit $GITHUB_SHA)"
+            # Someone may close it in the meantime; already closed counts as success.
+            gh issue close "$issue" || [ "$(gh issue view "$issue" --json state --jq .state)" = CLOSED ]
           done
