@@ -1,4 +1,4 @@
-"""Claude Code PreToolUse hook: block destructive site commands and secret output.
+"""Claude Code PreToolUse hook: block destructive site commands and secret expansions.
 
 Reads the hook payload on stdin. Exit status 2 blocks the tool call and shows
 stderr to the agent; 0 allows it. The rules mirror docs/verification.md, which
@@ -20,6 +20,7 @@ POSITIONAL_SITE_VERBS = {"drop-site", "new-site"}
 PROTECTED_FILES = {"site_config.json", "common_site_config.json", "test-browser.env"}
 CREDENTIAL_FILE = "test-browser.env"
 COMMAND_PREFIXES = {"sudo", "command", "exec", "nohup", "time", "builtin"}
+ENV_WRAPPERS = COMMAND_PREFIXES | {"timeout", "nice", "xargs"}
 ASSIGNMENT = re.compile(r"[A-Za-z_]\w*=")
 SECRET_NAME = re.compile(r"\w*(PASSWORD|SECRET|TOKEN|API_KEY)\w*")
 SECRET_REFERENCE = re.compile(r"\$\{?\w*(PASSWORD|SECRET|TOKEN|API_KEY)")
@@ -152,8 +153,10 @@ def split_redirections(words):
 
 def bash_violation(command):
     for words in segments(command):
+        if any(SECRET_REFERENCE.search(word) for word in words):
+            return "Do not expand passwords or tokens."
         plain, targets = split_redirections(words)
-        reason = segment_violation(command_words(plain), targets)
+        reason = segment_violation(plain, targets)
         if reason:
             return reason
     return None
@@ -164,26 +167,28 @@ def segment_violation(words, targets=()):
         return protected_file_violation(list(targets), ())
     return (
         destructive_violation(words)
-        or protected_file_violation(words, targets)
+        or protected_file_violation(command_words(words), targets)
         or environment_violation(words)
     )
 
 
 def destructive_violation(words):
-    if name(words[0]) != "bench":
-        return None
-    verb = next((word for word in words[1:] if word in DESTRUCTIVE_VERBS | {"new-site"}), None)
-    if verb is None or (verb == "new-site" and "--force" not in words):
-        return None
-    site = site_argument(words, verb)
-    if site in PERSISTENT_SITES:
-        return "Never drop, trim, restore, reinstall or overwrite the persistent Bond Management sites."
-    if not site or not TEMPORARY_SITE.fullmatch(site):
-        # Other apps' sites share this bench and need the user's approval.
-        return (
-            "Destructive bench commands need a literal temporary site named "
-            "bond-management-<name>-<32-hex-id>.localhost; ask before touching any other site."
-        )
+    for index, word in enumerate(words):
+        if name(word) != "bench":
+            continue
+        arguments = words[index + 1 :]
+        verb = next((arg for arg in arguments if arg in DESTRUCTIVE_VERBS | {"new-site"}), None)
+        if verb is None or (verb == "new-site" and "--force" not in arguments):
+            continue
+        site = site_argument(arguments, verb)
+        if site in PERSISTENT_SITES:
+            return "Never drop, trim, restore, reinstall or overwrite the persistent Bond Management sites."
+        if not site or not TEMPORARY_SITE.fullmatch(site):
+            # Other apps' sites share this bench and need the user's approval.
+            return (
+                "Destructive bench commands need a literal temporary site named "
+                "bond-management-<name>-<32-hex-id>.localhost; ask before touching any other site."
+            )
     return None
 
 
@@ -221,8 +226,10 @@ def protected_file_violation(words, targets):
 
 
 def environment_violation(words):
-    program, arguments = name(words[0]), words[1:]
-    if program == "env":
+    if any(name(word) == "printenv" for word in words):
+        return "Do not print the environment."
+    arguments = env_arguments(words)
+    if arguments is not None:
         index = 0
         while index < len(arguments) and (
             arguments[index].startswith("-") or ASSIGNMENT.match(arguments[index])
@@ -230,9 +237,11 @@ def environment_violation(words):
             index += 2 if arguments[index] in ("-u", "--unset", "-C", "--chdir", "-S") else 1
         if index >= len(arguments):
             return "Do not print the environment."
-        return segment_violation(command_words(arguments[index:]))
-    if program == "printenv":
-        return "Do not print the environment."
+        return segment_violation(arguments[index:])
+    words = command_words(words)
+    if not words:
+        return None
+    program, arguments = name(words[0]), words[1:]
     if program == "set" and not arguments:
         return "Do not print the environment."
     if program in VARIABLE_LISTERS:
@@ -241,8 +250,37 @@ def environment_violation(words):
             return "Do not print the environment."
         if any(SECRET_NAME.fullmatch(operand) for operand in operands if "=" not in operand):
             return "Do not print passwords or tokens."
-    if program in ("echo", "printf") and any(SECRET_REFERENCE.search(arg) for arg in arguments):
-        return "Do not print passwords or tokens."
+    return None
+
+
+def env_arguments(words):
+    """Find env behind wrappers, conservatively treating options as taking operands."""
+    index = 0
+    while index < len(words):
+        word = words[index]
+        index += 1
+        if ASSIGNMENT.match(word):
+            continue
+        program = name(word)
+        if program == "env":
+            return words[index:]
+        if program not in ENV_WRAPPERS:
+            return None
+        while index < len(words) and words[index].startswith("-"):
+            option = words[index]
+            index += 1
+            if option == "--":
+                break
+            # Option arity varies by wrapper; ambiguity must not hide an env dump.
+            if (
+                "=" not in option
+                and index < len(words)
+                and not words[index].startswith("-")
+                and name(words[index]) not in ENV_WRAPPERS | {"env"}
+            ):
+                index += 1
+        if program == "timeout" and index < len(words) and name(words[index]) not in ENV_WRAPPERS | {"env"}:
+            index += 1  # timeout also takes a positional duration.
     return None
 
 

@@ -36,6 +36,22 @@ class ClaudeGuardTests(unittest.TestCase):
         self.assert_blocked("bench restore backup.sql.gz")
         self.assert_blocked("cd ../.. && bench trim-tables")
 
+    def test_bench_is_checked_in_any_position(self):
+        commands = (
+            "command -- bench --site bond-management-dev.localhost reinstall --yes",
+            "sudo -u root bench --site bond-management-dev.localhost reinstall --yes",
+            "timeout 60 bench drop-site gita-dev.localhost",
+            "wrapper /usr/local/bin/bench --site bond-management-dev.localhost reinstall --yes",
+        )
+        for command in commands:
+            with self.subTest(command=command):
+                self.assert_blocked(command)
+        temporary = "bond-management-lifecycle-0123456789abcdef0123456789abcdef.localhost"
+        self.assert_blocked(f"wrapper --site {temporary} bench reinstall --yes")
+        self.assert_blocked(f"bench --site {temporary} migrate bench reinstall --yes")
+        self.assert_allowed(f"command -- bench --site {temporary} reinstall --yes")
+        self.assert_allowed("git restore x")
+
     def test_each_command_segment_needs_its_own_site(self):
         temporary = "bond-management-lifecycle-0123456789abcdef0123456789abcdef.localhost"
         self.assert_blocked(f"bench --site {temporary} migrate && bench reinstall --yes")
@@ -126,6 +142,52 @@ class ClaudeGuardTests(unittest.TestCase):
         self.assert_allowed("echo '$FRAPPE_PASSWORD'")
         self.assert_allowed("echo \\$FRAPPE_PASSWORD")
         self.assert_blocked('gh pr create --body "avoid $(printenv)"')
+
+    def test_wrapped_environment_dumps_are_blocked(self):
+        commands = (
+            "command -- printenv",
+            "wrapper /usr/bin/printenv",
+            "command -- env",
+            "sudo -u root env -0",
+            "sudo --user=root env",
+            "sudo -E env",
+            "timeout 60 env",
+            "timeout --preserve-status 60 command -- env",
+            "timeout --signal=KILL 60 nice -n 10 env",
+            "nice -n 10 env",
+            "xargs -n 1 env",
+            "nohup time builtin exec command -- /usr/bin/env",
+            "sudo -u root timeout -s KILL 60 env -i FOO=1",
+            "FRAPPE_USER=x sudo -u root env",
+        )
+        for command in commands:
+            with self.subTest(command=command):
+                self.assert_blocked(command)
+        self.assert_allowed("sudo -u root env CI=Yes yarn lint")
+        self.assert_allowed("timeout 60 env CI=Yes yarn lint")
+        self.assert_allowed("echo env")
+        self.assert_allowed("command -- echo env")
+
+    def test_secret_expansions_are_blocked_for_any_program(self):
+        commands = (
+            'cat <<< "$FRAPPE_PASSWORD"',
+            'grep . <<< "$BOND_SHARE_LOCK_PASSWORD"',
+            'tee <<< "$FRAPPE_ADMIN_PASSWORD"',
+            'cat "$FRAPPE_PASSWORD"',
+            'VALUE="$FRAPPE_PASSWORD" yarn test:e2e',
+            'cat > "$FRAPPE_PASSWORD"',
+            'cat <<< "${FRAPPE_PASSWORD}"',
+            'cat <<< "$SERVICE_SECRET"',
+            'tee <<< "${DEPLOY_TOKEN}"',
+            'grep . <<< "$SERVICE_API_KEY"',
+        )
+        for command in commands:
+            with self.subTest(command=command):
+                self.assert_blocked(command)
+        self.assert_allowed("echo '$FRAPPE_PASSWORD'")
+        self.assert_allowed("cat <<< '$FRAPPE_PASSWORD'")
+        self.assert_allowed('cat <<< "\\$FRAPPE_PASSWORD"')
+        self.assert_allowed("FRAPPE_USER=x yarn test:e2e")
 
     def test_other_tools_are_allowed(self):
         self.assertEqual(run_guard("Read", file_path="/repo/docs/verification.md"), 0)
