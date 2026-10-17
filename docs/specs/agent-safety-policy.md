@@ -1,7 +1,8 @@
 # Agent-neutral safety policy
 
 Status: design accepted with the decisions below (2026-10-17); rollout steps 1
-and 2 implemented.
+and 2 implemented; step 3 `Read` deny rules implemented, sandbox tracer passed,
+sandbox not yet enabled.
 Progress:
 [agent-safety-policy-progress.md](../plans/agent-safety-policy-progress.md).
 The current hook's grammar and guarantee stay as defined in
@@ -97,10 +98,42 @@ Installed: Claude Code 2.1.296, Codex CLI 0.163.0, Frappe v16.51.0.
   makes startup fail instead of running unsandboxed. The docs warn that
   excluding an interpreter or a script inside the working directory gives up
   the boundary.
-- Unverified here: that `allowUnsandboxedCommands: false` and
-  `failIfUnavailable` are honoured from project `.claude/settings.json` (the docs
-  describe the admin-required case for managed settings and `--settings`), and
-  how pre-commit/Semgrep caches outside the worktree behave in the sandbox.
+- Rechecked for step 3 (2026-10-17, same version, the permissions, sandboxing
+  and settings-reference pages):
+  - `Read` path patterns: `//path` absolute, `~/path` home, `/path` relative
+    to the settings source (the primary working directory for project
+    settings, so a worktree's own tree), `path` relative to the current
+    directory. A bare name matches at any depth under its anchor only, so
+    `Read(site_config.json)` would not reach the bench's `sites/`, which sits
+    above an app checkout. `Read(//**/NAME)` matches the name anywhere, the
+    same as the hook's basename rule; the committed rules use it for the two
+    site-config names. `test-browser.env` is denied at its one home path
+    instead, because `scripts/test_verify_helpers.py` writes a synthetic file
+    of that name under a temporary HOME and the sandbox would block it (see the
+    tracer).
+  - Sandbox paths use other prefixes: `/` and `//` absolute, `~/` home,
+    `./` or none relative to the project root. `denyRead` wildcards work on
+    every platform; on Linux/WSL2 a read entry is expanded to the concrete
+    paths it matches. `denyRead` also takes in every `Read(...)` deny rule, so
+    the committed rules already feed the sandbox once it is on.
+  - `sandbox.enabled`, `failIfUnavailable`, `allowUnsandboxedCommands`,
+    `excludedCommands`, `filesystem.denyRead` and `credentials.envVars` are
+    read from any settings file, project included. Only the loosening keys are
+    limited: under an admin-required sandbox (`allowUnsandboxedCommands: false`
+    from managed settings or `--settings`) a repository's `excludedCommands`
+    and `allowWrite` are ignored, and a repository's `false` for `enabled` or
+    `failIfUnavailable` loses to a user `true`. A user-level
+    `allowUnsandboxedCommands: false` beats a project `true`; nothing says a
+    project `false` is ignored. `envVars` `mask` entries are dropped from
+    project settings; `deny` entries are kept.
+  - `excludedCommands` uses `Bash(...)` rule syntax and matches the text of
+    the call, so `bench *` does not match `/path/to/bench`, and every command
+    in a chained call must match. A call with `cd`, a redirect to a file, a
+    command substitution, a subshell or control flow, or a leading
+    `sudo`/`eval`/`xargs` stays sandboxed. Excluded commands go through the
+    normal permission flow.
+  - Results of the tracer that exercised these settings are in the progress
+    note's _Step 3_ section.
 
 **Codex CLI** — checked against `codex --help`, `codex sandbox --help`,
 `codex execpolicy check --help`, `codex features list` (`hooks` stable/true),
@@ -181,10 +214,16 @@ pages.
 
 ### Rules that move to sandbox and permission settings (c)
 
-- Claude, after the tracer run (decision 3): enable the sandbox with `denyRead` on the bench's `sites/**/site_config.json`,
-  `sites/common_site_config.json` and `~/.config/bond_management/test-browser.env`,
-  `credentials.envVars` deny for the secret variables, `allowUnsandboxedCommands:
-  false`, `failIfUnavailable: true`; matching `Read(...)` deny rules.
+- Claude, after the tracer run (decision 3): enable the sandbox with `denyRead` on
+  `//**/site_config.json`, `//**/common_site_config.json` and
+  `~/.config/bond_management/test-browser.env` (the same paths as the `Read`
+  deny rules, which the sandbox also takes in), `credentials.envVars` deny for
+  `SECRET_ENV_VARS`, `allowUnsandboxedCommands: false`, `failIfUnavailable:
+  true`, `excludedCommands` for `bench *` and the two `verify.sh` spellings
+  (decision 1), and `filesystem.allowWrite: ["~/.semgrep"]`, the one extra
+  write path the lint gate needs (Semgrep opens its log there at startup).
+  Step 3 committed only the `Read` deny rules; the tracer passed, and the
+  block waits for the user's approval and the open checks in the progress note.
 - Codex: a permission profile with `deny` on the same paths, writes limited to
   the workspace, and a `shell_environment_policy` filter excluding
   `*PASSWORD*` and the `BOND_SHARE_LOCK_*` names.
@@ -278,6 +317,9 @@ only after step 2 gives callers a replacement.
 - Decide whether the persistent dev site's `site_config.json` should move to a
   path the sandbox denies by directory rather than by basename.
 - Consider `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB` for hooks and MCP servers.
+- `~/.config/bond_management/` also holds a `test-site-ui.env` that is not in
+  `PROTECTED_FILES` (its contents were not read). Decide whether it holds
+  credentials and should be protected or removed.
 
 `docs/domain-model.md` reviewed: no DocType, link, attachment or data flow
 changes.

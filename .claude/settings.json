@@ -1,4 +1,11 @@
 {
+  "permissions": {
+    "deny": [
+      "Read(//**/common_site_config.json)",
+      "Read(//**/site_config.json)",
+      "Read(~/.config/bond_management/test-browser.env)"
+    ]
+  },
   "hooks": {
     "PreToolUse": [
       {

@@ -18,7 +18,123 @@ tree clean at start. Spec and this note only; no code or config changes.
 4. Done (merged in #65 as `54c3011`): rollout step 1. See _Step 1_ below.
 5. Done (uncommitted, branch `claude/affectionate-franklin-509d8d`, base
    `54c3011`): rollout step 2. See _Step 2_ below.
-6. Next: rollout step 3 (Claude `Read` deny rules, then the sandbox tracer).
+6. Done (uncommitted, branch `claude/quirky-herschel-3556b4`, base
+   `1a9f369`): rollout step 3 `Read` deny rules and the sandbox tracer. See
+   _Step 3_ below. The sandbox block is not committed.
+7. Next: the user decides on enabling the sandbox (see _Recommendation_), then
+   rollout step 4 (Codex).
+
+## Step 3: Claude Read deny rules and sandbox tracer
+
+### Deny rules
+
+- `agent_policy.claude_read_deny_rules()` generates
+  `Read(//**/common_site_config.json)`, `Read(//**/site_config.json)` and
+  `Read(~/.config/bond_management/test-browser.env)` from `PROTECTED_FILES`
+  and the new `BROWSER_CREDENTIALS` (home-relative path). `.claude/settings.json`
+  carries them under `permissions.deny`; the PreToolUse hook entry is unchanged.
+- `scripts/test_agent_policy.py` `ClaudeSettingsSyncTests`: the deny list equals
+  the generated list (and the literal expected rules), every protected name has
+  exactly one rule, `BROWSER_CREDENTIALS` is the path `verify.sh` loads, the
+  hook entry is byte-for-byte the old one, and the file has no other keys (so
+  a sandbox block cannot land without updating the test).
+- Why `//**/`: project-relative patterns anchor at the session's working
+  directory (an app checkout or worktree), and the bench's `sites/` is above
+  it. A committed absolute bench path would not be portable.
+- Why the credential rule is not `//**/test-browser.env`: the sandbox adds every
+  `Read` deny rule to its `denyRead`, and `test_verify_helpers.py` writes, sources
+  and deletes a synthetic `test-browser.env` under a temporary HOME. With the
+  basename rule the sandboxed lint gate failed (tracer run 3). The hook still
+  blocks the basename everywhere.
+
+### Tracer
+
+Setup: the draft block in a scratch settings file outside the repo (enabled,
+`failIfUnavailable`, `allowUnsandboxedCommands: false`, `excludedCommands`
+`bench *`, `scripts/verify.sh *`, `apps/bond_management/scripts/verify.sh *`,
+`denyRead` on the three paths, `credentials.envVars` deny for every
+`SECRET_ENV_VARS` name). Each run was a nested headless session
+(`claude -p --settings <file>`, Claude Code 2.1.296, macOS Seatbelt) allowed
+one Bash command. A scratch probe printed only labels and exit statuses, never
+file contents; the driver exported dummy values (`tracer-dummy`) for
+`FRAPPE_PASSWORD`, `DB_ROOT_PASSWORD` and `BOND_SHARE_LOCK_USER`.
+
+| Run | Scope | Result |
+| --- | --- | --- |
+| 1 | `--settings`, user settings only | Probe: home write denied; `cat`, `head -c1`, `python3 open()` and `cat` through a symlink denied for all three files; `grep -r` over the dev site dir and over `sites/` from inside it exit 2; control `cat sites/apps.txt` 0; dummy secrets absent from `printenv`. |
+| 2 | Project `.claude/settings.json` in a scratch project | Same probe, identical results: the block is honoured from project settings. |
+| 3 | `--settings` + repo project settings, `bash scripts/verify.sh lint` | Exit 1: Semgrep could not open `~/.semgrep/semgrep.log`. Pre-commit and the `skills.lock` check passed. |
+| 4 | As 3, plus `allowWrite: ["~/.semgrep"]` | Exit 1: `test_verify_helpers.py` could not delete its synthetic `test-browser.env` (basename deny). Semgrep scans passed. |
+| 5 | As 4, credential rule anchored at its home path | Exit 1, but invalid: pre-commit reported eslint "files were modified" while this session was editing docs during the run; no tracked file changed. |
+| 6 | As 5, no concurrent edits | **Exit 0.** Pre-commit, `skills.lock`, Semgrep (0 findings), rule tests 4, guard 24, policy 17, helpers 12. |
+| 7 | As 6, probe again (symlinks created in the worktree) | All protected reads denied as in run 1, including symlinks to the home-anchored credential file. |
+
+Notes:
+
+- Non-fatal in run 6: Semgrep cannot write `~/.cache/semgrep_version`; the
+  scans and tests still pass. `allowWrite` for it is optional.
+- `printenv` inside the sandbox still shows two secret-like names that Claude
+  Code itself injects (`CLAUDE_CODE_MESSAGING_TOKEN`,
+  `CLOUDSDK_PROXY_PASSWORD`), not project secrets.
+- An earlier probe attempt ran **unsandboxed** by mistake (the scratch project
+  directory had not been created and the driver did not stop on a failed
+  `cd`). It printed statuses only, no contents, and showed every probe
+  succeeding. That confirms the `Read` deny rules alone do not stop a script
+  that opens the files itself.
+- The auto-mode classifier refused two nested runs that asked Claude to retry
+  with `dangerouslyDisableSandbox`. The tracer therefore did not check
+  `allowUnsandboxedCommands: false` or `failIfUnavailable` directly; the docs
+  say both are read from project settings.
+- Not exercised: the `excludedCommands` path (a bench or `verify.sh server`
+  call from the sandboxed session). Exclusions match the call text, and a
+  `cd`, a redirect or a command substitution keeps the call sandboxed, so the
+  bench-root form used for gates from a worktree
+  (`cd <bench> && ... verify.sh server`) would stay sandboxed and fail
+  closed, since bench reads the denied config.
+- Linux/WSL2 expand `denyRead` globs to concrete paths; the cost of
+  `//**/site_config.json` there is unmeasured.
+
+### Recommendation
+
+The tracer passed, so per decision 3 the sandbox can be enabled. Commit the
+block (generated from the core, with the sync test extended) only after the
+user approves, and first:
+
+1. Run one manual check in an interactive session with the block in
+   `.claude/settings.local.json`: `/sandbox` shows strict mode, a
+   `dangerouslyDisableSandbox` retry is refused, and an excluded
+   `scripts/verify.sh server` run from the app checkout (not a worktree) works.
+2. Document in `verification.md` that worktree sessions cannot run the
+   server/UI gates through the `cd <bench> && ...` form under the sandbox; the
+   person runs them, or the session uses the app checkout.
+
+Narrowest additions the block needs: `filesystem.allowWrite: ["~/.semgrep"]`
+(required), `~/.cache/semgrep_version` (optional, silences a warning).
+
+### Verification evidence (step 3)
+
+- Risk classification: agent permission settings, policy core and lint test;
+  no application, schema, permission or financial-rule change.
+- Required gates: `verify.sh pre-push` (lint + server).
+- Commands executed:
+  - `verify.sh lint` from this worktree with the bench `env/bin` on `PATH`
+    (unsandboxed, this session). Exit 0.
+  - `PYTHONPATH=<worktree> apps/bond_management/scripts/verify.sh server`
+    from the bench root, after the last code change. Exit 0.
+  - Sandboxed `bash scripts/verify.sh lint` (tracer run 6). Exit 0.
+- Tests passed: pre-commit, skills.lock check, Semgrep (0 findings) and rule
+  tests (4), guard suite (24), `test_agent_policy.py` (17), `test_verify_helpers.py`
+  (12), server suite (345 + 51 + 10).
+- Mutation check: dropping one rule from `.claude/settings.json` fails
+  `test_read_deny_rules_match_the_core`.
+- Tests failed: none on the final tree.
+- Tests not run: frontend and UI gates (no client or credential-loading
+  change); opt-in `lifecycle` and `share-race` (no site-handling change).
+- Blockers: none for the deny rules. Sandbox open checks are listed under
+  _Recommendation_.
+- Unverified local/CI differences: CI has not run.
+- `docs/domain-model.md` reviewed: no DocType, link, attachment or data-flow
+  change.
 
 ## Step 2: verify.sh owns credentials and site checks
 

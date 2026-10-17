@@ -17,6 +17,8 @@ DESTRUCTIVE_VERBS = frozenset(
 )
 POSITIONAL_SITE_VERBS = frozenset({"drop-site", "new-site"})
 PROTECTED_FILES = frozenset({"site_config.json", "common_site_config.json", "test-browser.env"})
+# Relative to the home directory; scripts/verify.sh loads it for the UI gate.
+BROWSER_CREDENTIALS = ".config/bond_management/test-browser.env"
 SECRET_NAME = re.compile(r"PASSWORD|SECRET|TOKEN|API_KEY", re.IGNORECASE)
 SECRET_ENV_VARS = (
     "FRAPPE_PASSWORD",
@@ -58,6 +60,18 @@ def destructive_site_violation(argv):
         if kind != TEMPORARY:
             return "Destructive bench commands require one literal temporary Bond Management site."
     return None
+
+
+def claude_read_deny_rules():
+    """Claude Code Read deny rules for the protected files.
+
+    Site config: `//**/NAME`, because the bench's sites/ sit outside the session's
+    working directory. Browser credentials: their one home path, so test fixtures
+    of the same name under a temporary HOME stay usable once the Bash sandbox,
+    which takes in these rules, is on.
+    """
+    site_config = sorted(PROTECTED_FILES - {PurePosixPath(BROWSER_CREDENTIALS).name})
+    return [f"Read(//**/{name})" for name in site_config] + [f"Read(~/{BROWSER_CREDENTIALS})"]
 
 
 def main(argv):

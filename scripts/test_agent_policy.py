@@ -1,6 +1,7 @@
 """Cases for the stdlib-only policy core, bond_management/agent_policy.py."""
 
 import ast
+import json
 import subprocess
 import sys
 import unittest
@@ -10,6 +11,7 @@ from claude_guard import agent_policy
 
 APP_ROOT = Path(__file__).resolve().parent.parent
 CORE = APP_ROOT / "bond_management" / "agent_policy.py"
+CLAUDE_SETTINGS = APP_ROOT / ".claude" / "settings.json"
 CONSUMERS = (
     APP_ROOT / "scripts" / "claude_guard.py",
     APP_ROOT / "bond_management" / "bond_management" / "tests" / "temporary_site_guard.py",
@@ -148,6 +150,43 @@ class AgentPolicyTests(unittest.TestCase):
     def test_protected_files(self):
         expected = {"site_config.json", "common_site_config.json", "test-browser.env"}
         self.assertEqual(agent_policy.PROTECTED_FILES, expected)
+
+
+class ClaudeSettingsSyncTests(unittest.TestCase):
+    """.claude/settings.json carries rules generated from the core; hand edits fail here."""
+
+    def setUp(self):
+        self.settings = json.loads(CLAUDE_SETTINGS.read_text())
+
+    def test_read_deny_rules_match_the_core(self):
+        expected = agent_policy.claude_read_deny_rules()
+        self.assertEqual(self.settings["permissions"]["deny"], expected)
+        self.assertEqual(
+            expected,
+            [
+                "Read(//**/common_site_config.json)",
+                "Read(//**/site_config.json)",
+                "Read(~/.config/bond_management/test-browser.env)",
+            ],
+        )
+
+    def test_every_protected_file_has_a_rule(self):
+        rules = agent_policy.claude_read_deny_rules()
+        for name in agent_policy.PROTECTED_FILES:
+            self.assertEqual(sum(rule.endswith(f"/{name})") for rule in rules), 1, name)
+        # The fixture-safe anchor must name the file verify.sh loads.
+        loader = f'local file="${{HOME:-}}/{agent_policy.BROWSER_CREDENTIALS}"'
+        self.assertIn(loader, (APP_ROOT / "scripts" / "verify.sh").read_text())
+
+    def test_guard_hook_entry_is_unchanged(self):
+        hook = {"type": "command", "command": 'python3 "$CLAUDE_PROJECT_DIR/scripts/claude_guard.py"'}
+        expected = {"PreToolUse": [{"matcher": "Bash|Read", "hooks": [hook]}]}
+        self.assertEqual(self.settings["hooks"], expected)
+
+    def test_no_unreviewed_settings(self):
+        # The sandbox block lands only after its tracer passes (spec, decision 3).
+        self.assertEqual(set(self.settings), {"permissions", "hooks"})
+        self.assertEqual(set(self.settings["permissions"]), {"deny"})
 
 
 if __name__ == "__main__":
