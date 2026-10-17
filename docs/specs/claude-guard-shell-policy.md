@@ -21,7 +21,7 @@ blocked. Unsupported syntax and malformed payloads
 fail closed with exit 2 and a diagnostic that contains no command contents.
 
 This is **not a sandbox or a general Bash interpreter**. Transitive behavior of
-external programs, scripts, interpreters, sourced credential-file contents,
+external programs, scripts, interpreters,
 ambient aliases/functions/PATH/options/environment, filesystem aliases/symlinks, and alternative
 secret stores are outside the guarantee. Those need execution/storage controls,
 not further syntax exceptions. No claim is made that an arbitrary accepted
@@ -39,13 +39,13 @@ program cannot read or output a secret internally.
 | Redirections | `<`, `>`, `>>`, optional unquoted numeric descriptors, and `<&`/`>&` with a literal descriptor or `-`. Every file target is checked. Missing targets and other operators are rejected. |
 | Globs | Only unquoted `*` and `?`, in arguments/targets, checked conservatively against protected basenames. A bare `*` is blocked because it can include a protected file. Executable and single-dash option globs are rejected. |
 | Assignments | Raw unquoted `NAME=` followed by a literal value, alone or before a command; literal assignment arguments after `export`/`env`. Assignment-shaped words are not executable names, and post-wrapper assignments are unsupported. No append assignments, parameter evaluation or variable declarations. |
-| Credential setup | Exactly `source PATH` or `. PATH`, where PATH has literal basename `test-browser.env`. The exact `$HOME/.config/bond_management/test-browser.env` and `${HOME}/.config/bond_management/test-browser.env` arguments are the only variable-expansion exception. No extra source arguments or leading assignments for that exception. |
+| Sourcing | Unsupported. Every `source` and `.` command is rejected, and a source of `test-browser.env` is blocked like any other use of a protected file. The former exact credential-source exception was retired in rollout step 2 of the [agent safety policy](agent-safety-policy.md); `scripts/verify.sh ui` loads the browser credentials itself. |
 | Shell setup | `set` may toggle only `a`, `e`, `u`, and `o pipefail`; xtrace and environment dumps are rejected. |
 | Wrappers | Option-free `command`, `exec`, `nohup`, `time`, `builtin`, `sudo`, `nice`, `xargs`; optional `--`. Additionally `sudo -u USER`/`--user USER`/`--user=USER`, `nice -n INTEGER`, `xargs -n POSITIVE_INTEGER`, and `timeout DURATION` (numeric, optional `s/m/h/d`). Unknown options, missing operands/commands, and nonliteral executable positions are rejected. |
 | `env` | Literal assignments followed by a supported command. No options, split strings, or environment-only invocations. Wrapped commands undergo the same checks. |
 
 All other active expansions are unsupported: named/positional/special
-parameters outside the exact credential exception; indirect, default, length,
+parameters; indirect, default, length,
 array, substring and replacement parameters; command/arithmetic/process
 substitutions; backticks; brace/bracket/extended globs; and tilde expansion.
 ANSI-C escapes and locale-dependent quotes are rejected. Here-documents,
@@ -59,7 +59,9 @@ interpreter or transitive code-execution mechanism.
 
 This deliberately narrows the former heuristic policy: non-secret variable
 arguments, substitutions, literal here-strings, harmless brace paths, bare globs,
-and undeclared wrapper options are now rejected uniformly. Use literal tool
+and undeclared wrapper options are now rejected uniformly. Agent safety policy
+step 2 also removed the credential-source exception, so no variable expansion
+and no `source` command is accepted. Use literal tool
 arguments, supported quoting, or a reviewed project script for work outside the
 subset. Previously blocked unsafe regressions must remain blocked.
 
@@ -76,7 +78,7 @@ allows, 2 blocks; diagnostics never echo input or secret values.
 ## Acceptance and verification
 
 The executable matrix covers literals/quotes, escapes, expansions, operators,
-redirections, globs, assignments, wrappers, source/setup, protected sites/files,
+redirections, globs, assignments, wrappers, rejected sourcing, shell setup, protected sites/files,
 environment disclosure and invalid payloads. Each syntax family has safe literal
 counterparts and rejected active forms. Generated cross-products exercise quote
 fragments and wrappers around both allowed temporary-site and blocked persistent

@@ -1,7 +1,7 @@
 # Agent-neutral safety policy
 
-Status: design accepted with the decisions below (2026-10-17); rollout step 1
-implemented.
+Status: design accepted with the decisions below (2026-10-17); rollout steps 1
+and 2 implemented.
 Progress:
 [agent-safety-policy-progress.md](../plans/agent-safety-policy-progress.md).
 The current hook's grammar and guarantee stay as defined in
@@ -65,7 +65,7 @@ or tool permission layer; **(d)** instruction only.
 | --- | --- | --- |
 | Read tool path whose basename is `site_config.json`, `common_site_config.json` or `test-browser.env` (`violation`, Read branch) | (c) Claude `Read` deny rules; (b) hook stays as backstop | Codex has no separate Read tool; its reads go through the shell, so its control is the sandbox row below. |
 | Protected basenames or matching globs in Bash words, `=` values, short-option tails and redirection targets (`protected_names`) | (c) sandbox read deny for agent shells; (b) hook backstop | The OS layer also closes `grep -r`, `tar -c .`, `python -c`, symlinks. **Conflict:** bench reads both config files in-process (`frappe/config.py:get_site_config`), so bench cannot run inside a sandbox that denies them. See _Design_, "bench boundary". |
-| Only exact `source`/`.` of `test-browser.env` (`credential_source`) | (a) `verify.sh ui` loads the file itself; (c) agent shells cannot read it | Removes the only variable-expansion exception from agent commands once adopted. |
+| Only exact `source`/`.` of `test-browser.env` (`credential_source`) | (a) `verify.sh ui` loads the file itself; (c) agent shells cannot read it | Done in step 2: `credential_source` is removed and the hook blocks every `source`. |
 | No expansion of variables named with `PASSWORD`, `SECRET`, `TOKEN` or `API_KEY` (`SECRET_NAME`) | (c) scrub those variables from agent shells; (b) backstop | Claude `sandbox.credentials.envVars` `deny`; Codex `shell_environment_policy`. |
 | `printenv`, bare `env`, bare `set`, xtrace (`command_violation`, `validate_set`) | (c) scrubbed environment makes a dump harmless; (b) backstop | |
 | Destructive verbs `drop-site`, `trim-database`, `trim-tables`, `restore`, `partial-restore`, `reinstall`, forced `new-site` need one literal temporary site; persistent sites always blocked (`destructive_violation`) | (a) in project helpers that drop sites; (b) hook and Codex `prefix_rule` for direct agent calls; (d) for people | Frappe's site commands (`commands/site.py`) call no app hook, so there is no app-level interception point without editing core. |
@@ -168,10 +168,13 @@ pages.
 
 - `verify.sh ui|playwright` loads `$HOME/.config/bond_management/test-browser.env`
   itself when the `FRAPPE_*` variables are unset, so no agent command sources
-  it. Existing callers that export the variables keep working.
+  it. Existing callers that export the variables keep working, and exported
+  values win over the file. Extra arguments go to Playwright, so a single spec
+  runs through the same gate.
 - `drop_temporary_site` and `create_temporary_site` call the core's site check
-  before any bench call, so a corrupted `TEMPORARY_SITE` can never name a
-  persistent site.
+  (`python3 -I bond_management/agent_policy.py SITE`, exit 0 only for one
+  temporary site) before any bench call, so a corrupted `TEMPORARY_SITE` can
+  never name a persistent site.
 - Optional `scripts/temp-site.sh create|drop PREFIX` helper wrapping the same
   functions, so ad-hoc local fresh-install checks have one reviewed path. People
   can still call bench directly; that stays (d).

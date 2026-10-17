@@ -23,16 +23,17 @@ symlink to this file.
 
 ## Running
 
-Serve the test site explicitly, load credentials, then run one spec from the
-app root. Projects: `investor-desktop`, `investor-mobile`, `desk`.
+Serve the test site explicitly, then run one spec through the browser gate from
+the bench root. It migrates and seeds the test site, loads the credentials file
+itself and passes the remaining arguments to Playwright. Projects:
+`investor-desktop`, `investor-mobile`, `desk`.
 
 ```bash
 bench --site bond-management-test.localhost serve --port 8001 --noreload
-set -a; source "$HOME/.config/bond_management/test-browser.env"; set +a
-BASE_URL=http://localhost:8001 yarn playwright test e2e/investor/bonds.spec.ts --project=investor-desktop
+BASE_URL=http://localhost:8001 apps/bond_management/scripts/verify.sh ui e2e/investor/bonds.spec.ts --project=investor-desktop
 ```
 
-Never copy the credentials file contents into the repo or logs. Login failures,
+Never source, print or copy the credentials file. Login failures,
 browser install and CI bootstrap: [verification.md](../docs/verification.md).
 
 ## Exploring in a browser

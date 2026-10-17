@@ -2,9 +2,11 @@
 
 Standard library only: scripts/claude_guard.py loads this file by path without
 package init, and bench code imports it as ``bond_management.agent_policy``.
+scripts/verify.sh runs it as a script to check a temporary site; see main().
 """
 
 import re
+import sys
 from pathlib import PurePosixPath
 
 PERSISTENT_SITES = frozenset({"bond-management-dev.localhost", "bond-management-test.localhost"})
@@ -58,6 +60,14 @@ def destructive_site_violation(argv):
     return None
 
 
+def main(argv):
+    """Exit 0 only for exactly one temporary site name; never echo the input."""
+    if len(argv) == 1 and classify_site(argv[0]) == TEMPORARY:
+        return 0
+    print("Refusing a site that is not one temporary Bond Management site.", file=sys.stderr)
+    return 1
+
+
 def _site_argument(words, verb):
     sites = []
     for index, word in enumerate(words):
@@ -75,3 +85,7 @@ def _site_argument(words, verb):
 
 def _program(word):
     return PurePosixPath(word).name.casefold()
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

@@ -84,10 +84,14 @@ class ClaudeGuardTests(unittest.TestCase):
         self.assert_allowed("bench --site bond-management-test.localhost run-tests --app bond_management")
         self.assert_allowed("bench build && git restore bond_management/hooks.py")
 
-    def test_credential_file_may_only_be_sourced(self):
+    def test_credential_file_is_never_read_or_sourced(self):
+        # scripts/verify.sh loads it itself, so no agent command needs it.
         path = "$HOME/.config/bond_management/test-browser.env"
-        self.assert_allowed(f'set -a; source "{path}"; set +a')
-        self.assert_allowed(f"set -a && . {path} && set +a && yarn test:e2e")
+        self.assert_blocked(f'set -a; source "{path}"; set +a')
+        self.assert_blocked(f"set -a && . {path} && set +a && yarn test:e2e")
+        self.assert_blocked("source /home/x/.config/bond_management/test-browser.env")
+        self.assert_blocked(". test-browser.env")
+        self.assert_allowed("scripts/verify.sh ui")
         self.assert_blocked(f"cat {path}")
         self.assert_blocked(f"grep PASSWORD {path}")
         self.assert_allowed("gh pr create --body 'Blocks printing test-browser.env.'")

@@ -14,7 +14,7 @@ APP_SEMGREP_RULES_FILE="${APP_ROOT}/semgrep/bond_management.yml"
 APP_SEMGREP_TESTS_FILE="${APP_ROOT}/semgrep/tests/bond_management.py"
 
 usage() {
-    echo "Usage: scripts/verify.sh [lint|server|frontend|ui|playwright|pre-push|pre-push-ui|lifecycle|share-race]" >&2
+    echo "Usage: scripts/verify.sh [lint|server|frontend|ui|playwright|pre-push|pre-push-ui|lifecycle|share-race] [playwright args]" >&2
 }
 
 prepare_test_site() {
@@ -126,6 +126,7 @@ run_lint() {
     python3 "${APP_ROOT}/scripts/test_verify_semgrep.py" --semgrep "${binary}"
     python3 "${APP_ROOT}/scripts/test_claude_guard.py"
     python3 "${APP_ROOT}/scripts/test_agent_policy.py"
+    python3 "${APP_ROOT}/scripts/test_verify_helpers.py"
 }
 
 run_server_tests() {
@@ -149,15 +150,75 @@ prepare_playwright_site() {
         bond_management.bond_management.tests.investor_ui_seed.seed_investor_ui_browser_test_data
 }
 
-run_playwright_tests() {
+BROWSER_CREDENTIAL_NAMES=(FRAPPE_USER FRAPPE_PASSWORD FRAPPE_ADMIN_USER FRAPPE_ADMIN_PASSWORD)
+BROWSER_CREDENTIALS_HINT='export them or create $HOME/.config/bond_management/test-browser.env'
+
+# Load and check the browser credentials with xtrace paused, so no value is
+# traced. No caller has to source the credentials file.
+prepare_browser_credentials() {
+    local xtrace=""
+    if [[ "$-" == *x* ]]; then
+        xtrace=1
+        set +x
+    fi
+    load_browser_credentials
     if [[ -z "${FRAPPE_USER:-}" ]] || [[ -z "${FRAPPE_PASSWORD:-}" ]]; then
-        echo "FRAPPE_USER and FRAPPE_PASSWORD are required for investor browser tests." >&2
+        echo "FRAPPE_USER and FRAPPE_PASSWORD are required for investor browser tests; ${BROWSER_CREDENTIALS_HINT}." >&2
         exit 1
     fi
     if [[ -z "${FRAPPE_ADMIN_USER:-}" ]] || [[ -z "${FRAPPE_ADMIN_PASSWORD:-}" ]]; then
-        echo "FRAPPE_ADMIN_USER and FRAPPE_ADMIN_PASSWORD are required for Desk browser tests." >&2
+        echo "FRAPPE_ADMIN_USER and FRAPPE_ADMIN_PASSWORD are required for Desk browser tests; ${BROWSER_CREDENTIALS_HINT}." >&2
         exit 1
     fi
+    if [[ -n "${xtrace}" ]]; then
+        set -x
+    fi
+}
+
+# Source the local credentials file when any browser variable is unset.
+# Variables the caller already set win. The file's output and errors are
+# discarded, so a malformed line cannot echo a value.
+load_browser_credentials() {
+    local file="${HOME:-}/.config/bond_management/test-browser.env"
+    local name missing=""
+    for name in "${BROWSER_CREDENTIAL_NAMES[@]}"; do
+        if [[ -z "${!name:-}" ]]; then
+            missing=1
+        fi
+    done
+    if [[ -z "${missing}" ]] || [[ -z "${HOME:-}" ]] || [[ ! -f "${file}" ]]; then
+        return 0
+    fi
+
+    for name in "${BROWSER_CREDENTIAL_NAMES[@]}"; do
+        printf -v "CALLER_${name}" '%s' "${!name:-}"
+    done
+    # The file was written for an interactive shell, so errexit and nounset are
+    # paused; bash 3.2 would otherwise exit silently inside it. The file may
+    # enable xtrace itself, so xtrace stays off while values are copied.
+    local status=0
+    set -a +eu
+    # shellcheck source=/dev/null
+    source "${file}" >/dev/null 2>&1
+    status=$?
+    set +ax -eu
+    if [[ "${status}" -ne 0 ]]; then
+        echo "Could not load browser test credentials from ${file}." >&2
+        exit 1
+    fi
+    local caller
+    for name in "${BROWSER_CREDENTIAL_NAMES[@]}"; do
+        caller="CALLER_${name}"
+        if [[ -n "${!caller:-}" ]]; then
+            printf -v "${name}" '%s' "${!caller}"
+            export "${name}"
+        fi
+        unset "${caller}"
+    done
+}
+
+run_playwright_tests() {
+    prepare_browser_credentials
 
     prepare_playwright_site
 
@@ -168,7 +229,7 @@ run_playwright_tests() {
     fi
 
     local base_url="${BASE_URL:-${PLAYWRIGHT_BASE_URL:-http://localhost:8000}}"
-    BASE_URL="${base_url}" yarn test:e2e
+    BASE_URL="${base_url}" yarn test:e2e "$@"
 }
 
 TEMPORARY_SITE=""
@@ -178,8 +239,17 @@ if [[ -n "${DB_ROOT_PASSWORD:-}" ]]; then
     DB_ROOT_ARGS=(--db-root-password "${DB_ROOT_PASSWORD}")
 fi
 
+# Run before every bench call on a temporary site, so a corrupted name can never
+# reach a persistent or foreign site. The core never echoes the name.
+require_temporary_site() {
+    if ! python3 -I "${APP_ROOT}/bond_management/agent_policy.py" "$1"; then
+        exit 1
+    fi
+}
+
 drop_temporary_site() {
     if [[ -n "${TEMPORARY_SITE}" ]]; then
+        require_temporary_site "${TEMPORARY_SITE}"
         cd "${BENCH_ROOT}"
         # Archive into a run-scoped directory and remove it once the drop succeeds,
         # so repeated runs do not accumulate site trees under archived/sites.
@@ -200,6 +270,7 @@ create_temporary_site() {
     shift
     local site
     site="${prefix}$(python3 -c 'import uuid; print(uuid.uuid4().hex)').localhost"
+    require_temporary_site "${site}"
 
     cd "${BENCH_ROOT}"
     TEMPORARY_SITE="${site}"
@@ -263,11 +334,9 @@ case "${MODE}" in
     frontend)
         run_frontend_checks
         ;;
-    ui)
-        run_playwright_tests
-        ;;
-    playwright)
-        run_playwright_tests
+    ui | playwright)
+        # Extra arguments go to Playwright, for example one spec and --project.
+        run_playwright_tests "${@:2}"
         ;;
     pre-push)
         run_lint
