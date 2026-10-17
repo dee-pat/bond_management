@@ -18,7 +18,7 @@ EXPLICIT_SITE = re.compile(r"--site[ =]\S+|\bdrop-site\s+\S+|\bnew-site\s+\S+")
 CREDENTIAL_FILE = "test-browser.env"
 SOURCE_CREDENTIAL_FILE = re.compile(r"(^|[;&|(]\s*|\s)(source|\.)\s+\S*test-browser\.env\b")
 SITE_CONFIG = re.compile(r"\b(common_)?site_config\.json\b")
-PRINT_FILE = re.compile(r"\b(cat|head|tail|less|more|bat|strings|xxd|od)\b")
+PRINT_FILE = re.compile(r"\b(cat|head|tail|less|more|bat|strings|xxd|od|grep|rg|sed|awk|cut|cp)\b")
 SECRET_NAME = r"\w*(PASSWORD|SECRET|TOKEN|API_KEY)\w*"
 ECHO_SECRET = re.compile(r"\b(echo|printf)\b[^|;&]*\$\{?" + SECRET_NAME)
 DUMP_ENV = re.compile(r"(^|[;&|]\s*)(printenv|env|export -p|set)\s*($|[;&|])|\bprintenv\s+" + SECRET_NAME)
@@ -30,7 +30,11 @@ def bash_violation(command):
             return "Never drop, trim, restore, reinstall or overwrite the persistent Bond Management sites."
         if not EXPLICIT_SITE.search(command):
             return "Name the temporary site explicitly; the default site may be a persistent one."
-    if CREDENTIAL_FILE in command and not SOURCE_CREDENTIAL_FILE.search(command):
+    if (
+        CREDENTIAL_FILE in command
+        and PRINT_FILE.search(command)
+        and not SOURCE_CREDENTIAL_FILE.search(command)
+    ):
         return f"Load {CREDENTIAL_FILE} with `source`; never print its contents."
     if SITE_CONFIG.search(command) and PRINT_FILE.search(command):
         return "Site configuration holds database and encryption secrets; read only the keys you need."

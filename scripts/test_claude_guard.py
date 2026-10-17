@@ -48,6 +48,7 @@ class ClaudeGuardTests(unittest.TestCase):
         self.assert_allowed(f"set -a && . {path} && set +a && yarn test:e2e")
         self.assert_blocked(f"cat {path}")
         self.assert_blocked(f"grep PASSWORD {path}")
+        self.assert_allowed("gh pr create --body 'Blocks printing test-browser.env.'")
         self.assertEqual(run_guard("Read", file_path="/Users/x/.config/bond_management/test-browser.env"), 2)
 
     def test_site_config_contents_are_not_printed(self):
