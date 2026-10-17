@@ -6,6 +6,34 @@
       "Read(~/.config/bond_management/test-browser.env)"
     ]
   },
+  "sandbox": {
+    "enabled": true,
+    "failIfUnavailable": true,
+    "allowUnsandboxedCommands": false,
+    "excludedCommands": [
+      "bench *",
+      "scripts/verify.sh *",
+      "apps/bond_management/scripts/verify.sh *"
+    ],
+    "filesystem": {
+      "denyRead": [
+        "//**/common_site_config.json",
+        "//**/site_config.json",
+        "~/.config/bond_management/test-browser.env"
+      ],
+      "allowWrite": ["~/.semgrep"]
+    },
+    "credentials": {
+      "envVars": [
+        { "name": "FRAPPE_PASSWORD", "mode": "deny" },
+        { "name": "FRAPPE_ADMIN_PASSWORD", "mode": "deny" },
+        { "name": "DB_ROOT_PASSWORD", "mode": "deny" },
+        { "name": "BOND_SHARE_LOCK_SOCKET", "mode": "deny" },
+        { "name": "BOND_SHARE_LOCK_USER", "mode": "deny" },
+        { "name": "BOND_SHARE_LOCK_PASSWORD", "mode": "deny" }
+      ]
+    }
+  },
   "hooks": {
     "PreToolUse": [
       {

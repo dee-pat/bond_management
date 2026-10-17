@@ -20,13 +20,16 @@ tree clean at start. Spec and this note only; no code or config changes.
    `54c3011`): rollout step 2. See _Step 2_ below.
 6. Done (uncommitted, branch `claude/quirky-herschel-3556b4`, base
    `1a9f369`): rollout step 3 `Read` deny rules and the sandbox tracer. See
-   _Step 3_ below. The sandbox block is not committed.
+   _Step 3_ below. The sandbox block followed separately (item 9).
 7. Done (uncommitted, branch `claude/ecstatic-babbage-a92288`, base
    `14d8b3d`): rollout step 4, the Codex project layer. See _Step 4_ below.
-8. Open: the user decides on enabling the Claude sandbox (see
-   _Recommendation_). The live Codex check below verified the hook and
-   environment filter, and the user confirmed the persistent-site exec-policy
-   decision outside any agent.
+8. Done: the live Codex check below verified the hook and environment
+   filter, and the user confirmed the persistent-site exec-policy decision
+   outside any agent.
+9. Done (uncommitted, branch `claude/enable-claude-sandbox`, base `95d93b8`):
+   the user approved enabling the Claude sandbox; the interactive checks
+   passed and the block is in `.claude/settings.json`. See _Sandbox
+   enablement_ under _Step 3_.
 
 ## Live Codex check — 2026-10-17
 
@@ -273,6 +276,75 @@ user approves, and first:
 
 Narrowest additions the block needs: `filesystem.allowWrite: ["~/.semgrep"]`
 (required), `~/.cache/semgrep_version` (optional, silences a warning).
+
+### Sandbox enablement (2026-10-17)
+
+The user approved enabling the sandbox. The draft block (keys checked against
+the 2.1.296 sandboxing and settings-reference pages) went into the ignored
+`.claude/settings.local.json` first; `~/.cache/semgrep_version` was left out.
+The checks ran in an interactive terminal session in the app checkout
+(Claude Code 2.1.302, which had auto-updated from 2.1.296), started with dummy
+values (`tracer-dummy`) for `FRAPPE_PASSWORD`, `DB_ROOT_PASSWORD` and
+`BOND_SHARE_LOCK_USER`. A scratch probe printed labels and exit statuses only.
+
+| Check | Result |
+| --- | --- |
+| a. `/sandbox` | Mode "Sandbox BashTool, with auto-allow"; Overrides "Strict sandbox mode (current)". Pass. |
+| b. Protected reads, secrets | `cat`, `python3 -I` `open()` and `cat` through a symlink exit 1 for both site configs of each persistent site, `common_site_config.json` and the browser credentials; `grep -r x` over `sites/` exit 2; control `cat sites/apps.txt` 0. All six `SECRET_ENV_VARS` absent, including the three dummies; `PATH` present. Pass. |
+| c. No unsandboxed retry | `touch ~/sandbox-probe` failed with "Operation not permitted" and was not retried. Pass. |
+| d. Excluded server gate | `scripts/verify.sh server` from the app checkout: exit 0, 51 + 345 + 10 tests. Pass. |
+| d. Sandboxed lint gate | `bash scripts/verify.sh lint`: exit 0 (pre-commit, `skills.lock`, Semgrep 0 findings and rule tests, Python suites 4, 24, 25, 12). Pass. |
+
+Findings along the way:
+
+- Project settings load only after the folder is trusted. The first terminal
+  run stopped at first-run setup, and `/sandbox` showed the sandbox off until
+  the folder was trusted.
+- In the Claude desktop app session, `/sandbox` showed the sandbox and strict
+  mode off, yet that session's commands ran under a sandbox carrying the
+  project's `denyRead` and `allowWrite` paths, and with `dangerouslyDisableSandbox`
+  disabled. Recorded as a spec follow-up; the terminal run is the evidence.
+- The documented bench-root form did not run: Claude Code reset the shell to
+  the project after `cd <bench>`, so `apps/bond_management/scripts/verify.sh
+  server` exited 127. `scripts/verify.sh server` matches the
+  `scripts/verify.sh *` exclusion and `verify.sh` derives the bench from its
+  own path, so that is the spelling verification.md now gives. The first try
+  exited 1 because the bench's Redis was not running; it passed after the user
+  started `bench start`.
+- `rm .claude/settings.local.json` is denied inside the sandbox (Claude Code
+  write-protects its settings files); the draft was cleared with the file tool.
+
+Committed: `agent_policy.claude_sandbox_settings()` generates the block;
+`.claude/settings.json` carries it; `ClaudeSettingsSyncTests` checks it equals
+the core, the strict keys and exclusions literally, `denyRead` equal to the
+`Read` deny paths, a `deny` entry for every `SECRET_ENV_VARS` name, and no
+other keys. Mutation check: removing the `DB_ROOT_PASSWORD` entry from
+`.claude/settings.json` fails `test_sandbox_block_matches_the_core`.
+
+### Verification evidence (sandbox enablement)
+
+- Risk classification: agent sandbox settings, policy core and lint test; no
+  application, schema, permission or financial-rule change.
+- Required gates: `verify.sh pre-push` (lint + server).
+- Commands executed: `scripts/verify.sh pre-push` from the app checkout, in
+  the desktop session with the committed block loaded (excluded, so it ran
+  outside the sandbox), after the last code change. Exit 0. Then
+  `bash scripts/verify.sh lint` (sandboxed) after the final docs edit.
+- Tests passed: pre-commit, `skills.lock` check, Semgrep (22 blocking,
+  50 advisory, 2 app rules, 0 findings) and rule tests (4), guard suite (24),
+  `test_agent_policy.py` (29), `test_verify_helpers.py` (12), server suite
+  (51 + 345 + 10).
+- Tests failed: none on the final tree. The interactive server check's first
+  run exited 1 because Redis was down (environment, not code).
+- Tests not run: frontend and UI gates (no client or credential-loading
+  change); opt-in `lifecycle` and `share-race` (no site-handling change).
+- Blockers: none.
+- Unverified local/CI differences: CI has not run; CI runs no Claude Code, so
+  the sandbox itself is checked only by the interactive checks above. Linux
+  and WSL2 expand the `//**/` `denyRead` globs to concrete paths; the cost
+  there is unmeasured.
+- `docs/domain-model.md` reviewed: no DocType, link, attachment or data-flow
+  change.
 
 ### Verification evidence (step 3)
 
