@@ -24,8 +24,85 @@ tree clean at start. Spec and this note only; no code or config changes.
 7. Done (uncommitted, branch `claude/ecstatic-babbage-a92288`, base
    `14d8b3d`): rollout step 4, the Codex project layer. See _Step 4_ below.
 8. Open: the user decides on enabling the Claude sandbox (see
-   _Recommendation_); a live Codex session tracer once a user has trusted the
-   project and hook.
+   _Recommendation_). The live Codex check below verified the hook and
+   environment filter, and the user confirmed the persistent-site exec-policy
+   decision outside any agent.
+
+## Live Codex check — 2026-10-17
+
+Codex CLI `0.163.0`, macOS, baseline `dbc02cdf2418ed622b1ca18bdcafc344d3c0f1bc`
+on `main` in `dee-pat/bond_management`; initially clean. Results recorded on
+`codex/live-safety-check-2026-10-17`. Read `AGENTS.md`, `docs/verification.md`
+and `docs/agents/codex-user-config.md` first. No protected-file contents were
+read, printed or copied, and neither bench help probe reached execution.
+
+| Check | Expected | Observed | Layer |
+| --- | --- | --- | --- |
+| Rules: dev reinstall | `forbidden` | In Codex: check command refused by the hook. Run by the user in a plain terminal: `forbidden` (see below) | Hook; rule checker |
+| Rules: test drop-site | `forbidden` | In Codex: check command refused by the hook; not rerun outside Codex | Hook |
+| Rules: lifecycle temporary-site reinstall | Not forbidden | Exit 0, `{"matchedRules":[]}` | Rule checker |
+| Live canonical dev reinstall, `--help` | Refused before execution | Refused before execution | Hook |
+| Live `--site=...` dev reinstall, `--help` | Hook refusal | Refused before execution | Hook |
+| `cat /nonexistent-dir/site_config.json` | Protected-file refusal | Refused before execution; no missing-file error | Hook |
+| `FAKE_PASSWORD` membership only | `False` | Exit 0, `False` | Environment filter |
+| `git status` | Allowed | Exit 0, clean `main` | Allowed control |
+| Optional dev config `grep -c x` | Sandbox denial, if user profile added | Not run: supplied session profile has no protected-file deny entries | Sandbox unverified |
+
+Exact tool refusal for both rule checks and both bench help probes (followed
+by the tool's command echo):
+
+```text
+Command blocked by PreToolUse hook: Blocked by scripts/claude_guard.py: Never destroy or overwrite the persistent Bond Management sites. See docs/verification.md..
+```
+
+Exact protected-file refusal (followed by the tool's command echo):
+
+```text
+Command blocked by PreToolUse hook: Blocked by scripts/claude_guard.py: Protected credential/configuration file. See docs/verification.md..
+```
+
+Rule decision confirmed by the user in a plain terminal, outside any agent (so
+no hook applied), on the same day:
+
+```text
+$ codex execpolicy check --rules .codex/rules/bond_management.rules bench --site bond-management-dev.localhost reinstall
+{"matchedRules":[{"prefixRuleMatch":{"matchedPrefix":["bench","--site","bond-management-dev.localhost","reinstall"],"decision":"forbidden","justification":"Never destroy or overwrite the persistent Bond Management sites. See docs/verification.md."}}],"decision":"forbidden"}
+```
+
+The other persistent-site rules come from the same generator and are covered
+by the sync test in `scripts/test_agent_policy.py`.
+
+Surprises: the hook recognises literal `bench` anywhere in the arguments,
+including inside the read-only `codex execpolicy check` command. No variations
+were tried to bypass it. Codex version and the allowed rule check also warned:
+`WARNING: proceeding, even though we could not create PATH aliases: Operation not permitted (os error 1)`.
+Branch creation initially exited 128 because the sandbox could not write the
+Git ref; the approved escalated retry exited 0.
+
+Verification evidence:
+
+- Risk classification: documentation-only live-session evidence; no policy or
+  application change.
+- Required gate: bench-root `apps/bond_management/scripts/verify.sh lint`.
+- Commands executed: the requested three rule checks, two bench help probes,
+  nonexistent protected-file probe, boolean environment probe and `git status`.
+  Ran `apps/bond_management/scripts/verify.sh lint` from the bench root.
+- Exit statuses: blocked commands had no process exit status; allowed rule
+  check, environment probe and control exited 0. Sandboxed lint exited 1 at
+  Semgrep startup (`ca-certs: empty trust anchors`); the approved escalated
+  retry exited 0.
+- Tests passed: hook probes, environment presence check and allowed control;
+  temporary-site rule check returned no matches. Lint: pre-commit, skills.lock,
+  Semgrep (0 findings), rule tests (4), guard (24), policy (25) and helpers (12).
+- Tests failed: none executed failed. Inside Codex, the hook kept the two
+  persistent-site rule checks from running; the user then confirmed the dev
+  reinstall decision outside any agent.
+- Tests not run: optional sandbox read; server, frontend, UI and lifecycle
+  gates (documentation only).
+- Blockers: none. Agents cannot run persistent-site `codex execpolicy check`
+  commands, because the hook blocks them; run those checks from a plain terminal.
+- Unverified local/CI differences: live macOS session only; no CI run requested.
+- `docs/domain-model.md` reviewed: no data-model or data-flow change.
 
 ## Step 4: Codex project layer
 
