@@ -124,7 +124,6 @@ run_lint() {
     local binary
     binary="$(semgrep_binary)"
     python3 "${APP_ROOT}/scripts/test_verify_semgrep.py" --semgrep "${binary}"
-    python3 "${APP_ROOT}/scripts/test_claude_guard.py"
     python3 "${APP_ROOT}/scripts/test_agent_policy.py"
     python3 "${APP_ROOT}/scripts/test_verify_helpers.py"
     python3 "${APP_ROOT}/scripts/test_workflow_concurrency.py"

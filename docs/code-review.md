@@ -85,17 +85,6 @@ score rubric is unchanged.
   meets the blocking bar above. Otherwise reply, resolve or record a follow-up,
   and do not request another review round for it.
 
-Example: the Claude guard (`scripts/claude_guard.py`) is bounded by
-[Goal and guarantee](specs/claude-guard-shell-policy.md#goal-and-guarantee) in
-its shell-policy spec. A literal protected basename or destructive `bench` word
-that an accepted command spelling lets through is inside the guarantee and
-blocks merge. These are outside it and are closed by reference to that section:
-recursive or directory reads that reach a protected file without naming it
-(`tar -c .`, `grep -r`, `cp -R`), interpreter one-liners (`python -c`,
-`node -e`), symlinks or other filesystem aliases, and scripts or programs whose
-own behaviour reads a secret. Protecting secrets against those needs an
-execution or storage control, not another syntax rule.
-
 ## Review output contract
 
 Apply this contract to reviews of PRs, commits, and uncommitted changes by

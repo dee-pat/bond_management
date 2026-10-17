@@ -921,6 +921,14 @@ class TestInvestorShares(IntegrationTestCase):
         self.assertFalse(frappe.db.exists("User Permission", self.assignment.name))
         self.assertFalse(frappe.db.exists("DocShare", share.name))
 
+    def test_bulk_clear_dispatch_system_manager_post_repairs_shares(self):
+        share = add_docshare("Bond Portfolio", self.assigned.name, self.investor.name)
+        system_manager = make_user(["System Manager"])
+        with self.set_user(system_manager.name):
+            self.assertEqual(self.dispatch_clear_portfolio_assignments("POST"), 1)
+        self.assertFalse(frappe.db.exists("User Permission", self.assignment.name))
+        self.assertFalse(frappe.db.exists("DocShare", share.name))
+
     def test_bulk_clear_dispatch_unauthorized_post_preserves_assignments_and_shares(self):
         share = add_docshare("Bond Portfolio", self.assigned.name, self.investor.name)
         with self.set_user(self.investor.name):
