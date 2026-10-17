@@ -18,7 +18,11 @@ destructive-site check live once in `bond_management/agent_policy.py`
 covers persistent, temporary and foreign sites across every destructive verb,
 the 32-hex suffix boundary, the core's stdlib-only imports, its script
 check, and that `.claude/settings.json` holds exactly the `Read` deny rules the
-core generates plus the unchanged guard hook. `scripts/test_verify_helpers.py` covers `verify.sh` loading the browser
+core generates plus the unchanged guard hook, that the `.codex/` rules and
+environment filter match the core, and that the Codex hook blocks through the
+guard with Codex's payload shape and outside a checkout. When `codex` is
+installed it also loads the rules with `codex execpolicy check`; CI skips that
+case. `scripts/test_verify_helpers.py` covers `verify.sh` loading the browser
 credentials file (synthetic values in a temporary HOME), exported variables
 winning, no value reaching output or xtrace, and the temporary-site check
 before any stubbed bench call. `verify.sh lint` runs all three suites. Tests pass command text only to the hook, never execute those

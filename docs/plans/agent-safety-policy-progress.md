@@ -21,8 +21,94 @@ tree clean at start. Spec and this note only; no code or config changes.
 6. Done (uncommitted, branch `claude/quirky-herschel-3556b4`, base
    `1a9f369`): rollout step 3 `Read` deny rules and the sandbox tracer. See
    _Step 3_ below. The sandbox block is not committed.
-7. Next: the user decides on enabling the sandbox (see _Recommendation_), then
-   rollout step 4 (Codex).
+7. Done (uncommitted, branch `claude/ecstatic-babbage-a92288`, base
+   `14d8b3d`): rollout step 4, the Codex project layer. See _Step 4_ below.
+8. Open: the user decides on enabling the Claude sandbox (see
+   _Recommendation_); a live Codex session tracer once a user has trusted the
+   project and hook.
+
+## Step 4: Codex project layer
+
+- Unverified spec items checked first; results are in the spec's _Tool
+  capabilities_ section. In short: `tool_input.command` is a string with
+  `tool_name: "Bash"` (Codex 0.163.0 source), a trusted project
+  `.codex/config.toml` can define permission profiles and
+  `shell_environment_policy`, and macOS deny globs block reads at any depth.
+  The spec's note on default environment excludes was corrected: they apply
+  only with `ignore_default_excludes = false`.
+- `.codex/rules/bond_management.rules`: 14 `forbidden` `prefix_rule`s from
+  `agent_policy.codex_rules()`, one per persistent site and verb:
+  `bench --site SITE VERB` for the five option verbs, `bench drop-site SITE` and
+  `bench new-site SITE`. Each has a `match` example and a `not_match` example
+  on a temporary site.
+- `.codex/hooks.json`: `PreToolUse`, matcher `Bash`, runs
+  `python3 "$(git rev-parse --show-toplevel)/scripts/claude_guard.py"`. No
+  adapter: the payload matches the guard's contract. Outside a checkout Python
+  exits 2 with a stderr reason, so the hook blocks rather than passes.
+- `.codex/config.toml`: `shell_environment_policy.filters` excluding
+  `*PASSWORD*`, `BOND_SHARE_LOCK_SOCKET` and `BOND_SHARE_LOCK_USER`, from
+  `agent_policy.codex_config()`. Decision 2 asked for a user-level snippet only
+  where a project file cannot carry the setting; this one can.
+- The permission profile is a user-level snippet in
+  [docs/agents/codex-user-config.md](../agents/codex-user-config.md), with the
+  trust steps: its deny paths sit outside the workspace and differ per
+  machine, and a project `default_permissions` would override each user's
+  sandbox choice.
+- `python3 -I bond_management/agent_policy.py --codex-rules|--codex-config`
+  prints each generated file; `GENERATED_FILES` maps the flag to its path.
+- `scripts/test_agent_policy.py` `CodexConfigSyncTests`: both files equal the
+  generated text; the prefix list equals an independently written list and
+  the core blocks every prefix; `.codex/` holds only the three reviewed files
+  and `config.toml` only the environment table; every `SECRET_ENV_VARS` name
+  is filtered and ordinary names are not; `hooks.json` is exact; the hook
+  command blocks a protected read and a persistent-site reinstall with
+  Codex's full payload shape and allows `git status`; it blocks outside a
+  checkout. With `codex` installed, `codex execpolicy check` returns
+  `forbidden` for every prefix, nothing for its temporary-site twin, and fails
+  to load a file whose `not_match` the rule matches. CI has no Codex and skips
+  that case.
+
+### Probes (Codex CLI 0.163.0, macOS)
+
+All under a scratch `CODEX_HOME` with decoy files and dummy variable values;
+no protected file was read and no value printed.
+
+- Profile in a trusted project `config.toml`: denied `*.decoy` at the top
+  level, two levels deep and at an absolute path outside the workspace;
+  `grep -r` saw "Operation not permitted"; a new matching file could not be
+  created. Untrusted: the command refused to run.
+- User-level profile in the documented shape (`extends = ":workspace"`,
+  `":root" = "read"`, absolute `sites/**` globs, a `~/` path): `cat` and
+  `python3 -I -c open()` denied, an unrelated file under `sites/` readable.
+- The generated `.codex/` copied into a trusted scratch project: the five
+  secret names were unset in the sandboxed command, an unrelated variable kept.
+- Not exercised: a live model session (hook trust by hash, `/hooks`, escalation
+  of `bench`).
+
+### Verification evidence (step 4)
+
+- Risk classification: agent configuration, policy core and lint test; no
+  application, schema, permission or financial-rule change.
+- Required gates: `verify.sh pre-push` (lint + server).
+- Commands executed:
+  - `env PATH=<bench>/env/bin:... bash scripts/verify.sh lint` from this
+    worktree, after the last code change, with the new files marked
+    intent-to-add so pre-commit sees them. Exit 0.
+  - `PYTHONPATH=<worktree> apps/bond_management/scripts/verify.sh server` from
+    the bench root after the last `agent_policy.py` change. Exit 0.
+- Tests passed: pre-commit, skills.lock check, Semgrep (0 findings) and rule
+  tests (4), guard suite (24), `test_agent_policy.py` (25, including the
+  `codex execpolicy` case), `test_verify_helpers.py` (12), server suite
+  (345 + 51 + 10).
+- Mutation check: changing one verb in the rules file fails
+  `test_generated_files_match_the_core`.
+- Tests failed: the first lint run (two ruff `RUF005` findings in the new
+  tests, fixed).
+- Tests not run: frontend and UI gates (no client change); opt-in `lifecycle`
+  and `share-race` (no site-handling change).
+- Unverified local/CI differences: CI has not run; CI skips the Codex CLI case.
+- `docs/domain-model.md` reviewed: no DocType, link, attachment or data-flow
+  change.
 
 ## Step 3: Claude Read deny rules and sandbox tracer
 
