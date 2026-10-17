@@ -164,13 +164,17 @@ configured bench.
 
 For Claude Code, `.claude/settings.json` runs `scripts/claude_guard.py` before
 each Bash or Read call. It splits commands the way Bash does (quotes,
-separators, `$( )` and backticks) and fails closed: drop, trim, restore,
-reinstall and forced new-site commands need a literal temporary site name, any
-command naming the credential file or a site configuration file is blocked
-except `source` of the credential file, and environment dumps and echoed
-password variables are blocked. Heredoc bodies are checked like commands, so
-put text that quotes these forms in a file. It backs up these rules; it does
-not replace them, since code that runs other code can always get past it.
+separators, redirections, `$( )` and backticks) and fails closed: drop, trim,
+restore, reinstall and forced new-site commands need a literal
+`bond-management-<name>-<32-hex-id>.localhost` temporary site, any command
+naming the credential file or a site configuration file (literally or by a
+wildcard) is blocked except `source` of the credential file, and environment
+dumps and printed password variables are blocked. Heredoc bodies are checked
+like commands, so put text that quotes these forms in a file. A path built from
+a variable or a bare `*` cannot be checked before the command runs: the hook
+rejects variable sites for destructive commands, but not variable paths. It
+backs up these rules; it does not replace them, since code that runs other code
+can always get past it.
 
 ### Credentials
 

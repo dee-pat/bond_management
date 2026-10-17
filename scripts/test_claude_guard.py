@@ -17,6 +17,8 @@ def run_guard(tool_name, **tool_input):
 
 
 class ClaudeGuardTests(unittest.TestCase):
+    credential_path = "$HOME/.config/bond_management/test-browser.env"
+
     def assert_blocked(self, command):
         self.assertEqual(run_guard("Bash", command=command), 2, command)
 
@@ -46,6 +48,13 @@ class ClaudeGuardTests(unittest.TestCase):
         self.assert_blocked("bench --site $(cat site.txt) restore backup.sql.gz")
         self.assert_blocked("bench --site all reinstall --yes")
         self.assert_allowed(f'bench --site "{temporary}" reinstall --yes')
+
+    def test_only_temporary_bond_sites_may_be_destroyed(self):
+        race = "bond-management-race-0123456789abcdef0123456789abcdef.localhost"
+        self.assert_blocked("bench --site customer.localhost reinstall --yes")
+        self.assert_blocked("bench drop-site gita-dev.localhost --no-backup")
+        self.assert_blocked("bench drop-site bond-management-scratch.localhost --no-backup")
+        self.assert_allowed(f"bench drop-site {race} --no-backup > drop.log 2>&1")
 
     def test_line_continuations_are_joined(self):
         self.assert_blocked("bench --site bond-management-dev.localhost \\\n reinstall --yes")
@@ -77,6 +86,11 @@ class ClaudeGuardTests(unittest.TestCase):
         self.assert_blocked("head sites/common_site_config.json")
         self.assert_blocked("jq . sites/bond-management-dev.localhost/site_config.json")
         self.assert_blocked('python3 -c "print(1)" < sites/common_site_config.json')
+        self.assert_blocked("cat sites/example/site_config.json>/tmp/config; cat /tmp/config")
+        self.assert_blocked("jq . <sites/common_site_config.json")
+        self.assert_blocked("cat sites/x/site_conf*.json")
+        self.assert_blocked("cp sites/x/*site_config.js?? /tmp/copy")
+        self.assert_allowed("ls *.py > files.txt 2>&1")
         self.assertEqual(run_guard("Read", file_path="/bench/sites/common_site_config.json"), 2)
         self.assert_allowed("bench --site bond-management-test.localhost set-config allow_tests true")
 
@@ -97,6 +111,11 @@ class ClaudeGuardTests(unittest.TestCase):
         self.assert_blocked("export -p")
         self.assert_blocked("declare -x")
         self.assert_blocked("set")
+        self.assert_blocked("env > /tmp/environment")
+        self.assert_blocked("declare -p FRAPPE_PASSWORD")
+        self.assert_blocked(f"source {self.credential_path} && export -p FRAPPE_PASSWORD")
+        self.assert_blocked("typeset -p BOND_SHARE_LOCK_PASSWORD")
+        self.assert_blocked("readonly")
         self.assert_allowed("set -euo pipefail; echo done")
         self.assert_allowed("env CI=Yes yarn lint")
         self.assert_allowed("export CI=Yes")

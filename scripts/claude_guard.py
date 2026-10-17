@@ -10,16 +10,22 @@ always get past it.
 import json
 import re
 import sys
+from fnmatch import fnmatchcase
 from pathlib import PurePosixPath
 
-PERSISTENT_SITES = {"bond-management-dev.localhost", "bond-management-test.localhost", "all"}
+PERSISTENT_SITES = {"bond-management-dev.localhost", "bond-management-test.localhost"}
+TEMPORARY_SITE = re.compile(r"bond-management-[a-z0-9-]+-[0-9a-f]{32}\.localhost")
 DESTRUCTIVE_VERBS = {"drop-site", "trim-database", "trim-tables", "restore", "partial-restore", "reinstall"}
 POSITIONAL_SITE_VERBS = {"drop-site", "new-site"}
 PROTECTED_FILES = {"site_config.json", "common_site_config.json", "test-browser.env"}
 CREDENTIAL_FILE = "test-browser.env"
 COMMAND_PREFIXES = {"sudo", "command", "exec", "nohup", "time", "builtin"}
 ASSIGNMENT = re.compile(r"[A-Za-z_]\w*=")
+SECRET_NAME = re.compile(r"\w*(PASSWORD|SECRET|TOKEN|API_KEY)\w*")
 SECRET_REFERENCE = re.compile(r"\$\{?\w*(PASSWORD|SECRET|TOKEN|API_KEY)")
+VARIABLE_LISTERS = {"export", "declare", "typeset", "readonly"}
+REDIRECTIONS = {"<", ">"}
+GLOB_ONLY = re.compile(r"[*?]+")
 # Stands in for a $ or backtick that Bash treats as literal (single quotes or
 # an escape), so only real expansions read as "$" below.
 LITERAL = "\x00"
@@ -76,6 +82,14 @@ def _scan(text, index, found, closer):
         elif char in " \t":
             end_word()
             index += 1
+        elif char in REDIRECTIONS:
+            # Redirections are their own words, so `a.json>b` names a.json; a
+            # leading file-descriptor number (2>) is dropped.
+            if "".join(word).isdigit():
+                word.clear()
+            end_word()
+            words.append(char)
+            index += 1
         elif char in SEPARATORS:
             end_segment()
             index += 1
@@ -122,18 +136,37 @@ def name(word):
     return PurePosixPath(word).name
 
 
+def split_redirections(words):
+    """Separate redirection targets from the command's own words."""
+    plain, targets, redirecting = [], [], False
+    for word in words:
+        if word in REDIRECTIONS:
+            redirecting = True
+        elif redirecting:
+            targets.append(word)
+            redirecting = False
+        else:
+            plain.append(word)
+    return plain, targets
+
+
 def bash_violation(command):
     for words in segments(command):
-        reason = segment_violation(command_words(words))
+        plain, targets = split_redirections(words)
+        reason = segment_violation(command_words(plain), targets)
         if reason:
             return reason
     return None
 
 
-def segment_violation(words):
+def segment_violation(words, targets=()):
     if not words:
-        return None
-    return destructive_violation(words) or protected_file_violation(words) or environment_violation(words)
+        return protected_file_violation(list(targets), ())
+    return (
+        destructive_violation(words)
+        or protected_file_violation(words, targets)
+        or environment_violation(words)
+    )
 
 
 def destructive_violation(words):
@@ -145,8 +178,12 @@ def destructive_violation(words):
     site = site_argument(words, verb)
     if site in PERSISTENT_SITES:
         return "Never drop, trim, restore, reinstall or overwrite the persistent Bond Management sites."
-    if not site or "$" in site:
-        return "Name the temporary site literally; the default site or a variable may be a persistent one."
+    if not site or not TEMPORARY_SITE.fullmatch(site):
+        # Other apps' sites share this bench and need the user's approval.
+        return (
+            "Destructive bench commands need a literal temporary site named "
+            "bond-management-<name>-<32-hex-id>.localhost; ask before touching any other site."
+        )
     return None
 
 
@@ -162,11 +199,23 @@ def site_argument(words, verb):
     return None
 
 
-def protected_file_violation(words):
-    names = {name(word) for word in words}
-    if not names & PROTECTED_FILES:
+def protected_names(words):
+    """Protected files a word names, literally or through a wildcard such as site_conf*."""
+    found = set()
+    for word in words:
+        pattern = name(word)
+        if pattern in PROTECTED_FILES:
+            found.add(pattern)
+        elif not GLOB_ONLY.fullmatch(pattern):
+            found.update(file for file in PROTECTED_FILES if fnmatchcase(file, pattern))
+    return found
+
+
+def protected_file_violation(words, targets):
+    names = protected_names([*words, *targets])
+    if not names:
         return None
-    if words[0] in ("source", ".") and names & PROTECTED_FILES == {CREDENTIAL_FILE}:
+    if words and words[0] in ("source", ".") and names == {CREDENTIAL_FILE}:
         return None
     return "This file holds credentials or site secrets; load test-browser.env with `source` and read nothing else."
 
@@ -184,9 +233,14 @@ def environment_violation(words):
         return segment_violation(command_words(arguments[index:]))
     if program == "printenv":
         return "Do not print the environment."
-    if program in ("export", "declare", "typeset", "set") and all(arg.startswith("-") for arg in arguments):
-        if program != "set" or not arguments:
+    if program == "set" and not arguments:
+        return "Do not print the environment."
+    if program in VARIABLE_LISTERS:
+        operands = [arg for arg in arguments if not arg.startswith("-")]
+        if not operands:
             return "Do not print the environment."
+        if any(SECRET_NAME.fullmatch(operand) for operand in operands if "=" not in operand):
+            return "Do not print passwords or tokens."
     if program in ("echo", "printf") and any(SECRET_REFERENCE.search(arg) for arg in arguments):
         return "Do not print passwords or tokens."
     return None
