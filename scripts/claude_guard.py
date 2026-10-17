@@ -22,7 +22,7 @@ def load_policy():
 agent_policy = load_policy()
 PROTECTED_FILES = agent_policy.PROTECTED_FILES
 SECRET_NAME = agent_policy.SECRET_NAME
-destructive_violation = agent_policy.destructive_site_violation
+bench_violation = agent_policy.bench_command_violation
 ASSIGNMENT = re.compile(r"[A-Za-z_][A-Za-z0-9_]*=")
 WRAPPERS = {"sudo", "command", "exec", "nohup", "time", "builtin", "timeout", "nice", "xargs"}
 UNSUPPORTED_COMMANDS = {
@@ -104,7 +104,7 @@ def command_violation(command: Command):
         return protected_file_reason()
     if any(name(word.value) == "printenv" for word in words):
         return "Do not print the environment."
-    reason = destructive_violation([word.value for word in words])
+    reason = bench_violation([word.value for word in words])
     if reason:
         return reason
     index = executable_index(words)

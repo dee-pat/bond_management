@@ -127,6 +127,7 @@ run_lint() {
     python3 "${APP_ROOT}/scripts/test_claude_guard.py"
     python3 "${APP_ROOT}/scripts/test_agent_policy.py"
     python3 "${APP_ROOT}/scripts/test_verify_helpers.py"
+    python3 "${APP_ROOT}/scripts/test_workflow_concurrency.py"
 }
 
 run_server_tests() {

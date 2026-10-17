@@ -234,7 +234,13 @@ compound shell grammar are rejected; put literal examples in files or quotes.
 Unknown wrapper options, malformed syntax/payloads and excessive inputs fail
 closed with exit 2; diagnostics never echo the command.
 
-Destructive `bench` commands require one literal temporary site named
+Bench disclosure commands (`show-config`, `mariadb`, `db-console`, `postgres`)
+are blocked for all sites. `set-config` accepts only the boolean verification
+flags listed in the [agent safety contract](specs/agent-safety-policy.md#contract)
+on the test site or a temporary site; global and secret configuration changes
+are blocked. Test Administrator password recovery remains supported there.
+
+Destructive `bench` commands (including app uninstall/removal) require one literal temporary site named
 `bond-management-<name>-<32-hex-id>.localhost` in the same segment. Duplicate or
 conflicting site selectors are rejected. Literal `bench`/`printenv` basenames
 are recognised in any position. Protected basenames and matching supported

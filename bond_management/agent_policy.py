@@ -10,12 +10,26 @@ import re
 import sys
 from pathlib import PurePosixPath
 
-PERSISTENT_SITES = frozenset({"bond-management-dev.localhost", "bond-management-test.localhost"})
+TEST_SITE = "bond-management-test.localhost"
+PERSISTENT_SITES = frozenset({"bond-management-dev.localhost", TEST_SITE})
 TEMPORARY_SITE_SUFFIX = r"[0-9a-f]{32}\.localhost"
 TEMPORARY_SITE = re.compile(r"bond-management-[a-z0-9-]+-" + TEMPORARY_SITE_SUFFIX)
 DESTRUCTIVE_VERBS = frozenset(
-    {"drop-site", "trim-database", "trim-tables", "restore", "partial-restore", "reinstall"}
+    {
+        "drop-site",
+        "trim-database",
+        "trim-tables",
+        "restore",
+        "partial-restore",
+        "reinstall",
+        "uninstall-app",
+        "remove-from-installed-apps",
+    }
 )
+DISCLOSURE_VERBS = frozenset({"show-config", "mariadb", "db-console", "postgres"})
+TEST_CONFIG_KEYS = frozenset({"allow_tests", "bond_investor_spa_enabled", "bond_migration_lifecycle_test"})
+DISCLOSURE_REASON = "Do not disclose site configuration or open a database console."
+CONFIGURATION_REASON = "Only supported test-site configuration and password recovery are permitted."
 POSITIONAL_SITE_VERBS = frozenset({"drop-site", "new-site"})
 PROTECTED_FILES = frozenset({"site_config.json", "common_site_config.json", "test-browser.env"})
 # Relative to the home directory; scripts/verify.sh loads it for the UI gate.
@@ -31,7 +45,7 @@ SECRET_ENV_VARS = (
 )
 
 PERSISTENT_REASON = "Never destroy or overwrite the persistent Bond Management sites."
-# Example only: the not_match case showing that Codex rules leave temporary sites to the hook.
+# Safe site used by generated not_match examples.
 EXAMPLE_TEMPORARY_SITE = f"bond-management-example-{'0' * 32}.localhost"
 
 PERSISTENT = "persistent"
@@ -67,6 +81,45 @@ def destructive_site_violation(argv):
     return None
 
 
+def bench_command_violation(argv):
+    """Separate disclosure, destructive-site and verification-setup boundaries."""
+    for index, word in enumerate(argv):
+        if _program(word) != "bench":
+            continue
+        arguments = argv[index + 1 :]
+        if DISCLOSURE_VERBS.intersection(arguments):
+            return DISCLOSURE_REASON
+        for verb in ("set-config", "set-admin-password"):
+            if verb not in arguments:
+                continue
+            site = _site_argument(arguments, verb)
+            if site != TEST_SITE and classify_site(site) != TEMPORARY:
+                return CONFIGURATION_REASON
+            if verb == "set-config" and not _supported_test_config(arguments):
+                return CONFIGURATION_REASON
+    return destructive_site_violation(argv)
+
+
+def _supported_test_config(arguments):
+    # Accept only a key/value pair and one site selector. Global, parse and
+    # unknown options fail closed rather than changing option interpretation.
+    if arguments.count("set-config") != 1:
+        return False
+    operands = []
+    index = 0
+    while index < len(arguments):
+        word = arguments[index]
+        if word == "--site":
+            index += 2
+            continue
+        if not word.startswith("--site=") and word != "set-config":
+            operands.append(word)
+        index += 1
+    return (
+        len(operands) == 2 and operands[0] in TEST_CONFIG_KEYS and operands[1] in {"true", "false", "1", "0"}
+    )
+
+
 def claude_read_deny_rules():
     """Claude Code Read deny rules for the protected files.
 
@@ -100,12 +153,18 @@ def claude_sandbox_settings():
 
 
 def codex_rule_prefixes():
-    """Canonical bench argv prefixes that destroy or recreate a persistent site."""
-    prefixes = []
+    """Canonical forbidden prefixes; argument-sensitive exceptions use the hook."""
+    prefixes = [["bench", verb] for verb in sorted(DISCLOSURE_VERBS)]
     option_verbs = sorted(DESTRUCTIVE_VERBS - POSITIONAL_SITE_VERBS)
     for site in sorted(PERSISTENT_SITES):
         prefixes += [["bench", "--site", site, verb] for verb in option_verbs]
         prefixes += [["bench", verb, site] for verb in sorted(POSITIONAL_SITE_VERBS)]
+        prefixes += [["bench", "--site", site, verb] for verb in sorted(DISCLOSURE_VERBS)]
+        if site != TEST_SITE:
+            prefixes.append(["bench", "--site", site, "set-admin-password"])
+            prefixes.append(["bench", "--site", site, "set-config"])
+        else:
+            prefixes.append(["bench", "--site", site, "set-config", "db_password"])
     return prefixes
 
 
@@ -115,10 +174,13 @@ def codex_rules():
     Codex matches literal argv prefixes only; other spellings reach the
     PreToolUse hook (scripts/claude_guard.py), which applies the full check.
     """
-    justification = json.dumps(f"{PERSISTENT_REASON} See docs/verification.md.")
     lines = _generated_header("--codex-rules")
     for prefix in codex_rule_prefixes():
+        reason = bench_command_violation(prefix) or PERSISTENT_REASON
+        justification = json.dumps(f"{reason} See docs/verification.md.")
         example = [EXAMPLE_TEMPORARY_SITE if word in PERSISTENT_SITES else word for word in prefix]
+        if bench_command_violation(example):
+            example = ["bench", "--site", EXAMPLE_TEMPORARY_SITE, "migrate"]
         lines += [
             "prefix_rule(",
             f"    pattern = {json.dumps(prefix)},",

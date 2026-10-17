@@ -1,5 +1,16 @@
 # Bond Management rule-to-test index
 
+Agent bench policy is covered by `scripts/test_agent_policy.py`,
+`scripts/test_claude_guard.py`, and the `bench-policy` cases in
+`scripts/claude_guard_cases.json`: disclosure denial across site classes,
+destructive-site isolation, supported test configuration and password recovery,
+and generated Codex rule consistency. `scripts/test_workflow_concurrency.py`
+checks PR supersession and independent push/manual groups in CI and Linters.
+`utils/test_investor_shares.py::test_bulk_clear_dispatch_rejects_get_before_mutating`,
+`::test_bulk_clear_dispatch_authorized_post_repairs_shares`, and
+`::test_bulk_clear_dispatch_unauthorized_post_preserves_assignments_and_shares`
+exercise HTTP method and role enforcement through the overridden core route.
+
 This page points from high-risk bond rules to their source modules and existing
 regression tests. See [domain-model.md](domain-model.md) for data relationships
 and [verification.md](verification.md) for required commands and completion

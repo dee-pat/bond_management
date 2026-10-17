@@ -2,6 +2,38 @@
 # python3 -I bond_management/agent_policy.py --codex-rules > .codex/rules/bond_management.rules
 
 prefix_rule(
+    pattern = ["bench", "db-console"],
+    decision = "forbidden",
+    justification = "Do not disclose site configuration or open a database console. See docs/verification.md.",
+    match = ["bench db-console"],
+    not_match = ["bench --site bond-management-example-00000000000000000000000000000000.localhost migrate"],
+)
+
+prefix_rule(
+    pattern = ["bench", "mariadb"],
+    decision = "forbidden",
+    justification = "Do not disclose site configuration or open a database console. See docs/verification.md.",
+    match = ["bench mariadb"],
+    not_match = ["bench --site bond-management-example-00000000000000000000000000000000.localhost migrate"],
+)
+
+prefix_rule(
+    pattern = ["bench", "postgres"],
+    decision = "forbidden",
+    justification = "Do not disclose site configuration or open a database console. See docs/verification.md.",
+    match = ["bench postgres"],
+    not_match = ["bench --site bond-management-example-00000000000000000000000000000000.localhost migrate"],
+)
+
+prefix_rule(
+    pattern = ["bench", "show-config"],
+    decision = "forbidden",
+    justification = "Do not disclose site configuration or open a database console. See docs/verification.md.",
+    match = ["bench show-config"],
+    not_match = ["bench --site bond-management-example-00000000000000000000000000000000.localhost migrate"],
+)
+
+prefix_rule(
     pattern = ["bench", "--site", "bond-management-dev.localhost", "partial-restore"],
     decision = "forbidden",
     justification = "Never destroy or overwrite the persistent Bond Management sites. See docs/verification.md.",
@@ -15,6 +47,14 @@ prefix_rule(
     justification = "Never destroy or overwrite the persistent Bond Management sites. See docs/verification.md.",
     match = ["bench --site bond-management-dev.localhost reinstall"],
     not_match = ["bench --site bond-management-example-00000000000000000000000000000000.localhost reinstall"],
+)
+
+prefix_rule(
+    pattern = ["bench", "--site", "bond-management-dev.localhost", "remove-from-installed-apps"],
+    decision = "forbidden",
+    justification = "Never destroy or overwrite the persistent Bond Management sites. See docs/verification.md.",
+    match = ["bench --site bond-management-dev.localhost remove-from-installed-apps"],
+    not_match = ["bench --site bond-management-example-00000000000000000000000000000000.localhost remove-from-installed-apps"],
 )
 
 prefix_rule(
@@ -42,6 +82,14 @@ prefix_rule(
 )
 
 prefix_rule(
+    pattern = ["bench", "--site", "bond-management-dev.localhost", "uninstall-app"],
+    decision = "forbidden",
+    justification = "Never destroy or overwrite the persistent Bond Management sites. See docs/verification.md.",
+    match = ["bench --site bond-management-dev.localhost uninstall-app"],
+    not_match = ["bench --site bond-management-example-00000000000000000000000000000000.localhost uninstall-app"],
+)
+
+prefix_rule(
     pattern = ["bench", "drop-site", "bond-management-dev.localhost"],
     decision = "forbidden",
     justification = "Never destroy or overwrite the persistent Bond Management sites. See docs/verification.md.",
@@ -58,6 +106,54 @@ prefix_rule(
 )
 
 prefix_rule(
+    pattern = ["bench", "--site", "bond-management-dev.localhost", "db-console"],
+    decision = "forbidden",
+    justification = "Do not disclose site configuration or open a database console. See docs/verification.md.",
+    match = ["bench --site bond-management-dev.localhost db-console"],
+    not_match = ["bench --site bond-management-example-00000000000000000000000000000000.localhost migrate"],
+)
+
+prefix_rule(
+    pattern = ["bench", "--site", "bond-management-dev.localhost", "mariadb"],
+    decision = "forbidden",
+    justification = "Do not disclose site configuration or open a database console. See docs/verification.md.",
+    match = ["bench --site bond-management-dev.localhost mariadb"],
+    not_match = ["bench --site bond-management-example-00000000000000000000000000000000.localhost migrate"],
+)
+
+prefix_rule(
+    pattern = ["bench", "--site", "bond-management-dev.localhost", "postgres"],
+    decision = "forbidden",
+    justification = "Do not disclose site configuration or open a database console. See docs/verification.md.",
+    match = ["bench --site bond-management-dev.localhost postgres"],
+    not_match = ["bench --site bond-management-example-00000000000000000000000000000000.localhost migrate"],
+)
+
+prefix_rule(
+    pattern = ["bench", "--site", "bond-management-dev.localhost", "show-config"],
+    decision = "forbidden",
+    justification = "Do not disclose site configuration or open a database console. See docs/verification.md.",
+    match = ["bench --site bond-management-dev.localhost show-config"],
+    not_match = ["bench --site bond-management-example-00000000000000000000000000000000.localhost migrate"],
+)
+
+prefix_rule(
+    pattern = ["bench", "--site", "bond-management-dev.localhost", "set-admin-password"],
+    decision = "forbidden",
+    justification = "Only supported test-site configuration and password recovery are permitted. See docs/verification.md.",
+    match = ["bench --site bond-management-dev.localhost set-admin-password"],
+    not_match = ["bench --site bond-management-example-00000000000000000000000000000000.localhost set-admin-password"],
+)
+
+prefix_rule(
+    pattern = ["bench", "--site", "bond-management-dev.localhost", "set-config"],
+    decision = "forbidden",
+    justification = "Only supported test-site configuration and password recovery are permitted. See docs/verification.md.",
+    match = ["bench --site bond-management-dev.localhost set-config"],
+    not_match = ["bench --site bond-management-example-00000000000000000000000000000000.localhost migrate"],
+)
+
+prefix_rule(
     pattern = ["bench", "--site", "bond-management-test.localhost", "partial-restore"],
     decision = "forbidden",
     justification = "Never destroy or overwrite the persistent Bond Management sites. See docs/verification.md.",
@@ -71,6 +167,14 @@ prefix_rule(
     justification = "Never destroy or overwrite the persistent Bond Management sites. See docs/verification.md.",
     match = ["bench --site bond-management-test.localhost reinstall"],
     not_match = ["bench --site bond-management-example-00000000000000000000000000000000.localhost reinstall"],
+)
+
+prefix_rule(
+    pattern = ["bench", "--site", "bond-management-test.localhost", "remove-from-installed-apps"],
+    decision = "forbidden",
+    justification = "Never destroy or overwrite the persistent Bond Management sites. See docs/verification.md.",
+    match = ["bench --site bond-management-test.localhost remove-from-installed-apps"],
+    not_match = ["bench --site bond-management-example-00000000000000000000000000000000.localhost remove-from-installed-apps"],
 )
 
 prefix_rule(
@@ -98,6 +202,14 @@ prefix_rule(
 )
 
 prefix_rule(
+    pattern = ["bench", "--site", "bond-management-test.localhost", "uninstall-app"],
+    decision = "forbidden",
+    justification = "Never destroy or overwrite the persistent Bond Management sites. See docs/verification.md.",
+    match = ["bench --site bond-management-test.localhost uninstall-app"],
+    not_match = ["bench --site bond-management-example-00000000000000000000000000000000.localhost uninstall-app"],
+)
+
+prefix_rule(
     pattern = ["bench", "drop-site", "bond-management-test.localhost"],
     decision = "forbidden",
     justification = "Never destroy or overwrite the persistent Bond Management sites. See docs/verification.md.",
@@ -111,4 +223,44 @@ prefix_rule(
     justification = "Never destroy or overwrite the persistent Bond Management sites. See docs/verification.md.",
     match = ["bench new-site bond-management-test.localhost"],
     not_match = ["bench new-site bond-management-example-00000000000000000000000000000000.localhost"],
+)
+
+prefix_rule(
+    pattern = ["bench", "--site", "bond-management-test.localhost", "db-console"],
+    decision = "forbidden",
+    justification = "Do not disclose site configuration or open a database console. See docs/verification.md.",
+    match = ["bench --site bond-management-test.localhost db-console"],
+    not_match = ["bench --site bond-management-example-00000000000000000000000000000000.localhost migrate"],
+)
+
+prefix_rule(
+    pattern = ["bench", "--site", "bond-management-test.localhost", "mariadb"],
+    decision = "forbidden",
+    justification = "Do not disclose site configuration or open a database console. See docs/verification.md.",
+    match = ["bench --site bond-management-test.localhost mariadb"],
+    not_match = ["bench --site bond-management-example-00000000000000000000000000000000.localhost migrate"],
+)
+
+prefix_rule(
+    pattern = ["bench", "--site", "bond-management-test.localhost", "postgres"],
+    decision = "forbidden",
+    justification = "Do not disclose site configuration or open a database console. See docs/verification.md.",
+    match = ["bench --site bond-management-test.localhost postgres"],
+    not_match = ["bench --site bond-management-example-00000000000000000000000000000000.localhost migrate"],
+)
+
+prefix_rule(
+    pattern = ["bench", "--site", "bond-management-test.localhost", "show-config"],
+    decision = "forbidden",
+    justification = "Do not disclose site configuration or open a database console. See docs/verification.md.",
+    match = ["bench --site bond-management-test.localhost show-config"],
+    not_match = ["bench --site bond-management-example-00000000000000000000000000000000.localhost migrate"],
+)
+
+prefix_rule(
+    pattern = ["bench", "--site", "bond-management-test.localhost", "set-config", "db_password"],
+    decision = "forbidden",
+    justification = "Only supported test-site configuration and password recovery are permitted. See docs/verification.md.",
+    match = ["bench --site bond-management-test.localhost set-config db_password"],
+    not_match = ["bench --site bond-management-example-00000000000000000000000000000000.localhost migrate"],
 )

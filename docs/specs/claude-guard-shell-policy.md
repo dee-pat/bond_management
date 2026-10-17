@@ -27,6 +27,11 @@ secret stores are outside the guarantee. Those need execution/storage controls,
 not further syntax exceptions. No claim is made that an arbitrary accepted
 program cannot read or output a secret internally.
 
+Bench disclosure and configuration rules are separate from destructive-site
+rules: see the [agent safety contract](agent-safety-policy.md#contract).
+Disclosure commands are denied even on temporary sites; only the documented
+boolean verification flags and password recovery are allowed on test sites.
+
 ## Supported syntax
 
 | Form | Contract |

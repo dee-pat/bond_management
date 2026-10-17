@@ -9,6 +9,7 @@ from frappe.api.v1 import read_doc
 from frappe.client import get as client_get
 from frappe.client import set_value
 from frappe.core.doctype.user_permission.user_permission import get_user_permissions
+from frappe.handler import execute_cmd
 from frappe.share import add, add_docshare, remove, set_docshare_permission
 from frappe.tests import IntegrationTestCase
 
@@ -907,6 +908,27 @@ class TestInvestorShares(IntegrationTestCase):
         self.assertTrue(frappe.db.exists("DocShare", compatible.name))
         self.assertFalse(frappe.db.exists("DocShare", stale.name))
 
+    def test_bulk_clear_dispatch_rejects_get_before_mutating(self):
+        share = add_docshare("Bond Portfolio", self.assigned.name, self.investor.name)
+        with self.assertRaises(frappe.PermissionError):
+            self.dispatch_clear_portfolio_assignments("GET")
+        self.assertTrue(frappe.db.exists("User Permission", self.assignment.name))
+        self.assertTrue(frappe.db.exists("DocShare", share.name))
+
+    def test_bulk_clear_dispatch_authorized_post_repairs_shares(self):
+        share = add_docshare("Bond Portfolio", self.assigned.name, self.investor.name)
+        self.assertEqual(self.dispatch_clear_portfolio_assignments("POST"), 1)
+        self.assertFalse(frappe.db.exists("User Permission", self.assignment.name))
+        self.assertFalse(frappe.db.exists("DocShare", share.name))
+
+    def test_bulk_clear_dispatch_unauthorized_post_preserves_assignments_and_shares(self):
+        share = add_docshare("Bond Portfolio", self.assigned.name, self.investor.name)
+        with self.set_user(self.investor.name):
+            with self.assertRaises(frappe.PermissionError):
+                self.dispatch_clear_portfolio_assignments("POST")
+        self.assertTrue(frappe.db.exists("User Permission", self.assignment.name))
+        self.assertTrue(frappe.db.exists("DocShare", share.name))
+
     def test_bulk_clear_endpoint_revokes_share_and_remains_safe_to_rerun(self):
         share = add_docshare("Bond Portfolio", self.assigned.name, self.investor.name)
         self.assertEqual(self.clear_portfolio_assignments(), 1)
@@ -1083,6 +1105,16 @@ class TestInvestorShares(IntegrationTestCase):
         frappe.get_attr(source_path)()
         self.assertFalse(frappe.db.exists("DocShare", share.name))
         self.assertFalse(frappe.db.exists("DocShare", source_share.name))
+
+    def dispatch_clear_portfolio_assignments(self, method):
+        route = "frappe.core.doctype.user_permission.user_permission.clear_user_permissions"
+        with (
+            patch.object(frappe.local, "request", SimpleNamespace(method=method), create=True),
+            patch.object(
+                frappe.local, "form_dict", frappe._dict(user=self.investor.name, for_doctype="Bond Portfolio")
+            ),
+        ):
+            return execute_cmd(route)
 
     def clear_portfolio_assignments(self):
         original = "frappe.core.doctype.user_permission.user_permission.clear_user_permissions"

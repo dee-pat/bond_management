@@ -132,6 +132,47 @@ class AgentPolicyTests(unittest.TestCase):
         for program in ("bench", "/usr/local/bin/bench", "env/bin/BENCH"):
             self.assert_violation([program, "drop-site", site], PERSISTENT_REASON)
 
+    def test_disclosure_is_blocked_independently_of_site_class(self):
+        for verb in ("show-config", "mariadb", "db-console", "postgres"):
+            for site in (*agent_policy.PERSISTENT_SITES, TEMPORARY, "foreign.localhost", "all"):
+                for argv in spellings(verb, site):
+                    self.assertIsNotNone(agent_policy.bench_command_violation(argv), argv)
+            self.assertIsNotNone(agent_policy.bench_command_violation(["bench", verb]))
+
+    def test_configuration_and_password_recovery_boundaries(self):
+        test_site = "bond-management-test.localhost"
+        for site in (*agent_policy.PERSISTENT_SITES, TEMPORARY, "foreign.localhost", "all"):
+            supported = site in (test_site, TEMPORARY)
+            for argv in spellings("set-admin-password", site):
+                self.assertEqual(agent_policy.bench_command_violation(argv) is None, supported, argv)
+            for key in ("allow_tests", "bond_investor_spa_enabled", "bond_migration_lifecycle_test"):
+                for argv in spellings("set-config", site):
+                    for value in ("true", "false", "1", "0"):
+                        command = [*argv, key, value]
+                        self.assertEqual(
+                            agent_policy.bench_command_violation(command) is None, supported, command
+                        )
+            for key in ("db_password", "db_name", "encryption_key", "unknown"):
+                self.assertIsNotNone(
+                    agent_policy.bench_command_violation(
+                        ["bench", "--site", site, "set-config", key, "synthetic-value"]
+                    )
+                )
+        for args in (
+            ["--global", "allow_tests", "true"],
+            ["-g", "allow_tests", "true"],
+            ["allow_tests", "true", "-g"],
+            ["allow_tests"],
+            ["allow_tests", "arbitrary"],
+            ["allow_tests", "true", "db_password", "synthetic-value"],
+        ):
+            self.assertIsNotNone(
+                agent_policy.bench_command_violation(["bench", "--site", test_site, "set-config", *args])
+            )
+        for verb in ("set-admin-password", "set-config"):
+            for sites in ([], ["--site", test_site, "--site", test_site]):
+                self.assertIsNotNone(agent_policy.bench_command_violation(["bench", *sites, verb]))
+
     def test_secret_names(self):
         # The observer socket and user are scrubbed by name, not by pattern.
         for name in agent_policy.SECRET_ENV_VARS:
@@ -259,15 +300,32 @@ class CodexConfigSyncTests(unittest.TestCase):
 
     def test_rules_forbid_every_destructive_verb_on_every_persistent_site(self):
         prefixes = agent_policy.codex_rule_prefixes()
-        expected = []
-        option_verbs = ("partial-restore", "reinstall", "restore", "trim-database", "trim-tables")
+        disclosure = ("db-console", "mariadb", "postgres", "show-config")
+        expected = [["bench", verb] for verb in disclosure]
+        option_verbs = (
+            "partial-restore",
+            "reinstall",
+            "remove-from-installed-apps",
+            "restore",
+            "trim-database",
+            "trim-tables",
+            "uninstall-app",
+        )
         for site in sorted(agent_policy.PERSISTENT_SITES):
             expected += [["bench", "--site", site, verb] for verb in option_verbs]
             expected += [["bench", "drop-site", site], ["bench", "new-site", site]]
+            expected += [["bench", "--site", site, verb] for verb in disclosure]
+            if site == "bond-management-test.localhost":
+                expected.append(["bench", "--site", site, "set-config", "db_password"])
+            else:
+                expected += [
+                    ["bench", "--site", site, "set-admin-password"],
+                    ["bench", "--site", site, "set-config"],
+                ]
         self.assertEqual(prefixes, expected)
         for prefix in prefixes:
             argv = [*prefix, "--force"] if "new-site" in prefix else prefix
-            self.assertEqual(agent_policy.destructive_site_violation(argv), PERSISTENT_REASON, argv)
+            self.assertIsNotNone(agent_policy.bench_command_violation(argv), argv)
 
     def test_project_layer_has_no_unreviewed_files(self):
         # The permission profile stays user-level (spec, decision 2): its paths are per machine.
@@ -330,15 +388,32 @@ class CodexConfigSyncTests(unittest.TestCase):
     @unittest.skipUnless(shutil.which("codex"), "codex CLI not installed; the sync test above is the gate")
     def test_codex_loads_and_applies_the_rules(self):
         for prefix in agent_policy.codex_rule_prefixes():
-            temporary = [TEMPORARY if word in agent_policy.PERSISTENT_SITES else word for word in prefix]
+            safe = ["bench", "--site", TEMPORARY, "migrate"]
             with self.subTest(prefix=prefix):
                 self.assertEqual(self.codex_check(CODEX_RULES, [*prefix, "--yes"])["decision"], "forbidden")
-                self.assertEqual(self.codex_check(CODEX_RULES, temporary)["matchedRules"], [])
+                self.assertEqual(self.codex_check(CODEX_RULES, safe)["matchedRules"], [])
+        # Rules must leave documented test setup and temporary-site cleanup usable.
+        for argv in (
+            ["bench", "--site", "bond-management-test.localhost", "set-admin-password"],
+            ["bench", "--site", "bond-management-test.localhost", "set-config", "allow_tests", "true"],
+            [
+                "bench",
+                "--site",
+                "bond-management-test.localhost",
+                "set-config",
+                "bond_investor_spa_enabled",
+                "1",
+            ],
+            ["bench", "--site", TEMPORARY, "uninstall-app", "bond_management"],
+            ["bench", "drop-site", TEMPORARY, "--no-backup"],
+        ):
+            self.assertEqual(self.codex_check(CODEX_RULES, argv)["matchedRules"], [], argv)
         # A not_match example that the rule matches fails at load.
-        persistent = sorted(agent_policy.PERSISTENT_SITES)[0]
         with tempfile.TemporaryDirectory() as directory:
             broken = Path(directory) / "broken.rules"
-            text = CODEX_RULES.read_text().replace(agent_policy.EXAMPLE_TEMPORARY_SITE, persistent, 1)
+            text = CODEX_RULES.read_text().replace(
+                f"bench --site {agent_policy.EXAMPLE_TEMPORARY_SITE} migrate", "bench db-console", 1
+            )
             broken.write_text(text)
             self.assertIsNone(self.codex_check(broken, ["bench", "version"]))
 
