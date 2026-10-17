@@ -12,8 +12,13 @@ The local Claude Bash/Read backstop has a separate
 `scripts/test_claude_guard.py` retains historical unsafe regressions and loads
 `test_claude_guard_matrix.py`: supported/rejected syntax, quoted/wrapped
 temporary-versus-persistent sites, every destructive verb, malformed payloads,
-resource bounds and non-echoing diagnostics. `verify.sh lint` runs the combined
-suite. Tests pass command text only to the hook, never execute those commands.
+resource bounds and non-echoing diagnostics. The policy constants and the
+destructive-site check live once in `bond_management/agent_policy.py`
+([agent safety policy](specs/agent-safety-policy.md)); `scripts/test_agent_policy.py`
+covers persistent, temporary and foreign sites across every destructive verb,
+the 32-hex suffix boundary and the core's stdlib-only imports. `verify.sh lint`
+runs both suites. Tests pass command text only to the hook, never execute those
+commands.
 
 Implementation and test paths beginning with `doctype/`, `api/`, `report/`, or
 `utils/` are relative to `bond_management/bond_management/`; `patches/`,

@@ -1,6 +1,7 @@
 # Agent-neutral safety policy
 
-Status: design accepted with the decisions below (2026-10-17); no code yet.
+Status: design accepted with the decisions below (2026-10-17); rollout step 1
+implemented.
 Progress:
 [agent-safety-policy-progress.md](../plans/agent-safety-policy-progress.md).
 The current hook's grammar and guarantee stay as defined in

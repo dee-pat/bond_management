@@ -1,25 +1,34 @@
 """Static Bash/Read backstop; see docs/specs/claude-guard-shell-policy.md."""
 
+import importlib.util
 import json
 import re
 import sys
 from fnmatch import fnmatchcase
-from pathlib import PurePosixPath
+from pathlib import Path, PurePosixPath
 
 from claude_guard_shell import Command, UnsupportedShell, bounded_text, commands
 
-PERSISTENT_SITES = {"bond-management-dev.localhost", "bond-management-test.localhost"}
-TEMPORARY_SITE = re.compile(r"bond-management-[a-z0-9-]+-[0-9a-f]{32}\.localhost")
-DESTRUCTIVE_VERBS = {"drop-site", "trim-database", "trim-tables", "restore", "partial-restore", "reinstall"}
-POSITIONAL_SITE_VERBS = {"drop-site", "new-site"}
-PROTECTED_FILES = {"site_config.json", "common_site_config.json", "test-browser.env"}
+
+def load_policy():
+    # By file path, so the hook never runs bond_management package init.
+    path = Path(__file__).resolve().parent.parent / "bond_management" / "agent_policy.py"
+    spec = importlib.util.spec_from_file_location("bond_management_agent_policy", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+agent_policy = load_policy()
+PROTECTED_FILES = agent_policy.PROTECTED_FILES
+SECRET_NAME = agent_policy.SECRET_NAME
+destructive_violation = agent_policy.destructive_site_violation
 CREDENTIAL_FILE = "test-browser.env"
 HOME_CREDENTIAL_PATHS = {
     "$HOME/.config/bond_management/test-browser.env",
     "${HOME}/.config/bond_management/test-browser.env",
 }
 ASSIGNMENT = re.compile(r"[A-Za-z_][A-Za-z0-9_]*=")
-SECRET_NAME = re.compile(r"PASSWORD|SECRET|TOKEN|API_KEY", re.IGNORECASE)
 WRAPPERS = {"sudo", "command", "exec", "nohup", "time", "builtin", "timeout", "nice", "xargs"}
 UNSUPPORTED_COMMANDS = {
     "if",
@@ -155,39 +164,6 @@ def protected_file_reason():
 
 def name(word):
     return "." if word == "." else PurePosixPath(word).name.casefold()
-
-
-def destructive_violation(words):
-    for index, word in enumerate(words):
-        if name(word) != "bench":
-            continue
-        arguments = words[index + 1 :]
-        verbs = [arg for arg in arguments if arg in DESTRUCTIVE_VERBS | {"new-site"}]
-        if not verbs or (verbs == ["new-site"] and "--force" not in arguments):
-            continue
-        if len(verbs) != 1:
-            return "Ambiguous destructive bench command."
-        site = site_argument(arguments, verbs[0])
-        if site in PERSISTENT_SITES:
-            return "Never destroy or overwrite the persistent Bond Management sites."
-        if not site or not TEMPORARY_SITE.fullmatch(site):
-            return "Destructive bench commands require one literal temporary Bond Management site."
-    return None
-
-
-def site_argument(words, verb):
-    sites = []
-    for index, word in enumerate(words):
-        if word.startswith("--site="):
-            sites.append(word.removeprefix("--site="))
-        elif word == "--site":
-            sites.append(words[index + 1] if index + 1 < len(words) else "")
-    if verb in POSITIONAL_SITE_VERBS:
-        if sites:
-            return None
-        after = words[words.index(verb) + 1 :]
-        return after[0] if after and not after[0].startswith("-") else None
-    return sites[0] if len(sites) == 1 else None
 
 
 def executable_index(words):

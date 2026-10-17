@@ -4,8 +4,7 @@ import json
 import re
 from pathlib import Path
 
-PERSISTENT_SITES = {"bond-management-dev.localhost", "bond-management-test.localhost"}
-SITE_SUFFIX = r"[0-9a-f]{32}\.localhost"
+from bond_management.agent_policy import PERSISTENT_SITES, TEMPORARY_SITE_SUFFIX
 
 
 def validate_temporary_site(*, bench_path, site_path, site, user, config, site_prefix, required_flags=()):
@@ -19,7 +18,7 @@ def validate_temporary_site(*, bench_path, site_path, site, user, config, site_p
     if resolved_site.parent != sites or resolved_site.name != site:
         raise RuntimeError("Temporary test site must be directly under the configured bench")
 
-    pattern = re.escape(site_prefix) + SITE_SUFFIX
+    pattern = re.escape(site_prefix) + TEMPORARY_SITE_SUFFIX
     if not isinstance(site, str) or site in PERSISTENT_SITES or re.fullmatch(pattern, site) is None:
         raise RuntimeError(f"Use a unique {site_prefix}<32-hex-id>.localhost test site")
     if user != "Administrator":
