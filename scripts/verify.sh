@@ -180,7 +180,13 @@ fi
 drop_temporary_site() {
     if [[ -n "${TEMPORARY_SITE}" ]]; then
         cd "${BENCH_ROOT}"
-        bench drop-site "${TEMPORARY_SITE}" --no-backup ${DB_ROOT_ARGS[@]+"${DB_ROOT_ARGS[@]}"}
+        # Archive into a run-scoped directory and remove it once the drop succeeds,
+        # so repeated runs do not accumulate site trees under archived/sites.
+        local archive
+        archive="$(mktemp -d "${TMPDIR:-/tmp}/bond-management-archive.XXXXXX")"
+        bench drop-site "${TEMPORARY_SITE}" --no-backup --archived-sites-path "${archive}" \
+            ${DB_ROOT_ARGS[@]+"${DB_ROOT_ARGS[@]}"}
+        rm -rf "${archive}"
         TEMPORARY_SITE=""
     fi
 }

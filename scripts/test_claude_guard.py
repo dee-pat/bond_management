@@ -34,6 +34,16 @@ class ClaudeGuardTests(unittest.TestCase):
         self.assert_blocked("bench restore backup.sql.gz")
         self.assert_blocked("cd ../.. && bench trim-tables")
 
+    def test_each_command_segment_needs_its_own_site(self):
+        temporary = "bond-management-lifecycle-0123456789abcdef0123456789abcdef.localhost"
+        self.assert_blocked(f"bench --site {temporary} migrate && bench reinstall --yes")
+        self.assert_blocked(f"bench --site {temporary} migrate; bench restore backup.sql.gz")
+        self.assert_allowed(f"bench --site {temporary} migrate && bench --site {temporary} reinstall --yes")
+
+    def test_line_continuations_are_joined(self):
+        self.assert_blocked("bench --site bond-management-dev.localhost \\\n reinstall --yes")
+        self.assert_blocked("bench \\\n restore backup.sql.gz")
+
     def test_temporary_sites_and_routine_commands_are_allowed(self):
         temporary = "bond-management-lifecycle-0123456789abcdef0123456789abcdef.localhost"
         self.assert_allowed(f"bench drop-site {temporary} --no-backup")
@@ -49,6 +59,8 @@ class ClaudeGuardTests(unittest.TestCase):
         self.assert_blocked(f"cat {path}")
         self.assert_blocked(f"grep PASSWORD {path}")
         self.assert_allowed("gh pr create --body 'Blocks printing test-browser.env.'")
+        self.assert_allowed("rg -n TODO README.md && gh pr create --body 'Do not print test-browser.env.'")
+        self.assert_blocked(f"source {path} && cat {path}")
         self.assertEqual(run_guard("Read", file_path="/Users/x/.config/bond_management/test-browser.env"), 2)
 
     def test_site_config_contents_are_not_printed(self):
@@ -63,6 +75,10 @@ class ClaudeGuardTests(unittest.TestCase):
         self.assert_blocked("printenv FRAPPE_ADMIN_PASSWORD")
         self.assert_blocked("env")
         self.assert_blocked("printenv | sort")
+        self.assert_blocked('echo "$(printenv)"')
+        self.assert_blocked("x=$(env); echo ok")
+        self.assert_blocked("echo `env`")
+        self.assert_blocked('echo "$(echo $FRAPPE_PASSWORD)"')
         self.assert_allowed("set -euo pipefail; echo done")
         self.assert_allowed("env CI=Yes yarn lint")
 
