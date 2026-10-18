@@ -10,10 +10,12 @@ from bond_management.bond_management.utils.statement_exchange_rates import build
 class BondExchangeRateSource(Document):
     """Server-maintained statement provenance for a global exchange-rate row."""
 
-    def before_validate(self):
+    def before_validate(self) -> None:
+        """Derive the unique key that allows one provenance row per rate and statement."""
         self.source_key = build_source_key(self.exchange_rate, self.statement)
 
-    def validate(self):
+    def validate(self) -> None:
+        """Allow writes only from statement sync, with existing links, matching dates and positive rates."""
         if not frappe.flags.get("in_statement_exchange_rate_sync"):
             frappe.throw(_("Exchange-rate provenance is managed from the Bond Statement PDF."))
 
@@ -37,6 +39,7 @@ class BondExchangeRateSource(Document):
         if self.reverse_rate not in (None, "") and to_decimal(self.reverse_rate, "Reverse Rate") <= 0:
             frappe.throw(_("Reverse Rate must be greater than zero."))
 
-    def on_trash(self):
+    def on_trash(self) -> None:
+        """Allow deletes only from statement sync so provenance cannot drift from its PDF."""
         if not frappe.flags.get("in_statement_exchange_rate_sync"):
             frappe.throw(_("Exchange-rate provenance is managed from the Bond Statement PDF."))

@@ -6,14 +6,15 @@ from frappe.model.document import Document
 from frappe.utils import getdate
 
 from bond_management.bond_management.utils.exchange_rate import REPORTING_CURRENCY
-from bond_management.bond_management.utils.financial import to_decimal
+from bond_management.bond_management.utils.financial import DecimalInput, to_decimal
 from bond_management.bond_management.utils.statement_exchange_rates import SOURCE_DOCTYPE
 
 ONE = Decimal("1")
 
 
 class BondExchangeRate(Document):
-    def before_validate(self):
+    def before_validate(self) -> None:
+        """Force USD as the target, set provenance and keep Rate and Reverse Rate reciprocal."""
         if self.rate_date:
             self.rate_date = getdate(self.rate_date)
 
@@ -21,7 +22,8 @@ class BondExchangeRate(Document):
         self._set_source_projection()
         self._sync_rate_values()
 
-    def validate(self):
+    def validate(self) -> None:
+        """Require positive rates, a matching statement date and one row per currency pair and date."""
         if not self.rate_date:
             frappe.throw(_("Rate Date is required"))
         if not isinstance(self.from_currency, str) or not self.from_currency:
@@ -78,7 +80,8 @@ class BondExchangeRate(Document):
                 frappe.UniqueValidationError,
             )
 
-    def on_trash(self):
+    def on_trash(self) -> None:
+        """Block deleting a rate that a Bond Statement still provides, except during statement sync."""
         if frappe.flags.get("in_statement_exchange_rate_sync"):
             return
         if self._statement_sources():
@@ -89,7 +92,7 @@ class BondExchangeRate(Document):
                 )
             )
 
-    def _set_source_projection(self):
+    def _set_source_projection(self) -> None:
         syncing = frappe.flags.get("in_statement_exchange_rate_sync")
         if self.is_new():
             if not syncing:
@@ -119,7 +122,7 @@ class BondExchangeRate(Document):
         self.statement = None
         self.manual_fallback = 1
 
-    def _statement_sources(self):
+    def _statement_sources(self) -> list[frappe._dict]:
         # Direct rate edit/delete checks must see derived provenance even when
         # the current user cannot browse the internal source DocType.
         return frappe.get_all(
@@ -130,7 +133,7 @@ class BondExchangeRate(Document):
             ignore_permissions=True,
         )
 
-    def _financial_values_changed(self):
+    def _financial_values_changed(self) -> bool:
         previous = self.get_doc_before_save()
         if not previous:
             self.load_doc_before_save()
@@ -147,7 +150,7 @@ class BondExchangeRate(Document):
             )
         )
 
-    def _sync_rate_values(self):
+    def _sync_rate_values(self) -> None:
         rate = _decimal_or_none(self.rate, "Rate")
         reverse_rate = _decimal_or_none(self.reverse_rate, "Reverse Rate")
 
@@ -164,7 +167,7 @@ class BondExchangeRate(Document):
             if reverse_rate is None or reverse_rate > 0:
                 self.reverse_rate = ONE / rate
 
-    def _should_use_reverse_rate(self, rate, reverse_rate) -> bool:
+    def _should_use_reverse_rate(self, rate: Decimal | None, reverse_rate: Decimal | None) -> bool:
         if reverse_rate is None:
             return False
         if rate is None:
@@ -179,7 +182,7 @@ class BondExchangeRate(Document):
         )
 
 
-def _decimal_or_none(value, field_label: str):
+def _decimal_or_none(value: DecimalInput, field_label: str) -> Decimal | None:
     if value in (None, ""):
         return None
     return to_decimal(value, field_label)

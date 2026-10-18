@@ -1,6 +1,8 @@
 # Copyright (c) 2026, Deepak Patel and contributors
 # For license information, please see license.txt
 
+from collections.abc import Callable
+
 import frappe
 from frappe import _
 from frappe.model.document import Document
@@ -40,7 +42,7 @@ from bond_management.bond_management.utils.validation import optional_string, re
 
 
 @frappe.whitelist(methods=["POST"])
-def read_statement_pdf(name: str | None, attachment: str, portfolio_name: str | None = None):
+def read_statement_pdf(name: str | None, attachment: str, portfolio_name: str | None = None) -> dict:
     """Preview statement PDF values without submitting a document snapshot."""
     name = optional_string(name, "Bond Statement")
     attachment = required_string(attachment, "Attachment")
@@ -67,7 +69,8 @@ def read_statement_pdf(name: str | None, attachment: str, portfolio_name: str | 
 
 
 class BondStatement(Document):
-    def before_validate(self):
+    def before_validate(self) -> None:
+        """Load PDF details for a new attachment, else reject edits to the PDF-managed fields."""
         if self.flags.ignore_statement_pdf:
             return
 
@@ -103,12 +106,14 @@ class BondStatement(Document):
             )
         self.flags.statement_attachment_details = details
 
-    def validate(self):
+    def validate(self) -> None:
+        """Rebuild holdings from the ledger and reconcile them with the attached PDF."""
         self.populate_holdings()
         self._apply_attachment_market_prices()
         self._reconcile_attachment_quantities()
 
-    def before_save(self):
+    def before_save(self) -> None:
+        """Rename the PDF and post its market prices in the same transaction as the statement."""
         details = self.flags.statement_attachment_details
         if not details:
             return
@@ -125,7 +130,7 @@ class BondStatement(Document):
         )
         self.market_price_posting = market_date.name if market_date else None
 
-    def _validate_unique_attachment(self):
+    def _validate_unique_attachment(self) -> None:
         existing = frappe.qb.get_query(
             "Bond Statement",
             fields=["name"],
@@ -145,7 +150,8 @@ class BondStatement(Document):
                 )
             )
 
-    def on_update(self):
+    def on_update(self) -> None:
+        """Write PDF-derived exchange rates and the reconciliation report, or fail the save."""
         details = self.flags.statement_attachment_details
         if not details:
             return
@@ -168,11 +174,12 @@ class BondStatement(Document):
         if not self.flags.suppress_quantity_reconciliation_message:
             self._report_quantity_mismatches()
 
-    def on_trash(self):
+    def on_trash(self) -> None:
+        """Remove the exchange-rate provenance and report files this statement created."""
         delete_statement_exchange_rates(self.name)
         delete_quantity_reconciliation_reports(self.name)
 
-    def _run_update_side_effect(self, stage, callback):
+    def _run_update_side_effect[T](self, stage: str, callback: Callable[[], T]) -> T:
         try:
             return callback()
         except Exception:
@@ -183,13 +190,13 @@ class BondStatement(Document):
             )
             raise
 
-    def _set_details_from_attachment(self):
+    def _set_details_from_attachment(self) -> None:
         details = get_statement_attachment_details(self.attachment, self.portfolio_name)
         self.flags.statement_attachment_details = details
         self.portfolio_name = details.portfolio_name
         self.statement_date = details.statement_date
 
-    def _apply_attachment_market_prices(self):
+    def _apply_attachment_market_prices(self) -> None:
         details = self.flags.statement_attachment_details
         if not details:
             return
@@ -208,7 +215,7 @@ class BondStatement(Document):
         for row in self.bond_statement_details:
             row.market_price = prices_by_isin[row.isin]
 
-    def _reconcile_attachment_quantities(self):
+    def _reconcile_attachment_quantities(self) -> None:
         details = self.flags.statement_attachment_details
         if not details:
             self.flags.quantity_reconciliation_comparisons = ()
@@ -229,7 +236,7 @@ class BondStatement(Document):
             "Mismatched" if self.flags.quantity_reconciliation_mismatches else "Matched"
         )
 
-    def _report_quantity_mismatches(self):
+    def _report_quantity_mismatches(self) -> None:
         mismatches = self.flags.quantity_reconciliation_mismatches or ()
         if not mismatches:
             return
@@ -252,7 +259,8 @@ class BondStatement(Document):
             wide=True,
         )
 
-    def populate_holdings(self):
+    def populate_holdings(self) -> None:
+        """Replace holdings with ledger positions on the statement date; matured bonds hold zero."""
         # Clear generated rows first so cleared inputs cannot retain old holdings.
         self.set("bond_statement_details", [])
 
