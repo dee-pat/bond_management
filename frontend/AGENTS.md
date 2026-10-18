@@ -5,11 +5,11 @@ Vue 3 + frappe-ui, read-only, served at `/bond-investor` by
 Vite build is served from `/assets/bond_management/frontend/`. The root
 `AGENTS.md` still applies; `CLAUDE.md` here is a symlink to this file.
 
-- Before changing the SPA, Playwright setup, investor APIs, investor redirects
-  or the legacy investor workspace, read
-  [investor-ui-migration.md](../docs/specs/investor-ui-migration.md) and update
-  [the progress note](../docs/plans/investor-ui-migration-progress.md) for the
-  current slice.
+- A change to the SPA, Playwright setup, investor APIs, investor redirects or
+  the legacy investor workspace updates the current slice in
+  [the progress note](../docs/plans/investor-ui-migration-progress.md). The
+  root [Read by task](../AGENTS.md#read-by-task) table names the spec sections
+  to read.
 - The SPA calls only `api/investor.py` and `api/investor_reports.py`. It never
   creates, edits, deletes, submits, uploads or parses; that is Desk's job.
 - The `frappe-ui` skill is pinned in `skills.lock` to an upstream frappe-ui
