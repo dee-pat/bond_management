@@ -1,6 +1,3 @@
-import { effectScope } from "vue";
-import { useCall } from "frappe-ui";
-
 import type {
 	BondDetailResponse,
 	BondPage,
@@ -61,54 +58,81 @@ interface InvestorRequest<T> {
 	request: (parameters?: InvestorApiParameters) => Promise<T>;
 }
 
+interface InvestorResponseBody {
+	data?: unknown;
+	exc_type?: unknown;
+}
+
 function useInvestorRequest<T>(method: string): InvestorRequest<T> {
 	const url = `${INVESTOR_API_URL}.${method}`;
 
+	// Each request is its own fetch, so a failure can never return another
+	// request's data. frappe-ui's useCall is not used: it drops the HTTP status,
+	// and v1 `/api/method` errors carry only `exc_type`, so a 401, or any error
+	// over HTTP/2 (no status text), could not be told apart from a server error.
 	async function request(parameters: InvestorApiParameters = {}): Promise<T> {
-		// A shared useCall resolves every submit from one data ref, and a network
-		// failure leaves the previous response there. Each request gets its own
-		// call so a failure can never return another request's data.
-		const scope = effectScope(true);
-		const call = scope.run(() =>
-			useCall<T, InvestorApiParameters>({ url, immediate: false })
-		)!;
+		let response: Response;
 		try {
-			const response = await call.submit(parameters);
-			if (response === null) {
-				throw toInvestorApiError(call.error);
-			}
-			return response;
-		} catch (caughtError) {
-			if (caughtError instanceof InvestorApiError) {
-				throw caughtError;
-			}
-			throw toInvestorApiError(caughtError);
-		} finally {
-			scope.stop();
+			response = await fetch(withQuery(url, parameters), { headers: requestHeaders() });
+		} catch {
+			throw new InvestorApiError(500);
 		}
+
+		const body = await readJson(response);
+		if (!response.ok) {
+			throw toInvestorApiError(response.status, body?.exc_type);
+		}
+		if (body?.data === undefined || body.data === null) {
+			throw new InvestorApiError(500);
+		}
+		return body.data as T;
 	}
 
 	return { request };
 }
 
-function toInvestorApiError(caughtError: unknown): InvestorApiError {
-	const errorType =
-		caughtError && typeof caughtError === "object" && "type" in caughtError
-			? String(caughtError.type)
-			: "";
-	const errorMessage =
-		caughtError && typeof caughtError === "object" && "message" in caughtError
-			? String(caughtError.message)
-			: String(caughtError ?? "");
-	const normalizedType = `${errorType} ${errorMessage}`.toLowerCase();
-	if (normalizedType.includes("authentication")) {
+function withQuery(url: string, parameters: InvestorApiParameters): string {
+	const query = new URLSearchParams();
+	for (const [key, value] of Object.entries(parameters)) {
+		if (value !== undefined) {
+			query.append(key, String(value));
+		}
+	}
+	const queryString = query.toString();
+	return queryString ? `${url}?${queryString}` : url;
+}
+
+function requestHeaders(): Record<string, string> {
+	// The same headers frappe-ui sends; the site name routes the Vite dev proxy.
+	const headers: Record<string, string> = {
+		Accept: "application/json",
+		"X-Frappe-Site-Name": window.location.hostname,
+	};
+	const csrfToken = window.csrf_token;
+	if (csrfToken && csrfToken !== "{{ csrf_token }}") {
+		headers["X-Frappe-CSRF-Token"] = csrfToken;
+	}
+	return headers;
+}
+
+async function readJson(response: Response): Promise<InvestorResponseBody | null> {
+	try {
+		const body: unknown = await response.json();
+		return body && typeof body === "object" ? (body as InvestorResponseBody) : null;
+	} catch {
+		return null;
+	}
+}
+
+function toInvestorApiError(status: number, excType: unknown): InvestorApiError {
+	if (status === 401 || excType === "AuthenticationError") {
 		return new InvestorApiError(401);
 	}
-	if (normalizedType.includes("permission") || normalizedType.includes("forbidden")) {
-		// Frappe's v1 dispatcher rejects Guest before the investor endpoint can
-		// raise its AuthenticationError. Keep session-expiry redirects distinct
-		// from an authenticated user's document-level permission denial.
-		if (typeof document !== "undefined" && document.cookie.includes("user_id=Guest")) {
+	if (status === 403 || excType === "PermissionError") {
+		// Frappe's v1 dispatcher rejects Guest with a PermissionError before the
+		// investor endpoint can raise its AuthenticationError. Keep session-expiry
+		// redirects distinct from an authenticated user's document-level denial.
+		if (document.cookie.includes("user_id=Guest")) {
 			return new InvestorApiError(401);
 		}
 		return new InvestorApiError(403);

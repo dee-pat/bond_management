@@ -5,7 +5,6 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { InvestorApiError, redirectToLogin } from "./api";
 import { useRecordDetail } from "./detail";
 
-vi.mock("frappe-ui", () => ({ useCall: vi.fn() }));
 vi.mock("./api", async (importOriginal) => ({
 	...(await importOriginal<typeof import("./api")>()),
 	redirectToLogin: vi.fn(),

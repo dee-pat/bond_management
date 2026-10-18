@@ -131,6 +131,8 @@ export function usePagedList<Row>(options: PagedListOptions<Row>) {
 
 export function toFilterValue(value: unknown): string | null {
 	if (value === null || value === undefined || value === "") return null;
+	// An object has no meaningful filter text; String() would send "[object Object]".
+	if (typeof value === "object" && !Array.isArray(value)) return null;
 	return String(value);
 }
 

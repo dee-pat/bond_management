@@ -5,7 +5,6 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { InvestorApiError, redirectToLogin } from "./api";
 import { toFilterValue, usePagedList } from "./list";
 
-vi.mock("frappe-ui", () => ({ useCall: vi.fn() }));
 vi.mock("./api", async (importOriginal) => ({
 	...(await importOriginal<typeof import("./api")>()),
 	redirectToLogin: vi.fn(),
@@ -91,9 +90,9 @@ describe("toFilterValue", () => {
 		expect(toFilterValue([])).toBe("");
 	});
 
-	it("stringifies objects with their default toString", () => {
-		// TODO(review): an object value becomes "[object Object]" and is sent as a filter.
-		expect(toFilterValue({ name: "PF-1" })).toBe("[object Object]");
+	it("returns null for plain objects", () => {
+		expect(toFilterValue({ name: "PF-1" })).toBeNull();
+		expect(toFilterValue({})).toBeNull();
 	});
 });
 
@@ -236,10 +235,11 @@ describe("usePagedList", () => {
 		expect(fetchPage).toHaveBeenCalledTimes(2);
 	});
 
-	it("applies a filter value but ignores an empty one", () => {
+	it("applies a filter value but ignores an empty or object one", () => {
 		const { list, fetchPage } = mountList();
 
 		list.applyFilter("currency", "Currency", "");
+		list.applyFilter("portfolio", "Portfolio", { name: "PF-1" });
 		expect(fetchPage).toHaveBeenCalledTimes(1);
 		expect(list.activeFilter.value).toBeNull();
 

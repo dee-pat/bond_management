@@ -59,6 +59,11 @@ request that fails before any response shows the failed state instead of an
 earlier response. `e2e/investor/performance.spec.ts` (rerun after a lost
 connection) and `e2e/investor/review-regressions.spec.ts` (portfolio filter
 change after a lost connection) cover it.
+`frontend/src/lib/api.ts` maps HTTP 401, and 403 for Guest, to the login
+redirect, and 403 to the forbidden state, from the status code first and the v1
+`exc_type` second. `src/lib/api.test.ts` owns the mapping matrix.
+`e2e/investor/hardening.spec.ts` checks the visible 401 redirect, and its
+mid-session expiry test checks the real Guest 403.
 
 ## Frontend unit tests
 

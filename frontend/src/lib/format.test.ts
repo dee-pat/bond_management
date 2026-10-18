@@ -15,21 +15,20 @@ describe("formatDate", () => {
 		expect(formatDate("")).toBe("—");
 	});
 
-	it("throws for text that is not a date", () => {
-		// TODO(review): an unparseable value throws a RangeError and breaks the
-		// render instead of falling back to the dash or the raw value.
-		expect(() => formatDate("not-a-date")).toThrow(RangeError);
-		expect(() => formatDate("2026-13-01")).toThrow(RangeError);
+	it("returns a dash for text that is not a calendar date", () => {
+		expect(formatDate("not-a-date")).toBe("—");
+		expect(formatDate("2026-13-01")).toBe("—");
+		expect(formatDate("2026-1-05")).toBe("—");
 	});
 
-	it("throws for a datetime string", () => {
-		// TODO(review): a timestamp value becomes "...T10:00:00T00:00:00Z" and throws.
-		expect(() => formatDate("2026-01-05T10:00:00")).toThrow(RangeError);
+	it("returns a dash for an impossible day instead of rolling over", () => {
+		expect(formatDate("2026-02-30")).toBe("—");
+		expect(formatDate("2025-02-29")).toBe("—");
 	});
 
-	it("rolls an impossible day into the next month", () => {
-		// TODO(review): 30 February silently renders as 2 March.
-		expect(formatDate("2026-02-30")).toBe("02 Mar 2026");
+	it("formats the date part of a Frappe datetime", () => {
+		expect(formatDate("2026-01-05T10:00:00")).toBe("05 Jan 2026");
+		expect(formatDate("2026-01-05 23:59:59.000000")).toBe("05 Jan 2026");
 	});
 });
 
@@ -43,10 +42,11 @@ describe("formatNumber", () => {
 		expect(formatNumber(-1234.5, 2)).toBe("-1,234.50");
 	});
 
-	it("keeps the sign of negative zero", () => {
-		// TODO(review): -0, and negatives that round to zero, render as "-0".
-		expect(formatNumber(-0)).toBe("-0");
-		expect(formatNumber(-0.4)).toBe("-0");
+	it("drops the sign of zero and of negatives that round to zero", () => {
+		expect(formatNumber(-0)).toBe("0");
+		expect(formatNumber(-0.4)).toBe("0");
+		expect(formatNumber(-0.004, 2)).toBe("0.00");
+		expect(formatNumber(-0.005, 2)).toBe("-0.01");
 	});
 
 	it("formats very large values in full", () => {
@@ -68,10 +68,10 @@ describe("formatNumber", () => {
 		expect(formatNumber(2, 3)).toBe("2.000");
 	});
 
-	it("renders non-finite values as Intl does", () => {
-		// TODO(review): NaN and Infinity reach the page as "NaN" and "∞".
-		expect(formatNumber(Number.NaN)).toBe("NaN");
-		expect(formatNumber(Number.POSITIVE_INFINITY)).toBe("∞");
+	it("returns a dash for non-finite values", () => {
+		expect(formatNumber(Number.NaN)).toBe("—");
+		expect(formatNumber(Number.POSITIVE_INFINITY)).toBe("—");
+		expect(formatNumber(Number.NEGATIVE_INFINITY, 2)).toBe("—");
 	});
 });
 
@@ -93,6 +93,16 @@ describe("formatMoney", () => {
 		expect(formatMoney(-1234.5, "USD")).toBe(`-USD${NBSP}1,234.50`);
 	});
 
+	it("drops the sign of an amount that rounds to zero", () => {
+		expect(formatMoney(-0.001, "USD")).toBe(`USD${NBSP}0.00`);
+		expect(formatMoney(-0.001, "US")).toBe("US 0.00");
+	});
+
+	it("returns a dash for a non-finite amount", () => {
+		expect(formatMoney(Number.NaN, "USD")).toBe("—");
+		expect(formatMoney(Number.POSITIVE_INFINITY, "")).toBe("—");
+	});
+
 	it("normalizes a lower-case currency code", () => {
 		expect(formatMoney(1234.5, "usd")).toBe(`USD${NBSP}1,234.50`);
 	});
@@ -102,8 +112,7 @@ describe("formatMoney", () => {
 	});
 
 	it("falls back to code and number for an invalid currency", () => {
-		// TODO(review): the fallback joins with a normal space, the Intl path with a
-		// no-break space, so the amount can wrap away from its code.
+		// Unlike the Intl path, the fallback joins with a normal space (kept on review).
 		expect(formatMoney(1234.5, "US")).toBe("US 1,234.50");
 	});
 });
@@ -113,6 +122,10 @@ describe("formatPercent", () => {
 		expect(formatPercent(12.3456)).toBe("12.35%");
 		expect(formatPercent(0)).toBe("0.00%");
 		expect(formatPercent(-0.5)).toBe("-0.50%");
+	});
+
+	it("returns a dash for a non-finite value", () => {
+		expect(formatPercent(Number.NaN)).toBe("—");
 	});
 
 	it("does not scale the value", () => {

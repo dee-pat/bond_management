@@ -1,6 +1,6 @@
 # Investor UI Migration Progress
 
-Last updated: 2026-10-16
+Last updated: 2026-10-18
 Specification: [investor-ui-migration.md](../specs/investor-ui-migration.md)
 Current phase: Phase 7 — Pilot
 Overall status: Phase 7 in progress; pilot acceptance pending
@@ -58,6 +58,26 @@ The new focused specs failed before the fix (the transaction list showed
 Portfolio A rows under a Portfolio B filter) and pass after it. The
 `pre-push-ui` gate passed on 2026-10-16: lint, 383 server tests, frontend
 lint/typecheck/build, and 60 Playwright tests.
+
+### Investor API status mapping and formatter edge cases
+
+While adding Vitest unit tests for `frontend/src/lib` on 2026-10-18, we found
+that Frappe v1 `/api/method` errors carry `exc_type`, not frappe-ui's
+`errors[]`, and `useCall` drops the HTTP status. The SPA recognised a 403 only
+through the HTTP/1.1 status text `FORBIDDEN`. A 401 showed the generic error,
+and over HTTP/2 (no status text) every expired session did too, instead of
+redirecting to login. On the user's decision, `frontend/src/lib/api.ts` now
+sends each request with its own `fetch` and the same headers. It maps the
+HTTP status first and `exc_type` second, and keeps the Guest-cookie rule for
+session expiry. The user also accepted these formatter changes:
+`formatDate` returns the dash for invalid or impossible dates and formats the
+date part of a datetime; `formatNumber`, `formatMoney` and `formatPercent`
+drop the sign of zero and return the dash for non-finite values;
+`toFilterValue` ignores plain objects. No API, data, permission or financial
+rule changes; the domain model was reviewed and is unchanged.
+`e2e/investor/hardening.spec.ts` gains a focused 401-redirect spec. It failed
+before the change (the page stayed on `/bond-investor/transactions`) and
+passes after it.
 
 ### Frappe-ui control prototype
 

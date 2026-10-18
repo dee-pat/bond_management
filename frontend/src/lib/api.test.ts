@@ -1,18 +1,20 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { InvestorApiError, redirectToLogin, useInvestorApi } from "./api";
 
-// The "frappe-ui" barrel imports .vue components. Load only the real useCall
-// so requests run through frappe-ui's own fetch and error parsing.
-vi.mock("frappe-ui", () => import("../../node_modules/frappe-ui/src/data-fetching/useCall/useCall"));
-
 const METHOD_URL = "/api/method/bond_management.bond_management.api.investor";
 
-function stubFetch(status: number, body: unknown) {
+// Frappe v1 `/api/method` errors carry `exc_type`, not frappe-ui's `errors[]`.
+function v1Error(excType: string) {
+	return { exc_type: excType, _server_messages: "[]" };
+}
+
+function stubFetch(status: number, body: unknown, statusText = "") {
 	const fetchMock = vi.fn(
 		async (_input: RequestInfo | URL, _init?: RequestInit) =>
 			new Response(typeof body === "string" ? body : JSON.stringify(body), {
 				status,
+				statusText,
 				headers: { "Content-Type": "application/json" },
 			})
 	);
@@ -20,8 +22,12 @@ function stubFetch(status: number, body: unknown) {
 	return fetchMock;
 }
 
-function frappeError(type: string, message = "") {
-	return { errors: [{ type, message, title: type, indicator: "red" }] };
+function stubBrowser(cookie: string, csrfToken?: string) {
+	vi.stubGlobal("document", { cookie });
+	vi.stubGlobal("window", {
+		csrf_token: csrfToken,
+		location: { hostname: "bond-management-test.localhost" },
+	});
 }
 
 async function requestError(): Promise<unknown> {
@@ -40,6 +46,10 @@ async function expectStatus(status: number): Promise<void> {
 	expect(caughtError).toBeInstanceOf(InvestorApiError);
 	expect((caughtError as InvestorApiError).status).toBe(status);
 }
+
+beforeEach(() => {
+	stubBrowser("user_id=investor%40example.com; sid=abc");
+});
 
 describe("InvestorApiError", () => {
 	it("carries the status behind a generic message", () => {
@@ -65,54 +75,81 @@ describe("investor requests", () => {
 
 		await useInvestorApi().fetchTransactions({
 			portfolio: "PF-1",
-			start: 20,
+			start: 0,
 			pageLength: 20,
 			sortBy: "trade_date",
 			sortOrder: "asc",
 		});
 		expect(fetchMock.mock.calls[0][0]).toBe(
-			`${METHOD_URL}.get_transactions?portfolio=PF-1&start=20&page_length=20&sort_by=trade_date&sort_order=asc`
+			`${METHOD_URL}.get_transactions?portfolio=PF-1&start=0&page_length=20&sort_by=trade_date&sort_order=asc`
 		);
 	});
 
-	it("maps a Frappe AuthenticationError to 401", async () => {
-		stubFetch(401, frappeError("AuthenticationError"));
+	it("sends no query string without parameters", async () => {
+		const fetchMock = stubFetch(200, { data: {} });
+
+		await useInvestorApi().fetchBootstrap();
+		expect(fetchMock.mock.calls[0][0]).toBe(`${METHOD_URL}.get_bootstrap`);
+	});
+
+	it("sends the frappe-ui request headers", async () => {
+		stubBrowser("user_id=investor%40example.com", "token-1");
+		const fetchMock = stubFetch(200, { data: {} });
+
+		await useInvestorApi().fetchBootstrap();
+		expect(fetchMock.mock.calls[0][1]).toEqual({
+			headers: {
+				Accept: "application/json",
+				"X-Frappe-Site-Name": "bond-management-test.localhost",
+				"X-Frappe-CSRF-Token": "token-1",
+			},
+		});
+	});
+
+	it("omits an unrendered CSRF token placeholder", async () => {
+		stubBrowser("user_id=investor%40example.com", "{{ csrf_token }}");
+		const fetchMock = stubFetch(200, { data: {} });
+
+		await useInvestorApi().fetchBootstrap();
+		expect(fetchMock.mock.calls[0][1]?.headers).not.toHaveProperty("X-Frappe-CSRF-Token");
+	});
+
+	it("maps HTTP 401 to 401 with or without status text", async () => {
+		stubFetch(401, v1Error("AuthenticationError"), "UNAUTHORIZED");
 		await expectStatus(401);
-	});
-
-	it("maps a Frappe PermissionError to 403 for a signed-in user", async () => {
-		vi.stubGlobal("document", { cookie: "user_id=investor%40example.com; sid=abc" });
-		stubFetch(403, frappeError("PermissionError", "Not permitted"));
-		await expectStatus(403);
-	});
-
-	it("maps a PermissionError to 401 when the session is Guest", async () => {
-		vi.stubGlobal("document", { cookie: "user_id=Guest; sid=Guest" });
-		stubFetch(403, frappeError("PermissionError"));
-		await expectStatus(401);
-	});
-
-	it("maps a forbidden message to 403", async () => {
-		stubFetch(403, frappeError("HTTPError", "Forbidden"));
-		await expectStatus(403);
-	});
-
-	it("maps any other Frappe error to 500", async () => {
-		stubFetch(417, frappeError("ValidationError", "Invalid filter"));
-		await expectStatus(500);
-	});
-
-	it("ignores the HTTP status when the body has no Frappe errors", async () => {
-		// TODO(review): only the error type and message are consulted, so a 401 or
-		// 403 without an `errors` payload maps to 500 and never redirects.
-		stubFetch(403, { exc_type: "PermissionError" });
-		await expectStatus(500);
 		stubFetch(401, {});
+		await expectStatus(401);
+	});
+
+	it("maps HTTP 403 to 403 for a signed-in user, even over HTTP/2", async () => {
+		stubFetch(403, v1Error("PermissionError"), "FORBIDDEN");
+		await expectStatus(403);
+		// HTTP/2 responses have no status text.
+		stubFetch(403, v1Error("PermissionError"));
+		await expectStatus(403);
+	});
+
+	it("maps HTTP 403 to 401 when the session is Guest", async () => {
+		stubBrowser("user_id=Guest; sid=Guest");
+		stubFetch(403, v1Error("PermissionError"));
+		await expectStatus(401);
+	});
+
+	it("falls back to exc_type when the status is not 401 or 403", async () => {
+		stubFetch(500, v1Error("AuthenticationError"));
+		await expectStatus(401);
+		stubFetch(500, v1Error("PermissionError"));
+		await expectStatus(403);
+	});
+
+	it("maps any other error to 500", async () => {
+		stubFetch(417, v1Error("ValidationError"), "EXPECTATION FAILED");
+		await expectStatus(500);
+		stubFetch(404, v1Error("DoesNotExistError"));
 		await expectStatus(500);
 	});
 
 	it("maps a non-JSON error body to 500", async () => {
-		vi.spyOn(console, "log").mockImplementation(() => undefined);
 		stubFetch(502, "<html>Bad Gateway</html>");
 		await expectStatus(500);
 	});
@@ -127,8 +164,12 @@ describe("investor requests", () => {
 		await expectStatus(500);
 	});
 
-	it("maps an empty success payload to 500", async () => {
+	it("maps a success without data to 500", async () => {
 		stubFetch(200, { data: null });
+		await expectStatus(500);
+		stubFetch(200, { message: { name: "BOND-1" } });
+		await expectStatus(500);
+		stubFetch(200, "not json");
 		await expectStatus(500);
 	});
 
