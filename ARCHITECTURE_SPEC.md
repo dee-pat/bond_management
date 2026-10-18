@@ -148,7 +148,8 @@ SVG and hover outputs, preserve browser coverage, pass `pre-push-ui`, and report
 runtime and total line deltas. Verified: 209 SVG and 66,880 hover outputs match
 the original; `pre-push-ui` exited 0 (lint, 424 server, 80 frontend unit and 61
 browser tests, typecheck and build). Scoped lint, doc links and diff checks pass.
-Fresh-install/opt-in checks do not apply; remote CI awaits an authorized push.
+Fresh-install/opt-in checks do not apply; remote CI evidence for the published
+revision is recorded on [PR #92](https://github.com/dee-pat/bond_management/pull/92).
 
 ## Test plan
 
