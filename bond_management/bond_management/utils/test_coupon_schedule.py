@@ -282,11 +282,13 @@ class TestCouponSchedule(IntegrationTestCase):
     def test_rejects_issue_date_on_or_after_maturity(self):
         for issue_date in ("2025-01-01", "2025-06-01"):
             with self.subTest(issue_date=issue_date):
-                with self.assertRaisesRegex(ValueError, "^Issue date must be before maturity date$"):
+                with self.assertRaisesRegex(
+                    frappe.ValidationError, "^Issue date must be before maturity date$"
+                ):
                     generate_coupon_schedule(issue_date, "2025-01-01", 2, 10, None, "30E/360")
 
         # The date check runs before frequency validation.
-        with self.assertRaisesRegex(ValueError, "^Issue date must be before maturity date$"):
+        with self.assertRaisesRegex(frappe.ValidationError, "^Issue date must be before maturity date$"):
             generate_coupon_schedule("2025-06-01", "2025-01-01", 0, 10, None, "30E/360")
 
     def test_pins_frequency_validation_and_missing_inputs(self):
@@ -308,8 +310,8 @@ class TestCouponSchedule(IntegrationTestCase):
             ],
         )
 
-    def test_unsupported_day_count_convention_raises_value_error(self):
-        with self.assertRaisesRegex(ValueError, "^Unsupported day count convention: BOGUS$"):
+    def test_rejects_unsupported_day_count_convention(self):
+        with self.assertRaisesRegex(frappe.ValidationError, "^Unsupported day count convention: BOGUS$"):
             generate_coupon_schedule("2025-01-01", "2026-01-01", 2, 10, None, "BOGUS")
 
     def assertSchedule(self, schedule, expected):

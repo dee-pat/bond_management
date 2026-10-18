@@ -61,7 +61,7 @@ after the start date. Otherwise:
 - `Actual/364(Kenya)` or `ACT/364(Kenya)`, matched case-insensitively
   (`is_kenya_day_count_convention`), and `ACT/364`: `days / 364`.
 - `ACT/365`: `days / 365`.
-- Any other value raises `ValueError`.
+- Any other value is rejected with a validation error.
 
 Bond Master's `day_count_convention` field offers only `30E/360`,
 `Actual/Actual(ICMA)`, and `Actual/364(Kenya)`, with `30E/360` as the
