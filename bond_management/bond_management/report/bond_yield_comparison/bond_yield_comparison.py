@@ -7,13 +7,14 @@ from frappe import _
 from bond_management.bond_management.utils.validation import date_range_filter, optional_date
 
 
-def execute(filters: dict | None = None):
-    """Return persisted market yields for the selected bonds and date range."""
+def execute(filters: dict | str | list | None = None) -> tuple[list[dict], list[dict]]:
+    """Return persisted market yields, as percents, for the selected readable bonds and date range."""
     filters = validate_filters(filters)
     return get_columns(), get_data(filters)
 
 
-def validate_filters(filters: dict | None) -> dict:
+def validate_filters(filters: dict | str | list | None) -> dict:
+    """Normalize report filters; also accepts a JSON string, ``None`` or ``[]`` from the report runner."""
     if filters is None or filters == []:
         return {}
     if isinstance(filters, str):
@@ -34,6 +35,7 @@ def validate_filters(filters: dict | None) -> dict:
 
 
 def get_data(filters: dict) -> list[dict]:
+    """Return permission-scoped market rows; ``future_xirr`` is ``None`` where the solver had no result."""
     readable_isins = get_readable_isins(filters["bonds"])
     if not readable_isins:
         return []
@@ -63,6 +65,7 @@ def get_data(filters: dict) -> list[dict]:
 
 
 def get_readable_isins(selected_isins: list[str] | None) -> list[str]:
+    """Return readable bonds, or raise ``PermissionError`` when any selected bond is unreadable."""
     filters = {"name": ["in", selected_isins]} if selected_isins else None
     readable_isins = frappe.qb.get_query(
         "Bond Master",
@@ -79,6 +82,7 @@ def get_readable_isins(selected_isins: list[str] | None) -> list[str]:
 
 
 def get_columns() -> list[dict]:
+    """Return the report's column definitions."""
     return [
         {
             "label": _("Date"),
@@ -109,7 +113,8 @@ def get_columns() -> list[dict]:
     ]
 
 
-def parse_bond_filter(value) -> list[str] | None:
+def parse_bond_filter(value: object) -> list[str] | None:
+    """Return sorted, unique ISINs from a list or JSON list string; ``None`` when empty."""
     if value in (None, "", []):
         return None
     if isinstance(value, str):
