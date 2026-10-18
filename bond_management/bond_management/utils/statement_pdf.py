@@ -13,7 +13,6 @@ from bond_management.bond_management.utils.pdf_common import (
     ISIN_PATTERN,
     MAX_PDF_BYTES,
     NUMBER_PATTERN,
-    PortfolioPdfCredentials,
     extract_page_texts,
     get_portfolio_pdf_credentials,
     match_account_portfolio,

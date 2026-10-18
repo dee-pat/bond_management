@@ -1,5 +1,4 @@
 import frappe
-from frappe.exceptions import FrappeTypeError
 from frappe.tests import IntegrationTestCase
 
 from bond_management.bond_management.api.investor import get_market_date, get_market_dates

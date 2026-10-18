@@ -1,7 +1,6 @@
 # Copyright (c) 2026, Deepak Patel and Contributors
 # See license.txt
 
-import frappe
 from frappe.tests import IntegrationTestCase
 
 from bond_management.bond_management.tests.factories import (

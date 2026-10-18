@@ -5,10 +5,9 @@ import frappe
 from frappe.api.v1 import read_doc
 from frappe.client import get as get_document
 from frappe.client import get_list
-from frappe.exceptions import FrappeTypeError
 from frappe.tests import IntegrationTestCase
 
-from bond_management.bond_management.api.investor import MAX_PAGE_START, get_exchange_rate, get_exchange_rates
+from bond_management.bond_management.api.investor import get_exchange_rate, get_exchange_rates
 from bond_management.bond_management.tests.factories import (
     allow_user,
     as_investor_user,

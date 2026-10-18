@@ -2,7 +2,7 @@
 # See license.txt
 
 from datetime import date, timedelta
-from decimal import ROUND_HALF_UP, Decimal
+from decimal import Decimal
 from unittest.mock import patch
 
 import frappe
@@ -15,7 +15,6 @@ from bond_management.bond_management.doctype.bond_market_date.bond_market_date i
 )
 from bond_management.bond_management.tests.factories import make_bond, make_market_date
 from bond_management.bond_management.utils.performance import get_latest_market_rows
-from bond_management.bond_management.utils.xirr import calculate_future_xirr
 from bond_management.patches.add_bond_query_indexes import (
     LEDGER_INDEX,
     MARKET_DATE_UNIQUE,

@@ -1,7 +1,6 @@
 from datetime import date
 from decimal import Decimal
 from itertools import pairwise
-from unittest.mock import patch
 
 import frappe
 from frappe.tests import IntegrationTestCase
