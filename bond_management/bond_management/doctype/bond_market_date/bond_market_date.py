@@ -19,12 +19,13 @@ from bond_management.bond_management.utils.xirr import (
 
 
 class BondMarketDate(Document):
-    def validate(self):
+    def validate(self) -> None:
+        """Enforce one snapshot per date and recalculate yields from the entered prices."""
         self._validate_unique_date()
         self._validate_market_price_rows()
         self._recalculate_market_data()
 
-    def _validate_unique_date(self):
+    def _validate_unique_date(self) -> None:
         """Allow one market-data snapshot for each valuation date.
 
         Frappe v16 does not permit a database ``unique`` constraint on Date
@@ -52,7 +53,7 @@ class BondMarketDate(Document):
                 frappe.UniqueValidationError,
             )
 
-    def _recalculate_market_data(self):
+    def _recalculate_market_data(self) -> None:
         historical_guesses = (
             get_last_xirr_guesses(
                 {row.isin for row in self.bond_market_prices if row.isin},
@@ -71,7 +72,7 @@ class BondMarketDate(Document):
             for fieldname, value in values.items():
                 row.set(fieldname, value)
 
-    def _validate_market_price_rows(self):
+    def _validate_market_price_rows(self) -> None:
         seen_isins = set()
 
         for row in self.bond_market_prices:
@@ -84,7 +85,7 @@ class BondMarketDate(Document):
                 frappe.throw(_("Market Price must be greater than zero in row {0}").format(row.idx))
 
 
-def _add_unique_isin(isin, seen_isins):
+def _add_unique_isin(isin: str, seen_isins: set[str]) -> None:
     if isin in seen_isins:
         frappe.throw(
             _("ISIN {0} appears more than once in Bond Market Prices").format(frappe.bold(escape_html(isin)))

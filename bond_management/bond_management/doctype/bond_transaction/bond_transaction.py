@@ -2,6 +2,8 @@
 # For license information, please see license.txt
 
 from collections import defaultdict
+from collections.abc import Iterable
+from datetime import date
 from decimal import ROUND_HALF_EVEN, Decimal
 
 import frappe
@@ -69,7 +71,7 @@ PDF_MONEY_PRECISION = Decimal("0.01")
 
 
 @frappe.whitelist(methods=["POST"])
-def read_transaction_pdf(name: str | None, attachment: str):
+def read_transaction_pdf(name: str | None, attachment: str) -> dict:
     """Preview transaction PDF rows without submitting a document snapshot."""
     name = optional_string(name, "Bond Transaction")
     attachment = required_string(attachment, "Attachment")
@@ -86,7 +88,7 @@ def read_transaction_pdf(name: str | None, attachment: str):
     }
 
 
-def serialize_transaction_attachment_row(row: TransactionAttachmentRow):
+def serialize_transaction_attachment_row(row: TransactionAttachmentRow) -> dict:
     """Serialize a parsed transaction row for the form preview."""
     values = transaction_attachment_row_values(row)
     values["trade_date"] = row.trade_date.isoformat()
@@ -94,7 +96,9 @@ def serialize_transaction_attachment_row(row: TransactionAttachmentRow):
     return values
 
 
-def calculate_transaction_principal_value(face_value_per_unit, quantity_face_value, price) -> Decimal:
+def calculate_transaction_principal_value(
+    face_value_per_unit: DecimalInput, quantity_face_value: DecimalInput, price: DecimalInput
+) -> Decimal:
     """Return the unrounded consideration implied by a price quoted per 100."""
     return (
         to_decimal(face_value_per_unit) * to_decimal(quantity_face_value) * to_decimal(price) / Decimal("100")
@@ -102,8 +106,14 @@ def calculate_transaction_principal_value(face_value_per_unit, quantity_face_val
 
 
 def _calculate_amount_values(
-    bond, settlement_date, quantity_face_value, price, accrued_interest_paid, commission
-):
+    bond: Document,
+    settlement_date: date | str | None,
+    quantity_face_value: DecimalInput,
+    price: DecimalInput,
+    accrued_interest_paid: DecimalInput,
+    commission: DecimalInput,
+) -> dict[str, Decimal]:
+    """Derive stored amounts with one rounding path shared by the controller and preview RPC."""
     original_principal = to_decimal(bond.face_value_per_unit) * to_decimal(quantity_face_value)
     principal = calculate_transaction_principal_value(
         bond.face_value_per_unit,
@@ -170,19 +180,22 @@ def _throw_pdf_mismatches(heading: str, mismatches: list[str], hint: str) -> Non
 
 
 class BondTransaction(Document):
-    def before_naming(self):
+    def before_naming(self) -> None:
+        """Fill a blank form from the selected PDF row so the reference-based name comes from the PDF."""
         row = self._get_selected_attachment_row()
         if row and not any(self.get(fieldname) for fieldname in PDF_POPULATION_CHECK_FIELDS):
             self._apply_attachment_row(row)
         elif row:
             self._validate_attachment_row(row)
 
-    def before_validate(self):
+    def before_validate(self) -> None:
+        """Reject edits to PDF-managed fields before any derived value is recalculated."""
         row = self._get_selected_attachment_row()
         if row:
             self._validate_attachment_row(row)
 
-    def validate(self):
+    def validate(self) -> None:
+        """Recompute every server-authoritative value and reject a save that breaks the ledger."""
         self.validate_required_inputs()
         bond = self.set_authoritative_bond_snapshot()
         self.validate_financial_terms()
@@ -194,7 +207,8 @@ class BondTransaction(Document):
     def _has_pdf_attachment(self) -> bool:
         return bool(self.attachment) and self.attachment.lower().endswith(".pdf")
 
-    def before_save(self):
+    def before_save(self) -> None:
+        """Rename the private PDF only after its portfolio and transaction are identified."""
         if not self._has_pdf_attachment():
             return
 
@@ -208,7 +222,7 @@ class BondTransaction(Document):
         )
 
     @frappe.whitelist(methods=["POST"])
-    def create_selected_pdf_transactions(self, transaction_selections: str | list | None):
+    def create_selected_pdf_transactions(self, transaction_selections: str | list | None) -> list[str]:
         """Atomically create one document per selected row from a multi-transaction PDF."""
         frappe.has_permission("Bond Transaction", "create", throw=True)
         if self.name and frappe.db.exists("Bond Transaction", self.name):
@@ -348,17 +362,19 @@ class BondTransaction(Document):
         return matching[0]
 
     def _get_transaction_attachment_details(self) -> TransactionAttachmentDetails:
+        """Parse the attachment once per save; batch creation shares one parse across documents."""
         details = self.flags.transaction_attachment_details
         if not details:
             details = get_transaction_attachment_details(self.attachment)
             self.flags.transaction_attachment_details = details
         return details
 
-    def _apply_attachment_row(self, row: TransactionAttachmentRow):
+    def _apply_attachment_row(self, row: TransactionAttachmentRow) -> None:
         for fieldname, value in transaction_attachment_row_values(row).items():
             self.set(fieldname, value)
 
-    def _validate_attachment_row(self, row: TransactionAttachmentRow):
+    def _validate_attachment_row(self, row: TransactionAttachmentRow) -> None:
+        """Keep PDF-managed fields equal to the PDF; only batch selection may override the portfolio."""
         mismatches = []
         expected_portfolio = row.portfolio_name
         if self.attachment_portfolio_override:
@@ -390,7 +406,10 @@ class BondTransaction(Document):
         )
 
     @staticmethod
-    def _attachment_values_match(actual, expected, value_type: str) -> bool:
+    def _attachment_values_match(
+        actual: DecimalInput | date, expected: DecimalInput | date, value_type: str
+    ) -> bool:
+        """Compare form and PDF values at the precision the PDF prints for that value type."""
         if value_type == "text":
             return str(actual or "").strip().upper() == str(expected or "").strip().upper()
         if value_type == "date":
@@ -410,7 +429,8 @@ class BondTransaction(Document):
             rounding=ROUND_HALF_EVEN,
         ) == expected_decimal.quantize(precision, rounding=ROUND_HALF_EVEN)
 
-    def validate_required_inputs(self):
+    def validate_required_inputs(self) -> None:
+        """Fail early with a field label before any lookup depends on a missing value."""
         for fieldname, label in (
             ("isin", "ISIN"),
             ("portfolio_name", "Portfolio Name"),
@@ -422,7 +442,7 @@ class BondTransaction(Document):
         if self.transaction_type not in {"Purchase", "Sale"}:
             frappe.throw(_("Transaction Type must be Purchase or Sale"))
 
-    def on_trash(self):
+    def on_trash(self) -> None:
         """A purchase cannot be deleted when later transactions depend on it."""
         self._lock_portfolios({self.portfolio_name})
         self._validate_ledger_group(
@@ -431,14 +451,16 @@ class BondTransaction(Document):
             exclude_name=self.name,
         )
 
-    def set_authoritative_bond_snapshot(self):
+    def set_authoritative_bond_snapshot(self) -> Document:
+        """Overwrite client-sent bond terms with Bond Master values and return the bond."""
         bond = frappe.get_doc("Bond Master", self.isin)
         bond.check_permission("read")
         for fieldname in BOND_SNAPSHOT_FIELDS:
             self.set(fieldname, bond.get(fieldname))
         return bond
 
-    def validate_financial_terms(self):
+    def validate_financial_terms(self) -> None:
+        """Reject non-positive quantity, face value and price, and negative commission."""
         if to_decimal(self.quantity_face_value) <= 0:
             frappe.throw(_("Quantity / Face Value must be greater than zero"))
         if to_decimal(self.face_value_per_unit) <= 0:
@@ -448,7 +470,8 @@ class BondTransaction(Document):
         if to_decimal(self.commission) < 0:
             frappe.throw(_("Commission must be zero or greater"))
 
-    def validate_transaction_dates(self):
+    def validate_transaction_dates(self) -> None:
+        """Keep trade on or before settlement, and both within the bond's issue-to-maturity life."""
         trade_date = getdate(self.trade_date)
         settlement_date = getdate(self.settlement_date)
         issue_date = getdate(self.issue_date)
@@ -465,7 +488,8 @@ class BondTransaction(Document):
         if trade_date > settlement_date:
             frappe.throw(_("Trade Date must be on or before Settlement Date"))
 
-    def calculate_amounts(self, bond=None):
+    def calculate_amounts(self, bond: Document | None = None) -> dict[str, Decimal]:
+        """Store server-calculated amounts so client-sent totals are never trusted."""
         if bond is None:
             bond = frappe.get_doc("Bond Master", self.isin)
         values = _calculate_amount_values(
@@ -480,7 +504,8 @@ class BondTransaction(Document):
             self.set(fieldname, value)
         return values
 
-    def validate_pdf_amounts(self, calculated_amounts):
+    def validate_pdf_amounts(self, calculated_amounts: dict[str, Decimal]) -> None:
+        """Catch a wrong Bond Master face value by comparing calculated amounts with the PDF."""
         if not self._has_pdf_attachment():
             return
 
@@ -503,7 +528,8 @@ class BondTransaction(Document):
             _("<br>Correct the Bond Master Face Value Per Unit or re-read the PDF."),
         )
 
-    def validate_portfolio_ledger(self):
+    def validate_portfolio_ledger(self) -> None:
+        """Keep the old and new ISIN-portfolio ledgers non-negative when either changes."""
         previous = self.get_doc_before_save()
         groups = {(self.isin, self.portfolio_name)}
         if previous:
@@ -519,7 +545,7 @@ class BondTransaction(Document):
                 replacement=replacement,
             )
 
-    def _lock_portfolios(self, portfolio_names):
+    def _lock_portfolios(self, portfolio_names: Iterable[str | None]) -> None:
         # A real portfolio row exists before its transactions, so this also locks an
         # empty ledger and serializes concurrent sales against the same portfolio.
         for portfolio_name in sorted(name for name in portfolio_names if name):
@@ -534,7 +560,14 @@ class BondTransaction(Document):
                 ignore_permissions=True,
             ).run()
 
-    def _validate_ledger_group(self, isin, portfolio_name, exclude_name=None, replacement=None):
+    def _validate_ledger_group(
+        self,
+        isin: str,
+        portfolio_name: str,
+        exclude_name: str | None = None,
+        replacement: BondTransaction | None = None,
+    ) -> None:
+        """Reject any settlement date on which the end-of-day position would go negative."""
         rows = frappe.qb.get_query(
             "Bond Transaction",
             filters={"isin": isin, "portfolio_name": portfolio_name},

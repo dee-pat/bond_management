@@ -16,10 +16,11 @@ from bond_management.bond_management.utils.validation import optional_string
 
 
 class BondMaster(Document):
-    def validate(self):
+    def validate(self) -> None:
+        """Regenerate maturity, repayment percentages and coupons from the principal schedule."""
         self._recalculate_schedules()
 
-    def _get_recalculated_values(self):
+    def _get_recalculated_values(self) -> dict:
         return {
             "first_coupon_date": self.first_coupon_date,
             "maturity_date": self.maturity_date,
@@ -45,7 +46,7 @@ class BondMaster(Document):
             ],
         }
 
-    def _recalculate_schedules(self):
+    def _recalculate_schedules(self) -> None:
         self.quantity_change = 1 if is_quantity_change_bond(self) else 0
         self.validate_financial_terms()
         self.validate_principal_schedule()
@@ -55,7 +56,8 @@ class BondMaster(Document):
         self.regenerate_coupon_schedule()
         self.validate_principal_alignment()
 
-    def validate_financial_terms(self):
+    def validate_financial_terms(self) -> None:
+        """Require a positive face value, a non-negative coupon and a 0-100 withholding tax."""
         if to_decimal(self.face_value_per_unit) <= 0:
             frappe.throw(_("Face Value Per Unit must be greater than zero"))
         if to_decimal(self.coupon_rate) < 0:
@@ -64,13 +66,15 @@ class BondMaster(Document):
         if withholding_tax < 0 or withholding_tax > 100:
             frappe.throw(_("Withholding Tax must be between 0 and 100"))
 
-    def validate_dates(self):
+    def validate_dates(self) -> None:
+        """Require maturity strictly after issue once both dates are known."""
         if not self.issue_date or not self.maturity_date:
             return
         if getdate(self.maturity_date) <= getdate(self.issue_date):
             frappe.throw(_("Maturity Date must be after Issue Date"))
 
-    def validate_principal_schedule(self):
+    def validate_principal_schedule(self) -> None:
+        """Require at least one dated repayment, each positive and on a unique date."""
         if not self.principal_schedule:
             frappe.throw(_("At least one principal repayment is required"))
 
@@ -86,7 +90,8 @@ class BondMaster(Document):
                 frappe.throw(_("Repayment date {0} cannot be duplicated").format(repayment_date))
             repayment_dates.add(repayment_date)
 
-    def update_principal_percentages(self):
+    def update_principal_percentages(self) -> None:
+        """Derive repayment percentages; the last row takes the remainder so they total 100."""
         total_units = sum(
             (to_decimal(row.principal_units) for row in self.principal_schedule),
             start=to_decimal(0),
@@ -101,11 +106,13 @@ class BondMaster(Document):
                 )
                 allocated_percent += row.repayment_percent
 
-    def update_maturity_date(self):
+    def update_maturity_date(self) -> None:
+        """Set maturity to the latest contractual repayment date."""
         dates = [getdate(row.repayment_date) for row in self.principal_schedule if row.repayment_date]
         self.maturity_date = max(dates) if dates else None
 
-    def regenerate_coupon_schedule(self):
+    def regenerate_coupon_schedule(self) -> None:
+        """Replace the coupon schedule so it always matches the current terms."""
         if not self.issue_date or not self.maturity_date or not self.coupon_frequency:
             return
 
@@ -124,7 +131,8 @@ class BondMaster(Document):
         for row in schedule:
             self.append("coupon_schedule", row)
 
-    def validate_principal_alignment(self):
+    def validate_principal_alignment(self) -> None:
+        """Require every repayment date to fall on a generated coupon date."""
         if not self.coupon_schedule or not self.principal_schedule:
             return
 
