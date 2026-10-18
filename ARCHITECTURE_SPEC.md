@@ -139,6 +139,17 @@ tests, build and 61 Playwright tests. Scoped pre-commit, doc links and diff chec
 also passed. No fresh-install/opt-in run applies (no schema, hooks or permission
 changes); remote CI evidence is recorded on the PR for the published revision.
 
+Report chart cleanup (2026-10-18): share non-null point projection within Bond
+Yield Comparison and reduce the hover fallback to its single-point case.
+Preserve gap bridging, singleton rendering, interpolation, axes, selection and
+clipboard behavior; no API, permission, schema or dependency change. The domain
+model was reviewed and needs no update. Acceptance: compare original/refactored
+SVG and hover outputs, preserve browser coverage, pass `pre-push-ui`, and report
+runtime and total line deltas. Verified: 209 SVG and 66,880 hover outputs match
+the original; `pre-push-ui` exited 0 (lint, 424 server, 80 frontend unit and 61
+browser tests, typecheck and build). Scoped lint, doc links and diff checks pass.
+Fresh-install/opt-in checks do not apply; remote CI awaits an authorized push.
+
 ## Test plan
 
 ### Unit and integration
