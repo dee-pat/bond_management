@@ -81,7 +81,9 @@ differences in the final field.
   `workflow_dispatch`, and on PRs that change its harness; run them locally for changes to patches, install hooks,
   or share and User Permission consistency.
 - A failed scheduled or manual _Opt-in suites_ run opens a `nightly-failure`
-  issue, or comments on the open one.
+  issue, or comments on the open one. Dispatching with `force_failure=true`
+  exercises that report, and the next fully passing scheduled run comments on
+  and closes the open issue.
 - CI pins Frappe to the exact tag in `FRAPPE_VERSION` (in `ci.yml` and
   `opt-in.yml`). Bump both together, deliberately, after checking the release.
 - Changes to patches, schema, hooks, dependencies, installation, or manual
