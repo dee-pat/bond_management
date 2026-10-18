@@ -1,7 +1,6 @@
 from datetime import timedelta
 from decimal import ROUND_HALF_UP, Decimal
 
-import frappe
 from frappe.utils import getdate
 
 from bond_management.bond_management.utils.coupon_schedule import (

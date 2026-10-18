@@ -1,7 +1,6 @@
 from datetime import timedelta
 
 import frappe
-from frappe.exceptions import FrappeTypeError
 from frappe.tests import IntegrationTestCase
 
 from bond_management.bond_management.api.investor import get_statement, get_statements

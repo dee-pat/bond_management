@@ -5,13 +5,14 @@ from contextlib import AbstractContextManager, nullcontext
 import frappe
 from frappe import _
 
-# Keep established dotted API paths while report adapters live in a focused module.
+# Re-exported to keep the SPA's established api.investor.* method paths while
+# report adapters live in a focused module.
 from bond_management.bond_management.api.investor_reports import (
-    get_bond_yield_comparison,
-    get_interest_difference_by_portfolio,
-    get_portfolio_performance,
-    get_portfolio_performance_cashflows,
-    get_yield_comparison_defaults,
+    get_bond_yield_comparison,  # noqa: F401 -- whitelisted path used by frontend/src/lib/api.ts
+    get_interest_difference_by_portfolio,  # noqa: F401 -- whitelisted path used by frontend/src/lib/api.ts
+    get_portfolio_performance,  # noqa: F401 -- whitelisted path used by frontend/src/lib/api.ts
+    get_portfolio_performance_cashflows,  # noqa: F401 -- whitelisted path used by frontend/src/lib/api.ts
+    get_yield_comparison_defaults,  # noqa: F401 -- whitelisted path used by frontend/src/lib/api.ts
 )
 from bond_management.bond_management.utils.investor_access import is_readable
 from bond_management.bond_management.utils.investor_access import (
