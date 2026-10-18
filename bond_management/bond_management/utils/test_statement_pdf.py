@@ -17,6 +17,8 @@ from bond_management.bond_management.utils.statement_pdf import (
     parse_statement_pdf_text,
 )
 
+NAMED_BOND_ISINS = {"Kenya Treasury Bond FXD3-2019-15": "KE6000001328"}
+
 
 class TestStatementPdf(UnitTestCase):
     def test_versioned_filename_length_boundaries_preserve_full_account_hint(self):
@@ -324,3 +326,137 @@ class TestStatementPdf(UnitTestCase):
         self.assertEqual(len(prices), 1)
         self.assertEqual(prices[0].reported_quantity, Decimal("0.000000"))
         self.assertFalse(prices[0].quantity_is_face_value)
+
+    def test_rejects_unknown_legacy_bond_name_before_checking_its_values(self):
+        for market_price in ("98.965410", "0.000000"):
+            with self.subTest(market_price=market_price):
+                self.assertMarketPriceError(
+                    f"FXD9/2020/10 KES 100,000.000000 104.592600 0.00000000 {market_price}\n"
+                    "10,459,260.00 9,896,541.00 10/07/2034",
+                    "Could not identify fixed-income security FXD9/2020/10 from the PDF in Bond Master records.",
+                    NAMED_BOND_ISINS,
+                )
+
+    def test_ignores_rows_with_non_numeric_values(self):
+        # NUMBER_PATTERN admits only valid decimals, so such rows never match.
+        self.assertEqual(
+            parse_statement_market_prices("XS1843435766 n/a 100 99 99,000 30/06/2026 101.25"),
+            (),
+        )
+
+    def test_rejects_zero_and_negative_fixed_income_values_in_every_layout(self):
+        price_error = "The PDF market price for ISIN {} must be greater than zero."
+        quantity_error = "The PDF reported quantity for ISIN {} must be zero or greater."
+        value_error = "The PDF market value for ISIN {} must be zero or greater."
+        cases = {
+            "current zero price": (
+                "XS1843435766 1,000 100 99 99,000 30/06/2026 0.00",
+                price_error.format("XS1843435766"),
+            ),
+            "current negative price": (
+                "XS1843435766 1,000 100 99 99,000 30/06/2026 -101.25",
+                price_error.format("XS1843435766"),
+            ),
+            "current negative quantity": (
+                "XS1843435766 -1,000 100 99 99,000 30/06/2026 101.25",
+                quantity_error.format("XS1843435766"),
+            ),
+            "legacy zero price": (
+                "XS2354781614 USD 3,900,000.00 101.384699 6.30000000 0.000000\n"
+                "3,954,003.26 3,851,250.00 23/01/2034",
+                price_error.format("XS2354781614"),
+            ),
+            "legacy negative quantity": (
+                "XS2354781614 USD -3,900,000.00 101.384699 6.30000000 98.750000\n"
+                "3,954,003.26 3,851,250.00 23/01/2034",
+                quantity_error.format("XS2354781614"),
+            ),
+            "legacy negative market value": (
+                "XS2354781614 USD 3,900,000.00 101.384699 6.30000000 98.750000\n"
+                "3,954,003.26 -3,851,250.00 23/01/2034",
+                value_error.format("XS2354781614"),
+            ),
+            "legacy price checked before market value": (
+                "XS2354781614 USD 3,900,000.00 101.384699 6.30000000 0.000000\n"
+                "3,954,003.26 -3,851,250.00 23/01/2034",
+                price_error.format("XS2354781614"),
+            ),
+            "named zero price": (
+                "FXD3/2019/15 KES 100,000.000000 104.592600 0.00000000 0.000000\n"
+                "10,459,260.00 9,896,541.00 10/07/2034",
+                price_error.format("KE6000001328"),
+            ),
+            "named negative price": (
+                "FXD3/2019/15 KES 100,000.000000 104.592600 0.00000000 -98.965410\n"
+                "10,459,260.00 9,896,541.00 10/07/2034",
+                price_error.format("KE6000001328"),
+            ),
+            "named quantity checked before market value": (
+                "FXD3/2019/15 KES -100,000.000000 104.592600 0.00000000 98.965410\n"
+                "10,459,260.00 -9,896,541.00 10/07/2034",
+                quantity_error.format("KE6000001328"),
+            ),
+            "named negative market value": (
+                "FXD3/2019/15 KES 100,000.000000 104.592600 0.00000000 98.965410\n"
+                "10,459,260.00 -9,896,541.00 10/07/2034",
+                value_error.format("KE6000001328"),
+            ),
+        }
+        for label, (text, message) in cases.items():
+            with self.subTest(label):
+                self.assertMarketPriceError(text, message, NAMED_BOND_ISINS)
+
+    def test_rejects_conflicts_between_isin_and_named_rows(self):
+        named_row = (
+            "FXD3/2019/15 KES 100,000.000000 104.592600 0.00000000 98.965410\n10,459,260.00 {} 10/07/2034"
+        )
+        cases = {
+            "price": (
+                "KE6000001328 100,000 100 99 99,000 30/06/2026 98.00",
+                "9,896,541.00",
+                "The PDF contains conflicting market prices for ISIN KE6000001328.",
+            ),
+            "quantity": (
+                "KE6000001328 200,000 100 99 99,000 30/06/2026 98.965410",
+                "9,896,541.00",
+                "The PDF contains conflicting reported quantities for ISIN KE6000001328.",
+            ),
+            "quantity interpretation": (
+                "KE6000001328 100,000 100 99 99,000 30/06/2026 98.965410",
+                "98,965.41",
+                "The PDF contains conflicting reported quantities for ISIN KE6000001328.",
+            ),
+        }
+        for label, (isin_row, market_value, message) in cases.items():
+            with self.subTest(label):
+                self.assertMarketPriceError(
+                    f"{isin_row}\n{named_row.format(market_value)}", message, NAMED_BOND_ISINS
+                )
+
+    def test_keeps_first_row_position_and_last_equal_row_values(self):
+        prices = parse_statement_market_prices(
+            """
+            XS2354781614 1,000 100 99 99,000 30/06/2026 98.75
+            XS1843435766 1,000 100 99 99,000 30/06/2026 101.25
+            XS2354781614 USD 1,000.00 99 8 98.75 99,000 98,750.00 30/06/2026
+            KE6000001328 100,000 100 99 99,000 30/06/2026 98.965410
+            FXD3/2019/15 KES 100,000.000000 104.592600 0.00000000 98.965410
+            10,459,260.00 9,896,541.00 10/07/2034
+            """,
+            NAMED_BOND_ISINS,
+        )
+
+        self.assertEqual(
+            [(row.isin, str(row.market_price), str(row.reported_quantity)) for row in prices],
+            [
+                ("XS2354781614", "98.75", "1000.00"),
+                ("XS1843435766", "101.25", "1000"),
+                ("KE6000001328", "98.965410", "100000.000000"),
+            ],
+        )
+        self.assertEqual([row.quantity_is_face_value for row in prices], [False, False, False])
+
+    def assertMarketPriceError(self, text, message, bond_name_to_isin=None):
+        with self.assertRaises(StatementPdfError) as context:
+            parse_statement_market_prices(text, bond_name_to_isin)
+        self.assertEqual(str(context.exception), message)

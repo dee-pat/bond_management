@@ -131,3 +131,202 @@ class TestCouponSchedule(IntegrationTestCase):
         schedule = generate_coupon_schedule("2025-01-01", "2026-01-01", 2, 0, "2025-07-01", "30E/360")
 
         self.assertEqual(schedule[0]["coupon_factor"], 0)
+
+    def test_pins_schedule_for_each_supported_frequency(self):
+        cases = {
+            1: (
+                "2027-01-15",
+                [
+                    ("2026-01-15", "2025-01-15", "2026-01-14", "6"),
+                    ("2027-01-15", "2026-01-15", "2027-01-14", "6"),
+                ],
+            ),
+            2: (
+                "2026-01-15",
+                [
+                    ("2025-07-15", "2025-01-15", "2025-07-14", "3.0"),
+                    ("2026-01-15", "2025-07-15", "2026-01-14", "3.0"),
+                ],
+            ),
+            4: (
+                "2026-01-15",
+                [
+                    ("2025-04-15", "2025-01-15", "2025-04-14", "1.50"),
+                    ("2025-07-15", "2025-04-15", "2025-07-14", "1.50"),
+                    ("2025-10-15", "2025-07-15", "2025-10-14", "1.50"),
+                    ("2026-01-15", "2025-10-15", "2026-01-14", "1.50"),
+                ],
+            ),
+            12: (
+                "2025-07-15",
+                [
+                    (f"2025-{month + 1:02d}-15", f"2025-{month:02d}-15", f"2025-{month + 1:02d}-14", "0.5")
+                    for month in range(1, 7)
+                ],
+            ),
+        }
+        for frequency, (maturity_date, expected) in cases.items():
+            with self.subTest(frequency=frequency):
+                schedule = generate_coupon_schedule(
+                    "2025-01-15", maturity_date, frequency, 6, None, "30E/360"
+                )
+                self.assertSchedule(schedule, expected)
+
+    def test_pins_end_of_month_and_clipped_day_cadence(self):
+        self.assertSchedule(
+            generate_coupon_schedule("2024-01-10", "2025-08-31", 2, 6, None, "30E/360"),
+            [
+                ("2024-02-29", "2024-01-10", "2024-02-28", "0.8166666666666666666666666666"),
+                ("2024-08-31", "2024-02-29", "2024-08-30", "3.016666666666666666666666667"),
+                ("2025-02-28", "2024-08-31", "2025-02-27", "2.966666666666666666666666666"),
+                ("2025-08-31", "2025-02-28", "2025-08-30", "3.033333333333333333333333334"),
+            ],
+        )
+        self.assertSchedule(
+            generate_coupon_schedule("2024-01-10", "2025-08-31", 2, 6, None, "Actual/Actual(ICMA)"),
+            [
+                ("2024-02-29", "2024-01-10", "2024-02-28", "0.8241758241758241758241758244"),
+                ("2024-08-31", "2024-02-29", "2024-08-30", "3.0"),
+                ("2025-02-28", "2024-08-31", "2025-02-27", "3.0"),
+                ("2025-08-31", "2025-02-28", "2025-08-30", "3.0"),
+            ],
+        )
+        # Steps run from the previous generated date, so a clipped 28 February
+        # carries into earlier dates when maturity is not a month end.
+        self.assertSchedule(
+            generate_coupon_schedule("2024-01-10", "2025-08-30", 2, 6, None, "30E/360"),
+            [
+                ("2024-02-28", "2024-01-10", "2024-02-27", "0.7999999999999999999999999998"),
+                ("2024-08-28", "2024-02-28", "2024-08-27", "3.0"),
+                ("2025-02-28", "2024-08-28", "2025-02-27", "3.0"),
+                ("2025-08-30", "2025-02-28", "2025-08-29", "3.033333333333333333333333334"),
+            ],
+        )
+
+    def test_pins_short_and_long_first_coupon_stubs(self):
+        self.assertSchedule(
+            generate_coupon_schedule("2025-01-01", "2026-07-01", 2, 6, "2025-03-15", "30E/360"),
+            [
+                ("2025-03-15", "2025-01-01", "2025-03-14", "1.233333333333333333333333334"),
+                ("2025-07-01", "2025-03-15", "2025-06-30", "1.766666666666666666666666666"),
+                ("2026-01-01", "2025-07-01", "2025-12-31", "3.0"),
+                ("2026-07-01", "2026-01-01", "2026-06-30", "3.0"),
+            ],
+        )
+        self.assertSchedule(
+            generate_coupon_schedule("2025-01-01", "2026-07-01", 2, 6, "2025-09-01", "Actual/Actual(ICMA)"),
+            [
+                ("2025-09-01", "2025-01-01", "2025-08-31", "3.977900552486187845303867404"),
+                ("2026-01-01", "2025-09-01", "2025-12-31", "1.989130434782608695652173913"),
+                ("2026-07-01", "2026-01-01", "2026-06-30", "3.0"),
+            ],
+        )
+
+    def test_rejects_first_coupon_date_on_issue_or_maturity_boundary(self):
+        for first_coupon_date, message in (
+            ("2025-01-01", "First Coupon Date must be after Issue Date"),
+            ("2024-12-31", "First Coupon Date must be after Issue Date"),
+            ("2026-07-01", "First Coupon Date must be before Maturity Date"),
+            ("2026-07-02", "First Coupon Date must be before Maturity Date"),
+        ):
+            with self.subTest(first_coupon_date=first_coupon_date):
+                with self.assertRaisesRegex(frappe.ValidationError, f"^{message}$"):
+                    generate_coupon_schedule("2025-01-01", "2026-07-01", 2, 6, first_coupon_date, "30E/360")
+
+    def test_pins_kenya_schedule_and_principal_date_validation(self):
+        # The convention name is matched case-insensitively and an entered
+        # first coupon date is ignored, even one before the issue date.
+        for convention, first_coupon_date in (
+            ("actual/364(kenya)", None),
+            ("Actual/364(Kenya)", "2024-01-01"),
+        ):
+            with self.subTest(convention=convention):
+                self.assertSchedule(
+                    generate_coupon_schedule(
+                        "2025-01-01",
+                        "2026-01-01",
+                        2,
+                        10,
+                        first_coupon_date,
+                        convention,
+                        principal_dates=["2025-07-03", "2026-01-01", None],
+                    ),
+                    [
+                        ("2025-01-02", "2025-01-01", "2025-01-01", "0.02747252747252747252747252747"),
+                        ("2025-07-03", "2025-01-02", "2025-07-02", "5.0"),
+                        ("2026-01-01", "2025-07-03", "2025-12-31", "5.0"),
+                    ],
+                )
+
+        # The earliest invalid repayment date is reported.
+        with self.assertRaisesRegex(
+            frappe.ValidationError,
+            "^Repayment Date 2026-07-01 must match the 182-day coupon schedule$",
+        ):
+            generate_coupon_schedule(
+                "2025-01-01",
+                "2027-01-01",
+                2,
+                10,
+                None,
+                "Actual/364(Kenya)",
+                principal_dates=["2026-08-01", "2026-07-01", "2027-01-01"],
+            )
+
+        with self.assertRaisesRegex(
+            frappe.ValidationError,
+            r"^Actual/364\(Kenya\) requires a semi-annual coupon frequency of 2$",
+        ):
+            generate_coupon_schedule("2025-01-01", "2027-01-01", 4, 10, None, "Actual/364(Kenya)")
+
+    def test_rejects_issue_date_on_or_after_maturity(self):
+        for issue_date in ("2025-01-01", "2025-06-01"):
+            with self.subTest(issue_date=issue_date):
+                with self.assertRaisesRegex(ValueError, "^Issue date must be before maturity date$"):
+                    generate_coupon_schedule(issue_date, "2025-01-01", 2, 10, None, "30E/360")
+
+        # The date check runs before frequency validation.
+        with self.assertRaisesRegex(ValueError, "^Issue date must be before maturity date$"):
+            generate_coupon_schedule("2025-06-01", "2025-01-01", 0, 10, None, "30E/360")
+
+    def test_pins_frequency_validation_and_missing_inputs(self):
+        for frequency, message in (
+            (5, "Coupon Frequency must be a positive divisor of 12"),
+            (-2, "Coupon Frequency must be a positive divisor of 12"),
+            ("x", "Coupon Frequency must be a number"),
+        ):
+            with self.subTest(frequency=frequency):
+                with self.assertRaisesRegex(frappe.ValidationError, f"^{message}$"):
+                    generate_coupon_schedule("2025-01-01", "2026-01-01", frequency, 10, None, "30E/360")
+
+        self.assertEqual(generate_coupon_schedule("2025-01-01", "2026-01-01", None, 10, None, "30E/360"), [])
+        self.assertSchedule(
+            generate_coupon_schedule("2025-01-01", "2026-01-01", "2", 10, None, "30E/360"),
+            [
+                ("2025-07-01", "2025-01-01", "2025-06-30", "5.0"),
+                ("2026-01-01", "2025-07-01", "2025-12-31", "5.0"),
+            ],
+        )
+
+    def test_unsupported_day_count_convention_raises_value_error(self):
+        with self.assertRaisesRegex(ValueError, "^Unsupported day count convention: BOGUS$"):
+            generate_coupon_schedule("2025-01-01", "2026-01-01", 2, 10, None, "BOGUS")
+
+    def assertSchedule(self, schedule, expected):
+        for row in schedule:
+            self.assertIsInstance(row["coupon_factor"], Decimal)
+        self.assertEqual(
+            [
+                (row["coupon_date"], row["period_start"], row["period_end"], row["coupon_factor"])
+                for row in schedule
+            ],
+            [
+                (
+                    date.fromisoformat(coupon),
+                    date.fromisoformat(start),
+                    date.fromisoformat(end),
+                    Decimal(factor),
+                )
+                for coupon, start, end, factor in expected
+            ],
+        )
