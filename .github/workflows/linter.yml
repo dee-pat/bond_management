@@ -12,8 +12,10 @@ permissions:
   contents: read
 
 concurrency:
+  # Pull requests cancel their superseded runs; push, scheduled and manual runs
+  # each keep their own group and run to completion.
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   linter:

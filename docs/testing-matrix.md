@@ -5,8 +5,8 @@ the exit codes of `bond_management/agent_policy.py`; `scripts/test_verify_helper
 covers `verify.sh` credential loading and the temporary-site check before any
 bench call; `scripts/test_deny_rules.py` checks every Codex deny prefix has a
 Claude Code deny rule; `scripts/test_workflow_concurrency.py` checks PR
-supersession and independent push/manual groups in CI (Linters and Opt-in
-suites cancel by design and are not covered). The investor-share dispatch tests
+supersession and independent push, scheduled and manual groups in CI,
+Linters and Opt-in suites. The investor-share dispatch tests
 `utils/test_investor_shares.py::test_bulk_clear_dispatch_rejects_get_before_mutating`,
 `::test_bulk_clear_dispatch_authorized_post_repairs_shares`,
 `::test_bulk_clear_dispatch_system_manager_post_repairs_shares`, and
