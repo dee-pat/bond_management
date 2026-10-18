@@ -66,6 +66,14 @@ and build reruns are unnecessary for these test/doc-only edits; CI links above
 cover the original PR. Cleanup CI is recorded on its PR; runtime and total
 line deltas are reported separately in the handoff.
 
+Shared composable test harness (2026-10-18): detail/list tests now share Vue
+mount/cleanup and async-settling helpers in a test-only module.
+Every test and assertion is unchanged; detached mounting, per-test unmounting
+and timer/nextTick ordering are preserved. Runtime/data contracts are unchanged.
+Domain model reviewed; no update needed. Verified locally: `verify.sh lint`,
+frontend lint/typecheck and all 80 unit tests passed (exit 0), as did doc links
+and diff checks. Runtime and total line deltas are reported in the handoff.
+
 ### Investor request isolation
 
 A review on 2026-10-16 found that each investor endpoint shared one frappe-ui
