@@ -1,8 +1,6 @@
 """Cases for the site classification in bond_management/agent_policy.py."""
 
 import importlib.util
-import json
-import re
 import subprocess
 import sys
 import unittest
@@ -10,8 +8,6 @@ from pathlib import Path
 
 APP_ROOT = Path(__file__).resolve().parent.parent
 CORE = APP_ROOT / "bond_management" / "agent_policy.py"
-CODEX_RULES = APP_ROOT / ".codex" / "rules" / "bond_management.rules"
-CLAUDE_SETTINGS = APP_ROOT / ".claude" / "settings.json"
 HEX = "0123456789abcdef" * 2
 TEMPORARY = f"bond-management-lifecycle-{HEX}.localhost"
 FOREIGN = (
@@ -74,18 +70,6 @@ class MainExitCodeTests(unittest.TestCase):
                 # The refusal never echoes the site name.
                 for site in argv:
                     self.assertNotIn(site or "\0", result.stderr)
-
-
-class DenyRuleSyncTests(unittest.TestCase):
-    def test_every_codex_prefix_has_a_claude_rule(self):
-        rules = CODEX_RULES.read_text()
-        patterns = re.findall(r"pattern = (\[.*?\])", rules)
-        codex = {" ".join(json.loads(pattern)) for pattern in patterns}
-        deny = json.loads(CLAUDE_SETTINGS.read_text())["permissions"]["deny"]
-        # A trailing " *" also matches the bare command, so the rule covers the prefix.
-        claude = {rule[len("Bash(") : -1].removesuffix(" *") for rule in deny if rule.startswith("Bash(")}
-        self.assertEqual(len(patterns), rules.count("prefix_rule("))
-        self.assertEqual(codex - claude, set())
 
 
 if __name__ == "__main__":

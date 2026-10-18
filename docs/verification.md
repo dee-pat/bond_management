@@ -2,6 +2,9 @@
 
 Read this file for changes, verification, CI failures, and completion evidence.
 Commands below run from the bench directory unless stated otherwise.
+This file, `.claude/settings.json`, `.codex/rules/bond_management.rules`,
+`.github/workflows/ci.yml` and `opt-in.yml` are this app's filled-in versions of
+the frappe-agent-kit `templates/` at the kit revision pinned in `skills.lock`.
 
 ## Definition of done
 
@@ -174,6 +177,8 @@ without calling bench, or echoing the name, unless it is one temporary site.
    `common_site_config.json` and `~/.config/bond_management/test-browser.env`,
    and denies `bench` drop, reinstall, restore, partial-restore and trim commands
    on both persistent sites (`--site` and positional forms).
+   `scripts/test_deny_rules.py`, run by `verify.sh lint`, fails when a Codex
+   deny prefix has no matching Claude Code rule.
 2. Persistent sites are protected by name. A temporary site must be
    `bond-management-<name>-<32-hex-id>.localhost`; `verify.sh` checks that name
    with `bond_management/agent_policy.py` before any bench call on one.

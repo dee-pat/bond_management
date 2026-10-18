@@ -59,50 +59,30 @@ During a requested PR review or review-fix workflow, resolve review
 conversations whose findings are verified as fixed at the current head. The
 `pr-review-threads` skill owns the steps and the `gh` commands.
 
-## When a finding blocks merge
-
-Use this rule to decide whether a review finding reopens work. Priorities are
-the P0–P3 meanings in the [review output contract](#summary-and-score); the
-score rubric is unchanged.
-
-- A finding blocks merge only when it is P0, P1 or P2 **and** falls inside the
-  changed component's documented guarantee: the goal, guarantee or acceptance
-  criteria in its spec, or the repository rules in `AGENTS.md` when no spec
-  narrows them.
-- A finding outside a spec's stated guarantee is not a defect of the change.
-  Reply in one line citing the spec section that excludes it, then resolve the
-  conversation without code changes. It is not an actionable finding and does
-  not set the score. If it shows the guarantee itself is wrong, propose a spec
-  change as a follow-up; do not widen the guarantee inside the PR.
-- A P3 finding never blocks merge and needs no follow-up. Fix it in the PR only
-  when the fix is trivial and low-risk or the user asks; otherwise reply and
-  resolve. While it remains open it still sets the score as the rubric says.
-- The user may waive a P2 finding. Only the user's explicit authorization, given
-  for that finding, counts; an agent or reviewer never waives one. Reply in the
-  thread with the waiver and the reason, then resolve it. The waived finding
-  still sets the score. P0 and P1 findings cannot be waived.
-- After the final planned review, a new reviewer finding reopens work only if it
-  meets the blocking bar above. Otherwise reply, resolve or record a follow-up,
-  and do not request another review round for it.
-
 ## Review output contract
 
 Apply this contract to reviews of PRs, commits, and uncommitted changes by
 Codex or Claude Code. Keep findings grounded in the changed code and follow the
 _Review guidelines_ in the root `AGENTS.md` for technical checks.
 
-### Summary and score
+### Summary, score and blocking
 
-Start the review summary with `Merge readiness: N/5`, or
-`Merge readiness: N/5 (provisional)` when the score is provisional, then the
-reviewed head commit and base revision, and a short rationale tied to the
-findings and verification.
-For uncommitted changes, identify the base commit and the staged/unstaged scope;
-the score applies only to that inspected snapshot. Reassess after fixes rather
-than carrying the previous score forward.
+The vendored
+[`frappe-pr-review` report format](../.agents/skills/frappe-pr-review/references/report.md)
+owns the merge-readiness rubric, the provisional and failed-check caps,
+confirmed-only scoring, and the rule for when a finding blocks merge. This app
+adds:
 
-Assign each actionable finding one priority. These meanings replace the P0–P3
-definitions in `frappe-pr-review`'s report format:
+- Start the summary with the score, then the reviewed head commit and base
+  revision. For uncommitted changes, also name the staged/unstaged scope.
+- Required verification comes from [verification.md](verification.md).
+- A finding blocks merge only inside the changed component's documented
+  guarantee: its spec, or the rules in `AGENTS.md` when no spec narrows them.
+
+### Domain examples that win on conflict
+
+These examples of each priority are this app's, and win over the generic
+severity descriptions in the report format:
 
 - **P0**: immediate, broad risk such as unrestricted financial-data exposure,
   destructive data corruption, or a broken critical operation.
@@ -111,32 +91,6 @@ definitions in `frappe-pr-review`'s report format:
 - **P2**: major correctness or regression defect that requires changes before
   merge.
 - **P3**: other actionable defect that needs a fix.
-
-Choose the lowest applicable score from this rubric; the highest-priority
-finding sets the defect ceiling. Do not average defects away or assign scores
-from finding counts:
-
-| Score   | Meaning                                                                                                                   |
-| ------- | ------------------------------------------------------------------------------------------------------------------------- |
-| **0/5** | A confirmed P0 finding remains. Stop merge and address it immediately.                                                    |
-| **1/5** | A P1 finding remains.                                                                                                     |
-| **2/5** | A P2 finding remains.                                                                                                     |
-| **3/5** | A P3 finding remains, or a required check failed for the reviewed revision.                                               |
-| **4/5** | No actionable findings, but required verification is missing, stale, or blocked, or a specific residual concern remains.  |
-| **5/5** | No actionable findings, required verification passed for the reviewed revision, and no specific residual concern remains. |
-
-Report review scope and residual concerns explicitly. Only _confirmed_ findings,
-as `frappe-pr-review` defines them, set the score; a _needs verification_ item
-never justifies 0/5. Scores express an evidence-based assessment, not a
-guarantee that the code is bug-free or authorization to merge.
-
-Report checks as the skill's report format requires, including required CI
-results for the exact revision. Mark the score **provisional**
-when required verification is missing, stale, or blocked; the maximum then is
-**4/5**. A failed required check caps the score at **3/5** even when no defect
-is identified; report the failure separately and use a lower score when a
-confirmed finding warrants one. Verification requirements come from
-[verification.md](verification.md).
 
 ### Findings
 

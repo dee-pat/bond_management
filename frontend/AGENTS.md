@@ -20,6 +20,8 @@ Vite build is served from `/assets/bond_management/frontend/`. The root
   dependency change is requested.
 - Financial values and durable status come from the server. Show pending and
   failed states; no optimistic updates.
+- Load `frappe-spa-client` for API client and unit-test work. Any new non-GET
+  investor call must send the CSRF token and get a unit test.
 
 Commands, from the app root: `yarn dev`, `yarn build`, `yarn lint`,
 `yarn typecheck`, `yarn test:unit` (Vitest for `src/lib`; from `frontend/`,

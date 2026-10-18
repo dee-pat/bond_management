@@ -48,7 +48,7 @@ class TestInvestorAttachmentConcurrency(IntegrationTestCase):
                 bond = own(make_bond())
                 transaction = own(make_transaction(bond, assigned))
                 # The harness owns these transaction boundaries, not app services.
-                frappe.db.commit()  # nosemgrep: bond-management-no-manual-transaction-boundary, frappe-manual-commit
+                frappe.db.commit()  # nosemgrep: frappe-kit-no-manual-transaction-boundary, frappe-manual-commit
                 frappe.db.sql("SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ")
                 frappe.db.sql("SET SESSION innodb_snapshot_isolation = %s", (int(strict_snapshot),))
                 mover_id = frappe.db.sql("SELECT CONNECTION_ID()")[0][0]
@@ -60,7 +60,7 @@ class TestInvestorAttachmentConcurrency(IntegrationTestCase):
                 attachment = own(make_private_file("Bond Transaction", transaction.name))
                 share = own(add_docshare("File", attachment.name, investor.name))
                 self.assertTrue(share.read)
-                frappe.db.commit()  # nosemgrep: bond-management-no-manual-transaction-boundary, frappe-manual-commit
+                frappe.db.commit()  # nosemgrep: frappe-kit-no-manual-transaction-boundary, frappe-manual-commit
 
             with self.primary_connection():
                 # Prove the snapshot predates the attachment, without mocking any reads.
@@ -71,7 +71,7 @@ class TestInvestorAttachmentConcurrency(IntegrationTestCase):
                         transaction.save()
                     self.assertEqual(conflict.exception.__cause__.args[0], 1020)
                     # Match Frappe's request conflict recovery, without swallowing it in services.
-                    frappe.db.rollback()  # nosemgrep: bond-management-no-manual-transaction-boundary, frappe-manual-commit
+                    frappe.db.rollback()  # nosemgrep: frappe-kit-no-manual-transaction-boundary, frappe-manual-commit
                     transaction.reload()
                     self.assertEqual(transaction.portfolio_name, assigned.name)
                     transaction.portfolio_name = other.name
@@ -80,7 +80,7 @@ class TestInvestorAttachmentConcurrency(IntegrationTestCase):
                 with patch("frappe.utils.background_jobs.get_queue", return_value=queue):
                     transaction.save()
                     queue.enqueue_call.assert_not_called()
-                    frappe.db.commit()  # nosemgrep: bond-management-no-manual-transaction-boundary, frappe-manual-commit
+                    frappe.db.commit()  # nosemgrep: frappe-kit-no-manual-transaction-boundary, frappe-manual-commit
                 self.assertEqual(queue.enqueue_call.call_count, 0 if strict_snapshot else 1)
 
             with self.secondary_connection():
@@ -88,7 +88,7 @@ class TestInvestorAttachmentConcurrency(IntegrationTestCase):
                     job = call.kwargs["kwargs"]
                     self.assertIs(job["method"], retry_file_share_cleanup)
                     job["method"](**job["kwargs"])
-                frappe.db.commit()  # nosemgrep: bond-management-no-manual-transaction-boundary, frappe-manual-commit
+                frappe.db.commit()  # nosemgrep: frappe-kit-no-manual-transaction-boundary, frappe-manual-commit
                 self.assertEqual(
                     frappe.db.get_value("Bond Transaction", transaction.name, "portfolio_name"), other.name
                 )
@@ -107,5 +107,5 @@ class TestInvestorAttachmentConcurrency(IntegrationTestCase):
                 for doctype, name in reversed(owned):
                     if frappe.db.exists(doctype, name):
                         frappe.delete_doc(doctype, name, ignore_permissions=True)
-                frappe.db.commit()  # nosemgrep: bond-management-no-manual-transaction-boundary, frappe-manual-commit
+                frappe.db.commit()  # nosemgrep: frappe-kit-no-manual-transaction-boundary, frappe-manual-commit
             frappe.local.db = self._primary_connection
