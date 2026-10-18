@@ -1,7 +1,10 @@
 from collections import defaultdict
+from collections.abc import Collection
+from typing import Any
 
 import frappe
 from frappe.utils import getdate
+from frappe.utils.data import DateTimeLikeObject
 
 from bond_management.bond_management.utils.exchange_rate import (
     REPORTING_CURRENCY,
@@ -18,7 +21,9 @@ from bond_management.bond_management.utils.xirr import (
 )
 
 
-def get_latest_market_rows(isins, valuation_date):
+def get_latest_market_rows(
+    isins: Collection[str] | None, valuation_date: DateTimeLikeObject
+) -> list[frappe._dict]:
     """Return only the latest persisted market row per ISIN."""
     if not isins:
         return []
@@ -30,7 +35,7 @@ def get_latest_market_rows(isins, valuation_date):
     )
 
 
-def _empty_context(transactions_by_isin):
+def _empty_context(transactions_by_isin: dict[str, list[frappe._dict]]) -> dict[str, Any]:
     return {
         "isins": [],
         "bonds": {},
@@ -80,7 +85,7 @@ def attach_bond_schedules(bonds_by_isin: dict) -> None:
             bonds_by_isin[row.parent][fieldname].append(row)
 
 
-def load_portfolio_performance_context(portfolio, valuation_date):
+def load_portfolio_performance_context(portfolio: str, valuation_date: DateTimeLikeObject) -> dict[str, Any]:
     """Batch-load all permission-aware inputs used by statements and reports."""
     valuation_date = getdate(valuation_date)
     transactions = frappe.qb.get_query(

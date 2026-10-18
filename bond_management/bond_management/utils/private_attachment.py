@@ -10,13 +10,14 @@ from pathlib import Path
 import frappe
 from filelock import FileLock, Timeout
 from frappe import _
+from frappe.model.document import Document
 
 # File.file_name is a 140-character Data field.
 FILE_NAME_MAX_LENGTH = 140
 
 
 def read_private_pdf_attachment(
-    attachment,
+    attachment: object,
     *,
     max_bytes: int | None,
     missing_message: str,
@@ -24,7 +25,11 @@ def read_private_pdf_attachment(
     private_message: str,
     size_message: str,
 ) -> tuple[bytes, str]:
-    """Read a private PDF through Frappe's File storage API, with an optional size limit."""
+    """Read a private PDF through Frappe's File storage API, with an optional size limit.
+
+    ``attachment`` is untrusted: anything but a non-empty ``.pdf`` URL string is
+    rejected. The File must be private and readable by the session user.
+    """
     attachment = _required_attachment_url(attachment, missing_message)
     if not attachment.lower().endswith(".pdf"):
         frappe.throw(extension_message)
@@ -49,7 +54,7 @@ def read_private_pdf_attachment(
 
 
 def standardize_private_pdf_attachment(
-    document,
+    document: Document,
     expected_filename: str,
     *,
     fieldname: str = "attachment",
@@ -154,11 +159,11 @@ def standardize_private_pdf_attachment(
         return expected_url
 
 
-def _private_file_sha256(file_doc) -> str:
+def _private_file_sha256(file_doc: Document) -> str:
     return hashlib.sha256(_read_private_bytes(file_doc)).hexdigest()
 
 
-def _read_private_bytes(file_doc) -> bytes:
+def _read_private_bytes(file_doc: Document) -> bytes:
     try:
         # Frappe's default encodings can turn binary PDF bytes into text.
         content = file_doc.get_content(encodings=())
@@ -171,7 +176,7 @@ def _read_private_bytes(file_doc) -> bytes:
     return content
 
 
-def _required_attachment_url(attachment, missing_message: str) -> str:
+def _required_attachment_url(attachment: object, missing_message: str) -> str:
     if attachment is None or (isinstance(attachment, str) and not attachment.strip()):
         frappe.throw(missing_message)
     if not isinstance(attachment, str):
@@ -242,7 +247,7 @@ def _standardization_lock(expected_url: str) -> Iterator[None]:
     lock_state = {"depth": 1, "released": False}
     lock_registry[expected_url] = lock_state
 
-    def release_lock():
+    def release_lock() -> None:
         if not lock_state["released"]:
             lock_state["released"] = True
             lock_registry.pop(expected_url, None)
@@ -262,7 +267,7 @@ def _standardization_lock(expected_url: str) -> Iterator[None]:
         frappe.db.after_rollback.add(release_lock)
 
 
-def _place_standardized_file(source_path: Path, target_path: Path, *, source_is_shared: bool):
+def _place_standardized_file(source_path: Path, target_path: Path, *, source_is_shared: bool) -> None:
     if target_path.exists():
         if not target_path.is_file():
             frappe.throw(_("Cannot standardize the PDF because the target path is not a file."))
@@ -297,7 +302,7 @@ def _place_standardized_file(source_path: Path, target_path: Path, *, source_is_
 
     source_path.replace(target_path)
 
-    def restore_source_path():
+    def restore_source_path() -> None:
         if target_path.exists() and not source_path.exists():
             target_path.replace(source_path)
 

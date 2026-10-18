@@ -17,7 +17,8 @@ KENYA_COUPON_PERIOD_DAYS = 182
 DateInput = date | str | None
 
 
-def is_kenya_day_count_convention(day_count_convention):
+def is_kenya_day_count_convention(day_count_convention: str | None) -> bool:
+    """Return whether the convention is Actual/364(Kenya), matched case-insensitively."""
     normalized = str(day_count_convention or "").casefold()
     return normalized in _KENYA_DAY_COUNT_KEYS
 
@@ -74,12 +75,12 @@ def generate_coupon_schedule(
 
 
 def year_fraction(
-    day_count_convention,
-    start_date,
-    end_date,
-    coupon_frequency,
-    reference_end_date=None,
-):
+    day_count_convention: str | None,
+    start_date: DateInput,
+    end_date: DateInput,
+    coupon_frequency: int | str,
+    reference_end_date: DateInput = None,
+) -> Decimal:
     """Return the year fraction from ``start_date`` to ``end_date``; 0 when end is not after start.
 
     An unsupported convention is user input: Bond Master's controller runs

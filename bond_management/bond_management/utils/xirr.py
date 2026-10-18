@@ -1,8 +1,13 @@
+import datetime
 from collections import defaultdict
+from collections.abc import Iterable, Mapping, Sequence
 from decimal import Decimal
+from typing import Any
 
 import frappe
+from frappe.model.document import Document
 from frappe.utils import getdate
+from frappe.utils.data import DateTimeLikeObject
 from pyxirr import InvalidPaymentsError, xirr
 
 from bond_management.bond_management.utils.accrual import (
@@ -11,7 +16,7 @@ from bond_management.bond_management.utils.accrual import (
     is_quantity_change_bond,
     unit_accrued_interest_from_bond,
 )
-from bond_management.bond_management.utils.financial import quantize_money, to_decimal
+from bond_management.bond_management.utils.financial import DecimalInput, quantize_money, to_decimal
 from bond_management.bond_management.utils.market_history import latest_market_rows
 from bond_management.bond_management.utils.portfolio import (
     get_coupon_position_from_transactions,
@@ -22,45 +27,51 @@ DEFAULT_XIRR_GUESS = 0.1
 PERCENT = Decimal("100")
 
 
-def round_cashflow_amount(amount):
+def round_cashflow_amount(amount: DecimalInput) -> float:
     """Round a cash-flow amount for the JSON/clipboard serialization boundary."""
     return float(quantize_money(amount))
 
 
-def round_cashflow_amounts(cash_flows):
+def round_cashflow_amounts(cash_flows: Iterable[Mapping[str, Any]]) -> list[dict[str, Any]]:
     """Apply the cash-flow amount convention without changing other metadata."""
     return [{**cash_flow, "amount": quantize_money(cash_flow["amount"])} for cash_flow in cash_flows]
 
 
-def apply_withholding_tax(amount, bond_doc):
-    """Return a coupon or accrued-interest amount after bond-level tax."""
+def apply_withholding_tax(amount: DecimalInput, bond_doc: Document | dict) -> Decimal:
+    """Return a coupon or accrued-interest amount after the bond's withholding-tax percent; unrounded."""
     withholding_tax = to_decimal(bond_doc.get("withholding_tax"))
     return to_decimal(amount) * (PERCENT - withholding_tax) / PERCENT
 
 
 def calculate_future_xirr(
-    isin,
-    date,
-    market_price,
+    isin: str,
+    date: DateTimeLikeObject,
+    market_price: DecimalInput,
     *,
-    bond_doc=None,
-    historical_guess=None,
-):
+    bond_doc: Document | dict | None = None,
+    historical_guess: float | None = None,
+) -> float | None:
+    """Return the yield to maturity, as a decimal rate, of buying at ``market_price`` per 100 on ``date``.
+
+    Cash flows are net of withholding tax. Returns ``None`` when the solver finds no solution.
+    """
     future_cash_flows = create_future_cash_flows(isin, date, market_price, bond_doc=bond_doc)
     consolidated_cash_flows = consolidate_cashflows(future_cash_flows)
     guess = historical_guess if historical_guess is not None else get_last_xirr_guess(isin, date)
     return calculate_xirr(consolidated_cash_flows, bounded_xirr_guess(guess))
 
 
-def bounded_xirr_guess(guess):
+def bounded_xirr_guess(guess: float | None) -> float:
     """Return a solver start rate (decimal, not percent) within a stable range."""
     if guess is None:
         guess = DEFAULT_XIRR_GUESS
     return max(min(guess, 1.0), -0.5)
 
 
-def calculate_xirr(cash_flows, guess=DEFAULT_XIRR_GUESS):
-    """Return an XIRR value, or ``None`` when cash flows have no valid solution."""
+def calculate_xirr(
+    cash_flows: Mapping[datetime.date, Decimal], guess: float = DEFAULT_XIRR_GUESS
+) -> float | None:
+    """Return the XIRR as a decimal rate, or ``None`` when cash flows have no valid solution."""
     if len(cash_flows) < 2:
         return None
 
@@ -79,17 +90,18 @@ def calculate_xirr(cash_flows, guess=DEFAULT_XIRR_GUESS):
         return None
 
 
-def _to_pyxirr_cashflows(cash_flows):
+def _to_pyxirr_cashflows(cash_flows: Mapping[datetime.date, Decimal]) -> dict[datetime.date, float]:
     """Adapt Decimal cash flows to pyxirr's float-only input contract."""
     return {date: float(amount) for date, amount in cash_flows.items()}
 
 
-def get_last_xirr_guess(isin, date):
+def get_last_xirr_guess(isin: str, date: DateTimeLikeObject) -> float | None:
+    """Return the latest persisted future XIRR on or before ``date`` as a decimal rate, if any."""
     return get_last_xirr_guesses({isin}, date).get(isin)
 
 
-def get_last_xirr_guesses(isins, date):
-    """Return the latest available persisted guess for each requested ISIN."""
+def get_last_xirr_guesses(isins: Iterable[str] | None, date: DateTimeLikeObject | None) -> dict[str, float]:
+    """Return the latest persisted future XIRR per ISIN as a decimal rate, scoped by market-date permission."""
     isins = sorted(set(isins or ()))
     if not isins or not date:
         return {}
@@ -105,7 +117,8 @@ def get_last_xirr_guesses(isins, date):
     return {result.isin: float(to_decimal(result.future_xirr) / to_decimal(100)) for result in results}
 
 
-def consolidate_cashflows(cash_flows):
+def consolidate_cashflows(cash_flows: Iterable[Mapping[str, Any]]) -> dict[datetime.date, Decimal]:
+    """Sum signed cash-flow amounts per calendar date, skipping rows without a date or amount."""
     consolidated_cash_flows = defaultdict(Decimal)
 
     for cash_flow in cash_flows:
@@ -120,7 +133,7 @@ def consolidate_cashflows(cash_flows):
     return dict(consolidated_cash_flows)
 
 
-def _unit_market_value(bond_doc, market_price, quantity_factor):
+def _unit_market_value(bond_doc: Document | dict, market_price: Decimal, quantity_factor: Decimal) -> Decimal:
     """Value one held unit at a bank quote per 100 of original face value.
 
     Standard bonds keep the original-face quote. KES quantity-change bonds
@@ -129,7 +142,7 @@ def _unit_market_value(bond_doc, market_price, quantity_factor):
     return to_decimal(bond_doc.get("face_value_per_unit")) * market_price / to_decimal(100) * quantity_factor
 
 
-def _coupon_position_factor(bond_doc, coupon_date):
+def _coupon_position_factor(bond_doc: Document | dict, coupon_date: datetime.date) -> Decimal:
     """Return the pre-payment factor entitled to a coupon on ``coupon_date``.
 
     On a repayment date the coupon is paid before that day's factor change.
@@ -139,7 +152,9 @@ def _coupon_position_factor(bond_doc, coupon_date):
     return calculate_principal_factor_from_bond(bond_doc, coupon_date, include_repayment_on_date=False)
 
 
-def _coupon_per_unit(bond_doc, coupon_period, coupon_date):
+def _coupon_per_unit(
+    bond_doc: Document | dict, coupon_period: Document | dict, coupon_date: datetime.date
+) -> Decimal:
     return (
         to_decimal(coupon_period.get("coupon_factor"))
         / to_decimal(100)
@@ -148,7 +163,9 @@ def _coupon_per_unit(bond_doc, coupon_period, coupon_date):
     )
 
 
-def _principal_per_unit(bond_doc, principal_period, repayment_date):
+def _principal_per_unit(
+    bond_doc: Document | dict, principal_period: Document | dict, repayment_date: datetime.date
+) -> Decimal:
     if is_quantity_change_bond(bond_doc):
         quantity_before = calculate_quantity_factor_from_bond(
             bond_doc, repayment_date, include_repayment_on_date=False
@@ -159,11 +176,22 @@ def _principal_per_unit(bond_doc, principal_period, repayment_date):
     return to_decimal(bond_doc.get("face_value_per_unit")) * repayment_factor
 
 
-def _principal_flow_type(repayment_date, maturity_date):
+def _principal_flow_type(repayment_date: datetime.date, maturity_date: datetime.date | None) -> str:
     return "sale" if repayment_date == maturity_date else "amortisation"
 
 
-def create_future_cash_flows(isin, date, market_price, quantity=1, bond_doc=None):
+def create_future_cash_flows(
+    isin: str,
+    date: DateTimeLikeObject,
+    market_price: DecimalInput,
+    quantity: DecimalInput = 1,
+    bond_doc: Document | dict | None = None,
+) -> list[dict[str, Any]]:
+    """Return date-sorted cash flows for buying ``quantity`` at ``market_price`` per 100 on ``date``.
+
+    The purchase and accrued interest are negative; coupons and principal are
+    positive and net of withholding tax. Amounts are quantized to money precision.
+    """
     # Fetch the bond document
     bond_doc = bond_doc or frappe.get_doc("Bond Master", isin)
     market_price = to_decimal(market_price)
@@ -238,8 +266,18 @@ def create_future_cash_flows(isin, date, market_price, quantity=1, bond_doc=None
     return sorted(future_cash_flows, key=lambda x: x["date"])
 
 
-def create_past_cash_flows(isin, date, market_price, bond_doc, transactions):  # noqa: C901 -- one pass over the coupon and principal schedules builds the XIRR cash-flow list
-    """Build past cash flows from a preloaded bond and its portfolio ledger rows."""
+def create_past_cash_flows(  # noqa: C901 -- one pass over the coupon and principal schedules builds the XIRR cash-flow list
+    isin: str,
+    date: DateTimeLikeObject,
+    market_price: DecimalInput,
+    bond_doc: Document | dict,
+    transactions: Sequence[Mapping[str, Any]],
+) -> list[dict[str, Any]]:
+    """Build past cash flows from a preloaded bond and its portfolio ledger rows.
+
+    Purchases are negative; sales, coupons, principal and the closing market
+    value with accrued interest are positive. Amounts are quantized to money precision.
+    """
     market_price = to_decimal(market_price)
     past_cash_flows = []
 

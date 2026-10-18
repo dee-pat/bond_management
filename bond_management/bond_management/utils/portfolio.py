@@ -1,10 +1,21 @@
+from collections.abc import Iterable, Mapping
+from decimal import Decimal
+from typing import Any
+
 from frappe.utils import getdate
+from frappe.utils.data import DateTimeLikeObject
 
-from bond_management.bond_management.utils.financial import to_decimal
+from bond_management.bond_management.utils.financial import DecimalInput, to_decimal
 
 
-def get_coupon_position_from_transactions(rows, coupon_date, coupon_per_unit):
-    """Calculate coupon entitlement from already-fetched ledger rows."""
+def get_coupon_position_from_transactions(
+    rows: Iterable[Mapping[str, Any]], coupon_date: DateTimeLikeObject, coupon_per_unit: DecimalInput
+) -> Decimal:
+    """Return the face quantity entitled to the coupon on ``coupon_date`` from fetched ledger rows.
+
+    Settlements before the coupon date count, sales negatively. A same-day
+    purchase counts only when its accrued interest paid covers the full coupon.
+    """
     coupon_date = getdate(coupon_date)
     coupon_per_unit = to_decimal(coupon_per_unit)
     position = to_decimal(0)
@@ -22,8 +33,10 @@ def get_coupon_position_from_transactions(rows, coupon_date, coupon_per_unit):
     return position
 
 
-def get_ledger_position_from_transactions(rows, statement_date):
-    """Calculate an end-of-day ledger position without additional database reads."""
+def get_ledger_position_from_transactions(
+    rows: Iterable[Mapping[str, Any]], statement_date: DateTimeLikeObject
+) -> Decimal:
+    """Return the end-of-day face quantity held on ``statement_date``, effective on settlement date."""
     statement_date = getdate(statement_date)
     position = to_decimal(0)
     for row in rows:

@@ -14,7 +14,7 @@ from bond_management.bond_management.utils.investor_permissions import (
 FEATURE_FLAG = "bond_investor_spa_enabled"
 
 
-def set_investor_api_data(result):
+def set_investor_api_data[T](result: T) -> T:
     """Expose a v1 result through both Frappe's legacy and useCall envelopes.
 
     This is intentionally a result helper rather than a decorator. Frappe's

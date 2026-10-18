@@ -118,7 +118,8 @@ def extract_page_texts(reader: PdfReader, *, error_class: type[ValueError], labe
     return page_texts
 
 
-def normalize_account_number(value: str) -> str:
+def normalize_account_number(value: str | None) -> str:
+    """Return the account number with all whitespace removed; empty for ``None``."""
     return re.sub(r"\s+", "", value or "")
 
 

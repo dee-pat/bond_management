@@ -21,11 +21,11 @@ def to_decimal(value: DecimalInput, field_label: str = "Value") -> Decimal:
     return result
 
 
-def quantize_money(value) -> Decimal:
+def quantize_money(value: DecimalInput) -> Decimal:
     """Apply the app's four-decimal, half-even cash and settlement convention."""
     return to_decimal(value).quantize(MONEY_PRECISION, rounding=ROUND_HALF_EVEN)
 
 
-def quantize_percent(value) -> Decimal:
+def quantize_percent(value: DecimalInput) -> Decimal:
     """Persist calculated percentages at nine decimal places using half-even rounding."""
     return to_decimal(value).quantize(PERCENT_PRECISION, rounding=ROUND_HALF_EVEN)

@@ -7,7 +7,7 @@ from frappe import _
 from frappe.utils import getdate
 
 
-def required_string(value, label: str) -> str:
+def required_string(value: object, label: str) -> str:
     """Return a non-empty string or raise a user-facing validation error."""
     if value is None:
         frappe.throw(_("{0} is required").format(label))
@@ -18,7 +18,7 @@ def required_string(value, label: str) -> str:
     return value
 
 
-def optional_string(value, label: str) -> str | None:
+def optional_string(value: object, label: str) -> str | None:
     """Return an optional string, rejecting lists and other complex values."""
     if value is None:
         return None
@@ -27,7 +27,7 @@ def optional_string(value, label: str) -> str | None:
     return value if value.strip() else None
 
 
-def optional_date(value, label: str) -> date | None:
+def optional_date(value: object, label: str) -> date | None:
     """Return an optional date, rejecting non-strings and unparseable values."""
     value = optional_string(value, label)
     if not value:

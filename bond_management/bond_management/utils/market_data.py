@@ -1,14 +1,27 @@
+from typing import Any
+
 import frappe
+from frappe.utils.data import DateTimeLikeObject
 
 from bond_management.bond_management.utils.accrual import (
     calculate_principal_factor_from_bond,
     calculate_weighted_average_repayment,
 )
+from bond_management.bond_management.utils.financial import DecimalInput
 from bond_management.bond_management.utils.xirr import calculate_future_xirr
 
 
-def calculate_market_data(date, isin, market_price, *, historical_guess=None):
-    """Calculate market-row values without depending on a DocType controller."""
+def calculate_market_data(
+    date: DateTimeLikeObject | None,
+    isin: str | None,
+    market_price: DecimalInput,
+    *,
+    historical_guess: float | None = None,
+) -> dict[str, Any]:
+    """Calculate market-row values without depending on a DocType controller.
+
+    ``future_xirr`` is a percent, or ``None`` when no price is given or the solver fails.
+    """
     values = {
         "currency": None,
         "future_xirr": None,

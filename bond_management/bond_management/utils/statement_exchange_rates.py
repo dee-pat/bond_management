@@ -1,12 +1,16 @@
+from collections.abc import Iterable, Iterator
 from contextlib import contextmanager
 from decimal import ROUND_HALF_UP, Decimal
 from hashlib import sha256
+from typing import NoReturn
 
 import frappe
 from frappe import _
+from frappe.model.document import Document
 from frappe.utils import getdate
 
 from bond_management.bond_management.utils.exchange_rate import REPORTING_CURRENCY
+from bond_management.bond_management.utils.statement_pdf import ParsedExchangeRate
 
 SOURCE_DOCTYPE = "Bond Exchange Rate Source"
 RATE_PRECISION = Decimal("0.000000000001")
@@ -19,7 +23,8 @@ def build_source_key(exchange_rate_name: str, statement_name: str) -> str:
 
 
 @contextmanager
-def statement_exchange_rate_sync():
+def statement_exchange_rate_sync() -> Iterator[None]:
+    """Flag exchange-rate and provenance writes as statement-derived for the duration of the block."""
     previous = frappe.flags.get("in_statement_exchange_rate_sync")
     frappe.flags.in_statement_exchange_rate_sync = True
     try:
@@ -28,8 +33,14 @@ def statement_exchange_rate_sync():
         frappe.flags.in_statement_exchange_rate_sync = previous
 
 
-def sync_statement_exchange_rates(statement, exchange_rates) -> None:
-    """Reconcile one PDF's sources against one global canonical rate per key."""
+def sync_statement_exchange_rates(
+    statement: Document, exchange_rates: Iterable[ParsedExchangeRate] | None
+) -> None:
+    """Reconcile one PDF's sources against one global canonical rate per key.
+
+    Only rates into USD are kept. Rates compare at the 12-place, half-up storage
+    precision, and any conflict fails the whole save.
+    """
     # BondStatement has already checked the caller's permission for this save;
     # every row touched here is derived from that authorized statement change.
     desired_rates = _collect_desired_rates(exchange_rates)
@@ -68,7 +79,9 @@ def delete_statement_exchange_rates(statement_name: str) -> None:
             _recompute_canonical_rate(exchange_rate_name)
 
 
-def _collect_desired_rates(exchange_rates):
+def _collect_desired_rates(
+    exchange_rates: Iterable[ParsedExchangeRate] | None,
+) -> dict[tuple[str, str], ParsedExchangeRate]:
     desired_rates = {}
     for parsed_rate in exchange_rates or ():
         if parsed_rate.to_currency != REPORTING_CURRENCY:
@@ -84,7 +97,7 @@ def _collect_desired_rates(exchange_rates):
     return desired_rates
 
 
-def _get_statement_sources(statement_name):
+def _get_statement_sources(statement_name: str) -> list[frappe._dict]:
     # Derived statement write behind BondStatement's permission check.
     return frappe.qb.get_query(
         SOURCE_DOCTYPE,
@@ -96,7 +109,7 @@ def _get_statement_sources(statement_name):
     ).run(as_dict=True)
 
 
-def _get_or_create_exchange_rate(statement, parsed_rate):
+def _get_or_create_exchange_rate(statement: Document, parsed_rate: ParsedExchangeRate) -> Document:
     rate = _stored_rate(parsed_rate.rate)
     if rate <= 0:
         frappe.throw(
@@ -150,7 +163,7 @@ def _get_or_create_exchange_rate(statement, parsed_rate):
     return exchange_rate
 
 
-def _validate_source_rate(exchange_rate, statement_name, desired_rate):
+def _validate_source_rate(exchange_rate: Document, statement_name: str, desired_rate: Decimal) -> None:
     # System-wide invariant: compare every statement's source for this rate,
     # including statements the caller cannot read.
     sources = frappe.qb.get_query(
@@ -177,7 +190,9 @@ def _validate_source_rate(exchange_rate, statement_name, desired_rate):
         _throw_conflict(exchange_rate, "the existing canonical row", desired_rate)
 
 
-def _upsert_statement_source(exchange_rate, statement, parsed_rate):
+def _upsert_statement_source(
+    exchange_rate: Document, statement: Document, parsed_rate: ParsedExchangeRate
+) -> Document:
     rate = _stored_rate(parsed_rate.rate)
     source_key = build_source_key(exchange_rate.name, statement.name)
     source_name = frappe.db.get_value(SOURCE_DOCTYPE, {"source_key": source_key}, "name")
@@ -200,7 +215,7 @@ def _upsert_statement_source(exchange_rate, statement, parsed_rate):
     return frappe.get_doc(values).insert(ignore_permissions=True)
 
 
-def _recompute_canonical_rate(exchange_rate_name):
+def _recompute_canonical_rate(exchange_rate_name: str) -> None:
     exchange_rate = frappe.get_doc("Bond Exchange Rate", exchange_rate_name)
     # Derived statement write behind BondStatement's permission check; the
     # canonical row follows every source, visible to the caller or not.
@@ -233,26 +248,28 @@ def _recompute_canonical_rate(exchange_rate_name):
     exchange_rate.save(ignore_permissions=True)
 
 
-def _delete_source(source_name):
+def _delete_source(source_name: str) -> None:
     # Derived statement write behind BondStatement's permission check.
     frappe.delete_doc(SOURCE_DOCTYPE, source_name, ignore_permissions=True)
 
 
-def _reverse_rate(rate):
+def _reverse_rate(rate: Decimal | float | str) -> Decimal:
     rate = Decimal(str(rate))
     return Decimal(1) / rate
 
 
-def _rates_differ(first, second):
+def _rates_differ(first: Decimal | float | str, second: Decimal | float | str) -> bool:
     return _stored_rate(first) != _stored_rate(second)
 
 
-def _stored_rate(rate):
+def _stored_rate(rate: Decimal | float | str) -> Decimal:
     """Match the 12-place, half-up DECIMAL storage boundary of rate fields."""
     return Decimal(str(rate)).quantize(RATE_PRECISION, rounding=ROUND_HALF_UP)
 
 
-def _throw_conflict(exchange_rate, statement_name, desired_rate):
+def _throw_conflict(
+    exchange_rate: Document, statement_name: str, desired_rate: Decimal | float | str
+) -> NoReturn:
     frappe.throw(
         _(
             "The exchange rate for {0} / {1} on {2} conflicts with statement {3} "
