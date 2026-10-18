@@ -1,6 +1,6 @@
 import re
 from collections import defaultdict
-from collections.abc import Mapping
+from collections.abc import Iterator, Mapping
 from dataclasses import dataclass, field, replace
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
@@ -165,99 +165,10 @@ def parse_statement_market_prices(
     """Extract fixed-income ISIN prices from current and legacy statement tables."""
     text = _join_wrapped_isins(text or "")
     rows_by_isin: dict[str, ParsedMarketPrice] = {}
-    for pattern in (CURRENT_MARKET_PRICE_PATTERN, LEGACY_MARKET_PRICE_PATTERN):
-        for match in pattern.finditer(text or ""):
-            isin = match.group("isin").upper()
-            try:
-                market_price = Decimal(match.group("market_price").replace(",", ""))
-                reported_quantity = Decimal(match.group("reported_quantity").replace(",", ""))
-            except InvalidOperation as error:
-                raise StatementPdfError(
-                    f"The PDF contains invalid fixed-income values for ISIN {isin}."
-                ) from error
-            if not market_price.is_finite() or market_price <= 0:
-                raise StatementPdfError(f"The PDF market price for ISIN {isin} must be greater than zero.")
-            if not reported_quantity.is_finite() or reported_quantity < 0:
-                raise StatementPdfError(f"The PDF reported quantity for ISIN {isin} must be zero or greater.")
-
-            quantity_is_face_value = False
-            if pattern is LEGACY_MARKET_PRICE_PATTERN:
-                market_value = Decimal(match.group("market_value").replace(",", ""))
-                if not market_value.is_finite() or market_value < 0:
-                    raise StatementPdfError(f"The PDF market value for ISIN {isin} must be zero or greater.")
-                quantity_is_face_value = _legacy_quantity_is_monetary_nominal(
-                    reported_quantity,
-                    market_price,
-                    market_value,
-                )
-
-            parsed_row = ParsedMarketPrice(
-                isin=isin,
-                market_price=market_price,
-                reported_quantity=reported_quantity,
-                quantity_is_face_value=quantity_is_face_value,
-            )
-            existing_row = rows_by_isin.get(isin)
-            if existing_row and existing_row.market_price != market_price:
-                raise StatementPdfError(f"The PDF contains conflicting market prices for ISIN {isin}.")
-            if existing_row and (
-                existing_row.reported_quantity != reported_quantity
-                or existing_row.quantity_is_face_value != quantity_is_face_value
-            ):
-                raise StatementPdfError(f"The PDF contains conflicting reported quantities for ISIN {isin}.")
-            rows_by_isin[isin] = parsed_row
-
-    normalized_bond_name_to_isin = {}
-    for name, isin in (bond_name_to_isin or {}).items():
-        for alias in _bond_name_aliases(name):
-            normalized_bond_name_to_isin[alias] = isin
-    for match in LEGACY_NAMED_MARKET_PRICE_PATTERN.finditer(text or ""):
-        bond_name = match.group("bond_name").strip()
-        if re.fullmatch(ISIN_PATTERN, bond_name.upper()):
-            continue
-
-        isin = normalized_bond_name_to_isin.get(_normalize_bond_name(bond_name))
-        if not isin:
-            raise StatementPdfError(
-                f"Could not identify fixed-income security {bond_name} from the PDF in Bond Master records."
-            )
-
-        try:
-            market_price = Decimal(match.group("market_price").replace(",", ""))
-            reported_quantity = Decimal(match.group("reported_quantity").replace(",", ""))
-            market_value = Decimal(match.group("market_value").replace(",", ""))
-        except InvalidOperation as error:
-            raise StatementPdfError(
-                f"The PDF contains invalid fixed-income values for {bond_name}."
-            ) from error
-
-        if not market_price.is_finite() or market_price <= 0:
-            raise StatementPdfError(f"The PDF market price for ISIN {isin} must be greater than zero.")
-        if not reported_quantity.is_finite() or reported_quantity < 0:
-            raise StatementPdfError(f"The PDF reported quantity for ISIN {isin} must be zero or greater.")
-        if not market_value.is_finite() or market_value < 0:
-            raise StatementPdfError(f"The PDF market value for ISIN {isin} must be zero or greater.")
-
-        parsed_row = ParsedMarketPrice(
-            isin=isin,
-            market_price=market_price,
-            reported_quantity=reported_quantity,
-            quantity_is_face_value=_legacy_quantity_is_monetary_nominal(
-                reported_quantity,
-                market_price,
-                market_value,
-            ),
-        )
-        existing_row = rows_by_isin.get(isin)
-        if existing_row and existing_row.market_price != market_price:
-            raise StatementPdfError(f"The PDF contains conflicting market prices for ISIN {isin}.")
-        if existing_row and (
-            existing_row.reported_quantity != reported_quantity
-            or existing_row.quantity_is_face_value != parsed_row.quantity_is_face_value
-        ):
-            raise StatementPdfError(f"The PDF contains conflicting reported quantities for ISIN {isin}.")
-        rows_by_isin[isin] = parsed_row
-
+    for row in _isin_keyed_rows(text):
+        _merge_row(rows_by_isin, row)
+    for row in _name_keyed_rows(text, bond_name_to_isin):
+        _merge_row(rows_by_isin, row)
     return tuple(rows_by_isin.values())
 
 
@@ -289,6 +200,102 @@ def parse_statement_exchange_rates(text: str) -> tuple[ParsedExchangeRate, ...]:
         rows_by_pair[key] = row
 
     return tuple(rows_by_pair.values())
+
+
+def _isin_keyed_rows(text: str) -> Iterator[ParsedMarketPrice]:
+    """Yield rows from the current table, then the legacy ISIN-keyed table."""
+    for pattern in (CURRENT_MARKET_PRICE_PATTERN, LEGACY_MARKET_PRICE_PATTERN):
+        for match in pattern.finditer(text):
+            isin = match.group("isin").upper()
+            subject = f"ISIN {isin}"
+            yield _validated_row(
+                isin,
+                _parse_amount(match, "market_price", subject),
+                _parse_amount(match, "reported_quantity", subject),
+                (
+                    _parse_amount(match, "market_value", subject)
+                    if pattern is LEGACY_MARKET_PRICE_PATTERN
+                    else None
+                ),
+            )
+
+
+def _name_keyed_rows(
+    text: str,
+    bond_name_to_isin: Mapping[str, str] | None,
+) -> Iterator[ParsedMarketPrice]:
+    """Yield legacy rows keyed by bond name, resolved to an ISIN through Bond Master."""
+    isin_by_alias = {
+        alias: isin for name, isin in (bond_name_to_isin or {}).items() for alias in _bond_name_aliases(name)
+    }
+    for match in LEGACY_NAMED_MARKET_PRICE_PATTERN.finditer(text):
+        bond_name = match.group("bond_name").strip()
+        if re.fullmatch(ISIN_PATTERN, bond_name.upper()):
+            # ISIN-keyed legacy rows also match this pattern; _isin_keyed_rows owns them.
+            continue
+
+        isin = isin_by_alias.get(_normalize_bond_name(bond_name))
+        if not isin:
+            raise StatementPdfError(
+                f"Could not identify fixed-income security {bond_name} from the PDF in Bond Master records."
+            )
+
+        yield _validated_row(
+            isin,
+            _parse_amount(match, "market_price", bond_name),
+            _parse_amount(match, "reported_quantity", bond_name),
+            _parse_amount(match, "market_value", bond_name),
+        )
+
+
+def _parse_amount(match: re.Match[str], group: str, subject: str) -> Decimal:
+    try:
+        return Decimal(match.group(group).replace(",", ""))
+    except InvalidOperation as error:
+        raise StatementPdfError(f"The PDF contains invalid fixed-income values for {subject}.") from error
+
+
+def _validated_row(
+    isin: str,
+    market_price: Decimal,
+    reported_quantity: Decimal,
+    market_value: Decimal | None,
+) -> ParsedMarketPrice:
+    """Validate one row; only legacy rows carry the market value that classifies quantity."""
+    if not market_price.is_finite() or market_price <= 0:
+        raise StatementPdfError(f"The PDF market price for ISIN {isin} must be greater than zero.")
+    if not reported_quantity.is_finite() or reported_quantity < 0:
+        raise StatementPdfError(f"The PDF reported quantity for ISIN {isin} must be zero or greater.")
+
+    quantity_is_face_value = False
+    if market_value is not None:
+        if not market_value.is_finite() or market_value < 0:
+            raise StatementPdfError(f"The PDF market value for ISIN {isin} must be zero or greater.")
+        quantity_is_face_value = _legacy_quantity_is_monetary_nominal(
+            reported_quantity,
+            market_price,
+            market_value,
+        )
+
+    return ParsedMarketPrice(
+        isin=isin,
+        market_price=market_price,
+        reported_quantity=reported_quantity,
+        quantity_is_face_value=quantity_is_face_value,
+    )
+
+
+def _merge_row(rows_by_isin: dict[str, ParsedMarketPrice], row: ParsedMarketPrice) -> None:
+    """Store a row, rejecting a different price or quantity already seen for its ISIN."""
+    existing_row = rows_by_isin.get(row.isin)
+    if existing_row and existing_row.market_price != row.market_price:
+        raise StatementPdfError(f"The PDF contains conflicting market prices for ISIN {row.isin}.")
+    if existing_row and (
+        existing_row.reported_quantity != row.reported_quantity
+        or existing_row.quantity_is_face_value != row.quantity_is_face_value
+    ):
+        raise StatementPdfError(f"The PDF contains conflicting reported quantities for ISIN {row.isin}.")
+    rows_by_isin[row.isin] = row
 
 
 def _legacy_quantity_is_monetary_nominal(
