@@ -2,7 +2,9 @@ from pathlib import Path
 
 import frappe
 from frappe import _
+from frappe.model.document import Document
 from frappe.utils import getdate
+from frappe.utils.data import DateTimeLikeObject
 
 from bond_management.bond_management.utils.pdf_common import filename_account, normalize_account_number
 from bond_management.bond_management.utils.private_attachment import (
@@ -13,12 +15,14 @@ from bond_management.bond_management.utils.private_attachment import (
 STATEMENT_FILENAME_PREFIX = "PortfolioStatement-"
 
 
-def get_standard_statement_filename(account_no: str, statement_date) -> str:
+def get_standard_statement_filename(account_no: str, statement_date: DateTimeLikeObject) -> str:
     """Return the canonical private PDF filename for a Bond Statement."""
     return f"{STATEMENT_FILENAME_PREFIX}{filename_account(account_no)}-{getdate(statement_date).strftime('%Y%m%d')}.pdf"
 
 
-def standardize_statement_attachment(statement, account_no: str, statement_date) -> str:
+def standardize_statement_attachment(
+    statement: Document, account_no: str, statement_date: DateTimeLikeObject
+) -> str:
     """Rename a statement PDF, versioning distinct content at the same account/date."""
     expected_filename = get_standard_statement_filename(account_no, statement_date)
     return standardize_private_pdf_attachment(
@@ -28,7 +32,7 @@ def standardize_statement_attachment(statement, account_no: str, statement_date)
     )
 
 
-def get_versioned_statement_filename(account_no: str, statement_date, digest: str) -> str:
+def get_versioned_statement_filename(account_no: str, statement_date: DateTimeLikeObject, digest: str) -> str:
     """Preserve the full legacy account hint within File's filename limit."""
     canonical_filename = get_standard_statement_filename(account_no, statement_date)
     filename = f"{Path(canonical_filename).stem}-{digest}.pdf"

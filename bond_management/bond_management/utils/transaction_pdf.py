@@ -1,11 +1,13 @@
 import re
+from collections.abc import Sequence
 from dataclasses import dataclass, field, replace
 from datetime import date, datetime
 from decimal import ROUND_HALF_EVEN, Decimal
 
 import frappe
 from frappe import _
-from pypdf import PdfReader
+from pypdf import PageObject, PdfReader
+from pypdf.generic import DictionaryObject
 
 from bond_management.bond_management.utils.financial import quantize_percent, to_decimal
 from bond_management.bond_management.utils.pdf_common import (
@@ -323,14 +325,20 @@ def _parse_reader(reader: PdfReader) -> ParsedTransactionPdf:
 
 
 def _extract_positioned_page_text(
-    page,
+    page: PageObject,
     *,
-    fragment_limit=MAX_POSITIONED_TEXT_FRAGMENTS,
+    fragment_limit: int = MAX_POSITIONED_TEXT_FRAGMENTS,
 ) -> tuple[str, int]:
     """Rebuild readable rows from PDFs whose content stream is column-ordered; return them and the fragment count."""
     fragments = []
 
-    def visitor_text(text, _cm, tm, _font, _font_size):
+    def visitor_text(
+        text: str | None,
+        _cm: Sequence[float],
+        tm: Sequence[float],
+        _font: DictionaryObject | None,
+        _font_size: float,
+    ) -> None:
         cleaned = " ".join((text or "").split())
         if cleaned:
             if len(fragments) >= fragment_limit:

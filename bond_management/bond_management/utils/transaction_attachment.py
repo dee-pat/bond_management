@@ -2,7 +2,9 @@ import hashlib
 
 import frappe
 from frappe import _
+from frappe.model.document import Document
 from frappe.utils import getdate
+from frappe.utils.data import DateTimeLikeObject
 
 from bond_management.bond_management.utils.pdf_common import MAX_PDF_BYTES, filename_account
 from bond_management.bond_management.utils.private_attachment import (
@@ -15,7 +17,7 @@ TRANSACTION_FILENAME_PREFIX = "Transaction-"
 
 
 def get_standard_transaction_filename(
-    account_no: str, settlement_date, *, content: bytes | None = None
+    account_no: str, settlement_date: DateTimeLikeObject, *, content: bytes | None = None
 ) -> str:
     """Return the canonical private PDF filename for a Bond Transaction."""
     normalized_account = filename_account(account_no)
@@ -44,9 +46,9 @@ def get_standard_transaction_filename(
 
 
 def standardize_transaction_attachment(
-    transaction,
+    transaction: Document,
     account_no: str,
-    settlement_date,
+    settlement_date: DateTimeLikeObject,
     *,
     max_bytes: int | None = MAX_PDF_BYTES,
 ) -> str:

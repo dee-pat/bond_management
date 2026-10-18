@@ -1,11 +1,13 @@
+from collections.abc import Iterable
 from io import BytesIO
 
 import frappe
 from frappe import _
 from frappe.core.doctype.file.utils import get_content_hash
+from frappe.model.document import Document
 from frappe.utils import escape_html, get_datetime
 from pypdf import PdfWriter
-from pypdf.generic import DecodedStreamObject, DictionaryObject, NameObject
+from pypdf.generic import DecodedStreamObject, DictionaryObject, IndirectObject, NameObject
 
 from bond_management.bond_management.utils.statement_quantity_reconciliation import (
     StatementQuantityComparison,
@@ -20,7 +22,12 @@ REPORT_DELETE_METHOD = (
 )
 
 
-def attach_quantity_reconciliation_report(statement, comparisons, *, file_name=None) -> str:
+def attach_quantity_reconciliation_report(
+    statement: Document,
+    comparisons: Iterable[StatementQuantityComparison],
+    *,
+    file_name: str | None = None,
+) -> str:
     """Create or replace the private reconciliation PDF for a statement.
 
     A statement owns one current report. Updating that File keeps the URL stable,
@@ -129,13 +136,13 @@ def _file_exists(file_name: str) -> bool:
         return False
 
 
-def _stable_generated_at(statement) -> str:
+def _stable_generated_at(statement: Document) -> str:
     if not statement.creation:
         return "unknown"
     return get_datetime(statement.creation).strftime("%Y-%m-%d %H:%M:%S")
 
 
-def _schedule_obsolete_report_cleanup(reports, keep_name: str) -> None:
+def _schedule_obsolete_report_cleanup(reports: Iterable[frappe._dict], keep_name: str) -> None:
     for report in reports:
         if report.name != keep_name:
             _schedule_file_deletion(report.name)
@@ -173,7 +180,7 @@ def delete_quantity_reconciliation_report_file(file_name: str) -> None:
         raise
 
 
-def _is_current_quantity_reconciliation_report(file_doc) -> bool:
+def _is_current_quantity_reconciliation_report(file_doc: Document) -> bool:
     if file_doc.attached_to_doctype != "Bond Statement" or file_doc.attached_to_field != REPORT_FIELD:
         return False
     return bool(
@@ -262,7 +269,12 @@ def _font(base_font: str) -> DictionaryObject:
     )
 
 
-def _add_text_page(writer, lines, regular_font, bold_font):
+def _add_text_page(
+    writer: PdfWriter,
+    lines: Iterable[tuple[str, str, int]],
+    regular_font: IndirectObject,
+    bold_font: IndirectObject,
+) -> None:
     page = writer.add_blank_page(width=595, height=842)
     page[NameObject("/Resources")] = DictionaryObject(
         {

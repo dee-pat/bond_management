@@ -1,6 +1,6 @@
 import re
 from collections import defaultdict
-from collections.abc import Iterator, Mapping
+from collections.abc import Callable, Iterable, Iterator, Mapping
 from dataclasses import dataclass, field, replace
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
@@ -486,7 +486,9 @@ def _normalize_bond_name(value: str) -> str:
     return re.sub(r"[^A-Z0-9]+", "-", (value or "").upper()).strip("-")
 
 
-def _unique_matches(text, patterns, converter):
+def _unique_matches[T](
+    text: str | None, patterns: Iterable[re.Pattern[str]], converter: Callable[[str], T]
+) -> list[T]:
     values = []
     for pattern in patterns:
         for match in pattern.findall(text or ""):

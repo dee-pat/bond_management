@@ -8,9 +8,12 @@ report, and direct-document access.
 
 from collections.abc import Iterator
 from contextlib import contextmanager
+from typing import Any
 
 import frappe
 from frappe import _
+from frappe.auth import LoginManager
+from frappe.model.document import Document
 
 INVESTOR_ROLE = "Bond Investor Read Only"
 BOND_MANAGER_ROLE = "Bond Management Manager"
@@ -28,7 +31,7 @@ def has_investor_desk_access() -> bool:
     return frappe.session.user == "Administrator" or BOND_MANAGER_ROLE in roles or INVESTOR_ROLE in roles
 
 
-def redirect_investor_to_workspace(login_manager) -> None:
+def redirect_investor_to_workspace(login_manager: LoginManager) -> None:
     """Start investor sessions at the Vue application, with Desk as its fallback."""
     if INVESTOR_ROLE not in frappe.get_roles(login_manager.user):
         return
@@ -45,7 +48,11 @@ _INVESTOR_ROLE_CACHE_KEY = "__bond_investor_role__"
 _ALLOWED_PORTFOLIOS_CACHE_KEY = "__bond_allowed_portfolios__"
 
 
-def is_investor_user(user: str, *, for_update: bool = False) -> bool:
+def is_investor_user(user: str | None, *, for_update: bool = False) -> bool:
+    """Return whether ``user`` holds the investor role; Administrator, Guest and empty users never do.
+
+    ``for_update`` locks the role rows and bypasses the transaction cache.
+    """
     if not user or user in {"Administrator", "Guest"}:
         return False
     cache = frappe.db.value_cache["User"][_INVESTOR_ROLE_CACHE_KEY]
@@ -66,7 +73,7 @@ def is_investor_user(user: str, *, for_update: bool = False) -> bool:
     return is_investor
 
 
-def get_allowed_portfolios(user: str) -> list[str] | None:
+def get_allowed_portfolios(user: str | None) -> list[str] | None:
     """Return assigned portfolios, or None when the user is not an investor."""
     if not is_investor_user(user):
         return None
@@ -108,7 +115,9 @@ def _portfolio_condition(doctype: str, fieldname: str, user: str) -> str | None:
     return f"`tab{doctype}`.`{fieldname}` in ({values})"
 
 
-def _reject_incompatible_shared_documents(doctype, fieldname, user, portfolios):
+def _reject_incompatible_shared_documents(
+    doctype: str, fieldname: str, user: str, portfolios: list[str]
+) -> None:
     """Fail closed if a legacy share would be ORed around the query condition."""
     shared_names = frappe.share.get_shared(doctype, user)
     if not shared_names:
@@ -127,14 +136,17 @@ def _reject_incompatible_shared_documents(doctype, fieldname, user, portfolios):
 
 
 def portfolio_query_condition(user: str) -> str | None:
+    """Permission-query hook: limit investors to assigned portfolios; ``None`` leaves others unrestricted."""
     return _portfolio_condition("Bond Portfolio", "name", user)
 
 
 def transaction_query_condition(user: str) -> str | None:
+    """Permission-query hook: limit investors to assigned portfolios; ``None`` leaves others unrestricted."""
     return _portfolio_condition("Bond Transaction", "portfolio_name", user)
 
 
 def statement_query_condition(user: str) -> str | None:
+    """Permission-query hook: limit investors to assigned portfolios; ``None`` leaves others unrestricted."""
     return _portfolio_condition("Bond Statement", "portfolio_name", user)
 
 
@@ -180,7 +192,10 @@ def file_query_condition(user: str | None = None) -> str | None:
     )
 
 
-def has_file_permission(doc, user: str | None = None, ptype: str | None = None, **_kwargs):
+def has_file_permission(
+    doc: Document, user: str | None = None, ptype: str | None = None, **_kwargs: Any
+) -> bool:
+    """Permission hook: raise ``PermissionError`` when an investor reaches outside their File scope."""
     if not is_file_in_investor_scope(doc, user or frappe.session.user, ptype):
         # Core File permission grants a direct share before this hook can
         # matter, so a false result would not deny access.
@@ -188,7 +203,7 @@ def has_file_permission(doc, user: str | None = None, ptype: str | None = None, 
     return True
 
 
-def is_file_in_investor_scope(file, user: str, ptype: str | None = "read") -> bool:
+def is_file_in_investor_scope(file: Document | frappe._dict, user: str, ptype: str | None = "read") -> bool:
     """Return False when an investor reaches beyond a read of an assigned portfolio's attachment."""
     portfolios = get_allowed_portfolios(user)
     if portfolios is None or not file.is_private:
@@ -201,12 +216,13 @@ def is_file_in_investor_scope(file, user: str, ptype: str | None = "read") -> bo
 
 
 class InvestorFileMixin:
-    def is_downloadable(self):
+    def is_downloadable(self) -> bool:
+        """Return whether core File allows the download and the file is in the investor's scope."""
         # Private downloads call core File permission directly, not app hooks.
         return super().is_downloadable() and is_file_in_investor_scope(self, frappe.session.user)
 
 
-def _reject_out_of_scope_file_shares(user):
+def _reject_out_of_scope_file_shares(user: str) -> None:
     """Fail closed: Frappe ORs shared names around the File query condition."""
     shared_names = frappe.share.get_shared("File", user)
     if not shared_names:
@@ -222,7 +238,7 @@ def _reject_out_of_scope_file_shares(user):
         frappe.throw(_("Not permitted"), frappe.PermissionError)
 
 
-def _attached_portfolio(file, field):
+def _attached_portfolio(file: Document | frappe._dict, field: str) -> str | None:
     if not file.attached_to_name:
         return None
     if field == "name":
@@ -255,7 +271,10 @@ def exchange_rate_source_query_condition(user: str | None = None) -> str | None:
     )
 
 
-def has_exchange_rate_source_permission(doc, user=None, ptype=None, **_kwargs):
+def has_exchange_rate_source_permission(
+    doc: Document, user: str | None = None, ptype: str | None = None, **_kwargs: Any
+) -> bool:
+    """Permission hook: investors may only read explicitly shared provenance in assigned portfolios."""
     user = user or frappe.session.user
     portfolios = get_allowed_portfolios(user)
     if portfolios is None:
@@ -272,7 +291,7 @@ def has_exchange_rate_source_permission(doc, user=None, ptype=None, **_kwargs):
     return True
 
 
-def _reject_incompatible_exchange_rate_source_shares(user, portfolios):
+def _reject_incompatible_exchange_rate_source_shares(user: str, portfolios: list[str]) -> list[str]:
     """Prevent DocShare's list-query OR from bypassing provenance scope."""
     shared_names = frappe.share.get_shared("Bond Exchange Rate Source", user, rights=["read"])
     if not shared_names:
@@ -311,7 +330,8 @@ def _reject_incompatible_exchange_rate_source_shares(user, portfolios):
     return shared_names
 
 
-def has_explicit_exchange_rate_source_share(user, source_name):
+def has_explicit_exchange_rate_source_share(user: str, source_name: str | None) -> bool:
+    """Return whether ``user`` has a direct, non-everyone read share of the provenance row."""
     if not source_name:
         return False
     return bool(
@@ -325,7 +345,10 @@ def has_explicit_exchange_rate_source_share(user, source_name):
     )
 
 
-def get_statement_portfolio(statement_name, *, for_update=False, wait=True):
+def get_statement_portfolio(
+    statement_name: str | None, *, for_update: bool = False, wait: bool = True
+) -> str | None:
+    """Return a statement's portfolio without a permission check; callers own the boundary."""
     if not statement_name:
         return None
     return frappe.db.get_value(
@@ -375,7 +398,7 @@ def exchange_rate_query_condition(user: str | None = None) -> str | None:
     )
 
 
-def _has_portfolio_access(portfolio: str | None, user: str, ptype: str) -> bool | None:
+def _has_portfolio_access(portfolio: str | None, user: str | None, ptype: str | None) -> bool:
     portfolios = get_allowed_portfolios(user)
     if portfolios is None:
         # Frappe's controller permission hooks are deny-capable: a falsey
@@ -391,13 +414,22 @@ def _has_portfolio_access(portfolio: str | None, user: str, ptype: str) -> bool 
     return True
 
 
-def has_portfolio_permission(doc, user: str | None = None, ptype: str | None = None, **_kwargs):
+def has_portfolio_permission(
+    doc: Document, user: str | None = None, ptype: str | None = None, **_kwargs: Any
+) -> bool:
+    """Permission hook: investors may only read assigned portfolios; raises otherwise."""
     return _has_portfolio_access(doc.name, user, ptype)
 
 
-def has_transaction_permission(doc, user: str | None = None, ptype: str | None = None, **_kwargs):
+def has_transaction_permission(
+    doc: Document, user: str | None = None, ptype: str | None = None, **_kwargs: Any
+) -> bool:
+    """Permission hook: investors may only read transactions in assigned portfolios; raises otherwise."""
     return _has_portfolio_access(doc.portfolio_name, user, ptype)
 
 
-def has_statement_permission(doc, user: str | None = None, ptype: str | None = None, **_kwargs):
+def has_statement_permission(
+    doc: Document, user: str | None = None, ptype: str | None = None, **_kwargs: Any
+) -> bool:
+    """Permission hook: investors may only read statements in assigned portfolios; raises otherwise."""
     return _has_portfolio_access(doc.portfolio_name, user, ptype)

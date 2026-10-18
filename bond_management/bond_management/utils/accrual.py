@@ -1,7 +1,11 @@
+import datetime
+from collections.abc import Iterable
 from datetime import timedelta
 from decimal import ROUND_HALF_UP, Decimal
 
+from frappe.model.document import Document
 from frappe.utils import getdate
+from frappe.utils.data import DateTimeLikeObject
 
 from bond_management.bond_management.utils.coupon_schedule import (
     is_kenya_day_count_convention,
@@ -9,6 +13,7 @@ from bond_management.bond_management.utils.coupon_schedule import (
 )
 from bond_management.bond_management.utils.financial import (
     PERCENT_PRECISION,
+    DecimalInput,
     quantize_percent,
     to_decimal,
 )
@@ -16,7 +21,10 @@ from bond_management.bond_management.utils.financial import (
 DAYS_PER_YEAR = Decimal(365)
 
 
-def get_coupon_period(coupon_schedule, settlement_date):
+def get_coupon_period(
+    coupon_schedule: Iterable[Document | dict] | None, settlement_date: DateTimeLikeObject
+) -> Document | dict | None:
+    """Return the schedule row whose inclusive period contains ``settlement_date``, if any."""
     settlement_date = getdate(settlement_date)
 
     if not coupon_schedule or not settlement_date:
@@ -34,13 +42,17 @@ def get_coupon_period(coupon_schedule, settlement_date):
 
 
 def calculate_accrued_fraction(
-    coupon_schedule,
-    settlement_date,
-    day_count_convention,
-    face_value_per_unit,
-    coupon_frequency,
-    coupon_rate,
-):
+    coupon_schedule: Iterable[Document | dict] | None,
+    settlement_date: DateTimeLikeObject,
+    day_count_convention: str | None,
+    face_value_per_unit: DecimalInput,
+    coupon_frequency: int | str,
+    coupon_rate: DecimalInput,
+) -> Decimal:
+    """Return unrounded accrued interest per unit of original face value at ``settlement_date``.
+
+    The result is before principal factor and withholding tax, and zero outside the schedule.
+    """
     period = get_coupon_period(coupon_schedule, settlement_date)
 
     if not period:
@@ -73,14 +85,19 @@ def calculate_accrued_fraction(
     return to_decimal(coupon_rate) / to_decimal(100) * to_decimal(face_value_per_unit) * fraction
 
 
-def is_quantity_change_bond(bond_doc):
+def is_quantity_change_bond(bond_doc: Document | dict) -> bool:
     """Return whether a bond uses the KES quantity-change convention."""
     return str(bond_doc.get("currency") or "").upper() == "KES" and is_kenya_day_count_convention(
         bond_doc.get("day_count_convention")
     )
 
 
-def _outstanding_factor(principal_schedule, date, *, include_repayment_on_date: bool):
+def _outstanding_factor(
+    principal_schedule: Iterable[Document | dict] | None,
+    date: DateTimeLikeObject,
+    *,
+    include_repayment_on_date: bool,
+) -> Decimal:
     """Return the share of original principal outstanding after repayments through ``date``."""
     settlement_date = getdate(date)
     factor = to_decimal(1)
@@ -99,12 +116,12 @@ def _outstanding_factor(principal_schedule, date, *, include_repayment_on_date: 
 
 
 def calculate_principal_factor_from_schedule(
-    principal_schedule,
-    date,
+    principal_schedule: Iterable[Document | dict] | None,
+    date: DateTimeLikeObject,
     *,
     include_repayment_on_date: bool = True,
     quantity_change: bool = False,
-):
+) -> Decimal:
     """Return outstanding principal after payments through ``date`` by default.
 
     Coupon entitlement is the distinct exception: pass
@@ -118,19 +135,22 @@ def calculate_principal_factor_from_schedule(
 
 
 def calculate_quantity_factor_from_schedule(
-    principal_schedule,
-    date,
+    principal_schedule: Iterable[Document | dict] | None,
+    date: DateTimeLikeObject,
     *,
     include_repayment_on_date: bool = True,
     quantity_change: bool = False,
-):
+) -> Decimal:
     """Return the outstanding quantity factor for quantity-changing bonds."""
     if not quantity_change:
         return to_decimal(1)
     return _outstanding_factor(principal_schedule, date, include_repayment_on_date=include_repayment_on_date)
 
 
-def calculate_principal_factor_from_bond(bond_doc, date, *, include_repayment_on_date: bool = True):
+def calculate_principal_factor_from_bond(
+    bond_doc: Document | dict, date: DateTimeLikeObject, *, include_repayment_on_date: bool = True
+) -> Decimal:
+    """Return the bond's outstanding principal factor on ``date``; one for quantity-change bonds."""
     return calculate_principal_factor_from_schedule(
         bond_doc.get("principal_schedule"),
         date,
@@ -139,7 +159,10 @@ def calculate_principal_factor_from_bond(bond_doc, date, *, include_repayment_on
     )
 
 
-def calculate_quantity_factor_from_bond(bond_doc, date, *, include_repayment_on_date: bool = True):
+def calculate_quantity_factor_from_bond(
+    bond_doc: Document | dict, date: DateTimeLikeObject, *, include_repayment_on_date: bool = True
+) -> Decimal:
+    """Return the bond's outstanding quantity factor on ``date``; one unless it is a quantity-change bond."""
     return calculate_quantity_factor_from_schedule(
         bond_doc.get("principal_schedule"),
         date,
@@ -148,7 +171,9 @@ def calculate_quantity_factor_from_bond(bond_doc, date, *, include_repayment_on_
     )
 
 
-def calculate_weighted_average_repayment(principal_schedule, valuation_date):
+def calculate_weighted_average_repayment(
+    principal_schedule: Iterable[Document | dict] | None, valuation_date: DateTimeLikeObject | None
+) -> tuple[datetime.date, Decimal] | tuple[None, None]:
     """Return the remaining-principal weighted repayment date and exact years.
 
     Repayments on or before the valuation date are no longer future principal
@@ -190,7 +215,13 @@ def calculate_weighted_average_repayment(principal_schedule, valuation_date):
     return valuation_date + timedelta(days=rounded_days), weighted_days / DAYS_PER_YEAR
 
 
-def unit_accrued_interest_from_bond(bond_doc, settlement_date):
+def unit_accrued_interest_from_bond(
+    bond_doc: Document | dict, settlement_date: DateTimeLikeObject
+) -> Decimal:
+    """Return unrounded gross accrued interest per unit at settlement, after the principal factor.
+
+    The quantity factor and withholding tax are applied by callers.
+    """
     settlement_date = getdate(settlement_date)
     principal_factor = calculate_principal_factor_from_bond(bond_doc, settlement_date)
     schedule = [
@@ -208,8 +239,16 @@ def unit_accrued_interest_from_bond(bond_doc, settlement_date):
     return fraction * principal_factor
 
 
-def get_accrued_interest_from_bond(bond_doc, settlement_date=None, quantity_face_value=None):
-    """Calculate from the same authoritative bond used for the transaction snapshot."""
+def get_accrued_interest_from_bond(
+    bond_doc: Document | dict,
+    settlement_date: DateTimeLikeObject | None = None,
+    quantity_face_value: DecimalInput = None,
+) -> Decimal:
+    """Calculate from the same authoritative bond used for the transaction snapshot.
+
+    Returns unrounded gross accrued interest for the quantity, or zero when the
+    date or quantity is missing.
+    """
     if not settlement_date or not quantity_face_value:
         return to_decimal(0)
     settlement_date = getdate(settlement_date)

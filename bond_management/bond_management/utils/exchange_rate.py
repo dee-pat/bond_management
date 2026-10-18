@@ -1,17 +1,21 @@
 from bisect import bisect_right
 from collections import defaultdict
+from collections.abc import Iterable, Mapping
 from decimal import Decimal
+from typing import Any
 
 import frappe
 from frappe import _
 from frappe.utils import getdate
+from frappe.utils.data import DateTimeLikeObject
 
 from bond_management.bond_management.utils.financial import quantize_money, to_decimal
 
 REPORTING_CURRENCY = "USD"
 
 
-def build_exchange_rate_context(rows) -> dict[str, list[dict]]:
+def build_exchange_rate_context(rows: Iterable[Mapping[str, Any]] | None) -> dict[str, list[dict]]:
+    """Group exchange-rate rows by source currency, with ``Decimal`` rates sorted by rate date."""
     rates = defaultdict(list)
     for row in rows or []:
         rates[row.get("from_currency")].append(
@@ -30,7 +34,7 @@ def build_exchange_rate_context(rows) -> dict[str, list[dict]]:
 def get_rate_for_date(
     exchange_rates: dict[str, list[dict]],
     from_currency: str,
-    rate_date,
+    rate_date: DateTimeLikeObject,
 ) -> Decimal:
     """Return the latest known source-to-USD rate on or before ``rate_date``."""
     if from_currency == REPORTING_CURRENCY:
@@ -52,13 +56,17 @@ def get_rate_for_date(
 
 
 def convert_cashflows(
-    cashflows,
-    exchange_rates,
+    cashflows: Iterable[Mapping[str, Any]],
+    exchange_rates: dict[str, list[dict]],
     *,
     currency: str,
-    rate_date=None,
-):
-    """Convert cash-flow amounts while preserving their metadata and Decimal precision."""
+    rate_date: DateTimeLikeObject | None = None,
+) -> list[dict[str, Any]]:
+    """Convert cash-flow amounts from ``currency`` to USD, preserving metadata and sign.
+
+    Each flow uses the rate on or before ``rate_date`` or its own date; amounts
+    are quantized to money precision.
+    """
     converted = []
     for cashflow in cashflows:
         effective_date = rate_date or cashflow.get("date")

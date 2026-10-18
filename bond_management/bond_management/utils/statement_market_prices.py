@@ -2,6 +2,7 @@ from collections.abc import Iterable
 from datetime import date
 
 import frappe
+from frappe.model.document import Document
 
 from bond_management.bond_management.utils.financial import to_decimal
 from bond_management.bond_management.utils.statement_pdf import ParsedMarketPrice
@@ -10,8 +11,13 @@ from bond_management.bond_management.utils.statement_pdf import ParsedMarketPric
 def sync_statement_market_prices(
     statement_date: date | str,
     market_prices: Iterable[ParsedMarketPrice],
-):
-    """Upsert PDF prices into the single Bond Market Date for the statement date."""
+) -> Document | None:
+    """Upsert PDF prices into the single Bond Market Date for the statement date.
+
+    Prices stay per 100 of original face value. Bonds the user cannot read are
+    skipped, and the Bond Market Date's create or write permission is checked.
+    Returns ``None`` when no price remains.
+    """
     market_prices = tuple(market_prices)
     if not market_prices:
         return None

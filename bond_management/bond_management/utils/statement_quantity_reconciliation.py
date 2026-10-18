@@ -1,11 +1,13 @@
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from decimal import Decimal
 
 import frappe
 from frappe import _
+from frappe.model.document import Document
 from frappe.utils import escape_html
 
-from bond_management.bond_management.utils.financial import to_decimal
+from bond_management.bond_management.utils.financial import DecimalInput, to_decimal
 from bond_management.bond_management.utils.statement_pdf import ParsedMarketPrice
 
 
@@ -18,15 +20,20 @@ class StatementQuantityComparison:
 
     @property
     def matches(self) -> bool:
+        """Return whether PDF and calculated quantities agree exactly."""
         return self.difference == Decimal("0")
 
 
 def reconcile_statement_quantities(
     parsed_rows: tuple[ParsedMarketPrice, ...],
-    statement_rows,
-    calculated_quantities=None,
+    statement_rows: Iterable[Document],
+    calculated_quantities: Mapping[str, DecimalInput] | None = None,
 ) -> tuple[StatementQuantityComparison, ...]:
-    """Compare normalized PDF units with calculated statement ledger quantities."""
+    """Compare normalized PDF units with calculated statement ledger quantities.
+
+    Legacy face-value quantities are divided by face value per unit. Rows are
+    sorted by ISIN, and ``difference`` is PDF minus calculated quantity.
+    """
     parsed_isins = [row.isin for row in parsed_rows]
     bonds = (
         frappe.qb.get_query(
@@ -93,6 +100,7 @@ def reconcile_statement_quantities(
 
 
 def format_quantity(value: Decimal | None) -> str:
+    """Format a quantity with thousands separators and no trailing zeros, or "Not present"."""
     if value is None:
         return "Not present"
     formatted = f"{value:,f}"
