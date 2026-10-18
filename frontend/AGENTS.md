@@ -22,4 +22,5 @@ Vite build is served from `/assets/bond_management/frontend/`. The root
   failed states; no optimistic updates.
 
 Commands, from the app root: `yarn dev`, `yarn build`, `yarn lint`,
-`yarn typecheck`.
+`yarn typecheck`, `yarn test:unit` (Vitest for `src/lib`; from `frontend/`,
+`yarn test`).

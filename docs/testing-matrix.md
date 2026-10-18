@@ -60,6 +60,14 @@ earlier response. `e2e/investor/performance.spec.ts` (rerun after a lost
 connection) and `e2e/investor/review-regressions.spec.ts` (portfolio filter
 change after a lost connection) cover it.
 
+## Frontend unit tests
+
+Vitest specs beside `frontend/src/lib/*.ts` (`yarn --cwd frontend test`, run by
+`verify.sh frontend`) own client-side formatting, list/detail state, stale-response
+guards, the 401 login redirect and the mapping of Frappe error payloads to
+`InvestorApiError`. They stub `fetch` and never call a server. Permissions,
+financial math and visible wiring stay with the server suite and Playwright.
+
 ## Registered migration and fresh-install lifecycle
 
 The opt-in `tests/migration_lifecycle.py` CLI helper verifies manual index and
