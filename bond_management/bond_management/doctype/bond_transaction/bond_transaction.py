@@ -222,40 +222,13 @@ class BondTransaction(Document):
         )
 
     @frappe.whitelist(methods=["POST"])
-    def create_selected_pdf_transactions(self, transaction_selections: str | list | None) -> list[str]:  # noqa: C901 -- whitelisted input checks, permission checks and atomic creation share one request
+    def create_selected_pdf_transactions(self, transaction_selections: str | list | None) -> list[str]:
         """Atomically create one document per selected row from a multi-transaction PDF."""
         frappe.has_permission("Bond Transaction", "create", throw=True)
         if self.name and frappe.db.exists("Bond Transaction", self.name):
             frappe.throw(_("Multiple PDF transactions can only be created from a new form."))
-        if transaction_selections is not None and not isinstance(transaction_selections, (str, list)):
-            frappe.throw(_("Selected transaction references must be sent as a JSON list."))
-
-        selections = frappe.parse_json(transaction_selections)
-        if not isinstance(selections, list):
-            frappe.throw(_("Select one or more transaction references to create."))
-        normalized_selections = []
-        for selection in selections:
-            if isinstance(selection, str):
-                reference = selection.strip().upper()
-                portfolio_name = None
-            elif isinstance(selection, dict):
-                raw_reference = selection.get("transaction_reference")
-                raw_portfolio_name = selection.get("portfolio_name")
-                if raw_reference is not None and not isinstance(raw_reference, str):
-                    frappe.throw(_("Each transaction reference must be text."))
-                if raw_portfolio_name is not None and not isinstance(raw_portfolio_name, str):
-                    frappe.throw(_("Each portfolio name must be text."))
-                reference = (raw_reference or "").strip().upper()
-                portfolio_name = (raw_portfolio_name or "").strip() or None
-            else:
-                frappe.throw(_("Each selected transaction must include a reference and portfolio."))
-            if reference:
-                normalized_selections.append((reference, portfolio_name))
-
-        selections_by_reference = dict(normalized_selections)
+        selections_by_reference = _parse_transaction_selections(transaction_selections)
         references = list(selections_by_reference)
-        if not references:
-            frappe.throw(_("Select one or more transaction references to create."))
 
         details = self._get_transaction_attachment_details()
         rows_by_reference = {row.transaction_reference: row for row in details.transactions}
@@ -606,3 +579,32 @@ class BondTransaction(Document):
                         "Transactions would make the position negative on {0}. Purchases settling that day are included."
                     ).format(settlement_date)
                 )
+
+
+def _parse_transaction_selections(transaction_selections: str | list | None) -> dict[str, str | None]:
+    """Normalize selections, keeping first-reference order and the last portfolio per reference."""
+    if transaction_selections is not None and not isinstance(transaction_selections, (str, list)):
+        frappe.throw(_("Selected transaction references must be sent as a JSON list."))
+    selections = frappe.parse_json(transaction_selections)
+    if not isinstance(selections, list):
+        frappe.throw(_("Select one or more transaction references to create."))
+
+    selections_by_reference = {}
+    for selection in selections:
+        if isinstance(selection, str):
+            selection = {"transaction_reference": selection}
+        if not isinstance(selection, dict):
+            frappe.throw(_("Each selected transaction must include a reference and portfolio."))
+        reference = selection.get("transaction_reference")
+        portfolio_name = selection.get("portfolio_name")
+        if reference is not None and not isinstance(reference, str):
+            frappe.throw(_("Each transaction reference must be text."))
+        if portfolio_name is not None and not isinstance(portfolio_name, str):
+            frappe.throw(_("Each portfolio name must be text."))
+        reference = (reference or "").strip().upper()
+        if reference:
+            selections_by_reference[reference] = (portfolio_name or "").strip() or None
+
+    if not selections_by_reference:
+        frappe.throw(_("Select one or more transaction references to create."))
+    return selections_by_reference

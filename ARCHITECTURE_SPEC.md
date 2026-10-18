@@ -123,6 +123,22 @@ Use deletion tests before splitting modules. Candidate seams:
 Each extracted public module gets a small typed interface and focused tests.
 Do not duplicate parser or permission logic across adapters.
 
+Current slice (2026-10-18): simplify transaction PDF selection in place by
+extracting normalization from atomic creation. Preserve string/list inputs,
+messages, blank handling, first-reference order and last-portfolio wins; leave
+permissions, attachment parsing, locks, creation order and rollback unchanged.
+No schema, dependency or API change; the domain model was reviewed. Acceptance:
+characterization and existing transaction tests pass, full `pre-push-ui` passes,
+and runtime/total line deltas are reported. Verified locally: the expanded
+32-test transaction module passes with both original and refactored normalization.
+The initial characterization corrected its dict/int error expectations against
+Frappe's existing type-validation wrapper; runtime behavior was not changed.
+`BASE_URL=http://localhost:8001 apps/bond_management/scripts/verify.sh pre-push-ui`
+passed (exit 0): lint/Semgrep, 424 server tests, frontend lint/typecheck, 80 unit
+tests, build and 61 Playwright tests. Scoped pre-commit, doc links and diff checks
+also passed. No fresh-install/opt-in run applies (no schema, hooks or permission
+changes); remote CI evidence is recorded on the PR for the published revision.
+
 ## Test plan
 
 ### Unit and integration

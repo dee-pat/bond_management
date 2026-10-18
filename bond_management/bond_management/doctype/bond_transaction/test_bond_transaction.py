@@ -13,6 +13,7 @@ from frappe.utils import getdate
 
 from bond_management.bond_management.doctype.bond_transaction.bond_transaction import (
     _calculate_amount_values,
+    _parse_transaction_selections,
     get_calculated_amounts,
     read_transaction_pdf,
 )
@@ -421,20 +422,59 @@ class TestBondTransaction(IntegrationTestCase):
                 self.assertEqual(file_doc.file_url, expected_url)
                 self.assertEqual(file_doc.get_content(encodings=()), pdf_bytes)
 
+    def test_pdf_selection_normalization_preserves_order_and_last_portfolio(self):
+        cases = (
+            ([" u123 ", "U456", "u123"], [("U123", None), ("U456", None)]),
+            (
+                [
+                    {"transaction_reference": " u123 ", "portfolio_name": " First "},
+                    "U456",
+                    {"transaction_reference": "U123", "portfolio_name": " Last "},
+                ],
+                [("U123", "Last"), ("U456", None)],
+            ),
+            ([{"transaction_reference": "U123", "portfolio_name": "First"}, " u123 "], [("U123", None)]),
+            ([" ", {}, {"transaction_reference": None}, "U123"], [("U123", None)]),
+        )
+        for selections, expected in cases:
+            for payload in (selections, frappe.as_json(selections)):
+                with self.subTest(payload=payload):
+                    self.assertEqual(list(_parse_transaction_selections(payload).items()), expected)
+
     def test_multi_transaction_creation_rejects_non_text_selection_values(self):
         staging = frappe.get_doc({"doctype": "Bond Transaction"})
 
         invalid_selections = (
-            ({"transaction_reference": ["U123"]}, "transaction reference must be text"),
+            (None, "Select one or more transaction references to create"),
+            ([], "Select one or more transaction references to create"),
+            ('"U123"', "Select one or more transaction references to create"),
+            ("null", "Select one or more transaction references to create"),
+            ("{}", "Select one or more transaction references to create"),
             (
-                {"transaction_reference": "U123", "portfolio_name": {"name": "TEST"}},
+                [" ", {}, {"transaction_reference": None}],
+                "Select one or more transaction references to create",
+            ),
+            ([None], "Each selected transaction must include a reference and portfolio"),
+            ([123], "Each selected transaction must include a reference and portfolio"),
+            ([{"transaction_reference": ["U123"]}], "transaction reference must be text"),
+            (
+                [{"transaction_reference": "U123", "portfolio_name": {"name": "TEST"}}],
+                "portfolio name must be text",
+            ),
+            (
+                [{"transaction_reference": " ", "portfolio_name": []}],
                 "portfolio name must be text",
             ),
         )
         for selection, message in invalid_selections:
             with self.subTest(selection=selection):
                 with self.assertRaisesRegex(ValidationError, message):
-                    staging.create_selected_pdf_transactions([selection])
+                    staging.create_selected_pdf_transactions(selection)
+        for selection in ({}, 123):
+            with self.subTest(selection=selection), self.assertRaises(FrappeTypeError):
+                staging.create_selected_pdf_transactions(selection)
+        with self.assertRaises(ValueError):
+            staging.create_selected_pdf_transactions("[")
 
     def test_multi_transaction_rows_can_be_posted_to_different_portfolios(self):
         bond = self._make_pdf_bond()
