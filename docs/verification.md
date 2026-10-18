@@ -86,7 +86,9 @@ differences in the final field.
 - A failed scheduled or manual _Opt-in suites_ run opens a `nightly-failure`
   issue, or comments on the open one. Dispatching with `force_failure=true`
   exercises that report, and the next fully passing scheduled run comments on
-  and closes the open issue.
+  and closes the open issue. Scheduled and manual runs never cancel each other;
+  only a newer push to the same PR cancels that PR's earlier run, as in CI and
+  Linters.
 - CI pins Frappe to the exact tag in `FRAPPE_VERSION` (in `ci.yml` and
   `opt-in.yml`). Bump both together, deliberately, after checking the release.
 - Changes to patches, schema, hooks, dependencies, installation, or manual

@@ -119,7 +119,10 @@ run_lint() {
     python3 "${APP_ROOT}/scripts/test_agent_policy.py"
     python3 "${APP_ROOT}/scripts/test_verify_helpers.py"
     python3 "${APP_ROOT}/scripts/test_deny_rules.py"
-    python3 "${APP_ROOT}/scripts/test_workflow_concurrency.py" "${APP_ROOT}/.github/workflows/ci.yml"
+    python3 "${APP_ROOT}/scripts/test_workflow_concurrency.py" \
+        "${APP_ROOT}/.github/workflows/ci.yml" \
+        "${APP_ROOT}/.github/workflows/linter.yml" \
+        "${APP_ROOT}/.github/workflows/opt-in.yml"
 }
 
 run_server_tests() {
