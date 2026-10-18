@@ -119,6 +119,7 @@ yarn install
 yarn build
 yarn lint
 yarn typecheck
+yarn test:unit
 ```
 
 The frontend source is under [`frontend/`](frontend/). The Python controllers, reports, APIs, utilities, DocTypes, and tests are under [`bond_management/bond_management/`](bond_management/bond_management/).

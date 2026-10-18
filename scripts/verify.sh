@@ -138,6 +138,7 @@ run_frontend_checks() {
     cd "${APP_ROOT}"
     yarn lint
     yarn typecheck
+    yarn test:unit
 
     cd "${BENCH_ROOT}"
     bench build --app bond_management

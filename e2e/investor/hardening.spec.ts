@@ -243,6 +243,30 @@ test("keeps an authenticated record denial on its detail route", async ({
   );
 });
 
+test("redirects to login when the API answers 401 without a status text match", async ({
+  page,
+}) => {
+  // Frappe v1 errors carry only `exc_type`; the client must read the HTTP status.
+  await page.route(`${INVESTOR_API}.get_transactions*`, (route) =>
+    route.fulfill({
+      status: 401,
+      contentType: "application/json",
+      body: JSON.stringify({ exc_type: "AuthenticationError" }),
+    })
+  );
+
+  // The real session is still valid, so the real login page would bounce back.
+  await page.route("**/login?*", (route) =>
+    route.fulfill({ status: 200, contentType: "text/html", body: "<h1>Login</h1>" })
+  );
+
+  await page.goto("/bond-investor/transactions");
+
+  await expect(page).toHaveURL(
+    /\/login\?redirect-to=%2Fbond-investor%2Ftransactions$/
+  );
+});
+
 function deferred(): { promise: Promise<void>; resolve: () => void } {
   let resolve = () => undefined;
   const promise = new Promise<void>((promiseResolve) => {

@@ -63,7 +63,7 @@ differences in the final field.
 - Changes to JavaScript, reports, DocType metadata, permissions, workspaces, or
   other Desk behavior must run
   `apps/bond_management/scripts/verify.sh pre-push-ui`. It includes the
-  complete server gate, frontend lint/typecheck/build, test-site preparation,
+  complete server gate, frontend lint/typecheck/unit tests/build, test-site preparation,
   and the complete authenticated Playwright suite for investor and Desk flows.
   Browser tests require `FRAPPE_USER` and `FRAPPE_PASSWORD` for the seeded
   investor plus `FRAPPE_ADMIN_USER` and `FRAPPE_ADMIN_PASSWORD` for Desk. Set
