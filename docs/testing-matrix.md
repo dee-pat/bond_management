@@ -12,12 +12,15 @@ Linters and Opt-in suites. The investor-share dispatch tests
 `::test_bulk_clear_dispatch_system_manager_post_repairs_shares`, and
 `::test_bulk_clear_dispatch_unauthorized_post_preserves_assignments_and_shares`
 exercise HTTP method and role enforcement through the overridden core route.
+`scripts/test_doc_links.py` checks that relative links and anchors in the `AGENTS.md` files and `docs/*.md` resolve, and that each skill in the _Read by task_ table exists.
 
 This page points from high-risk bond rules to their source modules and existing
 regression tests. See [domain-model.md](domain-model.md) for data relationships
 and [verification.md](verification.md) for required commands and completion
 evidence. Server tests own business rules and permission boundaries; browser
 specs cover visible wiring and routing.
+
+## Rule index
 
 Implementation and test paths beginning with `doctype/`, `api/`, `report/`, or
 `utils/` are relative to `bond_management/bond_management/`; `patches/`,
