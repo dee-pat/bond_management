@@ -78,11 +78,9 @@ guards, the 401 login redirect and the mapping of Frappe error payloads to
 `InvestorApiError`. They stub `fetch` and never call a server. Permissions,
 financial math and visible wiring stay with the server suite and Playwright.
 
-`frontend/src/lib/report.test.ts` covers shared report loading, empty results,
-failure/retry, invalidation, independent instances and stale success/error/401
-completion. `e2e/investor/performance.spec.ts` verifies recovery from a failed
-rerun through the visible Retry action; the report/date/clipboard browser flows
-remain the page-wiring checks.
+`frontend/src/lib/report.test.ts` owns the [shared report lifecycle](specs/investor-ui-migration.md#reports):
+17 cases, including success/error/401 across pending, completed and invalidated
+requests. `e2e/investor/performance.spec.ts` owns visible failure/Retry recovery.
 
 ## Registered migration and fresh-install lifecycle
 
