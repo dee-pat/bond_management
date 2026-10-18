@@ -175,12 +175,18 @@ without calling bench, or echoing the name, unless it is one temporary site.
 
 ### Agent safety
 
-1. `.claude/settings.json` denies Claude Code reads of `site_config.json`,
+1. `.claude/settings.json` has Claude Code `Read` denies for `site_config.json`,
    `common_site_config.json` and `~/.config/bond_management/test-browser.env`,
    and denies `bench` drop, reinstall, restore, partial-restore and trim commands
    on both persistent sites (`--site` and positional forms).
    `scripts/test_deny_rules.py`, run by `verify.sh lint`, fails when a Codex
-   deny prefix has no matching Claude Code rule.
+   deny prefix has no matching Claude Code rule. Codex's checked-in
+   `.codex/rules/bond_management.rules` forbids specific `bench` command
+   prefixes for database consoles, configuration disclosure, destructive
+   persistent-site operations and selected configuration/password changes.
+   These command rules do not deny general file reads. The Claude `Read`
+   denies do not provide a general shell-read block, and neither settings file
+   configures a hook that blocks credential-file reads through every tool.
 2. Persistent sites are protected by name. A temporary site must be
    `bond-management-<name>-<32-hex-id>.localhost`; `verify.sh` checks that name
    with `bond_management/agent_policy.py` before any bench call on one.
@@ -195,8 +201,10 @@ Local browser-test credentials live outside the app in
 `FRAPPE_USER`, `FRAPPE_PASSWORD`, `FRAPPE_ADMIN_USER` or
 `FRAPPE_ADMIN_PASSWORD` is unset; variables the caller already exported win,
 as in CI. It discards the file's output and errors and pauses xtrace, so no
-value is printed. Never source, print or copy the file yourself; agent hooks
-block it. Extra arguments after `ui` go to Playwright, for example
+value is printed by the loading wrapper. Never source, print or copy the file
+yourself; use the wrapper. This is an operating rule, not a general read block
+enforced by agent hooks (see _Agent safety_ above). Extra arguments after `ui`
+go to Playwright, for example
 `verify.sh ui e2e/investor/bonds.spec.ts --project=investor-desktop`.
 
 ## Local runtime recovery
