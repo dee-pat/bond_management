@@ -23,13 +23,15 @@ from bond_management.bond_management.utils.performance import attach_bond_schedu
 from bond_management.bond_management.utils.validation import date_range_filter, optional_date, required_string
 
 
-def execute(filters: dict | None = None):
+def execute(filters: dict | None = None) -> tuple[list[dict], list[dict]]:
+    """Return accrued-interest differences for a readable portfolio, with per-currency total rows."""
     filters = validate_filters(filters)
     rows = get_data(filters)
     return get_columns(), rows + make_total_rows(rows)
 
 
 def validate_filters(filters: dict | None) -> dict:
+    """Validate filters: a readable portfolio and an ordered, optionally open date range."""
     if filters is None:
         filters = {}
     if not isinstance(filters, dict):
@@ -47,6 +49,11 @@ def validate_filters(filters: dict | None) -> dict:
 
 
 def get_data(filters: dict) -> list[dict]:
+    """Return the portfolio's transactions with Decimal interest differences.
+
+    A positive difference favours the portfolio: it paid less accrued interest
+    than calculated on a purchase, or received more on a sale.
+    """
     query_filters = {"portfolio_name": filters["portfolio_name"]}
     if settlement_dates := date_range_filter(filters["from_date"], filters["to_date"]):
         query_filters["settlement_date"] = settlement_dates
@@ -87,6 +94,7 @@ def get_data(filters: dict) -> list[dict]:
 
 
 def load_bond_schedules(rows: list[dict]) -> dict[str, dict]:
+    """Return the rows' readable bonds by ISIN, with coupon and principal schedules attached."""
     isins = sorted({row.isin for row in rows})
     if not isins:
         return {}
@@ -103,6 +111,10 @@ def load_bond_schedules(rows: list[dict]) -> dict[str, dict]:
 
 
 def calculate_interest_difference_days(row: dict, schedules: dict | None) -> Decimal | None:
+    """Express the interest difference in days of accrual at settlement, rounded half-up to 0.01.
+
+    Returns ``None`` when the bond, coupon period or daily accrual is unavailable.
+    """
     if not schedules:
         return None
 
@@ -148,6 +160,7 @@ def calculate_interest_difference_days(row: dict, schedules: dict | None) -> Dec
 
 
 def make_total_rows(rows: list[dict]) -> list[dict]:
+    """Return one total row per portfolio and currency, summing the Decimal interest columns."""
     totals: dict[tuple[str, str], dict] = {}
     for row in rows:
         key = (row.portfolio_name, row.currency)
@@ -170,6 +183,7 @@ def make_total_rows(rows: list[dict]) -> list[dict]:
 
 
 def get_columns() -> list[dict]:
+    """Return the report's column definitions."""
     return [
         {
             "label": _("Transaction Reference"),
