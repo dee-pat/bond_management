@@ -25,28 +25,34 @@ class SemgrepGateTests(unittest.TestCase):
     def test_clean_source_passes(self):
         result = self.scan("value = 1\n")
         self.assertEqual(result.returncode, 0, result.stdout)
-        self.assertIn("Running Bond Management Semgrep rule tests.", result.stdout)
+        self.assertIn("Running blocking frappe-agent-kit Semgrep rules.", result.stdout)
+        # The kit's rule fixtures hold deliberate findings, so a pass shows they were not scanned.
+        self.assertTrue((self.app_root / "semgrep" / "kit" / "tests" / "transactions.py").is_file())
 
-    def test_frappe_error_blocks_before_advisory_and_app_scans(self):
+    def test_frappe_error_blocks_before_advisory_and_kit_scans(self):
         result = self.scan("value = eval(user_input)\n")
         self.assertEqual(result.returncode, 1, result.stdout)
         self.assertIn("frappe-codeinjection-eval", "".join(result.stdout.split()))
         self.assertNotIn("Running advisory Frappe Semgrep rules.", result.stdout)
+        self.assertNotIn("Running blocking frappe-agent-kit Semgrep rules.", result.stdout)
 
-    def test_app_error_blocks_before_rule_tests(self):
+    def test_kit_transaction_rule_blocks(self):
+        # frappe-manual-commit is a Frappe WARNING, so only the kit scan blocks this.
         result = self.scan("import frappe\nfrappe.db.commit()\n")
         self.assertEqual(result.returncode, 1, result.stdout)
-        self.assertIn(
-            "bond-management-no-manual-transaction-boundary",
-            "".join(result.stdout.split()),
-        )
-        self.assertNotIn("Running Bond Management Semgrep rule tests.", result.stdout)
+        self.assertIn("Running blocking frappe-agent-kit Semgrep rules.", result.stdout)
+        self.assertIn("frappe-kit-no-manual-transaction-boundary", "".join(result.stdout.split()))
+
+    def test_kit_decimal_rule_blocks(self):
+        result = self.scan("from decimal import Decimal\nvalue = Decimal(0.1)\n")
+        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assertIn("frappe-kit-decimal-from-float-literal", "".join(result.stdout.split()))
 
     def test_advisory_warning_does_not_block(self):
         result = self.scan('import frappe\nfrappe.db.sql(f"SELECT {user_input}")\n')
         self.assertEqual(result.returncode, 0, result.stdout)
         self.assertIn("frappe-sql-format-injection", "".join(result.stdout.split()))
-        self.assertIn("Running Bond Management Semgrep rule tests.", result.stdout)
+        self.assertIn("Running blocking frappe-agent-kit Semgrep rules.", result.stdout)
 
     def scan(self, source):
         (self.app_root / "violation.py").write_text(source, encoding="utf-8")

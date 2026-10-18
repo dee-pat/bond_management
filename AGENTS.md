@@ -21,7 +21,8 @@ This file covers what the code cannot tell you. Nested `AGENTS.md` files in
 - Skills live in `.agents/skills/`; never install skills globally. Upstream and
   kit skills are pinned in `skills.lock` and vendored unmodified by
   `scripts/sync-skills.sh`; only the `bond-management-*` skills are edited
-  here. The same lock vendors Frappe's Semgrep rules into `semgrep/frappe/`.
+  here. The same lock vendors Frappe's Semgrep rules into `semgrep/frappe/`
+  and the kit's into `semgrep/kit/`.
 - The _Shared Frappe rules_ block below is generated from
   [frappe-agent-kit](https://github.com/dee-pat/frappe-agent-kit). Never edit it
   here: change the kit, then bump the pin in `skills.lock` and run
@@ -139,7 +140,7 @@ This file covers what the code cannot tell you. Nested `AGENTS.md` files in
 - Attachment parsers cover current, supported legacy, malformed, conflicting,
   encrypted, wrong-password and non-PDF cases.
 
-<!-- BEGIN synced-rules: dee-pat/frappe-agent-kit/rules/frappe.md@9f1d0fce815615c7b261bb553572c0d1c421c987 -->
+<!-- BEGIN synced-rules: dee-pat/frappe-agent-kit/rules/frappe.md@793c1d5fef6623033eafdb1238e4f74d74621923 -->
 ## Shared Frappe rules
 
 Frappe v16 rules shared across apps; the app's own rules win on conflict. Use
@@ -179,6 +180,10 @@ pinned upstream skills, some of which read records with `get_all`/`get_list`.
   browser assertion in the same change; server tests own the full matrix.
 - Background jobs and patches are idempotent and safe to rerun.
 - For `>`, `>=`, `<`, `<=` rules, test greater, less and equal.
+- Never restore a production backup, or use real customer files or passwords, on
+  a local site; seed test data instead.
+- A new function over ruff complexity 15 (C901) needs a split or a
+  `# noqa: C901 -- <reason>` the reviewer accepts.
 - A gate passes only when run on the current change with an observed zero exit
   status. Report an unavailable gate as a blocker, and never weaken an assertion
   to make CI pass.
@@ -234,5 +239,8 @@ bench --site bond-management-test.localhost run-tests --doctype "Bond Transactio
   contract in [code-review.md](docs/code-review.md) wins on conflict.
 - Process and GitHub thread handling: [code-review.md](docs/code-review.md).
 - Only P0–P2 findings inside the changed component's documented guarantee
-  block merge, and only the user can waive a P2; P3s never block. See
-  [When a finding blocks merge](docs/code-review.md#when-a-finding-blocks-merge).
+  block merge, and only the user can waive a P2; P3s never block. The vendored
+  [report format](.agents/skills/frappe-pr-review/references/report.md) owns
+  the scoring rubric and blocking rule; this app's domain examples in
+  [code-review.md](docs/code-review.md#domain-examples-that-win-on-conflict)
+  win on conflict.

@@ -139,9 +139,11 @@ Services with no prior permission check to rely on are allowed without one:
 
 ## Automated coverage
 
-`scripts/verify.sh lint` runs Frappe's Semgrep rules plus
-`semgrep/bond_management.yml` (no manual transaction boundaries, no `Decimal`
-from float literals). A recurring finding above that a pattern can catch belongs
-there as a new rule with a test in `semgrep/tests/`. For a PR review,
+`scripts/verify.sh lint` runs Frappe's Semgrep rules plus the vendored kit
+rules in `semgrep/kit/` (no manual transaction boundaries, no `Decimal` from
+float literals). A recurring finding above that a pattern can catch belongs in
+a new rule with a `semgrep --test` fixture: in frappe-agent-kit when it applies
+to any Frappe app, otherwise in an app rules file under `semgrep/` that
+`verify.sh` scans and tests. For a PR review,
 `scripts/semgrep-pr.sh <base>` lists only the Frappe findings the change
 introduces.

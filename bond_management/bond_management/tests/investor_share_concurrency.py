@@ -110,13 +110,13 @@ class Race:
             raise AssertionError(f"{self.kind} race worker failed") from self.errors[0]
         if self.conflict:
             # Frappe rolls conflicts back; simulate a caller retry in a fresh transaction.
-            frappe.db.rollback()  # nosemgrep: bond-management-no-manual-transaction-boundary
+            frappe.db.rollback()  # nosemgrep: frappe-kit-no-manual-transaction-boundary
             try:
                 add_docshare("Bond Portfolio", self.names["portfolio"], self.user)
             except frappe.PermissionError:
                 self.denied = True
             finally:
-                frappe.db.rollback()  # nosemgrep: bond-management-no-manual-transaction-boundary
+                frappe.db.rollback()  # nosemgrep: frappe-kit-no-manual-transaction-boundary
         if not self.denied:
             raise AssertionError("Grant succeeded after authorization changed")
         # The CLI connection may retain an old snapshot; inspect current state.
@@ -132,7 +132,7 @@ class Race:
             for_update=True,
         ).run(pluck=True)
         # This disposable request harness owns its outer transaction.
-        frappe.db.rollback()  # nosemgrep: bond-management-no-manual-transaction-boundary
+        frappe.db.rollback()  # nosemgrep: frappe-kit-no-manual-transaction-boundary
         if share:
             raise AssertionError("Conflicting share survived the race")
         return {
@@ -159,13 +159,13 @@ class Race:
                 self.write()
             # These workers are the outer request harness, never business code.
             if name == "grant" and (self.denied or self.conflict):
-                frappe.db.rollback()  # nosemgrep: bond-management-no-manual-transaction-boundary
+                frappe.db.rollback()  # nosemgrep: frappe-kit-no-manual-transaction-boundary
             else:
-                frappe.db.commit()  # nosemgrep: bond-management-no-manual-transaction-boundary
+                frappe.db.commit()  # nosemgrep: frappe-kit-no-manual-transaction-boundary
         except BaseException as error:
             self.errors.append(error)
             if getattr(frappe.local, "db", None):
-                frappe.db.rollback()  # nosemgrep: bond-management-no-manual-transaction-boundary
+                frappe.db.rollback()  # nosemgrep: frappe-kit-no-manual-transaction-boundary
             self.changed.set()
         finally:
             frappe.destroy()

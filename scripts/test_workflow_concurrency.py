@@ -1,52 +1,64 @@
-"""Pin the concurrency contract and exercise its event-context matrix."""
+"""Pin a workflow's concurrency contract and exercise its event-context matrix.
+
+Usage: python3 test_workflow_concurrency.py [-v] [WORKFLOW.yml ...]
+
+Without paths it reads .github/workflows/ci.yml from the current directory, so
+an app can copy this file into scripts/ unchanged.
+"""
 
 import re
+import sys
 import unittest
 from pathlib import Path
+
+WORKFLOWS = [Path(arg) for arg in sys.argv[1:] if arg.endswith((".yml", ".yaml"))]
+sys.argv[1:] = [arg for arg in sys.argv[1:] if not arg.endswith((".yml", ".yaml"))]
+WORKFLOWS = WORKFLOWS or [Path(".github/workflows/ci.yml")]
+
+CONTEXTS = (
+    ("pull_request", "refs/pull/42/merge", 42, 100),
+    ("pull_request", "refs/pull/42/merge", 42, 101),
+    ("pull_request", "refs/pull/43/merge", 43, 102),
+    ("push", "refs/heads/main", None, 103),
+    ("push", "refs/heads/main", None, 104),
+    ("push", "refs/heads/version-16", None, 105),
+    ("push", "refs/heads/version-16", None, 106),
+    ("workflow_dispatch", "refs/heads/main", None, 107),
+    ("workflow_dispatch", "refs/heads/main", None, 108),
+    ("workflow_dispatch", "refs/heads/version-16", None, 109),
+    ("workflow_dispatch", "refs/heads/version-16", None, 110),
+)
 
 
 class WorkflowConcurrencyTests(unittest.TestCase):
     def test_pr_supersession_and_independent_non_pr_runs(self):
-        workflow_groups = []
-        for workflow, name in (("ci.yml", "CI"), ("linter.yml", "Linters")):
-            source = (Path(__file__).resolve().parent.parent / ".github/workflows" / workflow).read_text()
-            group = re.search(r"^  group: (.+)$", source, re.MULTILINE).group(1)
-            # CI cancels only superseded pull request runs; push and manual runs keep their own group.
-            cancel = "${{ github.event_name == 'pull_request' }}" if workflow == "ci.yml" else "true"
-            self.assertIn(f"  cancel-in-progress: {cancel}", source)
-            contexts = (
-                ("pull_request", "refs/pull/42/merge", 42, 100),
-                ("pull_request", "refs/pull/42/merge", 42, 101),
-                ("pull_request", "refs/pull/43/merge", 43, 102),
-                ("push", "refs/heads/main", None, 103),
-                ("push", "refs/heads/main", None, 104),
-                ("push", "refs/heads/version-16", None, 105),
-                ("push", "refs/heads/version-16", None, 106),
-                ("workflow_dispatch", "refs/heads/main", None, 107),
-                ("workflow_dispatch", "refs/heads/main", None, 108),
-                ("workflow_dispatch", "refs/heads/version-16", None, 109),
-                ("workflow_dispatch", "refs/heads/version-16", None, 110),
-            )
-            groups = [
-                concurrency_group(
-                    group,
-                    {
-                        "github": {
-                            "workflow": name,
-                            "event_name": event,
-                            "ref": ref,
-                            "run_id": run_id,
-                            "sha": f"sha{run_id}",
-                            "event": {"number": number, "pull_request": {"number": number}} if number else {},
-                        }
-                    },
-                )
-                for event, ref, number, run_id in contexts
-            ]
-            self.assertEqual(groups[0], groups[1])
-            self.assertEqual(len(set(groups)), len(groups) - 1, workflow)
-            workflow_groups.append(set(groups))
-        self.assertTrue(workflow_groups[0].isdisjoint(workflow_groups[1]))
+        for workflow in WORKFLOWS:
+            with self.subTest(workflow=str(workflow)):
+                source = workflow.read_text()
+                name = re.search(r"^name: (.+)$", source, re.MULTILINE).group(1)
+                group = re.search(r"^  group: (.+)$", source, re.MULTILINE).group(1)
+                # Only superseded pull request runs cancel; push and manual runs keep their own group.
+                cancel = re.search(r"^  cancel-in-progress: (.+)$", source, re.MULTILINE).group(1)
+                self.assertEqual(cancel, "${{ github.event_name == 'pull_request' }}")
+                groups = [
+                    concurrency_group(
+                        group,
+                        {
+                            "github": {
+                                "workflow": name,
+                                "event_name": event,
+                                "ref": ref,
+                                "run_id": run_id,
+                                "sha": f"sha{run_id}",
+                                "event": {"number": number, "pull_request": {"number": number}} if number else {},
+                            }
+                        },
+                    )
+                    for event, ref, number, run_id in CONTEXTS
+                ]
+                # The two runs of PR 42 share a group; every other run has its own.
+                self.assertEqual(groups[0], groups[1])
+                self.assertEqual(len(set(groups)), len(groups) - 1)
 
 
 def concurrency_group(template, context):

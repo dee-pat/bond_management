@@ -10,8 +10,7 @@ BENCH_ROOT="$(cd "${APP_ROOT}/../.." && pwd)"
 SEMGREP_VERSION="1.172.0"
 # Vendored at the revision pinned in skills.lock.
 FRAPPE_SEMGREP_RULES_DIR="${APP_ROOT}/semgrep/frappe"
-APP_SEMGREP_RULES_FILE="${APP_ROOT}/semgrep/bond_management.yml"
-APP_SEMGREP_TESTS_FILE="${APP_ROOT}/semgrep/tests/bond_management.py"
+KIT_SEMGREP_RULES_DIR="${APP_ROOT}/semgrep/kit"
 
 usage() {
     echo "Usage: scripts/verify.sh [lint|server|frontend|ui|playwright|pre-push|pre-push-ui|lifecycle|share-race] [playwright args]" >&2
@@ -97,22 +96,15 @@ run_semgrep() {
         exit "${advisory_status}"
     fi
 
-    echo "Running blocking Bond Management Semgrep rules."
+    # The kit's rule fixtures live in semgrep/kit/tests, which --exclude skips.
+    echo "Running blocking frappe-agent-kit Semgrep rules."
     "${binary}" scan \
         --error \
         --metrics=off \
         --disable-version-check \
-        --config "${APP_SEMGREP_RULES_FILE}" \
+        --config "${KIT_SEMGREP_RULES_DIR}" \
         --exclude "semgrep" \
         "${APP_ROOT}"
-
-    echo "Running Bond Management Semgrep rule tests."
-    (
-        cd "${APP_ROOT}/semgrep"
-        "${binary}" --test --strict --test-ignore-todo \
-            --config bond_management.yml \
-            tests/bond_management.py
-    )
 }
 
 run_lint() {
@@ -126,7 +118,8 @@ run_lint() {
     python3 "${APP_ROOT}/scripts/test_verify_semgrep.py" --semgrep "${binary}"
     python3 "${APP_ROOT}/scripts/test_agent_policy.py"
     python3 "${APP_ROOT}/scripts/test_verify_helpers.py"
-    python3 "${APP_ROOT}/scripts/test_workflow_concurrency.py"
+    python3 "${APP_ROOT}/scripts/test_deny_rules.py"
+    python3 "${APP_ROOT}/scripts/test_workflow_concurrency.py" "${APP_ROOT}/.github/workflows/ci.yml"
 }
 
 run_server_tests() {

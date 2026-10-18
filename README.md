@@ -175,8 +175,8 @@ checked against [`docs/security-review.md`](docs/security-review.md).
 ### Agent skills and rules
 
 Agent skills live in [`.agents/skills/`](.agents/skills/). Upstream skills, the
-shared Frappe rules block in `AGENTS.md`, and Frappe's Semgrep rules in
-`semgrep/frappe/` are pinned in [`skills.lock`](skills.lock) and vendored
+shared Frappe rules block in `AGENTS.md`, and the Semgrep rules in
+`semgrep/frappe/` (Frappe's) and `semgrep/kit/` (the kit's) are pinned in [`skills.lock`](skills.lock) and vendored
 unmodified from
 [frappe-agent-kit](https://github.com/dee-pat/frappe-agent-kit) and other
 upstreams. Check or refresh the vendored copies from the app directory:
