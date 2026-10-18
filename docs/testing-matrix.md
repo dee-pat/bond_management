@@ -73,10 +73,16 @@ mid-session expiry test checks the real Guest 403.
 ## Frontend unit tests
 
 Vitest specs beside `frontend/src/lib/*.ts` (`yarn --cwd frontend test`, run by
-`verify.sh frontend`) own client-side formatting, list/detail state, stale-response
+`verify.sh frontend`) own client-side formatting, list/detail/report state, stale-response
 guards, the 401 login redirect and the mapping of Frappe error payloads to
 `InvestorApiError`. They stub `fetch` and never call a server. Permissions,
 financial math and visible wiring stay with the server suite and Playwright.
+
+`frontend/src/lib/report.test.ts` covers shared report loading, empty results,
+failure/retry, invalidation, independent instances and stale success/error/401
+completion. `e2e/investor/performance.spec.ts` verifies recovery from a failed
+rerun through the visible Retry action; the report/date/clipboard browser flows
+remain the page-wiring checks.
 
 ## Registered migration and fresh-install lifecycle
 

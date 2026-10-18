@@ -4,6 +4,7 @@ import { Button, ErrorMessage, FormControl } from "frappe-ui";
 
 import { InvestorApiError, redirectToLogin, useInvestorApi } from "../lib/api";
 import { sanitizeClipboardText } from "../lib/clipboard";
+import { useReportRequest } from "../lib/report";
 import SurfaceState from "../components/SurfaceState.vue";
 import type { BondYieldComparisonReport, YieldComparisonFieldname } from "../report-types";
 import BondYieldComparisonChart from "./BondYieldComparisonChart.vue";
@@ -11,16 +12,20 @@ import YieldComparisonControls from "./YieldComparisonControls.vue";
 
 const fromDate = ref("");
 const toDate = ref("");
-const report = ref<BondYieldComparisonReport | null>(null);
+const api = useInvestorApi();
+const { report, loading, hasRun, error, load, invalidate } = useReportRequest(
+	() =>
+		api.fetchBondYieldComparison({
+			fromDate: fromDate.value || undefined,
+			toDate: toDate.value || undefined,
+		}),
+	"Bond yield comparison could not be loaded. Please retry."
+);
 const defaultsLoading = ref(true);
 const defaultsError = ref(false);
 const datesEdited = ref(false);
-const loading = ref(false);
-const hasRun = ref(false);
-const error = ref<string | null>(null);
 const copying = ref(false);
 const copyFeedback = ref<{ kind: "error" | "success"; message: string } | null>(null);
-const api = useInvestorApi();
 const dateRangeInvalid = computed(() =>
 	Boolean(fromDate.value && toDate.value && fromDate.value > toDate.value)
 );
@@ -30,7 +35,6 @@ const hasPersistedValues = computed(() =>
 );
 const marketPricePrecision = computed(() => columnPrecision("market_price", 3));
 const futureXirrPrecision = computed(() => columnPrecision("future_xirr", 3));
-let latestReportRequest = 0;
 let latestCopyRequest = 0;
 
 watch([fromDate, toDate], invalidateResults);
@@ -69,36 +73,9 @@ async function runReport(): Promise<void> {
 		return;
 	}
 
-	const requestId = ++latestReportRequest;
 	++latestCopyRequest;
-	hasRun.value = true;
-	loading.value = true;
-	error.value = null;
-	report.value = null;
 	resetCopyState();
-
-	try {
-		const response = await api.fetchBondYieldComparison({
-			fromDate: fromDate.value || undefined,
-			toDate: toDate.value || undefined,
-		});
-		if (requestId === latestReportRequest) {
-			report.value = response.report;
-		}
-	} catch (caughtError) {
-		if (requestId !== latestReportRequest) {
-			return;
-		}
-		if (caughtError instanceof InvestorApiError && caughtError.status === 401) {
-			redirectToLogin();
-			return;
-		}
-		error.value = "Bond yield comparison could not be loaded. Please retry.";
-	} finally {
-		if (requestId === latestReportRequest) {
-			loading.value = false;
-		}
-	}
+	await load();
 }
 
 async function copyAuditData(): Promise<void> {
@@ -132,12 +109,8 @@ async function copyAuditData(): Promise<void> {
 }
 
 function invalidateResults(): void {
-	++latestReportRequest;
+	invalidate();
 	++latestCopyRequest;
-	report.value = null;
-	loading.value = false;
-	hasRun.value = false;
-	error.value = null;
 	resetCopyState();
 }
 

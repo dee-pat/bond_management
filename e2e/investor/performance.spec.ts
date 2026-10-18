@@ -137,7 +137,7 @@ test("shows a failure instead of the previous report when a rerun cannot connect
     `${INVESTOR_API}.get_portfolio_performance?*`,
     async (route) => {
       attempts += 1;
-      if (attempts === 1) {
+      if (attempts !== 2) {
         await route.continue();
         return;
       }
@@ -159,4 +159,9 @@ test("shows a failure instead of the previous report when a rerun cannot connect
   );
   await expect(page.getByTestId("performance-table")).toHaveCount(0);
   expect(attempts).toBe(2);
+
+  await page.getByRole("button", { name: "Retry", exact: true }).click();
+  await expect(page.getByTestId("performance-table")).toBeVisible();
+  await expect(page.getByRole("alert")).toHaveCount(0);
+  expect(attempts).toBe(3);
 });
