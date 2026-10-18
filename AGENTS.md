@@ -140,7 +140,7 @@ This file covers what the code cannot tell you. Nested `AGENTS.md` files in
 - Attachment parsers cover current, supported legacy, malformed, conflicting,
   encrypted, wrong-password and non-PDF cases.
 
-<!-- BEGIN synced-rules: dee-pat/frappe-agent-kit/rules/frappe.md@793c1d5fef6623033eafdb1238e4f74d74621923 -->
+<!-- BEGIN synced-rules: dee-pat/frappe-agent-kit/rules/frappe.md@5b1f075673ef4806989138c0aadecf6739e5db13 -->
 ## Shared Frappe rules
 
 Frappe v16 rules shared across apps; the app's own rules win on conflict. Use
