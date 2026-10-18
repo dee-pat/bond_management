@@ -146,7 +146,7 @@ Read the row for your task; the rules below always apply. Code spans are skills.
 - Attachment parsers cover current, supported legacy, malformed, conflicting,
   encrypted, wrong-password and non-PDF cases.
 
-<!-- BEGIN synced-rules: dee-pat/frappe-agent-kit/rules/frappe.md@5b1f075673ef4806989138c0aadecf6739e5db13 -->
+<!-- BEGIN synced-rules: dee-pat/frappe-agent-kit/rules/frappe.md@c2e2fdfcb871438033248eea1ec30506a4ac86b9 -->
 ## Shared Frappe rules
 
 Frappe v16 rules shared across apps; the app's own rules win on conflict. Use
@@ -193,6 +193,8 @@ pinned upstream skills, some of which read records with `get_all`/`get_list`.
 - A gate passes only when run on the current change with an observed zero exit
   status. Report an unavailable gate as a blocker, and never weaken an assertion
   to make CI pass.
+- Commits and pull requests carry no AI attribution: no `Co-Authored-By`
+  trailer for an AI agent and no "Generated with ..." line.
 <!-- END synced-rules: dee-pat/frappe-agent-kit/rules/frappe.md -->
 
 ## Sites

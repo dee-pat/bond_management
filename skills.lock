@@ -6,18 +6,18 @@
 # scripts/sync-skills.sh sync, and commit the lock and the copies together.
 # scripts/sync-skills.sh, scripts/semgrep-pr.sh, scripts/test_deny_rules.py and
 # scripts/test_workflow_concurrency.py are byte-identical copies of
-# dee-pat/frappe-agent-kit tools/ at 5b1f075673ef4806989138c0aadecf6739e5db13.
+# dee-pat/frappe-agent-kit tools/ at c2e2fdfcb871438033248eea1ec30506a4ac86b9.
 frappe-app-dev      frappe/skills             skills/frappe-app-dev      c1118cbf175a3d4393fb7d02d749876eaf8a86e8  -
 code-style          frappe/skills             skills/code-style          c1118cbf175a3d4393fb7d02d749876eaf8a86e8  -
 frappe-code-review  frappe/skills             skills/frappe-code-review  c1118cbf175a3d4393fb7d02d749876eaf8a86e8  -
 frappe-ui           frappe/frappe-ui          skills/frappe-ui           15ed4fecee1c906befdf23cc14f7b7bb0d7acbf4  evals
 playwright-cli      microsoft/playwright-cli  skills/playwright-cli      74354ecc7a43da16d91a9bc54fa8db8283a3fcf5  -
-frappe-migration    dee-pat/frappe-agent-kit  skills/frappe-migration    5b1f075673ef4806989138c0aadecf6739e5db13  -
-grilling            dee-pat/frappe-agent-kit  skills/grilling            5b1f075673ef4806989138c0aadecf6739e5db13  -
-pr-review-threads   dee-pat/frappe-agent-kit  skills/pr-review-threads   5b1f075673ef4806989138c0aadecf6739e5db13  -
-frappe-pr-review    dee-pat/frappe-agent-kit  skills/frappe-pr-review    5b1f075673ef4806989138c0aadecf6739e5db13  -
-frappe-debugging    dee-pat/frappe-agent-kit  skills/frappe-debugging    5b1f075673ef4806989138c0aadecf6739e5db13  -
-frappe-spa-client   dee-pat/frappe-agent-kit  skills/frappe-spa-client   5b1f075673ef4806989138c0aadecf6739e5db13  -
-rule                dee-pat/frappe-agent-kit  rules/frappe.md            5b1f075673ef4806989138c0aadecf6739e5db13  AGENTS.md
+frappe-migration    dee-pat/frappe-agent-kit  skills/frappe-migration    c2e2fdfcb871438033248eea1ec30506a4ac86b9  -
+grilling            dee-pat/frappe-agent-kit  skills/grilling            c2e2fdfcb871438033248eea1ec30506a4ac86b9  -
+pr-review-threads   dee-pat/frappe-agent-kit  skills/pr-review-threads   c2e2fdfcb871438033248eea1ec30506a4ac86b9  -
+frappe-pr-review    dee-pat/frappe-agent-kit  skills/frappe-pr-review    c2e2fdfcb871438033248eea1ec30506a4ac86b9  -
+frappe-debugging    dee-pat/frappe-agent-kit  skills/frappe-debugging    c2e2fdfcb871438033248eea1ec30506a4ac86b9  -
+frappe-spa-client   dee-pat/frappe-agent-kit  skills/frappe-spa-client   c2e2fdfcb871438033248eea1ec30506a4ac86b9  -
+rule                dee-pat/frappe-agent-kit  rules/frappe.md            c2e2fdfcb871438033248eea1ec30506a4ac86b9  AGENTS.md
 vendor              frappe/semgrep-rules      rules                      81a6e3d47a328249e8ddf04c586e493dd5553002  semgrep/frappe
-vendor              dee-pat/frappe-agent-kit  semgrep/kit                5b1f075673ef4806989138c0aadecf6739e5db13  semgrep/kit
+vendor              dee-pat/frappe-agent-kit  semgrep/kit                c2e2fdfcb871438033248eea1ec30506a4ac86b9  semgrep/kit
