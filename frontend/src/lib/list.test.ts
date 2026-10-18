@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
-import { createApp, nextTick } from "vue";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
+import { settle, withSetup } from "../test-utils/composable";
 import { InvestorApiError, redirectToLogin } from "./api";
 import { toFilterValue, usePagedList } from "./list";
 
@@ -24,26 +24,6 @@ interface Deferred {
 	reject: (error: unknown) => void;
 }
 
-const unmountAll: Array<() => void> = [];
-
-afterEach(() => {
-	unmountAll.splice(0).forEach((unmount) => unmount());
-});
-
-// Vue's testing guide: run a composable that uses lifecycle hooks inside a host app.
-function withSetup<T>(composable: () => T): T {
-	let result!: T;
-	const app = createApp({
-		setup() {
-			result = composable();
-			return () => null;
-		},
-	});
-	app.mount(document.createElement("div"));
-	unmountAll.push(() => app.unmount());
-	return result;
-}
-
 function page(names: string[], hasMore = false, start = 0): Page {
 	return {
 		data: names.map((name) => ({ name })),
@@ -63,11 +43,6 @@ function mountList() {
 		usePagedList<Row>({ fetchPage, sortBy: "trade_date", errorMessage: "Could not load rows." })
 	);
 	return { list, fetchPage, pending };
-}
-
-async function settle(): Promise<void> {
-	await new Promise((resolve) => setTimeout(resolve, 0));
-	await nextTick();
 }
 
 describe("toFilterValue", () => {
