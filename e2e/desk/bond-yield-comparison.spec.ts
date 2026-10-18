@@ -180,6 +180,13 @@ test("keeps the chart visible when more than five snapshots do not overlap", asy
     page.locator("[data-bond-yield-hover-tooltip] [data-bond-yield-hover-isin]")
   ).toHaveCount(1);
 
+  await firstLine.dispatchEvent("mouseleave");
+  await expect(page.locator("[data-bond-yield-hover-tooltip]")).toBeHidden();
+  await firstLine.dispatchEvent("mousemove", hoverCoordinates);
+  await expect(page.locator("[data-bond-yield-hover-value]")).toHaveText(
+    "Future XIRR: 8.75%"
+  );
+
   const checkboxes = page.locator(
     "[data-bond-yield-selection] .bond-yield-checkbox"
   );

@@ -382,20 +382,18 @@ function make_gap_chart_svg(model, geometry = get_gap_chart_geometry(model)) {
 	});
 
 	model.datasets.forEach((dataset, dataset_index) => {
-		let segment = [];
-		dataset.values.forEach((value, index) => {
-			if (value === null) {
-				return;
-			}
-
-			const point = { x: x(index), y: y(value), index, value };
-			segment.push(point);
-		});
-		append_data_line(parts, segment, dataset.color, dataset.name, dataset_index);
+		const points = get_dataset_points(dataset, geometry);
+		append_data_line(parts, points, dataset.color, dataset.name, dataset_index);
 	});
 
 	parts.push("</svg>");
 	return parts.join("");
+}
+
+function get_dataset_points(dataset, { x, y }) {
+	return dataset.values.flatMap((value, index) =>
+		value === null ? [] : [{ x: x(index), y: y(value), value }]
+	);
 }
 
 function append_data_line(parts, points, color, name, dataset_index) {
@@ -460,11 +458,7 @@ function get_hover_line_value(dataset, event, svg, geometry) {
 	}
 	const pointer_x = ((event.clientX - rect.left) / rect.width) * geometry.width;
 	const pointer_y = ((event.clientY - rect.top) / rect.height) * geometry.height;
-	const points = dataset.values
-		.map((value, index) =>
-			value === null ? null : { x: geometry.x(index), y: geometry.y(value), value }
-		)
-		.filter(Boolean);
+	const points = get_dataset_points(dataset, geometry);
 	if (!points.length) {
 		return null;
 	}
@@ -486,13 +480,7 @@ function get_hover_line_value(dataset, event, svg, geometry) {
 		}
 	}
 
-	if (!closest) {
-		const nearest = points.reduce((result, point) =>
-			Math.abs(pointer_x - point.x) < Math.abs(pointer_x - result.x) ? point : result
-		);
-		return nearest.value;
-	}
-	return closest.value;
+	return closest ? closest.value : points[0].value;
 }
 
 function position_chart_tooltip(tooltip, event, chart) {
