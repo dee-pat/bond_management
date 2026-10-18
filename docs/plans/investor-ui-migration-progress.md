@@ -45,6 +45,34 @@ server suite, and the Playwright job passed 56 tests across the
 
 ## In progress: Phase 7 — Pilot
 
+### Shared report request lifecycle
+
+Verified locally (2026-10-18): Portfolio Performance, Bond Yield Comparison and
+Interest Difference now share `useReportRequest`, preserving page validation,
+stale-response protection, session-expiry redirects and clipboard invalidation.
+The [focused spec](../specs/report-request-lifecycle.md) defines the contract and
+gates. No API, financial or permission changes; `docs/domain-model.md` reviewed
+and unchanged. Implementation branch: `codex/frontend-report-lifecycle`.
+
+- Risk: shared frontend report state; required gate is `pre-push-ui` plus
+  scoped pre-commit including new files.
+- `BASE_URL=http://localhost:8001 apps/bond_management/scripts/verify.sh pre-push-ui`
+  from the bench: exit 0. Lint/Semgrep/rule checks, 423 server tests (56 unit,
+  357 integration and 10 unspecified-category), frontend lint/typecheck,
+  80 Vitest tests, production build and all 61 authenticated Playwright tests
+  passed. The extended Performance failure flow now verifies a successful Retry.
+- The new helper has 17 deferred-promise regression cases. Removing its stale
+  guards temporarily produced 10 failures (exit 1); restoring them passed all
+  17 (exit 0). The initial test run before adding the helper failed to import
+  the not-yet-created module; it was not a product regression.
+- Scoped pre-commit initially formatted the three Vue files; its final rerun
+  and `git diff --check` passed. No unresolved test failure or blocker remains.
+- No separate fresh-install or opt-in migration/share-race run is needed:
+  schema, hooks, dependencies and permission logic are unchanged. Remote CI
+  evidence belongs to the PR checks for the published revision; the results
+  above are local evidence. Local macOS and its existing test site do not
+  reproduce CI's fresh Ubuntu/MariaDB 11.8 setup.
+
 ### Investor request isolation
 
 A review on 2026-10-16 found that each investor endpoint shared one frappe-ui

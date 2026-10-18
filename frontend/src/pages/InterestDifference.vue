@@ -5,13 +5,10 @@ import { ListCell, ListHeaderCell } from "frappe-ui/list";
 
 import DataList from "../components/DataList.vue";
 import SurfaceState from "../components/SurfaceState.vue";
-import { InvestorApiError, redirectToLogin, useInvestorApi } from "../lib/api";
+import { useInvestorApi } from "../lib/api";
 import { formatDate, formatMoney, formatNumber } from "../lib/format";
-import type {
-	InterestDifferenceColumn,
-	InterestDifferenceReport,
-	InterestDifferenceRow,
-} from "../report-types";
+import { useReportRequest } from "../lib/report";
+import type { InterestDifferenceColumn, InterestDifferenceRow } from "../report-types";
 import type { InvestorBootstrap } from "../types";
 
 const props = defineProps<{ bootstrap: InvestorBootstrap }>();
@@ -19,10 +16,15 @@ const api = useInvestorApi();
 const selectedPortfolio = ref("");
 const fromDate = ref("");
 const toDate = ref("");
-const report = ref<InterestDifferenceReport | null>(null);
-const loading = ref(false);
-const hasRun = ref(false);
-const error = ref<string | null>(null);
+const { report, loading, hasRun, error, load, invalidate } = useReportRequest(
+	() =>
+		api.fetchInterestDifference({
+			portfolio: selectedPortfolio.value,
+			fromDate: fromDate.value || undefined,
+			toDate: toDate.value || undefined,
+		}),
+	"Interest difference could not be loaded. Please retry."
+);
 const dateRangeInvalid = computed(() =>
 	Boolean(fromDate.value && toDate.value && fromDate.value > toDate.value)
 );
@@ -34,9 +36,7 @@ const portfolioOptions = computed(() => [
 		value: portfolio.name,
 	})),
 ]);
-let latestRequest = 0;
-
-watch([selectedPortfolio, fromDate, toDate], invalidateResults);
+watch([selectedPortfolio, fromDate, toDate], invalidate);
 
 async function runReport(): Promise<void> {
 	// DatePicker commits typed text on blur. Let those model updates settle before
@@ -49,43 +49,7 @@ async function runReport(): Promise<void> {
 		return;
 	}
 
-	const requestId = ++latestRequest;
-	hasRun.value = true;
-	loading.value = true;
-	error.value = null;
-	report.value = null;
-
-	try {
-		const response = await api.fetchInterestDifference({
-			portfolio: selectedPortfolio.value,
-			fromDate: fromDate.value || undefined,
-			toDate: toDate.value || undefined,
-		});
-		if (requestId === latestRequest) {
-			report.value = response.report;
-		}
-	} catch (caughtError) {
-		if (requestId !== latestRequest) {
-			return;
-		}
-		if (caughtError instanceof InvestorApiError && caughtError.status === 401) {
-			redirectToLogin();
-			return;
-		}
-		error.value = "Interest difference could not be loaded. Please retry.";
-	} finally {
-		if (requestId === latestRequest) {
-			loading.value = false;
-		}
-	}
-}
-
-function invalidateResults(): void {
-	++latestRequest;
-	report.value = null;
-	loading.value = false;
-	hasRun.value = false;
-	error.value = null;
+	await load();
 }
 
 function displayValue(row: InterestDifferenceRow, column: InterestDifferenceColumn): string {

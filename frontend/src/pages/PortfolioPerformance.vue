@@ -4,11 +4,8 @@ import { Button, ErrorMessage, FormControl, LoadingText } from "frappe-ui";
 
 import { InvestorApiError, redirectToLogin, useInvestorApi } from "../lib/api";
 import { sanitizeClipboardText } from "../lib/clipboard";
-import type {
-	PerformanceCashflow,
-	PerformanceCashflowSelection,
-	PortfolioPerformanceReport,
-} from "../report-types";
+import { useReportRequest } from "../lib/report";
+import type { PerformanceCashflow, PerformanceCashflowSelection } from "../report-types";
 import type { InvestorBootstrap } from "../types";
 import SurfaceState from "../components/SurfaceState.vue";
 import PortfolioPerformanceTable from "./PortfolioPerformanceTable.vue";
@@ -18,10 +15,14 @@ const api = useInvestorApi();
 
 const selectedPortfolio = ref("");
 const valuationDate = ref(currentDate());
-const report = ref<PortfolioPerformanceReport | null>(null);
-const loading = ref(false);
-const hasRun = ref(false);
-const error = ref<string | null>(null);
+const { report, loading, hasRun, error, load, invalidate } = useReportRequest(
+	() =>
+		api.fetchPortfolioPerformance({
+			portfolio: selectedPortfolio.value,
+			valuationDate: valuationDate.value,
+		}),
+	"Portfolio performance could not be loaded. Please retry."
+);
 const copyingKey = ref<string | null>(null);
 const copyFeedback = ref<{ kind: "empty" | "error" | "success"; message: string } | null>(null);
 const hasAssignments = computed(() => props.bootstrap.portfolios.length > 0);
@@ -39,7 +40,6 @@ const canRun = computed(
 		Boolean(valuationDate.value) &&
 		!loading.value
 );
-let latestReportRequest = 0;
 let latestCashflowRequest = 0;
 
 watch([selectedPortfolio, valuationDate], invalidateResults);
@@ -49,36 +49,9 @@ async function runReport(): Promise<void> {
 		return;
 	}
 
-	const requestId = ++latestReportRequest;
 	++latestCashflowRequest;
-	hasRun.value = true;
-	loading.value = true;
-	error.value = null;
-	report.value = null;
 	resetCopyState();
-
-	try {
-		const response = await api.fetchPortfolioPerformance({
-			portfolio: selectedPortfolio.value,
-			valuationDate: valuationDate.value,
-		});
-		if (requestId === latestReportRequest) {
-			report.value = response.report;
-		}
-	} catch (caughtError) {
-		if (requestId !== latestReportRequest) {
-			return;
-		}
-		if (caughtError instanceof InvestorApiError && caughtError.status === 401) {
-			redirectToLogin();
-			return;
-		}
-		error.value = "Portfolio performance could not be loaded. Please retry.";
-	} finally {
-		if (requestId === latestReportRequest) {
-			loading.value = false;
-		}
-	}
+	await load();
 }
 
 async function copyCashflows(selection: PerformanceCashflowSelection): Promise<void> {
@@ -135,12 +108,8 @@ async function copyCashflows(selection: PerformanceCashflowSelection): Promise<v
 }
 
 function invalidateResults(): void {
-	++latestReportRequest;
+	invalidate();
 	++latestCashflowRequest;
-	report.value = null;
-	loading.value = false;
-	hasRun.value = false;
-	error.value = null;
 	resetCopyState();
 }
 
