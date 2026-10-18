@@ -22,7 +22,7 @@ class BondExchangeRate(Document):
         self._set_source_projection()
         self._sync_rate_values()
 
-    def validate(self) -> None:
+    def validate(self) -> None:  # noqa: C901 -- one validation gate for the rate, statement date and pair uniqueness
         """Require positive rates, a matching statement date and one row per currency pair and date."""
         if not self.rate_date:
             frappe.throw(_("Rate Date is required"))

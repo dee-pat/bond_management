@@ -128,7 +128,7 @@ def cleanup_file_shares(doc, method=None):
         frappe.enqueue(cleanup_incompatible_file_shares, file=doc.name, enqueue_after_commit=True)
 
 
-def cleanup_incompatible_file_shares(user=None, doctype=None, name=None, file=None, *, wait=True):
+def cleanup_incompatible_file_shares(user=None, doctype=None, name=None, file=None, *, wait=True):  # noqa: C901 -- File, DocShare, User locking order must stay in one transaction
     """Remove File shares that portfolio scope no longer allows.
 
     A stale share would make the recipient's File list fail closed. Like
@@ -152,6 +152,7 @@ def cleanup_incompatible_file_shares(user=None, doctype=None, name=None, file=No
         filters["share_name"] = file
 
     if not user and not doctype:
+        # Share-maintenance internal: lock every recipient, including shares the caller cannot read.
         _lock_users(
             frappe.qb.get_query("DocShare", fields=["user"], filters=filters, ignore_permissions=True).run(
                 pluck=True
@@ -174,6 +175,7 @@ def cleanup_incompatible_file_shares(user=None, doctype=None, name=None, file=No
         if file is _DEFERRED_SHARE_TARGET or not _scoped_attachment(file):
             continue
         if _inaccessible_file_share(file, target, share):
+            # Share-maintenance internal: remove the stale share whatever the caller can read.
             deleted = frappe.delete_doc(
                 "DocShare", share.name, ignore_permissions=True, flags={"ignore_share_permission": True}
             )
@@ -227,7 +229,7 @@ def _defer_file_share_cleanup(user, doctype, name, file):
     )
 
 
-def cleanup_incompatible_shares(user=None, doctype=None, name=None, names=None):
+def cleanup_incompatible_shares(user=None, doctype=None, name=None, names=None):  # noqa: C901 -- target, user, DocShare locking order must stay in one transaction
     """Administrative invariant repair; the caller owns the request transaction.
 
     The service reads shares and assignment data without investor permissions
@@ -249,6 +251,7 @@ def cleanup_incompatible_shares(user=None, doctype=None, name=None, names=None):
     if user:
         _lock_users([user])
     else:
+        # Share-maintenance internal: lock every recipient, including shares the caller cannot read.
         recipients = frappe.qb.get_query(
             "DocShare", fields=["user"], filters=filters, ignore_permissions=True
         ).run(pluck=True)
@@ -279,9 +282,11 @@ def cleanup_incompatible_shares(user=None, doctype=None, name=None, names=None):
             continue
         if target is None:
             # DocShare.on_trash comments on its target; orphan rows have none.
+            # Share-maintenance internal: remove the orphan share whatever the caller can read.
             frappe.delete_doc("DocShare", share.name, ignore_permissions=True, ignore_on_trash=True)
             continue
         if _inaccessible_share(target, share):
+            # Share-maintenance internal: remove the stale share whatever the caller can read.
             frappe.delete_doc(
                 "DocShare", share.name, ignore_permissions=True, flags={"ignore_share_permission": True}
             )

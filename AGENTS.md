@@ -40,8 +40,7 @@ This file covers what the code cannot tell you. Nested `AGENTS.md` files in
   `bond_management/bond_management/utils/`: accrual, coupon schedules, XIRR and
   performance math; PDF parsing (`statement_pdf.py`, `transaction_pdf.py`)
   behind `private_attachment.py`; statement-derived writes.
-- A new function over ruff complexity 15 (C901) needs a split or a
-  `# noqa: C901 -- <reason>` that the reviewer accepts.
+- This app uses ruff max-complexity 12, stricter than the shared rule's 15.
 - Tests sit beside their code (`utils/test_*.py`, `api/test_*.py`,
   `doctype/*/test_*.py`). Factories: `tests/factories.py`, `tests/pdf_factory.py`.
   Playwright seed: `tests/investor_ui_seed.py`. Rule-to-test index:

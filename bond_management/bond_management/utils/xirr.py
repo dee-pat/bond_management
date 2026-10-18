@@ -238,7 +238,7 @@ def create_future_cash_flows(isin, date, market_price, quantity=1, bond_doc=None
     return sorted(future_cash_flows, key=lambda x: x["date"])
 
 
-def create_past_cash_flows(isin, date, market_price, bond_doc, transactions):
+def create_past_cash_flows(isin, date, market_price, bond_doc, transactions):  # noqa: C901 -- one pass over the coupon and principal schedules builds the XIRR cash-flow list
     """Build past cash flows from a preloaded bond and its portfolio ledger rows."""
     market_price = to_decimal(market_price)
     past_cash_flows = []
