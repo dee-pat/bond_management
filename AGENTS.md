@@ -40,8 +40,7 @@ This file covers what the code cannot tell you. Nested `AGENTS.md` files in
   `bond_management/bond_management/utils/`: accrual, coupon schedules, XIRR and
   performance math; PDF parsing (`statement_pdf.py`, `transaction_pdf.py`)
   behind `private_attachment.py`; statement-derived writes.
-- A new function over ruff complexity 15 (C901) needs a split or a
-  `# noqa: C901 -- <reason>` that the reviewer accepts.
+- This app uses ruff max-complexity 12, stricter than the shared rule's 15.
 - Tests sit beside their code (`utils/test_*.py`, `api/test_*.py`,
   `doctype/*/test_*.py`). Factories: `tests/factories.py`, `tests/pdf_factory.py`.
   Playwright seed: `tests/investor_ui_seed.py`. Rule-to-test index:
@@ -140,7 +139,7 @@ This file covers what the code cannot tell you. Nested `AGENTS.md` files in
 - Attachment parsers cover current, supported legacy, malformed, conflicting,
   encrypted, wrong-password and non-PDF cases.
 
-<!-- BEGIN synced-rules: dee-pat/frappe-agent-kit/rules/frappe.md@793c1d5fef6623033eafdb1238e4f74d74621923 -->
+<!-- BEGIN synced-rules: dee-pat/frappe-agent-kit/rules/frappe.md@5b1f075673ef4806989138c0aadecf6739e5db13 -->
 ## Shared Frappe rules
 
 Frappe v16 rules shared across apps; the app's own rules win on conflict. Use

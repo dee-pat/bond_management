@@ -222,7 +222,7 @@ class BondTransaction(Document):
         )
 
     @frappe.whitelist(methods=["POST"])
-    def create_selected_pdf_transactions(self, transaction_selections: str | list | None) -> list[str]:
+    def create_selected_pdf_transactions(self, transaction_selections: str | list | None) -> list[str]:  # noqa: C901 -- whitelisted input checks, permission checks and atomic creation share one request
         """Atomically create one document per selected row from a multi-transaction PDF."""
         frappe.has_permission("Bond Transaction", "create", throw=True)
         if self.name and frappe.db.exists("Bond Transaction", self.name):

@@ -133,6 +133,7 @@ def _get_or_create_exchange_rate(statement, parsed_rate):
         except frappe.UniqueValidationError:
             # A concurrent PDF may win the global insert. Re-read its locked
             # canonical row so equal rates can still share provenance.
+            # Derived statement write behind BondStatement's permission check.
             existing_name = frappe.qb.get_query(
                 "Bond Exchange Rate",
                 fields=["name"],
@@ -228,6 +229,7 @@ def _recompute_canonical_rate(exchange_rate_name):
     exchange_rate.source = "Statement PDF"
     # This link is a stable display projection only; source rows own cleanup.
     exchange_rate.statement = sources[0].statement
+    # Derived statement write behind BondStatement's permission check.
     exchange_rate.save(ignore_permissions=True)
 
 
