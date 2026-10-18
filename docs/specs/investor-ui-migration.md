@@ -211,6 +211,16 @@ same normal Frappe permissions.
 
 ### Reports
 
+- Portfolio Performance, Bond Yield Comparison and Interest Difference share
+  `useReportRequest(fetcher, errorMessage)` in `frontend/src/lib/report.ts`.
+  Each instance starts idle; `load()` clears old data/errors and accepts only
+  the latest response. Empty reports succeed, current 401 errors redirect to
+  login, and other failures show the page's generic message. Stale success,
+  error and completion cannot change state or redirect. `invalidate()` restores
+  idle state and makes pending requests stale without cancelling them.
+  Pages retain filter watches, validation/`nextTick()` timing, yield default-date
+  loading and independent clipboard tokens. Existing API shapes, permissions,
+  financial values and clipboard formats remain unchanged.
 - Preserve the existing report filters, columns, currencies, percentages, dates and chart meaning.
 - Bond Yield Comparison defaults From Date to the oldest permission-readable persisted yield date and To Date to the current site date. Its chart uses persisted market dates for horizontal positions and shows one x-axis label per year. Connected segments render as lines without point markers; an isolated value uses a visible, keyboard-focusable marker so single-date results and values around gaps remain readable without connecting missing data.
 - The chart contract uses `gap_policy: "preserve"`: the x-axis keeps the union of persisted market dates returned by the report. If a bond has no market-price row or has a null Future XIRR at a returned date, that series has no point there; the gap is not treated as zero and adjacent points are not interpolated or connected. A date absent from every returned row is not added to the x-axis.
