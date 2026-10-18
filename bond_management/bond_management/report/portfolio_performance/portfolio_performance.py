@@ -1,13 +1,17 @@
 # Copyright (c) 2026, Deepak Patel and contributors
 # For license information, please see license.txt
 
+import datetime
 from collections import defaultdict
+from collections.abc import Iterable, Mapping
 from decimal import Decimal
+from typing import Any
 
 import frappe
 from frappe import _
 from frappe.desk.query_report import get_report_doc
 from frappe.utils import add_years, escape_html, getdate
+from frappe.utils.data import DateTimeLikeObject
 
 from bond_management.bond_management.utils.accrual import (
     calculate_principal_factor_from_bond,
@@ -19,7 +23,7 @@ from bond_management.bond_management.utils.exchange_rate import (
     convert_cashflows,
     get_rate_for_date,
 )
-from bond_management.bond_management.utils.financial import quantize_money, to_decimal
+from bond_management.bond_management.utils.financial import DecimalInput, quantize_money, to_decimal
 from bond_management.bond_management.utils.investor_access import require_readable_portfolio
 from bond_management.bond_management.utils.performance import load_portfolio_performance_context
 from bond_management.bond_management.utils.portfolio import get_ledger_position_from_transactions
@@ -41,8 +45,11 @@ REPORTING_ONLY_FIELDS = {"market_value_usd", "xirr_usd", "expected_coupons_next_
 # ---------- ENTRY POINT ----------
 
 
-def execute(filters: dict | None = None):
-    """Return native-currency and USD performance values for one portfolio."""
+def execute(filters: dict | None = None) -> tuple[list[dict], list[dict]]:
+    """Return native-currency and USD performance values for one readable portfolio.
+
+    Money is quantized to four places; XIRR columns are percents.
+    """
     if filters is None:
         filters = {}
     if not isinstance(filters, dict):
@@ -145,22 +152,28 @@ def get_xirr_cashflows(
     ]
 
 
-def validate_report_inputs(portfolio, valuation_date):
+def validate_report_inputs(portfolio: object, valuation_date: object) -> tuple[str, datetime.date]:
+    """Require a readable portfolio and a valuation date string, which is returned as a date."""
     portfolio = required_string(portfolio, "Portfolio")
     valuation_date = required_string(valuation_date, "Valuation Date")
     require_readable_portfolio(portfolio)
     return portfolio, getdate(valuation_date)
 
 
-def _cashflow_rate(amount, quantity):
+def _cashflow_rate(amount: DecimalInput, quantity: DecimalInput) -> float | None:
     quantity = to_decimal(quantity)
     if not quantity:
         return None
     return round_cashflow_amount(to_decimal(amount) / quantity)
 
 
-def get_terminal_market_price(isin, valuation_date, quantity, market_price):
-    """Require a valid quote only when a position still has market exposure."""
+def get_terminal_market_price(
+    isin: str, valuation_date: datetime.date, quantity: Decimal, market_price: DecimalInput
+) -> Decimal:
+    """Require a valid quote only when a position still has market exposure.
+
+    Returns the price per 100 of original face value, or zero for a closed position without a quote.
+    """
     if quantity and market_price is None:
         frappe.throw(
             _("No market price found for {0} on or before {1}").format(
@@ -177,8 +190,13 @@ def get_terminal_market_price(isin, valuation_date, quantity, market_price):
     return to_decimal(market_price) if market_price is not None else to_decimal(0)
 
 
-def calculate_future_xirr_from_cashflows(isin, valuation_date, cashflows, historical_guess=None):
-    """Calculate future XIRR with the same bounded historical guess as the utility."""
+def calculate_future_xirr_from_cashflows(
+    isin: str,
+    valuation_date: DateTimeLikeObject,
+    cashflows: Iterable[Mapping[str, Any]],
+    historical_guess: float | None = None,
+) -> float | None:
+    """Calculate future XIRR, as a decimal rate, with the same bounded historical guess as the utility."""
     guess = historical_guess if historical_guess is not None else get_last_xirr_guess(isin, valuation_date)
     return calculate_xirr(consolidate_cashflows(cashflows), bounded_xirr_guess(guess))
 
@@ -189,7 +207,7 @@ def calculate_future_xirr_from_cashflows(isin, valuation_date, cashflows, histor
 def get_columns(include_reporting_currency_columns: bool = True) -> list[dict]:
     """Return native columns and reporting columns when they add information."""
 
-    def money(label, fieldname, width=145, options="currency", **extra):
+    def money(label: str, fieldname: str, width: int = 145, options: str = "currency", **extra: Any) -> dict:
         return {
             "label": label,
             "fieldname": fieldname,
@@ -199,7 +217,7 @@ def get_columns(include_reporting_currency_columns: bool = True) -> list[dict]:
             **extra,
         }
 
-    def percent(label, fieldname, width):
+    def percent(label: str, fieldname: str, width: int) -> dict:
         return {
             "label": label,
             "fieldname": fieldname,
@@ -255,13 +273,15 @@ def get_columns(include_reporting_currency_columns: bool = True) -> list[dict]:
     return [column for column in columns if column["fieldname"] not in REPORTING_ONLY_FIELDS]
 
 
-def has_non_reporting_currency(data) -> bool:
+def has_non_reporting_currency(data: Iterable[Mapping[str, Any]]) -> bool:
     """Return whether the report contains a bond outside the reporting currency."""
     return any(row.get("currency") and row.get("currency") != REPORTING_CURRENCY for row in data)
 
 
-def expected_coupon_value(cashflows, valuation_date):
-    """Return coupons after valuation through the inclusive one-year cutoff."""
+def expected_coupon_value(
+    cashflows: Iterable[Mapping[str, Any]], valuation_date: DateTimeLikeObject
+) -> Decimal:
+    """Return coupons after valuation through the inclusive one-year cutoff, quantized to money precision."""
     valuation_date = getdate(valuation_date)
     cutoff_date = getdate(add_years(valuation_date, 1))
     return quantize_money(
@@ -281,7 +301,12 @@ def expected_coupon_value(cashflows, valuation_date):
 # ---------- CORE DATA ----------
 
 
-def get_data(portfolio, valuation_date, context=None):
+def get_data(
+    portfolio: str, valuation_date: DateTimeLikeObject, context: dict[str, Any] | None = None
+) -> tuple[
+    list[dict], list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]
+]:
+    """Return report rows and the combined native past, native future, USD past and USD future cash flows."""
     rows = []
     valuation_date = getdate(valuation_date)
     context = context or load_portfolio_performance_context(portfolio, valuation_date)
@@ -386,7 +411,14 @@ def get_data(portfolio, valuation_date, context=None):
     )
 
 
-def _bond_cashflows(portfolio, isin, context, valuation_date, *, xirr_type=None):
+def _bond_cashflows(
+    portfolio: str,
+    isin: str,
+    context: dict[str, Any],
+    valuation_date: datetime.date,
+    *,
+    xirr_type: str | None = None,
+) -> tuple[Decimal, Decimal, list[dict[str, Any]], list[dict[str, Any]]]:
     """Use the same position and terminal quote for report and export flows."""
     bond = context["bonds"][isin]
     transactions = context["transactions"][isin]
@@ -422,7 +454,14 @@ def _bond_cashflows(portfolio, isin, context, valuation_date, *, xirr_type=None)
     return quantity, terminal_price, past, future
 
 
-def _reporting_cashflows(cashflows, bond, context, valuation_date, *, xirr_type):
+def _reporting_cashflows(
+    cashflows: Iterable[Mapping[str, Any]],
+    bond: frappe._dict,
+    context: dict[str, Any],
+    valuation_date: datetime.date,
+    *,
+    xirr_type: str,
+) -> list[dict[str, Any]]:
     # Past flows use their own historical dates; future flows use today's valuation.
     return convert_cashflows(
         cashflows,
@@ -435,11 +474,17 @@ def _reporting_cashflows(cashflows, bond, context, valuation_date, *, xirr_type)
 # ---------- TOTAL ROW ----------
 
 
-def make_total_row(data, combined_cashflow, combined_future_cashflow, combined_reporting_cashflow):
+def make_total_row(
+    data: list[dict],
+    combined_cashflow: list[dict[str, Any]],
+    combined_future_cashflow: list[dict[str, Any]],
+    combined_reporting_cashflow: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Return the TOTAL row; native totals and XIRRs are ``None`` for a mixed-currency portfolio."""
     currencies = {row["currency"] for row in data if row.get("currency")}
     single_native_currency = len(currencies) <= 1
 
-    def sum_field(fieldname):
+    def sum_field(fieldname: str) -> Decimal:
         return quantize_money(sum((to_decimal(row.get(fieldname)) for row in data), Decimal(0)))
 
     native_values = {
@@ -478,5 +523,5 @@ def make_total_row(data, combined_cashflow, combined_future_cashflow, combined_r
     }
 
 
-def _percent_value(value):
+def _percent_value(value: float | None) -> float | None:
     return value * 100 if value is not None else None
