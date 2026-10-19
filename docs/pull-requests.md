@@ -1,4 +1,4 @@
-<!-- BEGIN synced-rules: dee-pat/frappe-agent-kit/templates/pull-requests.md@144a99431ed1342f2a2f33eb7a1163bfd76444a2 -->
+<!-- BEGIN synced-rules: dee-pat/frappe-agent-kit/templates/pull-requests.md@456e4b2cc57b840d9e6c9ffe3a6d68e8d7551c18 -->
 # Shared pull request process
 
 Codex and Claude Code follow the same process and PR body format. The app's
