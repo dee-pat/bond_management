@@ -123,39 +123,14 @@ Use deletion tests before splitting modules. Candidate seams:
 Each extracted public module gets a small typed interface and focused tests.
 Do not duplicate parser or permission logic across adapters.
 
-Current slice (2026-10-18): simplify transaction PDF selection in place by
-extracting normalization from atomic creation. Preserve string/list inputs,
-messages, blank handling, first-reference order and last-portfolio wins; leave
-permissions, attachment parsing, locks, creation order and rollback unchanged.
-No schema, dependency or API change; the domain model was reviewed. Acceptance:
-characterization and existing transaction tests pass, full `pre-push-ui` passes,
-and runtime/total line deltas are reported. Verified locally: the expanded
-32-test transaction module passes with both original and refactored normalization.
-The initial characterization corrected its dict/int error expectations against
-Frappe's existing type-validation wrapper; runtime behavior was not changed.
-`BASE_URL=http://localhost:8001 apps/bond_management/scripts/verify.sh pre-push-ui`
-passed (exit 0): lint/Semgrep, 424 server tests, frontend lint/typecheck, 80 unit
-tests, build and 61 Playwright tests. Scoped pre-commit, doc links and diff checks
-also passed. No fresh-install/opt-in run applies (no schema, hooks or permission
-changes); remote CI evidence is recorded on the PR for the published revision.
+Done (behaviour-preserving; evidence is on each PR):
 
-Report chart cleanup (2026-10-18): share non-null point projection within Bond
-Yield Comparison and reduce the hover fallback to its single-point case.
-Preserve gap bridging, singleton rendering, interpolation, axes, selection and
-clipboard behavior; no API, permission, schema or dependency change. The domain
-model was reviewed and needs no update. Acceptance: compare original/refactored
-SVG and hover outputs, preserve browser coverage, pass `pre-push-ui`, and report
-runtime and total line deltas. Verified: 209 SVG and 66,880 hover outputs match
-the original; `pre-push-ui` exited 0 (lint, 424 server, 80 frontend unit and 61
-browser tests, typecheck and build). Scoped lint, doc links and diff checks pass.
-Fresh-install/opt-in checks do not apply; remote CI evidence for the published
-revision is recorded on [PR #92](https://github.com/dee-pat/bond_management/pull/92).
-
-Synthetic PDF fixture cleanup (2026-10-19): both builders share page/font setup,
-stream installation, encryption and serialization. Public signatures and 39
-generated PDFs match the originals byte for byte; all existing tests are intact.
-`pre-push` passed (exit 0): lint/Semgrep and 424 server tests. Domain model
-reviewed; runtime unchanged. Doc/diff checks passed; line deltas in the handoff.
+- Transaction PDF selection normalization extracted from atomic creation:
+  [#91](https://github.com/dee-pat/bond_management/pull/91).
+- Bond Yield Comparison chart point projection and hover fallback:
+  [#92](https://github.com/dee-pat/bond_management/pull/92).
+- Synthetic PDF builders share page, stream, encryption and serialization:
+  [#95](https://github.com/dee-pat/bond_management/pull/95).
 
 ## Test plan
 
