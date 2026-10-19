@@ -1,5 +1,7 @@
 import { expect, test } from "@playwright/test";
 
+import { expectDetailNavigation } from "./helpers/controls";
+
 const BOND_ISIN = "UI-TEST-BOND-001";
 
 test("browses the shared bond catalog and read-only schedules", async ({
@@ -51,6 +53,7 @@ test("browses the shared bond catalog and read-only schedules", async ({
 
   await expect(page).toHaveURL(`/bond-investor/bonds/${BOND_ISIN}`);
   await expect(page.getByRole("heading", { name: BOND_ISIN })).toBeVisible();
+  await expectDetailNavigation(page, "Bond Master", "/bonds", "Bond Master");
   const detail = page.getByTestId("bond-detail");
   await expect(detail).toContainText("Investor UI Test Bond");
   await expect(detail).toContainText("Kenya Treasury Bond");
@@ -69,4 +72,5 @@ test("browses the shared bond catalog and read-only schedules", async ({
   await page.reload();
   await expect(page).toHaveURL(`/bond-investor/bonds/${BOND_ISIN}`);
   await expect(page.getByRole("heading", { name: BOND_ISIN })).toBeVisible();
+  await expectDetailNavigation(page, "Bond Master", "/bonds", "Bond Master");
 });

@@ -14,3 +14,23 @@ export async function selectFrappeOption(
   await expect(optionLocator).toBeVisible();
   await optionLocator.click();
 }
+
+export async function expectDetailNavigation(
+  page: Page,
+  section: string,
+  path: string,
+  title: string
+): Promise<void> {
+  const breadcrumbs = page.getByRole("navigation", { name: "Breadcrumb" });
+  const parent = breadcrumbs.getByRole("link", { name: section, exact: true });
+  await expect(parent).toBeVisible();
+  await expect(parent).toHaveAttribute("href", `/bond-investor${path}`);
+  await expect(
+    breadcrumbs.getByRole("heading", { name: title, exact: true })
+  ).toBeVisible();
+  await expect(
+    page
+      .getByRole("navigation", { name: "Investor navigation" })
+      .getByRole("link", { name: section, exact: true })
+  ).toHaveAttribute("aria-current", "page");
+}

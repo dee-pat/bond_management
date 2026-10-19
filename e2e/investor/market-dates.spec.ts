@@ -1,5 +1,7 @@
 import { expect, test } from "@playwright/test";
 
+import { expectDetailNavigation } from "./helpers/controls";
+
 const BOND_ISIN = "UI-TEST-BOND-001";
 const MARKET_DATE = "02 Jan 2025";
 
@@ -30,6 +32,12 @@ test("browses market history, persisted prices, and yield curve", async ({
 
   await expect(page).toHaveURL(/\/bond-investor\/market-dates\/BMD-\d+$/);
   await expect(page.getByRole("heading", { name: MARKET_DATE })).toBeVisible();
+  await expectDetailNavigation(
+    page,
+    "Bond Market Dates",
+    "/market-dates",
+    "Bond Market Date"
+  );
   const prices = page.getByTestId("market-prices");
   await expect(prices.getByRole("columnheader")).toHaveCount(7);
   await expect(
@@ -69,4 +77,10 @@ test("browses market history, persisted prices, and yield curve", async ({
   await page.reload();
   await expect(page).toHaveURL(/\/bond-investor\/market-dates\/BMD-\d+$/);
   await expect(page.getByRole("heading", { name: MARKET_DATE })).toBeVisible();
+  await expectDetailNavigation(
+    page,
+    "Bond Market Dates",
+    "/market-dates",
+    "Bond Market Date"
+  );
 });
