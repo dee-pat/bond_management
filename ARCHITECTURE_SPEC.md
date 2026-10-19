@@ -151,6 +151,12 @@ browser tests, typecheck and build). Scoped lint, doc links and diff checks pass
 Fresh-install/opt-in checks do not apply; remote CI evidence for the published
 revision is recorded on [PR #92](https://github.com/dee-pat/bond_management/pull/92).
 
+Synthetic PDF fixture cleanup (2026-10-19): both builders share page/font setup,
+stream installation, encryption and serialization. Public signatures and 39
+generated PDFs match the originals byte for byte; all existing tests are intact.
+`pre-push` passed (exit 0): lint/Semgrep and 424 server tests. Domain model
+reviewed; runtime unchanged. Doc/diff checks passed; line deltas in the handoff.
+
 ## Test plan
 
 ### Unit and integration
