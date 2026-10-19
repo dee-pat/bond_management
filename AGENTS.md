@@ -146,7 +146,7 @@ Read the row for your task; the rules below always apply. Code spans are skills.
 - Attachment parsers cover current, supported legacy, malformed, conflicting,
   encrypted, wrong-password and non-PDF cases.
 
-<!-- BEGIN synced-rules: dee-pat/frappe-agent-kit/rules/frappe.md@cdd586c8de2461d3b6f0660021de52164ddddf16 -->
+<!-- BEGIN synced-rules: dee-pat/frappe-agent-kit/rules/frappe.md@144a99431ed1342f2a2f33eb7a1163bfd76444a2 -->
 ## Shared Frappe rules
 
 Frappe v16 rules shared across apps; the app's own rules win on conflict. Use
@@ -196,6 +196,8 @@ pinned upstream skills, some of which read records with `get_all`/`get_list`.
 - Specs, plans and progress notes state intent, invariants and current status,
   and link the PR for finished work. Test results, gate output and other run
   evidence go in the PR and CI, never in those docs.
+- When preparing or updating a PR, read `docs/pull-requests.md` when present
+  and use the repository PR template; app verification and review rules win.
 - Commits and pull requests carry no AI attribution: no `Co-Authored-By`
   trailer for an AI agent and no "Generated with ..." line.
 <!-- END synced-rules: dee-pat/frappe-agent-kit/rules/frappe.md -->
