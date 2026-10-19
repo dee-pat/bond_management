@@ -1,8 +1,8 @@
-<!-- BEGIN synced-rules: dee-pat/frappe-agent-kit/templates/pull_request_template.md@144a99431ed1342f2a2f33eb7a1163bfd76444a2 -->
+<!-- BEGIN synced-rules: dee-pat/frappe-agent-kit/templates/pull_request_template.md@456e4b2cc57b840d9e6c9ffe3a6d68e8d7551c18 -->
 ## Summary
 
 <!-- Explain the problem and resulting behavior. Add a small before/after
-example or diagram only when useful. See docs/pull-requests.md. -->
+example or diagram only when useful. Read the shared process linked from AGENTS.md. -->
 
 ## Verification
 

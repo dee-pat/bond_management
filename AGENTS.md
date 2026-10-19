@@ -146,7 +146,7 @@ Read the row for your task; the rules below always apply. Code spans are skills.
 - Attachment parsers cover current, supported legacy, malformed, conflicting,
   encrypted, wrong-password and non-PDF cases.
 
-<!-- BEGIN synced-rules: dee-pat/frappe-agent-kit/rules/frappe.md@144a99431ed1342f2a2f33eb7a1163bfd76444a2 -->
+<!-- BEGIN synced-rules: dee-pat/frappe-agent-kit/rules/frappe.md@456e4b2cc57b840d9e6c9ffe3a6d68e8d7551c18 -->
 ## Shared Frappe rules
 
 Frappe v16 rules shared across apps; the app's own rules win on conflict. Use
