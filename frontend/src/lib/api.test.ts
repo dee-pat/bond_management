@@ -62,34 +62,63 @@ describe("InvestorApiError", () => {
 });
 
 describe("investor requests", () => {
-	it("returns the response data from a GET to the investor method", async () => {
-		const fetchMock = stubFetch(200, { data: { name: "BOND-1" } });
-
-		await expect(useInvestorApi().fetchBond("BOND-1")).resolves.toEqual({ name: "BOND-1" });
+	const list = {
+		start: 0,
+		pageLength: 20,
+		sortBy: "name",
+		sortOrder: "asc" as const,
+		filterField: "currency",
+		filterValue: "USD & KES",
+	};
+	const listQuery =
+		"start=0&page_length=20&sort_by=name&sort_order=asc&filter_field=currency&filter_value=USD+%26+KES";
+	const name = "ROW /&1";
+	const nameQuery = "?name=ROW+%2F%261";
+	const dates = { fromDate: "2026-01-01", toDate: "2026-06-30" };
+	const dateQuery = "from_date=2026-01-01&to_date=2026-06-30";
+	const portfolio = { portfolio: "PF-1", valuationDate: "2026-06-30" };
+	const portfolioQuery = "portfolio=PF-1&valuation_date=2026-06-30";
+	const endpoints: [string, (api: ReturnType<typeof useInvestorApi>) => Promise<unknown>, string][] = [
+		["get_bootstrap", (api) => api.fetchBootstrap(), ""],
+		["get_transactions", (api) => api.fetchTransactions({ ...list, portfolio: "PF-1" }),
+			`?portfolio=PF-1&${listQuery}`],
+		["get_transaction", (api) => api.fetchTransaction(name), nameQuery],
+		["get_statements", (api) => api.fetchStatements({
+			...list, portfolio: "PF-1", reconciliationStatus: "Matched",
+		}), `?portfolio=PF-1&reconciliation_status=Matched&${listQuery}`],
+		["get_statement", (api) => api.fetchStatement(name), nameQuery],
+		["get_bonds", (api) => api.fetchBonds(list), `?${listQuery}`],
+		["get_bond", (api) => api.fetchBond(name), nameQuery],
+		["get_market_dates", (api) => api.fetchMarketDates(list), `?${listQuery}`],
+		["get_market_date", (api) => api.fetchMarketDate(name), nameQuery],
+		["get_exchange_rates", (api) => api.fetchExchangeRates(list), `?${listQuery}`],
+		["get_exchange_rate", (api) => api.fetchExchangeRate(name), nameQuery],
+		["get_portfolio_performance", (api) => api.fetchPortfolioPerformance(portfolio),
+			`?${portfolioQuery}`],
+		["get_interest_difference_by_portfolio", (api) => api.fetchInterestDifference({
+			...dates, portfolio: "PF-1",
+		}), `?portfolio=PF-1&${dateQuery}`],
+		["get_portfolio_performance_cashflows", (api) => api.fetchPortfolioPerformanceCashflows({
+			...portfolio, isin: "BOND-1", xirrType: "future", cashflowCurrency: "reporting",
+		}), `?${portfolioQuery}&isin=BOND-1&xirr_type=future&cashflow_currency=reporting`],
+		["get_bond_yield_comparison", (api) => api.fetchBondYieldComparison(dates), `?${dateQuery}`],
+		["get_yield_comparison_defaults", (api) => api.fetchYieldComparisonDefaults(), ""],
+		["get_transactions", (api) => api.fetchTransactions({}), ""],
+		["get_statements", (api) => api.fetchStatements({}), ""],
+		["get_bonds", (api) => api.fetchBonds({}), ""],
+		["get_market_dates", (api) => api.fetchMarketDates({}), ""],
+		["get_exchange_rates", (api) => api.fetchExchangeRates({}), ""],
+		["get_interest_difference_by_portfolio", (api) => api.fetchInterestDifference({ portfolio: "PF-1" }),
+			"?portfolio=PF-1"],
+		["get_bond_yield_comparison", (api) => api.fetchBondYieldComparison({}), ""],
+	];
+	it.each(endpoints)("maps %s", async (method, call, query) => {
+		const data = { name: "returned data" };
+		const fetchMock = stubFetch(200, { data });
+		await expect(call(useInvestorApi())).resolves.toEqual(data);
 		expect(fetchMock).toHaveBeenCalledOnce();
-		expect(fetchMock.mock.calls[0][0]).toBe(`${METHOD_URL}.get_bond?name=BOND-1`);
-	});
-
-	it("sends list options as snake_case parameters and omits unset ones", async () => {
-		const fetchMock = stubFetch(200, { data: { data: [], pagination: {} } });
-
-		await useInvestorApi().fetchTransactions({
-			portfolio: "PF-1",
-			start: 0,
-			pageLength: 20,
-			sortBy: "trade_date",
-			sortOrder: "asc",
-		});
-		expect(fetchMock.mock.calls[0][0]).toBe(
-			`${METHOD_URL}.get_transactions?portfolio=PF-1&start=0&page_length=20&sort_by=trade_date&sort_order=asc`
-		);
-	});
-
-	it("sends no query string without parameters", async () => {
-		const fetchMock = stubFetch(200, { data: {} });
-
-		await useInvestorApi().fetchBootstrap();
-		expect(fetchMock.mock.calls[0][0]).toBe(`${METHOD_URL}.get_bootstrap`);
+		expect(fetchMock.mock.calls[0][0]).toBe(`${METHOD_URL}.${method}${query}`);
+		expect(fetchMock.mock.calls[0][1]?.method ?? "GET").toBe("GET");
 	});
 
 	it("sends the frappe-ui request headers", async () => {

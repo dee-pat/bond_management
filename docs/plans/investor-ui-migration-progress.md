@@ -1,6 +1,6 @@
 # Investor UI Migration Progress
 
-Last updated: 2026-10-18
+Last updated: 2026-10-19
 Specification: [investor-ui-migration.md](../specs/investor-ui-migration.md)
 Current phase: Phase 7 — Pilot
 Overall status: Phase 7 in progress; pilot acceptance pending
@@ -73,6 +73,19 @@ and timer/nextTick ordering are preserved. Runtime/data contracts are unchanged.
 Domain model reviewed; no update needed. Verified locally: `verify.sh lint`,
 frontend lint/typecheck and all 80 unit tests passed (exit 0), as did doc links
 and diff checks. Runtime and total line deltas are reported in the handoff.
+
+### Investor API request plumbing
+
+Verified locally (2026-10-19): replaced 16 stateless per-endpoint request objects
+with one typed request function. All public methods, response types, GET URLs,
+encoding, omitted parameters, headers and error/session handling are unchanged;
+each call owns its fetch. No server, dependency or permission changes; domain
+model reviewed, with no mapped flow changes. The 36-test API suite passes before
+and after refactoring, including 23 endpoint/omission cases. TypeScript confirms
+all 16 public signatures match. `pre-push-ui` exited 0: lint/Semgrep, 424 server
+tests, frontend lint/typecheck, 100 unit tests, build and 61 Playwright tests.
+Doc links and diff checks pass; fresh-install/opt-in checks do not apply.
+Runtime and total line deltas are reported in the handoff.
 
 ### Investor request isolation
 
