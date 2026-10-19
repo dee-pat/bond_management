@@ -54,41 +54,36 @@ export class InvestorApiError extends Error {
 	}
 }
 
-interface InvestorRequest<T> {
-	request: (parameters?: InvestorApiParameters) => Promise<T>;
-}
-
 interface InvestorResponseBody {
 	data?: unknown;
 	exc_type?: unknown;
 }
 
-function useInvestorRequest<T>(method: string): InvestorRequest<T> {
+async function requestInvestor<T>(
+	method: string,
+	parameters: InvestorApiParameters = {}
+): Promise<T> {
 	const url = `${INVESTOR_API_URL}.${method}`;
 
 	// Each request is its own fetch, so a failure can never return another
 	// request's data. frappe-ui's useCall is not used: it drops the HTTP status,
 	// and v1 `/api/method` errors carry only `exc_type`, so a 401, or any error
 	// over HTTP/2 (no status text), could not be told apart from a server error.
-	async function request(parameters: InvestorApiParameters = {}): Promise<T> {
-		let response: Response;
-		try {
-			response = await fetch(withQuery(url, parameters), { headers: requestHeaders() });
-		} catch {
-			throw new InvestorApiError(500);
-		}
-
-		const body = await readJson(response);
-		if (!response.ok) {
-			throw toInvestorApiError(response.status, body?.exc_type);
-		}
-		if (body?.data === undefined || body.data === null) {
-			throw new InvestorApiError(500);
-		}
-		return body.data as T;
+	let response: Response;
+	try {
+		response = await fetch(withQuery(url, parameters), { headers: requestHeaders() });
+	} catch {
+		throw new InvestorApiError(500);
 	}
 
-	return { request };
+	const body = await readJson(response);
+	if (!response.ok) {
+		throw toInvestorApiError(response.status, body?.exc_type);
+	}
+	if (body?.data === undefined || body.data === null) {
+		throw new InvestorApiError(500);
+	}
+	return body.data as T;
 }
 
 function withQuery(url: string, parameters: InvestorApiParameters): string {
@@ -141,61 +136,39 @@ function toInvestorApiError(status: number, excType: unknown): InvestorApiError 
 }
 
 export function useInvestorApi() {
-	const bootstrap = useInvestorRequest<InvestorBootstrap>("get_bootstrap");
-	const transactions = useInvestorRequest<TransactionPage>("get_transactions");
-	const transaction = useInvestorRequest<TransactionDetailResponse>("get_transaction");
-	const statements = useInvestorRequest<StatementPage>("get_statements");
-	const statement = useInvestorRequest<StatementDetailResponse>("get_statement");
-	const bonds = useInvestorRequest<BondPage>("get_bonds");
-	const bond = useInvestorRequest<BondDetailResponse>("get_bond");
-	const marketDates = useInvestorRequest<MarketDatePage>("get_market_dates");
-	const marketDate = useInvestorRequest<MarketDateDetailResponse>("get_market_date");
-	const exchangeRates = useInvestorRequest<ExchangeRatePage>("get_exchange_rates");
-	const exchangeRate = useInvestorRequest<ExchangeRateDetailResponse>("get_exchange_rate");
-	const portfolioPerformance = useInvestorRequest<PortfolioPerformanceResponse>(
-		"get_portfolio_performance"
-	);
-	const portfolioPerformanceCashflows = useInvestorRequest<PerformanceCashflowsResponse>(
-		"get_portfolio_performance_cashflows"
-	);
-	const interestDifference = useInvestorRequest<InterestDifferenceResponse>(
-		"get_interest_difference_by_portfolio"
-	);
-	const bondYieldComparison = useInvestorRequest<BondYieldComparisonResponse>(
-		"get_bond_yield_comparison"
-	);
-	const yieldComparisonDefaults = useInvestorRequest<YieldComparisonDefaultsResponse>(
-		"get_yield_comparison_defaults"
-	);
-
 	return {
-		fetchBootstrap: () => bootstrap.request(),
+		fetchBootstrap: () => requestInvestor<InvestorBootstrap>("get_bootstrap"),
 		fetchTransactions: (options: PortfolioListOptions) =>
-			transactions.request({
+			requestInvestor<TransactionPage>("get_transactions", {
 				portfolio: options.portfolio,
 				...listParams(options),
 			}),
-		fetchTransaction: (name: string) => transaction.request({ name }),
+		fetchTransaction: (name: string) =>
+			requestInvestor<TransactionDetailResponse>("get_transaction", { name }),
 		fetchStatements: (options: StatementListOptions) =>
-			statements.request({
+			requestInvestor<StatementPage>("get_statements", {
 				portfolio: options.portfolio,
 				reconciliation_status: options.reconciliationStatus,
 				...listParams(options),
 			}),
-		fetchStatement: (name: string) => statement.request({ name }),
-		fetchBonds: (options: ListOptions) => bonds.request(listParams(options)),
-		fetchBond: (name: string) => bond.request({ name }),
+		fetchStatement: (name: string) =>
+			requestInvestor<StatementDetailResponse>("get_statement", { name }),
+		fetchBonds: (options: ListOptions) =>
+			requestInvestor<BondPage>("get_bonds", listParams(options)),
+		fetchBond: (name: string) => requestInvestor<BondDetailResponse>("get_bond", { name }),
 		fetchMarketDates: (options: ListOptions) =>
-			marketDates.request(listParams(options)),
-		fetchMarketDate: (name: string) => marketDate.request({ name }),
+			requestInvestor<MarketDatePage>("get_market_dates", listParams(options)),
+		fetchMarketDate: (name: string) =>
+			requestInvestor<MarketDateDetailResponse>("get_market_date", { name }),
 		fetchExchangeRates: (options: ListOptions) =>
-			exchangeRates.request(listParams(options)),
-		fetchExchangeRate: (name: string) => exchangeRate.request({ name }),
+			requestInvestor<ExchangeRatePage>("get_exchange_rates", listParams(options)),
+		fetchExchangeRate: (name: string) =>
+			requestInvestor<ExchangeRateDetailResponse>("get_exchange_rate", { name }),
 		fetchPortfolioPerformance: (options: {
 			portfolio: string;
 			valuationDate: string;
 		}) =>
-			portfolioPerformance.request({
+			requestInvestor<PortfolioPerformanceResponse>("get_portfolio_performance", {
 				portfolio: options.portfolio,
 				valuation_date: options.valuationDate,
 			}),
@@ -204,7 +177,7 @@ export function useInvestorApi() {
 			fromDate?: string;
 			toDate?: string;
 		}) =>
-			interestDifference.request({
+			requestInvestor<InterestDifferenceResponse>("get_interest_difference_by_portfolio", {
 				portfolio: options.portfolio,
 				from_date: options.fromDate,
 				to_date: options.toDate,
@@ -216,7 +189,7 @@ export function useInvestorApi() {
 			xirrType: XirrType;
 			cashflowCurrency: CashflowCurrency;
 		}) =>
-			portfolioPerformanceCashflows.request({
+			requestInvestor<PerformanceCashflowsResponse>("get_portfolio_performance_cashflows", {
 				portfolio: options.portfolio,
 				valuation_date: options.valuationDate,
 				isin: options.isin,
@@ -224,11 +197,12 @@ export function useInvestorApi() {
 				cashflow_currency: options.cashflowCurrency,
 			}),
 		fetchBondYieldComparison: (options: { fromDate?: string; toDate?: string }) =>
-			bondYieldComparison.request({
+			requestInvestor<BondYieldComparisonResponse>("get_bond_yield_comparison", {
 				from_date: options.fromDate,
 				to_date: options.toDate,
 			}),
-		fetchYieldComparisonDefaults: () => yieldComparisonDefaults.request(),
+		fetchYieldComparisonDefaults: () =>
+			requestInvestor<YieldComparisonDefaultsResponse>("get_yield_comparison_defaults"),
 	};
 }
 
