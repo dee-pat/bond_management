@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-import { selectFrappeOption } from "./helpers/controls";
+import { expectDetailNavigation, selectFrappeOption } from "./helpers/controls";
 
 const PORTFOLIO_NAME = "UI Test Portfolio";
 const BOND_ISIN = "UI-TEST-BOND-001";
@@ -82,6 +82,12 @@ test("browses the assigned statement list and read-only detail", async ({
   await expect(
     page.getByRole("heading", { name: "31 Dec 2025" })
   ).toBeVisible();
+  await expectDetailNavigation(
+    page,
+    "Bond Statements",
+    "/statements",
+    "Bond Statement"
+  );
   const detail = page.getByTestId("statement-detail");
   await expect(detail).toContainText("Market Price Posting");
   await expect(detail).toContainText("Matched");
@@ -116,4 +122,10 @@ test("browses the assigned statement list and read-only detail", async ({
   await expect(
     page.getByRole("heading", { name: "31 Dec 2025" })
   ).toBeVisible();
+  await expectDetailNavigation(
+    page,
+    "Bond Statements",
+    "/statements",
+    "Bond Statement"
+  );
 });

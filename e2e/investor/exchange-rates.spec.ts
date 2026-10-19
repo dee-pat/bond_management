@@ -1,5 +1,7 @@
 import { expect, test } from "@playwright/test";
 
+import { expectDetailNavigation } from "./helpers/controls";
+
 const EXCHANGE_RATE_DATE = "03 Jan 2025";
 const FROM_CURRENCY = "GBP";
 
@@ -47,6 +49,12 @@ test("browses shared exchange rates and persisted reciprocal values", async ({
   await expect(
     page.getByRole("heading", { name: FROM_CURRENCY })
   ).toBeVisible();
+  await expectDetailNavigation(
+    page,
+    "Bond Exchange Rates",
+    "/exchange-rates",
+    "Bond Exchange Rate"
+  );
   const detail = page.getByTestId("exchange-rate-detail");
   await expect(detail).toContainText(EXCHANGE_RATE_DATE);
   await expect(detail).toContainText("USD");
@@ -63,4 +71,10 @@ test("browses shared exchange rates and persisted reciprocal values", async ({
   await expect(
     page.getByRole("heading", { name: FROM_CURRENCY })
   ).toBeVisible();
+  await expectDetailNavigation(
+    page,
+    "Bond Exchange Rates",
+    "/exchange-rates",
+    "Bond Exchange Rate"
+  );
 });

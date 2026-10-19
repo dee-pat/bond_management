@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, type Component } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from "vue";
 import {
 	Avatar,
 	Badge,
@@ -22,66 +22,8 @@ import { useRoute } from "vue-router";
 
 import { InvestorApiError, redirectToLogin, useInvestorApi } from "../lib/api";
 import { INVESTOR_NAVIGATION } from "../navigation";
+import { PAGE_BY_ROUTE } from "../page-registry";
 import type { InvestorBootstrap } from "../types";
-import BondDetail from "./BondDetail.vue";
-import BondList from "./BondList.vue";
-import ExchangeRateDetail from "./ExchangeRateDetail.vue";
-import ExchangeRateList from "./ExchangeRateList.vue";
-import InterestDifference from "./InterestDifference.vue";
-import MarketDateDetail from "./MarketDateDetail.vue";
-import MarketDateList from "./MarketDateList.vue";
-import PortfolioPerformance from "./PortfolioPerformance.vue";
-import StatementDetail from "./StatementDetail.vue";
-import StatementList from "./StatementList.vue";
-import TransactionDetail from "./TransactionDetail.vue";
-import TransactionList from "./TransactionList.vue";
-import YieldComparison from "./YieldComparison.vue";
-
-interface InvestorPage {
-	component: Component;
-	title?: string;
-	parent?: string;
-	needsBootstrap?: boolean;
-}
-
-const PAGE_BY_ROUTE: Partial<Record<string, InvestorPage>> = {
-	transactions: { component: TransactionList, needsBootstrap: true },
-	"transaction-detail": {
-		component: TransactionDetail,
-		title: "Bond Transaction",
-		parent: "transactions",
-	},
-	statements: { component: StatementList, needsBootstrap: true },
-	"statement-detail": {
-		component: StatementDetail,
-		title: "Bond Statement",
-		parent: "statements",
-	},
-	bonds: { component: BondList },
-	"bond-detail": {
-		component: BondDetail,
-		title: "Bond Master",
-		parent: "bonds",
-	},
-	"market-dates": { component: MarketDateList },
-	"market-date-detail": {
-		component: MarketDateDetail,
-		title: "Bond Market Date",
-		parent: "market-dates",
-	},
-	"exchange-rates": { component: ExchangeRateList },
-	"exchange-rate-detail": {
-		component: ExchangeRateDetail,
-		title: "Bond Exchange Rate",
-		parent: "exchange-rates",
-	},
-	performance: { component: PortfolioPerformance, needsBootstrap: true },
-	"interest-difference": {
-		component: InterestDifference,
-		needsBootstrap: true,
-	},
-	"yield-comparison": { component: YieldComparison },
-};
 
 const route = useRoute();
 const pageHeading = ref<HTMLHeadingElement | null>(null);

@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-import { selectFrappeOption } from "./helpers/controls";
+import { expectDetailNavigation, selectFrappeOption } from "./helpers/controls";
 
 const TRANSACTION_REFERENCE = "UI-TEST-TRANSACTION-001";
 const BOND_ISIN = "UI-TEST-BOND-001";
@@ -90,18 +90,15 @@ test("browses the assigned transaction list and read-only detail", async ({
   await expect(page).toHaveURL(
     new RegExp(`/bond-investor/transactions/${TRANSACTION_REFERENCE}$`)
   );
-  const detailBreadcrumbs = page.getByRole("navigation", {
-    name: "Breadcrumb",
-  });
-  await expect(
-    detailBreadcrumbs.getByText("Bond Transactions", { exact: true })
-  ).toBeVisible();
-  await expect(
-    detailBreadcrumbs.getByText("Bond Transaction", { exact: true })
-  ).toBeVisible();
   await expect(
     page.getByRole("heading", { name: TRANSACTION_REFERENCE })
   ).toBeVisible();
+  await expectDetailNavigation(
+    page,
+    "Bond Transactions",
+    "/transactions",
+    "Bond Transaction"
+  );
   const detail = page.getByTestId("transaction-detail");
   await expect(detail).toContainText("Settlement Amount");
   await expect(detail).toContainText(/USD.*1,051\.00/);
@@ -129,4 +126,10 @@ test("browses the assigned transaction list and read-only detail", async ({
   await expect(
     page.getByRole("heading", { name: TRANSACTION_REFERENCE })
   ).toBeVisible();
+  await expectDetailNavigation(
+    page,
+    "Bond Transactions",
+    "/transactions",
+    "Bond Transaction"
+  );
 });

@@ -87,6 +87,24 @@ tests, frontend lint/typecheck, 100 unit tests, build and 61 Playwright tests.
 Doc links and diff checks pass; fresh-install/opt-in checks do not apply.
 Runtime and total line deltas are reported in the handoff.
 
+### Shared investor page registry
+
+Consolidate the shell's page components, titles, parent sections and bootstrap
+flags with the five detail route paths in `frontend/src/page-registry.ts`.
+Keep eager imports, navigation order, route names/parameters, history base,
+home and not-found handling, breadcrumbs and bootstrap delivery unchanged.
+No API or permission changes; the domain model was reviewed and needs no update.
+Acceptance: all five existing detail browser flows check their parent link,
+leaf breadcrumb and active navigation before and after refresh; the complete
+`pre-push-ui` gate passes.
+Verified locally on 2026-10-19: the five detail flows passed against the existing
+build before refactoring (6 tests including setup); all 13 page definitions and
+15 ordered routes matched the baseline. `pre-push-ui` exited zero: lint, 424
+server tests, frontend lint/typecheck, 100 unit tests, build and 61 browser tests.
+Doc links and diff checks pass. Fresh-install and opt-in gates do not apply.
+Remote CI evidence is recorded in the pull request. Runtime is 8 net lines smaller;
+tests add 67 lines. Total, including this note, is 77 net lines larger.
+
 ### Investor request isolation
 
 A review on 2026-10-16 found that each investor endpoint shared one frappe-ui
