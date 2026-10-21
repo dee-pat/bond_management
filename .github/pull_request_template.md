@@ -1,4 +1,4 @@
-<!-- BEGIN synced-rules: dee-pat/frappe-agent-kit/templates/pull_request_template.md@456e4b2cc57b840d9e6c9ffe3a6d68e8d7551c18 -->
+<!-- BEGIN synced-rules: dee-pat/frappe-agent-kit/templates/pull_request_template.md@8ca864c970682324dceb01a6d8bb1713c9c260b7 -->
 ## Summary
 
 <!-- Explain the problem and resulting behavior. Add a small before/after
