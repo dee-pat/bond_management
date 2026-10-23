@@ -21,10 +21,10 @@ const emit = defineEmits<{
 }>();
 
 const PERFORMANCE_COLUMN_WIDTHS: Record<PerformanceFieldname, string> = {
-	next_coupon_date: "10rem",
-	next_coupon_amount: "12rem",
-	second_coupon_date: "10rem",
-	second_coupon_amount: "12rem",
+	next_coupon_date: "8rem",
+	next_coupon_amount: "9rem",
+	second_coupon_date: "8rem",
+	second_coupon_amount: "9rem",
 	isin: "12rem",
 	currency: "4.5rem",
 	principal_factor: "8rem",
