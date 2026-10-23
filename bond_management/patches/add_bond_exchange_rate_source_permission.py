@@ -10,7 +10,3 @@ from bond_management.patches.add_bond_investor_read_only_access import ensure_in
 def execute():
     ensure_investor_read_only_docperm(SOURCE_DOCTYPE)
     cleanup_incompatible_shares(doctype=SOURCE_DOCTYPE)
-
-
-def ensure_permission():
-    ensure_investor_read_only_docperm(SOURCE_DOCTYPE)

@@ -8,7 +8,8 @@ export default defineConfig({
   fullyParallel: false,
   forbidOnly: Boolean(process.env.CI),
   retries: process.env.CI ? 2 : 0,
-  workers: 1,
+  // Investor specs only read seeded data, so their files run in parallel.
+  workers: process.env.CI ? 2 : 4,
   reporter: process.env.CI ? [["github"], ["blob"]] : "html",
   timeout: 60_000,
   expect: {
@@ -58,6 +59,8 @@ export default defineConfig({
       },
       testMatch: /desk\/.*\.spec\.ts$/,
       dependencies: ["desk-setup"],
+      // Desk specs share one Administrator session and save a smoke statement.
+      workers: 1,
     },
   ],
 });

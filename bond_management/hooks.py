@@ -26,18 +26,12 @@ website_route_rules = [
 app_include_css = ["/assets/bond_management/css/attachment.css"]
 
 # Installation marks patches as completed before running this hook, so
-# permission bootstrap that must exist on a fresh site is also invoked here.
+# invariants that must exist on a fresh site are also invoked here. DocPerms
+# and report roles come from the DocType and report JSON instead.
 after_install = [
     "bond_management.patches.add_bond_query_indexes.ensure_bond_query_indexes",
-    "bond_management.patches.add_bond_investor_read_only_access.execute",
-    "bond_management.patches.add_bond_investor_report_permission.execute",
-    "bond_management.patches.add_bond_yield_comparison_report_permission.execute",
-    "bond_management.patches.add_bond_management_manager_access.execute",
-    "bond_management.patches.add_bond_management_report_permission.execute",
-    "bond_management.patches.add_bond_exchange_rate_permissions.execute",
     "bond_management.patches.add_bond_exchange_rate_provenance.execute",
     "bond_management.patches.enforce_investor_share_boundary.execute",
-    "bond_management.patches.add_bond_exchange_rate_source_permission.execute",
 ]
 
 # Frappe schema sync removes manual indexes when the DocField cannot declare
@@ -45,10 +39,6 @@ after_install = [
 # the registered patch and fresh-install hook perform duplicate validation.
 after_migrate = [
     "bond_management.patches.add_bond_query_indexes.reapply_bond_query_indexes",
-    "bond_management.patches.add_bond_management_manager_access.execute",
-    "bond_management.patches.add_bond_exchange_rate_permissions.execute",
-    "bond_management.patches.add_bond_yield_comparison_report_permission.execute",
-    "bond_management.patches.add_bond_exchange_rate_source_permission.ensure_permission",
 ]
 
 permission_query_conditions = {

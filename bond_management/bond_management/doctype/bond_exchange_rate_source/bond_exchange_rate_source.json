@@ -56,7 +56,7 @@
  ],
  "index_web_pages_for_search": 0,
  "links": [],
- "modified": "2026-09-15 00:00:00.000000",
+ "modified": "2026-10-23 00:00:00.000000",
  "modified_by": "Administrator",
  "module": "Bond Management",
  "name": "Bond Exchange Rate Source",
@@ -72,9 +72,9 @@
    "print": 1,
    "read": 1,
    "report": 1,
+   "role": "Bond Management Manager",
    "share": 1,
-   "write": 1,
-   "role": "Bond Management Manager"
+   "write": 1
   },
   {
    "create": 1,
@@ -85,9 +85,13 @@
    "print": 1,
    "read": 1,
    "report": 1,
+   "role": "System Manager",
    "share": 1,
-   "write": 1,
-   "role": "System Manager"
+   "write": 1
+  },
+  {
+   "read": 1,
+   "role": "Bond Investor Read Only"
   }
  ],
  "row_format": "Dynamic",

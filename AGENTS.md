@@ -139,7 +139,9 @@ Read the row for your task; the rules below always apply. Code spans are skills.
 
 - Patches live in `bond_management/patches/`, registered in `patches.txt`;
   install and migrate invariants are also wired into `after_install` and
-  `after_migrate` in `hooks.py`.
+  `after_migrate` in `hooks.py`. DocPerms and report roles are declared in
+  the DocType and report JSON, which install and migrate load; the registered
+  access patches must agree with them.
 - Tests are deterministic and rerunnable; outcomes never depend on factory
   name suffixes or wall-clock timing. Playwright owns visible SPA and Desk
   wiring.

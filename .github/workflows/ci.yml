@@ -94,7 +94,6 @@ jobs:
           bench setup requirements --dev
           bench new-site --db-root-password root --admin-password admin bond-management-test.localhost
           bench --site bond-management-test.localhost install-app bond_management
-          bench build
         env:
           CI: "Yes"
 
@@ -195,7 +194,8 @@ jobs:
           bench --site bond-management-test.localhost set-config allow_tests true
           bench --site bond-management-test.localhost set-config host_name "http://bond-management-test.localhost:8000"
           bench --site bond-management-test.localhost install-app bond_management
-          bench build
+          # verify.sh frontend builds bond_management itself.
+          bench build --app frappe
           apps/bond_management/scripts/verify.sh frontend
         env:
           CI: "Yes"
@@ -207,9 +207,11 @@ jobs:
           bench --site bond-management-test.localhost set-config bond_investor_spa_enabled 1
           bench --site bond-management-test.localhost execute bond_management.bond_management.tests.investor_ui_seed.seed_investor_ui_browser_test_data
 
+      # The runner image already has Chromium's system libraries; --with-deps
+      # would run apt on every job.
       - name: Install Playwright browser
         working-directory: ${{ env.BENCH_ROOT }}/apps/bond_management
-        run: yarn playwright install --with-deps chromium
+        run: yarn playwright install chromium
 
       - name: Start Web Server
         working-directory: ${{ env.BENCH_ROOT }}

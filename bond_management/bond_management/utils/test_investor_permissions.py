@@ -29,6 +29,46 @@ from bond_management.patches.add_bond_yield_comparison_report_permission import 
     execute as ensure_yield_report_permission,
 )
 
+ACCESS_PATCHES = tuple(
+    f"bond_management.patches.{name}.execute"
+    for name in (
+        "add_bond_investor_read_only_access",
+        "add_bond_investor_report_permission",
+        "add_bond_management_manager_access",
+        "add_bond_management_report_permission",
+        "add_bond_exchange_rate_permissions",
+        "add_bond_yield_comparison_report_permission",
+        "add_bond_exchange_rate_source_permission",
+    )
+)
+APP_DOCTYPES = (
+    "Bond Portfolio",
+    "Bond Transaction",
+    "Bond Statement",
+    "Bond Master",
+    "Bond Market Date",
+    "Bond Exchange Rate",
+    "Bond Exchange Rate Source",
+)
+APP_REPORTS = ("Portfolio Performance", "Interest Difference by Portfolio", "Bond Yield Comparison")
+DOCPERM_FIELDS = (
+    "read",
+    "write",
+    "create",
+    "delete",
+    "submit",
+    "cancel",
+    "amend",
+    "print",
+    "email",
+    "share",
+    "export",
+    "import",
+    "report",
+    "select",
+    "if_owner",
+)
+
 
 class TestInvestorPermissions(IntegrationTestCase):
     def setUp(self):
@@ -346,27 +386,26 @@ class TestInvestorPermissions(IntegrationTestCase):
                 bool(frappe.get_meta(permission.parent).allow_import),
             )
 
-    def test_manager_permissions_are_bootstrapped_on_fresh_install(self):
-        self.assertIn(
-            "bond_management.patches.add_bond_management_manager_access.execute",
-            app_hooks.after_install,
-        )
-        self.assertIn(
-            "bond_management.patches.add_bond_management_manager_access.execute",
-            app_hooks.after_migrate,
-        )
-        self.assertIn(
-            "bond_management.patches.add_bond_management_report_permission.execute",
-            app_hooks.after_install,
-        )
-        self.assertIn(
-            "bond_management.patches.add_bond_exchange_rate_permissions.execute",
-            app_hooks.after_install,
-        )
-        self.assertIn(
-            "bond_management.patches.add_bond_exchange_rate_permissions.execute",
-            app_hooks.after_migrate,
-        )
+    def test_access_patches_agree_with_doctype_and_report_json(self):
+        # Install and migrate load DocPerms and report roles from JSON, so the
+        # registered access patches must not add or change any of those rows.
+        for patch_path in ACCESS_PATCHES:
+            frappe.get_attr(patch_path)()
+
+        for doctype in APP_DOCTYPES:
+            declared = _json_docperms(_app_json("doctype", doctype)["permissions"])
+            stored = _json_docperms(
+                frappe.qb.get_query(
+                    "DocPerm",
+                    fields=["role", "permlevel", *DOCPERM_FIELDS],
+                    filters={"parent": doctype},
+                    ignore_permissions=True,
+                ).run(as_dict=True)
+            )
+            self.assertEqual(stored, declared, doctype)
+        for report in APP_REPORTS:
+            declared = {row["role"] for row in _app_json("report", report)["roles"]}
+            self.assertEqual({row.role for row in frappe.get_doc("Report", report).roles}, declared, report)
 
     def test_exchange_rate_permissions_include_system_manager(self):
         ensure_exchange_rate_permissions()
@@ -457,16 +496,7 @@ class TestInvestorPermissions(IntegrationTestCase):
         report = frappe.get_doc("Report", "Portfolio Performance")
         self.assertIn(investor_permissions.BOND_MANAGER_ROLE, {row.role for row in report.roles})
 
-    def test_yield_report_permission_is_bootstrapped_on_fresh_install(self):
-        self.assertIn(
-            "bond_management.patches.add_bond_yield_comparison_report_permission.execute",
-            app_hooks.after_install,
-        )
-        self.assertIn(
-            "bond_management.patches.add_bond_yield_comparison_report_permission.execute",
-            app_hooks.after_migrate,
-        )
-
+    def test_yield_report_permission_patch_is_idempotent(self):
         ensure_yield_report_permission()
         ensure_yield_report_permission()
         permission = frappe.qb.get_query(
@@ -498,3 +528,19 @@ class TestInvestorPermissions(IntegrationTestCase):
 
             self.assertEqual(frappe.local.response["home_page"], "/bond-investor")
             self.assertNotIn("redirect_to", frappe.local.response)
+
+
+def _app_json(folder: str, name: str) -> dict:
+    scrubbed = frappe.scrub(name)
+    return frappe.get_file_json(
+        frappe.get_module_path("Bond Management", folder, scrubbed, f"{scrubbed}.json")
+    )
+
+
+def _json_docperms(rows: list) -> dict[tuple[str, int], tuple[int, ...]]:
+    return {
+        (row["role"], int(row.get("permlevel") or 0)): tuple(
+            int(row.get(field) or 0) for field in DOCPERM_FIELDS
+        )
+        for row in rows
+    }

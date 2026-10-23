@@ -1101,16 +1101,12 @@ class TestInvestorShares(IntegrationTestCase):
 
     def test_fresh_install_bootstrap_runs_the_same_rerunnable_cleanup(self):
         path = "bond_management.patches.enforce_investor_share_boundary.execute"
-        source_path = "bond_management.patches.add_bond_exchange_rate_source_permission.execute"
         self.assertIn(path, hooks.after_install)
-        self.assertIn(source_path, hooks.after_install)
         share = self.legacy_share(self.other, self.investor.name)
         source = self.make_statement_source(make_statement(self.other, statement_date="2091-04-08"))
         source_share = self.legacy_share(source, self.investor.name)
         frappe.get_attr(path)()
         frappe.get_attr(path)()
-        frappe.get_attr(source_path)()
-        frappe.get_attr(source_path)()
         self.assertFalse(frappe.db.exists("DocShare", share.name))
         self.assertFalse(frappe.db.exists("DocShare", source_share.name))
 

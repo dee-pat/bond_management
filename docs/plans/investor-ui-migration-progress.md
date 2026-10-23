@@ -1,6 +1,6 @@
 # Investor UI Migration Progress
 
-Last updated: 2026-10-19
+Last updated: 2026-10-23
 Specification: [investor-ui-migration.md](../specs/investor-ui-migration.md)
 Current phase: Phase 7 — Pilot
 Overall status: Phase 7 in progress; pilot acceptance pending
@@ -53,6 +53,7 @@ Done during the pilot (behaviour and acceptance notes are on each PR):
 | Shared composable test mount and settle helpers | [#93](https://github.com/dee-pat/bond_management/pull/93) |
 | One typed investor request function | [#94](https://github.com/dee-pat/bond_management/pull/94) |
 | Shared page registry for shell pages and detail routes | [#96](https://github.com/dee-pat/bond_management/pull/96) |
+| Shared Select and click-to-filter composable for the transaction and statement lists; investor Playwright files run in parallel workers | PR pending |
 
 Validate the read-only SPA with real pilot workflows while keeping the legacy
 investor Workspace as the Apps fallback. Investor login targets the Vue

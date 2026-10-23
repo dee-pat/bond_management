@@ -68,43 +68,32 @@ run_semgrep() {
     binary="$(semgrep_binary)"
 
     # semgrep/ holds rules and their test fixtures, which contain deliberate
-    # findings, not app code.
+    # findings, not app code. Every kit rule is ERROR severity, so the
+    # severity filter keeps all of them blocking.
     cd "${APP_ROOT}"
-    echo "Running blocking Frappe Semgrep rules (ERROR severity)."
+    echo "Running blocking Semgrep rules (Frappe ERROR and frappe-agent-kit)."
     "${binary}" scan \
         --error \
         --metrics=off \
         --disable-version-check \
         --config "${FRAPPE_SEMGREP_RULES_DIR}" \
+        --config "${KIT_SEMGREP_RULES_DIR}" \
         --severity ERROR \
         --exclude "semgrep"
 
-    echo "Running advisory Frappe Semgrep rules."
+    echo "Running advisory Frappe Semgrep rules (WARNING)."
     local advisory_status=0
-    if "${binary}" scan \
+    "${binary}" scan \
         --metrics=off \
         --disable-version-check \
         --config "${FRAPPE_SEMGREP_RULES_DIR}" \
-        --exclude "semgrep"; then
-        advisory_status=0
-    else
-        advisory_status=$?
-    fi
+        --severity WARNING \
+        --exclude "semgrep" || advisory_status=$?
 
     if [[ "${advisory_status}" -gt 1 ]]; then
         echo "The advisory Semgrep scan failed with status ${advisory_status}." >&2
         exit "${advisory_status}"
     fi
-
-    # The kit's rule fixtures live in semgrep/kit/tests, which --exclude skips.
-    echo "Running blocking frappe-agent-kit Semgrep rules."
-    "${binary}" scan \
-        --error \
-        --metrics=off \
-        --disable-version-check \
-        --config "${KIT_SEMGREP_RULES_DIR}" \
-        --exclude "semgrep" \
-        "${APP_ROOT}"
 }
 
 run_lint() {

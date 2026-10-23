@@ -229,7 +229,7 @@ go to Playwright, for example
   feature flag at process startup; the CI workflow does this explicitly.
 - Install the Playwright browser when it is missing with
   `yarn playwright install chromium` from the app root. CI installs Chromium
-  and its system dependencies in its run-scoped bench.
+  in its run-scoped bench; the runner image provides its system libraries.
 - Start the intended local site explicitly so the browser cannot land on a
   different default site:
   `bench --site bond-management-test.localhost serve --port 8001 --noreload`.
@@ -256,8 +256,10 @@ go to Playwright, for example
 - The Linters workflow runs `scripts/verify.sh lint`. The CI Server job builds a
   fresh bench and site under `$RUNNER_TEMP` (emptied per job), installs the
   checked-out app through a local `file://` source, and runs
-  `scripts/verify.sh server`. The UI job builds its own fresh bench and site and
-  runs `scripts/verify.sh ui`. Each gate runs once per revision.
+  `scripts/verify.sh server` without building assets, which server tests never
+  render. The UI job builds its own fresh bench and site, builds Frappe's
+  assets, and runs `scripts/verify.sh frontend` (which builds this app) and
+  `scripts/verify.sh ui`. Each gate runs once per revision.
 - Before starting the UI job's web server, set its disposable Administrator
   password, enable `bond_investor_spa_enabled`, and seed the investor browser
   user and fixture records. The web process must start after the feature flag
