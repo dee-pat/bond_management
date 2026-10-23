@@ -18,7 +18,10 @@ const USD_ONLY_HEADERS = [
   "Gain Value",
   "XIRR",
   "Future XIRR",
-  "Expected Coupons (Next Year)",
+  "Next Coupon Date",
+  "Next Coupon Amount",
+  "Second Coupon Date",
+  "Second Coupon Amount",
 ];
 
 test("copies past cash flows without XIRR and future cash flows", async ({
@@ -44,7 +47,7 @@ test("copies past cash flows without XIRR and future cash flows", async ({
   const table = page.getByTestId("performance-table");
   await expect(table).toBeVisible();
   const headers = table.getByRole("columnheader");
-  await expect(headers).toHaveCount(11);
+  await expect(headers).toHaveCount(14);
   expect(
     await headers.evaluateAll((elements) =>
       elements.map((element) => element.textContent?.trim() ?? "")
@@ -52,7 +55,7 @@ test("copies past cash flows without XIRR and future cash flows", async ({
   ).toEqual(USD_ONLY_HEADERS);
   const rows = table.getByRole("row");
   await expect(rows).toHaveCount(3);
-  await expect(rows.nth(1).getByRole("cell")).toHaveCount(11);
+  await expect(rows.nth(1).getByRole("cell")).toHaveCount(14);
   await expect(
     table.getByRole("columnheader", { name: "Market Value (USD)", exact: true })
   ).toHaveCount(0);
@@ -67,7 +70,10 @@ test("copies past cash flows without XIRR and future cash flows", async ({
   await expect(bondRow).toContainText("1.000");
   await expect(bondRow).toContainText("1,000.00");
   await expect(bondRow).toContainText("1,051.00");
-  await expect(bondRow).toContainText("70.00");
+  await expect(bondRow).toContainText("01 Jan 2026");
+  await expect(bondRow).toContainText("01 Jul 2026");
+  await expect(bondRow.getByRole("cell").nth(11)).toContainText("35.00");
+  await expect(bondRow.getByRole("cell").nth(13)).toContainText("35.00");
   await expect(bondRow).toContainText("1,059.81");
   await expect(bondRow).toContainText("8.81");
   await expect(bondRow).toContainText("4.473%");

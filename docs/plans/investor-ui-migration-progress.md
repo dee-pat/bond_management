@@ -82,3 +82,18 @@ Open:
 - [ ] Legacy workspace removal approved as a separate release.
 - [ ] Internal Desk behaviours and their Playwright ownership confirmed before
       removing any Desk spec.
+
+## Next two coupons report slice
+
+Status: Implemented locally; PR and CI follow-up pending.
+Replace the displayed annual coupon summary in Desk and the investor report
+with Next Coupon Date, Next Coupon Amount, Second Coupon Date and Second
+Coupon Amount. Use the first two projected coupon flows strictly after the
+valuation date, in native currency after existing withholding tax, without a
+one-year cutoff. Missing payments and all four TOTAL cells remain blank.
+Preserve annual-total row fields for API compatibility; no schema or permission
+changes. Reuse authoritative future cash flows and Decimal money quantization.
+Failures follow existing report errors; rollback is code-only.
+Acceptance: ordered date/amount pairs, empty and single-payment cases, server
+projection parity and visible Desk/SPA coverage. Run report/API tests and the
+pre-push-ui gate. No migration or new dependencies are required.

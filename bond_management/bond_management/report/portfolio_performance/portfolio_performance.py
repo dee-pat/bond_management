@@ -255,18 +255,15 @@ def get_columns(include_reporting_currency_columns: bool = True) -> list[dict]:
         percent(_("XIRR"), "xirr", 85),
         percent(_("XIRR (USD)"), "xirr_usd", 100),
         percent(_("Future XIRR"), "future_xirr", 110),
-        money(
-            _("Expected Coupons (Next Year)"),
-            "expected_coupons_next_year",
-            190,
-            description=_("Coupon payments after the valuation date through exactly one year after it."),
-        ),
-        money(
-            _("Expected Coupons (Next Year) (USD)"),
-            "expected_coupons_next_year_usd",
-            210,
-            "reporting_currency",
-        ),
+        {"label": _("Next Coupon Date"), "fieldname": "next_coupon_date", "fieldtype": "Date", "width": 145},
+        money(_("Next Coupon Amount"), "next_coupon_amount", disable_total=True),
+        {
+            "label": _("Second Coupon Date"),
+            "fieldname": "second_coupon_date",
+            "fieldtype": "Date",
+            "width": 145,
+        },
+        money(_("Second Coupon Amount"), "second_coupon_amount", disable_total=True),
     ]
     if include_reporting_currency_columns:
         return columns
@@ -296,6 +293,27 @@ def expected_coupon_value(
             Decimal(0),
         )
     )
+
+
+def upcoming_coupon_values(
+    cashflows: Iterable[Mapping[str, Any]], valuation_date: DateTimeLikeObject
+) -> dict:
+    """Project the next two net coupon payments in native currency; absent payments stay blank."""
+    valuation_date = getdate(valuation_date)
+    coupons = sorted(
+        (
+            flow
+            for flow in cashflows
+            if flow.get("type") == "coupon" and flow.get("date") and getdate(flow["date"]) > valuation_date
+        ),
+        key=lambda flow: getdate(flow["date"]),
+    )[:2]
+    values = {}
+    for index, prefix in enumerate(("next_coupon", "second_coupon")):
+        coupon = coupons[index] if index < len(coupons) else None
+        values[f"{prefix}_date"] = getdate(coupon["date"]).isoformat() if coupon else None
+        values[f"{prefix}_amount"] = quantize_money(to_decimal(coupon["amount"])) if coupon else None
+    return values
 
 
 # ---------- CORE DATA ----------
@@ -383,6 +401,7 @@ def get_data(
         rows.append(
             {
                 "isin": isin,
+                **upcoming_coupon_values(future_cashflows, valuation_date),
                 "currency": currency,
                 "reporting_currency": REPORTING_CURRENCY,
                 "principal_factor": principal_factor,
@@ -511,6 +530,10 @@ def make_total_row(
 
     return {
         "isin": "TOTAL",
+        "next_coupon_date": None,
+        "next_coupon_amount": None,
+        "second_coupon_date": None,
+        "second_coupon_amount": None,
         "currency": currencies.pop() if single_native_currency and currencies else None,
         "reporting_currency": REPORTING_CURRENCY,
         **native_values,

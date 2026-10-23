@@ -22,11 +22,11 @@ test("copies cash flows from the rendered XIRR action", async ({ page }) => {
     page.locator(".dt-row-0 .dt-cell--col-4 .dt-cell__content")
   ).toContainText("7.250%");
   await expect(
-    page.getByText("Expected Coupons (Next Year)", { exact: true })
+    page.getByText("Next Coupon Date", { exact: true })
   ).toBeVisible();
   const couponRow = page.locator(".dt-row").filter({ hasText: "TEST-BOND" });
   await expect(couponRow).toHaveCount(1);
-  await expect(couponRow).toContainText("70.00");
+  await expect(couponRow).toContainText("35.00");
   const undefinedYieldActions = page.locator(
     '.portfolio-cashflow-copy[data-isin="UNDEFINED-XIRR"]'
   );
@@ -86,7 +86,7 @@ test("renders the columns returned by a USD-only report", async ({
   await page.goto(reportRoute);
 
   await expect(
-    page.getByText("Expected Coupons (Next Year)", { exact: true })
+    page.getByText("Next Coupon Date", { exact: true })
   ).toBeVisible();
   const headers = await page
     .locator(".dt-cell--header .dt-cell__content")

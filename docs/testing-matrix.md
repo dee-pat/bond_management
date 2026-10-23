@@ -106,3 +106,9 @@ to verify a portfolio move after another connection commits a private attachment
 and compatible File share. It checks after-commit retry registration, removal and
 investor File listing, plus strict-snapshot conflict rollback and retry. The
 queue transport alone is substituted; database reads and document hooks are real.
+
+Portfolio Performance's next two coupon date/amount pairs are covered by
+`report/portfolio_performance/test_portfolio_performance.py::test_next_two_coupon_payments_exclude_valuation_day_and_other_flows`,
+with API projection parity in `api/test_investor_performance.py` and visible
+pairs in `e2e/investor/performance.spec.ts` and
+`e2e/desk/portfolio-performance.spec.ts`.

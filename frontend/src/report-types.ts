@@ -10,6 +10,10 @@ export type PerformanceFieldname =
   | "gain_value"
   | "xirr"
   | "xirr_usd"
+  | "next_coupon_date"
+  | "next_coupon_amount"
+  | "second_coupon_date"
+  | "second_coupon_amount"
   | "future_xirr"
   | "expected_coupons_next_year"
   | "expected_coupons_next_year_usd";
@@ -25,7 +29,7 @@ export interface PerformanceCashflowAction {
 export interface PerformanceColumn {
   fieldname: PerformanceFieldname;
   label: string;
-  fieldtype: "Data" | "Link" | "Float" | "Currency" | "Percent";
+  fieldtype: "Date" | "Data" | "Link" | "Float" | "Currency" | "Percent";
   options: string | null;
   description: string | null;
   precision: number | null;
@@ -46,6 +50,10 @@ export interface PerformanceRow {
   xirr: number | null;
   xirr_usd: number | null;
   future_xirr: number | null;
+  next_coupon_date: string | null;
+  next_coupon_amount: number | null;
+  second_coupon_date: string | null;
+  second_coupon_amount: number | null;
   expected_coupons_next_year: number | null;
   expected_coupons_next_year_usd: number | null;
   has_past_cashflows: boolean;

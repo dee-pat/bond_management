@@ -370,3 +370,11 @@ against its own fresh site where a site is needed.
 - [ERPNext v16 app-owned frontend package](https://github.com/frappe/erpnext/blob/version-16/package.json)
 - [ERPNext v16 banking package](https://github.com/frappe/erpnext/blob/version-16/banking/package.json)
 - [Playwright documentation](https://playwright.dev/docs/intro)
+
+### Upcoming coupons in Portfolio Performance
+
+Desk and SPA end the report with Next Coupon Date, Next Coupon Amount,
+Second Coupon Date and Second Coupon Amount. Dates are strictly after the
+valuation date; amounts use the held position's existing projected net coupons
+in native currency. No one-year cutoff applies. Missing payments and TOTAL
+cells are blank. Legacy annual-total fields remain available in API rows.
