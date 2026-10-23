@@ -68,17 +68,23 @@ run_semgrep() {
     binary="$(semgrep_binary)"
 
     # semgrep/ holds rules and their test fixtures, which contain deliberate
-    # findings, not app code. Every kit rule is ERROR severity, so the
-    # severity filter keeps all of them blocking.
+    # findings, not app code. Scan kit rules separately so every severity blocks.
     cd "${APP_ROOT}"
-    echo "Running blocking Semgrep rules (Frappe ERROR and frappe-agent-kit)."
+    echo "Running blocking Frappe Semgrep rules (ERROR)."
     "${binary}" scan \
         --error \
         --metrics=off \
         --disable-version-check \
         --config "${FRAPPE_SEMGREP_RULES_DIR}" \
-        --config "${KIT_SEMGREP_RULES_DIR}" \
         --severity ERROR \
+        --exclude "semgrep"
+
+    echo "Running blocking frappe-agent-kit Semgrep rules (all severities)."
+    "${binary}" scan \
+        --error \
+        --metrics=off \
+        --disable-version-check \
+        --config "${KIT_SEMGREP_RULES_DIR}" \
         --exclude "semgrep"
 
     echo "Running advisory Frappe Semgrep rules (WARNING)."

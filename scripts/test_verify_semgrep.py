@@ -41,6 +41,24 @@ class SemgrepGateTests(unittest.TestCase):
         # The kit's rule fixtures hold deliberate findings, so a pass shows they were not scanned.
         self.assertTrue((self.app_root / "semgrep" / "kit" / "tests" / "transactions.py").is_file())
 
+    def test_kit_decimal_float_literal_blocks(self):
+        result = self.scan("from decimal import Decimal\nvalue = Decimal(0.1)\n")
+        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assertIn("frappe-kit-decimal-from-float-literal", "".join(result.stdout.split()))
+
+    def test_kit_lower_severities_still_block(self):
+        rule_path = self.app_root / "semgrep" / "kit" / "finance.yml"
+        original_rule = rule_path.read_text(encoding="utf-8")
+        self.assertIn("severity: ERROR", original_rule)
+        for severity in ("WARNING", "INFO"):
+            with self.subTest(severity=severity):
+                rule_path.write_text(
+                    original_rule.replace("severity: ERROR", f"severity: {severity}"), encoding="utf-8"
+                )
+                result = self.scan("from decimal import Decimal\nvalue = Decimal(0.1)\n")
+                self.assertEqual(result.returncode, 1, result.stdout)
+                self.assertIn("frappe-kit-decimal-from-float-literal", "".join(result.stdout.split()))
+
     def scan(self, source):
         (self.app_root / "violation.py").write_text(source, encoding="utf-8")
         environment = os.environ | {"SEMGREP_BIN": self.semgrep_binary}
