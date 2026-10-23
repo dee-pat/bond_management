@@ -18,7 +18,8 @@ MANAGER_PERMISSIONS = {
     "delete": 1,
     "print": 1,
     "email": 1,
-    "share": 1,
+    # Financial documents are never shared (docs/decisions/0012).
+    "share": 0,
     "export": 1,
     "import": 1,
     "report": 1,

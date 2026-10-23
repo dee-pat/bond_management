@@ -64,3 +64,4 @@ Anything not yet known, such as an unrecorded rationale. Delete when empty.
 - [0009: Principal repayment rows define maturity](0009-principal-repayment-schedule.md)
 - [0010: Financial and attachment mutations are server-authoritative](0010-server-authoritative-mutations.md)
 - [0011: Accrued-interest valuation is net of withholding tax](0011-withholding-tax-on-accrued-valuation.md)
+- [0012: Financial documents are never shared](0012-financial-documents-are-never-shared.md)

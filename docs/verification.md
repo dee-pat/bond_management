@@ -77,13 +77,12 @@ differences in the final field.
   `playwright`. `ui` and `playwright` prepare the configured test site
   themselves (migrate, enable the investor SPA, seed fixtures) before running
   Playwright; no manual setup is needed.
-- The opt-in stages `lifecycle` and `share-race` each create a uniquely named
-  temporary site, run every phase of their helper, and drop the site whether
-  the run passed or failed. Set `DB_ROOT_PASSWORD` when the bench has no
-  `root_password`; `share-race` also needs the `BOND_SHARE_LOCK_*` observer
-  variables. The _Opt-in suites_ workflow runs both nightly, on
-  `workflow_dispatch`, and on PRs that change its harness; run them locally for changes to patches, install hooks,
-  or share and User Permission consistency.
+- The opt-in `lifecycle` stage creates a uniquely named temporary site, runs
+  every phase of its helper, and drops the site whether the run passed or
+  failed. Set `DB_ROOT_PASSWORD` when the bench has no `root_password`. The
+  _Opt-in suites_ workflow runs it nightly, on `workflow_dispatch`, and on PRs
+  that change its harness; run it locally for changes to patches or install
+  hooks.
 - A failed scheduled or manual _Opt-in suites_ run opens a `nightly-failure`
   issue, or comments on the open one. Dispatching with `force_failure=true`
   exercises that report, and the next fully passing scheduled run comments on
@@ -162,15 +161,7 @@ Never drop the persistent pair under this rule. The opt-in migration lifecycle
 helper follows the site naming and opt-in steps in
 [migration-lifecycle.md](specs/migration-lifecycle.md).
 
-The opt-in investor share-race helper
-(`bond_management/bond_management/tests/investor_share_concurrency.py`) runs
-on a uniquely named `bond-management-race-<32-hex-id>.localhost` site with Bond
-Management installed and `allow_tests` enabled. Set `BOND_SHARE_RACE_BENCH` to
-the configured bench path and provide the observer credentials privately as the
-module docstring describes. Run its `seed` and then `run` phases, capture the
-results, and drop the site even when a phase fails; `verify.sh share-race` does
-all of this. The helper rejects both persistent sites and sites outside the
-configured bench. Before creating or dropping a site, `verify.sh` checks the
+Before creating or dropping a site, `verify.sh` checks the
 name with the shared policy core (`bond_management/agent_policy.py`) and stops
 without calling bench, or echoing the name, unless it is one temporary site.
 

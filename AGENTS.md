@@ -15,7 +15,7 @@ Read the row for your task; the rules below always apply. Code spans are skills.
 | --- | --- | --- |
 | Any code change (default) | [Definition of done](docs/verification.md#definition-of-done) | Locating tests: [rule index](docs/testing-matrix.md#rule-index); a relationship or data flow changes: [DocType relationships](docs/domain-model.md#doctype-relationships), [main flow](docs/domain-model.md#main-processing-flow); Desk form script: [client/server contract](ARCHITECTURE_SPEC.md#clientserver-contract) |
 | Financial calculation or convention | [Conventions](#bond-financial-conventions); the matching [decision record](docs/decisions/README.md#index) | Changing a convention: [when to write a record](docs/decisions/README.md#when-to-write-one) |
-| Permissions, shares or investor scope | [Portfolio scope](docs/security-review.md#portfolio-scope); [Shares and User Permissions](docs/security-review.md#shares-and-user-permissions) | New entry point: [whitelisted methods](docs/security-review.md#whitelisted-methods); `ignore_permissions=True`: [allowed uses](docs/security-review.md#ignore_permissionstrue); share concurrency: [share-race site](docs/verification.md#temporary-sites) |
+| Permissions, shares or investor scope | [Portfolio scope](docs/security-review.md#portfolio-scope); [Shares and User Permissions](docs/security-review.md#shares-and-user-permissions) | New entry point: [whitelisted methods](docs/security-review.md#whitelisted-methods); `ignore_permissions=True`: [allowed uses](docs/security-review.md#ignore_permissionstrue) |
 | Attachments and PDF parsing | [Attachments](docs/security-review.md#attachments); [Secrets](docs/security-review.md#secrets) | Statement-derived writes: [derived persistence](ARCHITECTURE_SPEC.md#derived-persistence) |
 | DocType, field or patch change | `bond-management-migration` with `frappe-migration`; [DocType relationships](docs/domain-model.md#doctype-relationships) | New financial DocType: [portfolio scope](docs/security-review.md#portfolio-scope); patch, hook or index: [fresh install](docs/verification.md#required-gates), [lifecycle](docs/specs/migration-lifecycle.md#execution-and-recovery) |
 | Investor SPA | [Settled decisions](docs/specs/investor-ui-migration.md#settled-decisions); [phase summary](docs/plans/investor-ui-migration-progress.md#phase-summary) | API: [contract](docs/specs/investor-ui-migration.md#investor-api-contract), `frappe-spa-client`; screens: [UI behaviour](docs/specs/investor-ui-migration.md#ui-behaviour) |
@@ -77,11 +77,11 @@ Read the row for your task; the rules below always apply. Code spans are skills.
 - Investor isolation is centralized in `hooks.py`:
   - `permission_query_conditions` and `has_permission`
     (`utils/investor_permissions.py`) scope Portfolio, Transaction, Statement,
-    Exchange Rate (and its Source) and File to portfolios assigned through User
-    Permission.
-  - `utils/investor_shares.py` (via `extend_doctype_class`, `doc_events` and a
-    `clear_user_permissions` override) rejects investor mutations and keeps
-    DocShare and User Permission consistent.
+    Exchange Rate and File to portfolios assigned through User Permission, and
+    deny investors Exchange Rate Source.
+  - `utils/investor_shares.py` (via `extend_doctype_class` and `doc_events`)
+    rejects investor mutations and every share of a financial document or its
+    Files ([decision 0012](docs/decisions/0012-financial-documents-are-never-shared.md)).
   - Add every new financial DocType to `_financial_doctypes` in `hooks.py`.
 - Statement save synchronously writes derived data: canonical
   `Bond Exchange Rate` rows plus one `Bond Exchange Rate Source` provenance row
@@ -226,7 +226,6 @@ apps/bond_management/scripts/verify.sh ui           # seed fixtures + full Playw
 apps/bond_management/scripts/verify.sh pre-push     # lint + server
 apps/bond_management/scripts/verify.sh pre-push-ui  # lint + server + frontend + ui
 apps/bond_management/scripts/verify.sh lifecycle    # opt-in migration lifecycle on a temporary site
-apps/bond_management/scripts/verify.sh share-race   # opt-in share race; needs BOND_SHARE_LOCK_* observer
 bench --site bond-management-test.localhost run-tests --module bond_management.bond_management.utils.test_accrual [--test <method>]
 bench --site bond-management-test.localhost run-tests --doctype "Bond Transaction"
 ```

@@ -31,7 +31,6 @@ app_include_css = ["/assets/bond_management/css/attachment.css"]
 after_install = [
     "bond_management.patches.add_bond_query_indexes.ensure_bond_query_indexes",
     "bond_management.patches.add_bond_exchange_rate_provenance.execute",
-    "bond_management.patches.enforce_investor_share_boundary.execute",
 ]
 
 # Frappe schema sync removes manual indexes when the DocField cannot declare
@@ -47,7 +46,6 @@ permission_query_conditions = {
     "Bond Transaction": "bond_management.bond_management.utils.investor_permissions.transaction_query_condition",
     "Bond Statement": "bond_management.bond_management.utils.investor_permissions.statement_query_condition",
     "Bond Exchange Rate": "bond_management.bond_management.utils.investor_permissions.exchange_rate_query_condition",
-    "Bond Exchange Rate Source": "bond_management.bond_management.utils.investor_permissions.exchange_rate_source_query_condition",
 }
 
 has_permission = {
@@ -76,46 +74,25 @@ extend_doctype_class["File"] = [
 ]
 doc_events = {
     doctype: {
-        "validate_share": f"{_investor_shares}.validate_share",
         "before_insert": f"{_investor_shares}.reject_investor_mutation",
         "before_validate": f"{_investor_shares}.reject_investor_mutation",
         "before_cancel": f"{_investor_shares}.reject_investor_mutation",
         "before_update_after_submit": f"{_investor_shares}.reject_investor_mutation",
         "on_trash": f"{_investor_shares}.reject_investor_mutation",
-        "on_update": f"{_investor_shares}.cleanup_document_shares",
     }
     for doctype in _financial_doctypes
 }
+# Financial documents and their Files are never shared (docs/decisions/0012).
 doc_events.update(
     {
-        "File": {
-            "validate_share": f"{_investor_shares}.validate_file_share",
-            "on_update": f"{_investor_shares}.cleanup_file_shares",
-        },
-        "User": {
-            "before_validate": f"{_investor_shares}.lock_user_authorization",
-            "on_update": f"{_investor_shares}.cleanup_user_shares",
-        },
+        "File": {"on_update": f"{_investor_shares}.remove_financial_file_shares"},
         "DocShare": {
-            "before_insert": f"{_investor_shares}.lock_share_authorization",
-            "before_validate": f"{_investor_shares}.lock_share_authorization",
-            "on_trash": f"{_investor_shares}.reject_investor_share_mutation",
+            "before_insert": f"{_investor_shares}.reject_financial_share",
+            "before_validate": f"{_investor_shares}.reject_financial_share",
         },
-        "User Permission": {
-            "before_insert": f"{_investor_shares}.lock_assignment_authorization",
-            "before_validate": f"{_investor_shares}.lock_assignment_authorization",
-            "on_trash": f"{_investor_shares}.lock_assignment_authorization",
-            "on_update": f"{_investor_shares}.cleanup_assignment_shares",
-            "after_delete": f"{_investor_shares}.cleanup_assignment_shares",
-        },
+        "User Permission": {"on_update": f"{_investor_shares}.clear_previous_assignee_cache"},
     }
 )
-
-override_whitelisted_methods = {
-    "frappe.core.doctype.user_permission.user_permission.clear_user_permissions": (
-        f"{_investor_shares}.clear_user_permissions"
-    ),
-}
 
 on_session_creation = [
     "bond_management.bond_management.utils.investor_permissions.redirect_investor_to_workspace"

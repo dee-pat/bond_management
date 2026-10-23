@@ -143,8 +143,8 @@ The individual stages are `lint` (pre-commit, the `skills.lock` check, Semgrep
 and rule tests), `server`, `frontend`, `ui` and `playwright`. The `ui` and
 `playwright` stages migrate and seed the test site themselves. GitHub Actions
 runs the same stages, so local and CI commands do not drift. The opt-in
-`lifecycle` and `share-race` stages each create, test and drop a temporary site;
-the Opt-in suites workflow runs them nightly and on demand.
+`lifecycle` stage creates, tests and drops a temporary site; the Opt-in suites
+workflow runs it nightly and on demand.
 
 Browser tests use Playwright with three projects: `investor-desktop`,
 `investor-mobile` and `desk`. The Desk project includes a server-backed

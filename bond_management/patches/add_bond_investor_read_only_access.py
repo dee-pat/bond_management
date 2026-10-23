@@ -7,7 +7,6 @@ READ_ONLY_DOCTYPES = (
     "Bond Statement",
     "Bond Master",
     "Bond Market Date",
-    "Bond Exchange Rate Source",
 )
 PRINTABLE_DOCTYPES = {
     "Bond Transaction",

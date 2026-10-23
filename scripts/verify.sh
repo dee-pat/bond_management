@@ -13,7 +13,7 @@ FRAPPE_SEMGREP_RULES_DIR="${APP_ROOT}/semgrep/frappe"
 KIT_SEMGREP_RULES_DIR="${APP_ROOT}/semgrep/kit"
 
 usage() {
-    echo "Usage: scripts/verify.sh [lint|server|frontend|ui|playwright|pre-push|pre-push-ui|lifecycle|share-race] [playwright args]" >&2
+    echo "Usage: scripts/verify.sh [lint|server|frontend|ui|playwright|pre-push|pre-push-ui|lifecycle] [playwright args]" >&2
 }
 
 prepare_test_site() {
@@ -287,26 +287,6 @@ run_migration_lifecycle() {
     bench --site "${site}" execute "${phase}.verify"
 }
 
-run_share_race() {
-    local name
-    for name in BOND_SHARE_LOCK_SOCKET BOND_SHARE_LOCK_USER; do
-        if [[ -z "${!name:-}" ]]; then
-            echo "${name} is required for the share-race check; see investor_share_concurrency.py." >&2
-            exit 1
-        fi
-    done
-
-    create_temporary_site "bond-management-race-"
-    local site="${TEMPORARY_SITE}"
-    local helper="bond_management.bond_management.tests.investor_share_concurrency"
-
-    BOND_SHARE_RACE_BENCH="${BENCH_ROOT}"
-    BOND_SHARE_RACE_TOKEN="$(python3 -c 'import secrets; print(secrets.token_hex(6))')"
-    export BOND_SHARE_RACE_BENCH BOND_SHARE_RACE_TOKEN
-    bench --site "${site}" execute "${helper}.seed"
-    bench --site "${site}" execute "${helper}.run"
-}
-
 if [[ "${BASH_SOURCE[0]}" != "$0" ]]; then
     return
 fi
@@ -337,9 +317,6 @@ case "${MODE}" in
         ;;
     lifecycle)
         run_migration_lifecycle
-        ;;
-    share-race)
-        run_share_race
         ;;
     *)
         usage

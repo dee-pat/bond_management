@@ -1,7 +1,7 @@
 name: Opt-in suites
 
-# The migration lifecycle and investor share-race helpers need their own
-# temporary sites, so they run nightly and on demand rather than in CI.
+# The migration lifecycle helper needs its own temporary site, so it runs
+# nightly and on demand rather than in CI.
 on:
   schedule:
     - cron: "17 2 * * *"
@@ -17,7 +17,6 @@ on:
       - .github/workflows/opt-in.yml
       - scripts/verify.sh
       - bond_management/bond_management/tests/migration_lifecycle*.py
-      - bond_management/bond_management/tests/investor_share_concurrency.py
       - bond_management/bond_management/tests/temporary_site_guard.py
       - bond_management/agent_policy.py
 
@@ -50,8 +49,6 @@ jobs:
         include:
           - name: Migration lifecycle
             mode: lifecycle
-          - name: Investor share race
-            mode: share-race
 
     services:
       redis-cache:
@@ -68,9 +65,6 @@ jobs:
           MYSQL_ROOT_PASSWORD: root
         ports:
           - 3306:3306
-        # The share-race lock observer connects through the server socket.
-        volumes:
-          - /tmp/mysqld:/run/mysqld
         options: --health-cmd="mariadb-admin ping" --health-interval=5s --health-timeout=2s --health-retries=3
 
     steps:
@@ -114,9 +108,6 @@ jobs:
         run: apps/bond_management/scripts/verify.sh "${{ matrix.mode }}"
         env:
           CI: "Yes"
-          BOND_SHARE_LOCK_SOCKET: /tmp/mysqld/mysqld.sock
-          BOND_SHARE_LOCK_USER: root
-          BOND_SHARE_LOCK_PASSWORD: root
 
       # Manual runs only: prove the report step below without breaking a suite.
       - name: Force failure

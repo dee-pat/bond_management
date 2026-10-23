@@ -93,26 +93,12 @@ flowchart LR
 Desk owns financial writes. The investor app reads fixed, permission-scoped API
 projections for portfolio performance, yield comparison, and interest
 difference. Investor role decisions read persisted role assignments rather than
-cached role lists. Frappe DocShare grants cannot expand investor portfolio
-scope or grant financial mutations: shares are validated against recipient
-assignments, and role/assignment changes repair incompatible shares in the same
-request transaction. The app overrides Frappe's bulk User Permission clear
-endpoint to retain its System Manager check and repair shares after the bulk
-delete, which bypasses ordinary document events. The repair patch also runs on
-fresh installation. Exchange-rate provenance shares resolve scope through the
-linked Bond Statement. Investors can read only explicitly shared provenance
-rows, and list queries enforce that same scope. Migration and fresh-install
-bootstraps repair incompatible legacy source shares.
-
-Private File shares follow their attached document's portfolio. Portfolio moves
-discover attachments and recipients using current locking reads, including rows
-committed after the mover's snapshot. Discovery never waits while acquiring File,
-DocShare and recipient locks out of the normal order; contention schedules the
-whole attachment scope for cleanup after commit. This preserves the investor's
-File list, which fails closed when an incompatible share remains. If core's
-snapshot-based deletion check cannot see a discovered share, deletion is retried
-after commit through the normal DocShare API. Strict snapshot conflicts still
-abort the request and require a fresh transaction.
+cached role lists. Financial documents and Files attached to them are never
+shared ([decision 0012](decisions/0012-financial-documents-are-never-shared.md)):
+a DocShare hook rejects such shares for every user, a File newly attached to a
+financial document loses its shares in the same save, and a registered patch
+removed shares made before the decision. Investor list queries fail closed if
+a share still appears. Investors have no access to Bond Exchange Rate Source.
 
 ## Important behavior
 

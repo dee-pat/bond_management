@@ -275,7 +275,7 @@ class TestInvestorPermissions(IntegrationTestCase):
         with (
             patch.object(investor_permissions, "is_investor_user", return_value=True),
             patch.object(investor_permissions.frappe.qb, "get_query") as get_query,
-            patch.object(investor_permissions, "_reject_incompatible_shared_documents"),
+            patch.object(investor_permissions, "_reject_investor_shares"),
         ):
             get_query.return_value.run.return_value = []
 
@@ -305,7 +305,7 @@ class TestInvestorPermissions(IntegrationTestCase):
             patch.object(investor_permissions, "is_investor_user", return_value=True),
             patch.object(investor_permissions.frappe.qb, "get_query") as get_query,
             patch.object(investor_permissions.frappe.db, "escape", side_effect=lambda value: f"'{value}'"),
-            patch.object(investor_permissions, "_reject_incompatible_shared_documents"),
+            patch.object(investor_permissions, "_reject_investor_shares"),
         ):
             get_query.return_value.run.return_value = ["Nanda Portfolio", "Joint Portfolio"]
 
