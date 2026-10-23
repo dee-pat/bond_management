@@ -85,7 +85,7 @@ Open:
 
 ## Next two coupons report slice
 
-Status: Implemented locally; PR and CI follow-up pending.
+Status: Implemented in [PR #102](https://github.com/dee-pat/bond_management/pull/102); CI pending.
 Replace the displayed annual coupon summary in Desk and the investor report
 with Next Coupon Date, Next Coupon Amount, Second Coupon Date and Second
 Coupon Amount. Use the first two projected coupon flows strictly after the
