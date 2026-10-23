@@ -53,7 +53,7 @@ Done during the pilot (behaviour and acceptance notes are on each PR):
 | Shared composable test mount and settle helpers | [#93](https://github.com/dee-pat/bond_management/pull/93) |
 | One typed investor request function | [#94](https://github.com/dee-pat/bond_management/pull/94) |
 | Shared page registry for shell pages and detail routes | [#96](https://github.com/dee-pat/bond_management/pull/96) |
-| Shared Select and click-to-filter composable for the transaction and statement lists; investor Playwright files run in parallel workers | PR pending |
+| Shared Select and click-to-filter composable for the transaction and statement lists; investor Playwright files run in parallel workers locally | PR pending |
 | Desk Bond Yield Comparison keeps its table and opens the investor chart, the only yield chart ([plan](sharing-and-yield-chart-simplification.md)) | PR pending |
 
 Validate the read-only SPA with real pilot workflows while keeping the legacy

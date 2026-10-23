@@ -8,8 +8,9 @@ export default defineConfig({
   fullyParallel: false,
   forbidOnly: Boolean(process.env.CI),
   retries: process.env.CI ? 2 : 0,
-  // Investor specs only read seeded data, so their files run in parallel.
-  workers: process.env.CI ? 2 : 4,
+  // Investor specs only read seeded data, so their files run in parallel
+  // locally. CI's single-process test server gained nothing from 2 workers.
+  workers: process.env.CI ? 1 : 4,
   reporter: process.env.CI ? [["github"], ["blob"]] : "html",
   timeout: 60_000,
   expect: {
