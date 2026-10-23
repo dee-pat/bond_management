@@ -255,15 +255,15 @@ def get_columns(include_reporting_currency_columns: bool = True) -> list[dict]:
         percent(_("XIRR"), "xirr", 85),
         percent(_("XIRR (USD)"), "xirr_usd", 100),
         percent(_("Future XIRR"), "future_xirr", 110),
-        {"label": _("Next Coupon Date"), "fieldname": "next_coupon_date", "fieldtype": "Date", "width": 145},
-        money(_("Next Coupon Amount"), "next_coupon_amount", disable_total=True),
+        {"label": _("Next Coupon Date"), "fieldname": "next_coupon_date", "fieldtype": "Date", "width": 110},
+        money(_("Next Coupon Amount"), "next_coupon_amount", 115, disable_total=True),
         {
             "label": _("Second Coupon Date"),
             "fieldname": "second_coupon_date",
             "fieldtype": "Date",
-            "width": 145,
+            "width": 110,
         },
-        money(_("Second Coupon Amount"), "second_coupon_amount", disable_total=True),
+        money(_("Second Coupon Amount"), "second_coupon_amount", 115, disable_total=True),
     ]
     if include_reporting_currency_columns:
         return columns

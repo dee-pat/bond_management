@@ -97,3 +97,10 @@ Failures follow existing report errors; rollback is code-only.
 Acceptance: ordered date/amount pairs, empty and single-payment cases, server
 projection parity and visible Desk/SPA coverage. Run report/API tests and the
 pre-push-ui gate. No migration or new dependencies are required.
+
+### Coupon column spacing follow-up
+
+Status: Implemented locally; PR publication pending. Reduce the four coupon
+column widths in Desk and the investor table to keep the report compact.
+Coupon values, labels and the API contract remain unchanged. Domain model
+reviewed; no data-flow or relationship changes.
