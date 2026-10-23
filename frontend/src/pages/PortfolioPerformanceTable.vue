@@ -2,7 +2,7 @@
 import { Button } from "frappe-ui";
 import { RouterLink } from "vue-router";
 
-import { formatMoney, formatNumber, formatPercent } from "../lib/format";
+import { formatDate, formatMoney, formatNumber, formatPercent } from "../lib/format";
 import type {
 	PerformanceCashflowSelection,
 	PerformanceColumn,
@@ -21,6 +21,10 @@ const emit = defineEmits<{
 }>();
 
 const PERFORMANCE_COLUMN_WIDTHS: Record<PerformanceFieldname, string> = {
+	next_coupon_date: "10rem",
+	next_coupon_amount: "12rem",
+	second_coupon_date: "10rem",
+	second_coupon_amount: "12rem",
 	isin: "12rem",
 	currency: "4.5rem",
 	principal_factor: "8rem",
@@ -45,6 +49,9 @@ function formattedValue(row: PerformanceRow, column: PerformanceColumn): string 
 	const value = valueFor(row, column);
 	if (value === null || value === undefined) {
 		return "";
+	}
+	if (column.fieldtype === "Date") {
+		return formatDate(String(value));
 	}
 	if (typeof value !== "number") {
 		return value;
@@ -72,7 +79,7 @@ function currencyFor(row: PerformanceRow, column: PerformanceColumn): string {
 }
 
 function isNumericColumn(column: PerformanceColumn): boolean {
-	return column.fieldname !== "isin" && column.fieldname !== "currency";
+	return ["Float", "Currency", "Percent"].includes(column.fieldtype);
 }
 
 function actionFor(

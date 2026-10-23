@@ -12,6 +12,7 @@ from bond_management.bond_management.report.portfolio_performance.portfolio_perf
     get_data,
     get_xirr_cashflows,
     make_total_row,
+    upcoming_coupon_values,
 )
 from bond_management.bond_management.tests.factories import (
     make_assigned_investor,
@@ -210,8 +211,8 @@ class TestPortfolioPerformance(IntegrationTestCase):
         columns = get_columns()
         fieldnames = [column["fieldname"] for column in columns]
         self.assertEqual(
-            fieldnames[-2:],
-            ["expected_coupons_next_year", "expected_coupons_next_year_usd"],
+            fieldnames[-4:],
+            ["next_coupon_date", "next_coupon_amount", "second_coupon_date", "second_coupon_amount"],
         )
         labels = {column["fieldname"]: column["label"] for column in columns}
         self.assertEqual(labels["currency"], "CCY")
@@ -240,11 +241,13 @@ class TestPortfolioPerformance(IntegrationTestCase):
                 "nominal_value": 145,
                 "purchases_value": 145,
                 "proceeds_value": 145,
-                "expected_coupons_next_year": 190,
+                "next_coupon_date": 145,
+                "next_coupon_amount": 145,
+                "second_coupon_date": 145,
+                "second_coupon_amount": 145,
                 "market_value": 145,
                 "gain_value": 145,
                 "xirr": 85,
-                "expected_coupons_next_year_usd": 210,
                 "market_value_usd": 155,
                 "xirr_usd": 100,
                 "future_xirr": 110,
@@ -310,8 +313,8 @@ class TestPortfolioPerformance(IntegrationTestCase):
 
         ordered_fieldnames = [column["fieldname"] for column in columns]
         self.assertEqual(
-            ordered_fieldnames[-2:],
-            ["future_xirr", "expected_coupons_next_year"],
+            ordered_fieldnames[-4:],
+            ["next_coupon_date", "next_coupon_amount", "second_coupon_date", "second_coupon_amount"],
         )
         fieldnames = set(ordered_fieldnames)
         self.assertNotIn("market_value_usd", fieldnames)
@@ -466,12 +469,14 @@ class TestPortfolioPerformance(IntegrationTestCase):
         )
         make_market_date(bond, date="2025-12-31")
 
-        _, past_cashflows, future_cashflows, _, _ = get_data(portfolio.name, "2025-12-31")
+        rows, past_cashflows, future_cashflows, _, _ = get_data(portfolio.name, "2025-12-31")
 
         past_coupon = next(flow for flow in past_cashflows if flow["type"] == "coupon")
         future_coupon = next(flow for flow in future_cashflows if flow["type"] == "coupon")
         self.assertEqual(past_coupon["amount"], 45)
         self.assertEqual(future_coupon["amount"], 45)
+        self.assertEqual(rows[0]["next_coupon_amount"], Decimal("45.0000"))
+        self.assertEqual(rows[0]["next_coupon_date"], "2026-01-01")
 
     def test_market_value_and_gain_use_accrued_interest_net_of_withholding_tax(self):
         bond = make_bond(coupon_rate=10, withholding_tax=10)
@@ -737,3 +742,28 @@ class TestPortfolioPerformance(IntegrationTestCase):
             get_xirr_cashflows(portfolio.name, "2025-12-31", "TOTAL", {})
         with self.assertRaisesRegex(FrappeTypeError, "cashflow_currency.*str"):
             get_xirr_cashflows(portfolio.name, "2025-12-31", "TOTAL", "past", [])
+
+    def test_next_two_coupon_payments_exclude_valuation_day_and_other_flows(self):
+        flows = [
+            {"type": "coupon", "date": "2027-07-01", "amount": Decimal("12.34567")},
+            {"type": "coupon", "date": "2025-12-31", "amount": 100},
+            {"type": "amortisation", "date": "2026-01-01", "amount": 100},
+            {"type": "coupon", "date": "2027-01-01", "amount": Decimal("45.12345")},
+            {"type": "coupon", "date": "2025-07-01", "amount": 100},
+            {"type": "coupon", "date": "2028-01-01", "amount": 100},
+        ]
+        values = upcoming_coupon_values(flows, "2025-12-31")
+        self.assertEqual(
+            values,
+            {
+                "next_coupon_date": "2027-01-01",
+                "next_coupon_amount": Decimal("45.1234"),
+                "second_coupon_date": "2027-07-01",
+                "second_coupon_amount": Decimal("12.3457"),
+            },
+        )
+        for count in (0, 1):
+            values = upcoming_coupon_values(flows[:count], "2025-12-31")
+            self.assertIsNone(values["second_coupon_date"])
+            self.assertIsNone(values["second_coupon_amount"])
+        self.assertIsNone(upcoming_coupon_values([], "2025-12-31")["next_coupon_amount"])

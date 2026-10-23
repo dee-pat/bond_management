@@ -204,7 +204,10 @@ class TestInvestorPortfolioPerformance(IntegrationTestCase):
                 "gain_value",
                 "xirr",
                 "future_xirr",
-                "expected_coupons_next_year",
+                "next_coupon_date",
+                "next_coupon_amount",
+                "second_coupon_date",
+                "second_coupon_amount",
             ],
         )
         self.assertTrue(all(set(column) == COLUMN_FIELDS for column in report["columns"]))

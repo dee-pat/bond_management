@@ -171,3 +171,7 @@ rates on each flow date; future flows use the valuation-date rate. Export
 authorization remains at the public endpoint, and the shared calculation uses
 the already permission-scoped context. The simplification preserves the mapped
 relationships, statement-derived writes, and read-only investor projections.
+
+Portfolio Performance projects the next two future net coupon cash flows as
+native-currency date/amount pairs in Desk and the investor API. Absent coupons
+and TOTAL pairs are blank; legacy annual coupon totals remain in row payloads.
