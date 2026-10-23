@@ -39,9 +39,11 @@ Performance, Bond Yield Comparison, and Interest Difference by Portfolio).
   `has_permission` hook, list condition and `InvestorFileMixin` (private
   downloads call core File permission directly) all enforce it, and
   `has_file_permission` denies investors any non-read permission.
-- Investors have no access to Bond Exchange Rate Source. They hold no DocPerm
-  row, so Frappe runs no list hook for them; `has_exchange_rate_source_permission`
-  still denies a document read through a stray share.
+- Investors have no access to Bond Exchange Rate Source. Its list hook
+  `exchange_rate_source_query_condition` returns no rows for any investor,
+  including one whose other role grants a Source DocPerm, and
+  `has_exchange_rate_source_permission` denies document reads, even through a
+  stray share.
 
 ## Shares and User Permissions
 

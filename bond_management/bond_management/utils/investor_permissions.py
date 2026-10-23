@@ -243,14 +243,22 @@ def _attached_portfolio(file: Document | frappe._dict, field: str) -> str | None
     return frappe.db.get_value(file.attached_to_doctype, file.attached_to_name, field)
 
 
+def exchange_rate_source_query_condition(user: str | None = None) -> str | None:
+    """Permission-query hook: list no provenance for an investor, including one with another role.
+
+    Another role can grant a Source DocPerm, and then Frappe runs this hook.
+    """
+    user = user or frappe.session.user
+    if not is_investor_user(user):
+        return None
+    _reject_investor_shares(SOURCE_DOCTYPE, user)
+    return "1=0"
+
+
 def has_exchange_rate_source_permission(
     doc: Document, user: str | None = None, ptype: str | None = None, **_kwargs: Any
 ) -> bool:
-    """Permission hook: deny investors any access to exchange-rate provenance.
-
-    Investors have no Source DocPerm, so Frappe never runs a list hook for them;
-    this document check still stops a stray share from granting a read.
-    """
+    """Permission hook: deny investors any access to exchange-rate provenance, even through a share."""
     if is_investor_user(user or frappe.session.user):
         frappe.throw(_("Not permitted"), frappe.PermissionError)
     return True

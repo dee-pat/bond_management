@@ -22,7 +22,8 @@ attachments or the investor SPA's chart.
   deferred retries, assignment and role cleanup, the `clear_user_permissions`
   override and the share-race harness are removed.
 - Exchange Rate Source: the investor DocPerm row leaves the DocType JSON;
-  migrate removes it from deployed sites. The Source hooks deny investors.
+  migrate removes it from deployed sites. The Source hooks deny investors,
+  including investors whose other role grants a Source DocPerm.
 - Bond Yield Comparison in Desk: filters, the standard report table and an
   "Open chart" button to `/bond-investor/yield-comparison`. The SPA keeps the
   only chart.

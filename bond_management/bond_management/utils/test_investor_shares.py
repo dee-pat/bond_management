@@ -173,11 +173,25 @@ class TestInvestorShares(IntegrationTestCase):
             with self.assertRaises(frappe.PermissionError):
                 frappe.qb.get_query(SOURCE_DOCTYPE, fields=["name"], ignore_permissions=False).run()
 
-        # Without a Source DocPerm Frappe skips list hooks, so only the document check applies.
+        # A pure investor has no Source DocPerm, so Frappe answers lists from shares
+        # alone; the document check still denies the read.
         self.legacy_share(source, self.investor.name)
         with self.set_user(self.investor.name):
             with self.assertRaises(frappe.PermissionError):
                 read_doc(SOURCE_DOCTYPE, source.name)
+
+    def test_investors_with_another_role_cannot_list_exchange_rate_source(self):
+        # The other role grants a Source DocPerm, so Frappe runs the list hook for them.
+        source = self.make_statement_source(make_statement(self.other))
+        with self.set_user(self.manager.name):
+            self.assertIn(source.name, self.visible_sources())
+            self.assertEqual(read_doc(SOURCE_DOCTYPE, source.name).name, source.name)
+        for role in (BOND_MANAGER_ROLE, "System Manager"):
+            investor = make_user([INVESTOR_ROLE, role])
+            with self.subTest(role=role), self.set_user(investor.name):
+                self.assertEqual(self.visible_sources(), [])
+                with self.assertRaises(frappe.PermissionError):
+                    read_doc(SOURCE_DOCTYPE, source.name)
 
     def test_moving_an_assignment_refreshes_the_previous_users_permission_cache(self):
         next_investor = make_user([INVESTOR_ROLE])
@@ -209,6 +223,9 @@ class TestInvestorShares(IntegrationTestCase):
         return frappe.qb.get_query("Bond Portfolio", fields=["name"], ignore_permissions=False).run(
             pluck=True
         )
+
+    def visible_sources(self):
+        return frappe.qb.get_query(SOURCE_DOCTYPE, fields=["name"], ignore_permissions=False).run(pluck=True)
 
     def legacy_share(self, document, user=None, **permissions):
         # db_insert deliberately bypasses hooks to represent shares made before decision 0012.
