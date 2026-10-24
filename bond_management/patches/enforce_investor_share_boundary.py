@@ -1,5 +1,7 @@
-from bond_management.bond_management.utils.investor_shares import cleanup_incompatible_shares
+"""Superseded by remove_financial_document_shares; kept registered so reruns stay valid."""
+
+from bond_management.bond_management.utils.investor_shares import delete_financial_shares
 
 
 def execute():
-    cleanup_incompatible_shares()
+    delete_financial_shares()

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { ref } from "vue";
 import { RouterLink } from "vue-router";
 import { Badge, Button, Select } from "frappe-ui";
 import { ListCell } from "frappe-ui/list";
@@ -8,13 +8,19 @@ import ListFilterBar from "../components/ListFilterBar.vue";
 import PagedRecordList from "../components/PagedRecordList.vue";
 import FilterButton from "../components/FilterButton.vue";
 import { useInvestorApi } from "../lib/api";
-import { toFilterValue, usePagedList } from "../lib/list";
+import { usePagedList } from "../lib/list";
+import { useListFilters, usePortfolioFilter } from "../lib/list-filters";
 import { formatDate } from "../lib/format";
-import type { ActiveListFilter, InvestorBootstrap, StatementListRow } from "../types";
+import type { InvestorBootstrap, StatementListRow } from "../types";
 
 const props = defineProps<{ bootstrap: InvestorBootstrap }>();
 const api = useInvestorApi();
-const selectedPortfolio = ref("");
+const {
+	selected: selectedPortfolio,
+	hasAssignments,
+	options: portfolioOptions,
+	filter: portfolioFilter,
+} = usePortfolioFilter(() => props.bootstrap.portfolios);
 const selectedStatus = ref("");
 const list = usePagedList<StatementListRow>({
 	fetchPage: (parameters) =>
@@ -26,70 +32,17 @@ const list = usePagedList<StatementListRow>({
 	sortBy: "statement_date",
 	errorMessage: "Statements could not be loaded. Please retry.",
 });
-const { activeFilter, loading, load: loadStatements } = list;
-
-const hasAssignments = computed(() => props.bootstrap.portfolios.length > 0);
-const portfolioOptions = computed(() => [
-	{ label: "All assigned portfolios", value: "" },
-	...props.bootstrap.portfolios.map((portfolio) => ({
-		label: portfolio.label,
-		value: portfolio.name,
-	})),
+const { loading } = list;
+const { activeFilters, reload, applyFilter, clearFilter, clearAllFilters } = useListFilters(list, [
+	portfolioFilter,
+	{ field: "reconciliation_status", label: "Reconciliation Status", selected: selectedStatus },
 ]);
+
 const statusOptions = [
 	{ label: "All statuses", value: "" },
 	{ label: "Matched", value: "Matched" },
 	{ label: "Mismatched", value: "Mismatched" },
 ];
-const activeFilters = computed<ActiveListFilter[]>(() => {
-	const filters: ActiveListFilter[] = [];
-	if (selectedPortfolio.value) {
-		const portfolio = props.bootstrap.portfolios.find(
-			(choice) => choice.name === selectedPortfolio.value
-		);
-		filters.push({
-			field: "portfolio_name",
-			label: "Portfolio Name",
-			value: portfolio?.label ?? selectedPortfolio.value,
-		});
-	}
-	if (selectedStatus.value) {
-		filters.push({
-			field: "reconciliation_status",
-			label: "Reconciliation Status",
-			value: selectedStatus.value,
-		});
-	}
-	if (activeFilter.value) filters.push(activeFilter.value);
-	return filters;
-});
-
-function changeFilters(): void {
-	void loadStatements(0);
-}
-
-function applyFilter(field: string, label: string, value: unknown): void {
-	const filterValue = toFilterValue(value);
-	if (!filterValue) return;
-	if (field === "portfolio_name") selectedPortfolio.value = filterValue;
-	else if (field === "reconciliation_status") selectedStatus.value = filterValue;
-	else activeFilter.value = { field, label, value: filterValue };
-	void loadStatements(0);
-}
-
-function clearFilter(field: string): void {
-	if (field === "portfolio_name") selectedPortfolio.value = "";
-	if (field === "reconciliation_status") selectedStatus.value = "";
-	if (activeFilter.value?.field === field) activeFilter.value = null;
-	void loadStatements(0);
-}
-
-function clearAllFilters(): void {
-	selectedPortfolio.value = "";
-	selectedStatus.value = "";
-	activeFilter.value = null;
-	void loadStatements(0);
-}
 const sortColumns = [
 	{ label: "Statement Date", field: "statement_date" },
 	{ label: "Portfolio Name", field: "portfolio_name" },
@@ -108,7 +61,7 @@ const sortColumns = [
 					label="Portfolio Name"
 					:options="portfolioOptions"
 					:disabled="loading || !hasAssignments"
-					@update:model-value="changeFilters"
+					@update:model-value="reload"
 				/>
 
 				<Select
@@ -118,7 +71,7 @@ const sortColumns = [
 					label="Reconciliation Status"
 					:options="statusOptions"
 					:disabled="loading || !hasAssignments"
-					@update:model-value="changeFilters"
+					@update:model-value="reload"
 				/>
 			</div>
 		</div>

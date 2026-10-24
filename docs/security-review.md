@@ -7,8 +7,7 @@ these surfaces. Findings use the format in [code-review.md](code-review.md).
 
 ## Whitelisted methods
 
-Entry points: `api/investor.py`, `api/investor_reports.py`,
-`utils/investor_shares.py`, the Bond Transaction, Statement, Master, and Market
+Entry points: `api/investor.py`, `api/investor_reports.py`, the Bond Transaction, Statement, Master, and Market
 Date controllers, and every Script Report under `report/` (Portfolio
 Performance, Bond Yield Comparison, and Interest Difference by Portfolio).
 
@@ -24,9 +23,9 @@ Performance, Bond Yield Comparison, and Interest Difference by Portfolio).
 
 ## Portfolio scope
 
-- A new financial DocType is in `_financial_doctypes` in `hooks.py`. That
-  list only wires the investor-mutation rejection and share cleanup; it does
-  not scope reads.
+- A new financial DocType is in `_financial_doctypes` in `hooks.py` and
+  `FINANCIAL_DOCTYPES` in `utils/investor_permissions.py`. Those lists wire the
+  investor-mutation rejection and the share rule; they do not scope reads.
 - A portfolio-owned DocType is also registered explicitly in both
   `permission_query_conditions` and `has_permission` in `hooks.py`, backed by
   functions in `utils/investor_permissions.py`. A DocType left out of either
@@ -36,41 +35,31 @@ Performance, Bond Yield Comparison, and Interest Difference by Portfolio).
   permission level 1 and returned only when the caller can read that statement
   ([PR #19](https://github.com/dee-pat/bond_management/pull/19)).
 - A private `File` attached to a portfolio-owned DocType follows that
-  portfolio's scope for investors. Ownership and shares never widen it: the
-  File `has_permission` hook, list condition and `InvestorFileMixin`
-  (private downloads call core File permission directly) all enforce it, and
-  `validate_file_share` rejects new out-of-scope shares. Assignment, role,
-  attached-document and File relink changes remove File shares that become
-  stale, because a stale share makes the investor's whole File list fail
-  closed. Investors stay read-only on these files: share validation rejects
-  an investor sharer and write or share grants to investors or everyone,
-  `has_file_permission` denies investors any non-read permission, and cleanup
-  drops legacy mutating grants. These checks also run from DocShare
-  `before_validate`, so a server caller's `ignore_validate` cannot skip them,
-  and the DocShare `on_trash` guard stops investors deleting these grants,
-  reading the File's current scope without waiting and failing closed.
-  Share validation locks the attached target,
-  users, then the File, the order document saves use before locking File rows
-  by URL; a File relinked or made private between reads locks its target
-  without waiting. Cleanup and File saves already hold users or the File, so
-  they take the other rows, including DocShare rows that an update locks
-  before its hooks run, without waiting and defer a busy row to a retry after
-  commit.
+  portfolio's scope for investors. Ownership never widens it: the File
+  `has_permission` hook, list condition and `InvestorFileMixin` (private
+  downloads call core File permission directly) all enforce it, and
+  `has_file_permission` denies investors any non-read permission.
+- Investors have no access to Bond Exchange Rate Source. Its list hook
+  `exchange_rate_source_query_condition` returns no rows for any investor,
+  including one whose other role grants a Source DocPerm, and
+  `has_exchange_rate_source_permission` denies document reads, even through a
+  stray share.
 
 ## Shares and User Permissions
 
-- Investor mutations stay rejected by `utils/investor_shares.py`, wired through
-  `extend_doctype_class`, `doc_events`, and the `clear_user_permissions`
-  override.
-- DocShare and User Permission changes stay consistent under concurrency;
-  changes here run the share-race helper described under _Temporary sites_ in
-  `docs/verification.md`.
-- Frappe locks an updated DocShare row in `check_if_latest()` before
-  `before_validate` waits for the target and users. Financial share cleanup
-  already holds those rows, so it locks DocShare rows without waiting and,
-  when one is busy, retries its whole original scope after commit instead of
-  waiting. Retrying the scope, not shares picked by a plain read, also covers
-  shares committed after this request's snapshot.
+- Financial documents and Files attached to them are never shared
+  ([decision 0012](decisions/0012-financial-documents-are-never-shared.md)).
+  No role has the `share` permission on a financial DocType, and the DocShare
+  `before_insert` and `before_validate` hook `reject_financial_share` rejects
+  any such share, for Administrator and server callers too. A diff that creates
+  a share of these documents, or bypasses the hook, is a finding.
+- A File newly attached to a financial document loses its shares in the same
+  save. The share hook locks the File row, so a concurrent relink either runs
+  first and is seen, or runs after and removes the share.
+- Investor list queries fail closed when the investor holds any share of a
+  portfolio-scoped DocType or of a File attached to a financial document.
+- Investor mutations stay rejected by `reject_investor_mutation` in
+  `utils/investor_shares.py`, wired through `doc_events`.
 
 ## `ignore_permissions=True`
 
@@ -96,7 +85,7 @@ Services with no prior permission check to rely on are allowed without one:
   boundary rather than sit behind it. `get_allowed_portfolios` and the
   investor-role lookup in `utils/investor_permissions.py` read Has Role and
   User Permission rows an investor cannot read, and `utils/investor_shares.py`
-  locks and repairs DocShare rows to keep shares consistent.
+  reads and deletes DocShare rows to keep financial documents unshared.
 
 ## Attachments
 
@@ -131,7 +120,7 @@ Services with no prior permission check to rely on are allowed without one:
 - The investor SPA renders through Vue templates; `v-html` and `innerHTML` with
   data are findings.
 - Desk scripts that build HTML or SVG strings escape every data value (for
-  example `escape_svg` in the Bond Yield Comparison report); only numbers and
+  example `frappe.utils.escape_html` in the Portfolio Performance report); only numbers and
   fixed strings are interpolated raw.
 - `/bond-investor` (`www/bond_investor.py`) serves only when
   `bond_investor_spa_enabled` is set and the user is signed in, and redirects

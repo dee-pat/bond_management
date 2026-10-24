@@ -26,18 +26,11 @@ website_route_rules = [
 app_include_css = ["/assets/bond_management/css/attachment.css"]
 
 # Installation marks patches as completed before running this hook, so
-# permission bootstrap that must exist on a fresh site is also invoked here.
+# invariants that must exist on a fresh site are also invoked here. DocPerms
+# and report roles come from the DocType and report JSON instead.
 after_install = [
     "bond_management.patches.add_bond_query_indexes.ensure_bond_query_indexes",
-    "bond_management.patches.add_bond_investor_read_only_access.execute",
-    "bond_management.patches.add_bond_investor_report_permission.execute",
-    "bond_management.patches.add_bond_yield_comparison_report_permission.execute",
-    "bond_management.patches.add_bond_management_manager_access.execute",
-    "bond_management.patches.add_bond_management_report_permission.execute",
-    "bond_management.patches.add_bond_exchange_rate_permissions.execute",
     "bond_management.patches.add_bond_exchange_rate_provenance.execute",
-    "bond_management.patches.enforce_investor_share_boundary.execute",
-    "bond_management.patches.add_bond_exchange_rate_source_permission.execute",
 ]
 
 # Frappe schema sync removes manual indexes when the DocField cannot declare
@@ -45,10 +38,6 @@ after_install = [
 # the registered patch and fresh-install hook perform duplicate validation.
 after_migrate = [
     "bond_management.patches.add_bond_query_indexes.reapply_bond_query_indexes",
-    "bond_management.patches.add_bond_management_manager_access.execute",
-    "bond_management.patches.add_bond_exchange_rate_permissions.execute",
-    "bond_management.patches.add_bond_yield_comparison_report_permission.execute",
-    "bond_management.patches.add_bond_exchange_rate_source_permission.ensure_permission",
 ]
 
 permission_query_conditions = {
@@ -86,46 +75,25 @@ extend_doctype_class["File"] = [
 ]
 doc_events = {
     doctype: {
-        "validate_share": f"{_investor_shares}.validate_share",
         "before_insert": f"{_investor_shares}.reject_investor_mutation",
         "before_validate": f"{_investor_shares}.reject_investor_mutation",
         "before_cancel": f"{_investor_shares}.reject_investor_mutation",
         "before_update_after_submit": f"{_investor_shares}.reject_investor_mutation",
         "on_trash": f"{_investor_shares}.reject_investor_mutation",
-        "on_update": f"{_investor_shares}.cleanup_document_shares",
     }
     for doctype in _financial_doctypes
 }
+# Financial documents and their Files are never shared (docs/decisions/0012).
 doc_events.update(
     {
-        "File": {
-            "validate_share": f"{_investor_shares}.validate_file_share",
-            "on_update": f"{_investor_shares}.cleanup_file_shares",
-        },
-        "User": {
-            "before_validate": f"{_investor_shares}.lock_user_authorization",
-            "on_update": f"{_investor_shares}.cleanup_user_shares",
-        },
+        "File": {"on_update": f"{_investor_shares}.remove_financial_file_shares"},
         "DocShare": {
-            "before_insert": f"{_investor_shares}.lock_share_authorization",
-            "before_validate": f"{_investor_shares}.lock_share_authorization",
-            "on_trash": f"{_investor_shares}.reject_investor_share_mutation",
+            "before_insert": f"{_investor_shares}.reject_financial_share",
+            "before_validate": f"{_investor_shares}.reject_financial_share",
         },
-        "User Permission": {
-            "before_insert": f"{_investor_shares}.lock_assignment_authorization",
-            "before_validate": f"{_investor_shares}.lock_assignment_authorization",
-            "on_trash": f"{_investor_shares}.lock_assignment_authorization",
-            "on_update": f"{_investor_shares}.cleanup_assignment_shares",
-            "after_delete": f"{_investor_shares}.cleanup_assignment_shares",
-        },
+        "User Permission": {"on_update": f"{_investor_shares}.clear_previous_assignee_cache"},
     }
 )
-
-override_whitelisted_methods = {
-    "frappe.core.doctype.user_permission.user_permission.clear_user_permissions": (
-        f"{_investor_shares}.clear_user_permissions"
-    ),
-}
 
 on_session_creation = [
     "bond_management.bond_management.utils.investor_permissions.redirect_investor_to_workspace"

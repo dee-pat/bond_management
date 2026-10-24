@@ -23,7 +23,10 @@ The public phases are in
 all seven manual indexes, their ordered columns and uniqueness, permissions,
 and every registered Patch Log immediately after `install-app`, before any
 migration. `prepare()` creates synthetic legacy rows and removes only Patch
-Logs returned by Frappe's `get_patches_from_app("bond_management")`.
+Logs returned by Frappe's `get_patches_from_app("bond_management")`, except
+the three older share-cleanup patches. Their existing logs must remain
+unchanged through the first migrate, so they cannot mask a broken new
+`remove_financial_document_shares` patch on an upgraded site.
 
 One-time data backfills were retired on 2026-10-13 after every deployed site
 had run them; a fresh install marks registered patches complete without running
@@ -33,11 +36,16 @@ statement, a statement-derived FX rate without its provenance row, and a manual
 FX rate without its manual-fallback flag. Direct database writes reproduce these
 legacy states only after the helper has enforced its temporary-site
 administrative boundary. Add representative rows here whenever a new data
-patch is registered.
+patch is registered. Legacy share fixtures include direct and everyone grants
+on a financial document, a grant on its private File, and unrelated User and
+File grants that must survive. These rows bypass today's share rejection only
+inside the guarded fixture.
 
 `verify()` asserts transaction financial values, FX provenance and
-manual-fallback flags, permissions, and manual indexes. It persists a business
-snapshot beside the bench, outside the repository and site configuration.
+manual-fallback flags, permissions, manual indexes, financial-share removal,
+unrelated-share preservation, and unchanged private File metadata and contents.
+It persists a business snapshot beside the bench, outside the repository and
+site configuration.
 Snapshots omit generated child names and timestamps while retaining financial
 fields, child ordering, and FX provenance. `requeue()` removes
 only the registered app Patch Logs for a forced rerun. The next `verify()`

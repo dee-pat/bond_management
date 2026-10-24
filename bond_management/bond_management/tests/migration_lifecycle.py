@@ -22,6 +22,14 @@ from bond_management.bond_management.tests.migration_lifecycle_fixtures import (
 from bond_management.bond_management.tests.temporary_site_guard import validate_temporary_site
 
 OPT_IN = "bond_migration_lifecycle_test"
+PREVIOUS_SHARE_PATCHES = tuple(
+    f"bond_management.patches.{name}"
+    for name in (
+        "enforce_investor_share_boundary",
+        "add_bond_exchange_rate_source_permission",
+        "cleanup_incompatible_file_shares",
+    )
+)
 
 
 def fresh():
@@ -39,12 +47,14 @@ def fresh():
 
 
 def prepare():
-    """Seed legacy data and requeue only this app's registered Patch Logs."""
+    """Seed legacy data; requeue app patches except the already-complete share cleanups."""
     state_path = _guard()
     state = _read_state(state_path)
     assert state["phase"] == "fresh", "Run fresh() immediately after install-app first"
     state.update(phase="prepared", fixtures=prepare_legacy_rows())
-    _remove_app_patch_logs()
+    # Existing sites have already completed these wrappers. Replaying them
+    # would hide a broken remove_financial_document_shares upgrade patch.
+    _remove_app_patch_logs(keep=PREVIOUS_SHARE_PATCHES)
     _write_state(state_path, state)
     return {"phase": "prepared", "next": f"bench --site {frappe.local.site} migrate"}
 
@@ -57,6 +67,12 @@ def verify():
     assert_indexes()
     assert_permissions()
     patch_logs = _patch_logs()
+    if state["phase"] == "prepared":
+        previous = [row for row in state["fresh_patch_logs"] if row["patch"] in PREVIOUS_SHARE_PATCHES]
+        assert len(previous) == len(PREVIOUS_SHARE_PATCHES)
+        assert [row for row in patch_logs if row["patch"] in PREVIOUS_SHARE_PATCHES] == previous, (
+            "First migration reran an already-complete share cleanup patch"
+        )
     assert_business_data(state["fixtures"])
     snapshot = _snapshot(state["fixtures"])
     if "snapshot" in state:
@@ -111,8 +127,10 @@ def _patch_logs():
     return json.loads(frappe.as_json(rows))
 
 
-def _remove_app_patch_logs():
-    patches = get_patches_from_app("bond_management")
+def _remove_app_patch_logs(*, keep=()):
+    registered = get_patches_from_app("bond_management")
+    assert set(keep) <= set(registered)
+    patches = [patch for patch in registered if patch not in keep]
     assert patches and all(patch.startswith("bond_management.") for patch in patches)
     frappe.db.delete("Patch Log", {"patch": ["in", patches]})
     assert not frappe.db.count("Patch Log", {"patch": ["in", patches]})

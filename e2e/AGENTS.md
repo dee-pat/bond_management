@@ -20,6 +20,9 @@ symlink to this file.
 4. Add delayed, failed, stale-response, retry or duplicate-request cases only
    for a demonstrated browser regression or a risk no lower layer can test.
    Keep each one deterministic and focused on visible recovery.
+5. Investor spec files run in parallel workers locally, so they never change
+   data. A flow that saves belongs in `desk/`, which runs on one worker, and
+   must not write records an investor spec reads.
 
 ## Running
 

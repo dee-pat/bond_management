@@ -1,16 +1,7 @@
-"""Scope investor access to explicitly shared exchange-rate provenance rows."""
+"""Superseded by decision 0012: investors have no Source access and Source rows are never shared."""
 
-from bond_management.bond_management.utils.investor_shares import (
-    SOURCE_DOCTYPE,
-    cleanup_incompatible_shares,
-)
-from bond_management.patches.add_bond_investor_read_only_access import ensure_investor_read_only_docperm
+from bond_management.bond_management.utils.investor_shares import delete_financial_shares
 
 
 def execute():
-    ensure_investor_read_only_docperm(SOURCE_DOCTYPE)
-    cleanup_incompatible_shares(doctype=SOURCE_DOCTYPE)
-
-
-def ensure_permission():
-    ensure_investor_read_only_docperm(SOURCE_DOCTYPE)
+    delete_financial_shares()

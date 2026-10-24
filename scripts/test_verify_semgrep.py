@@ -22,37 +22,42 @@ class SemgrepGateTests(unittest.TestCase):
         shutil.copy2(source_root / "scripts" / "verify.sh", self.app_root / "scripts" / "verify.sh")
         shutil.copytree(source_root / "semgrep", self.app_root / "semgrep")
 
-    def test_clean_source_passes(self):
-        result = self.scan("value = 1\n")
-        self.assertEqual(result.returncode, 0, result.stdout)
-        self.assertIn("Running blocking frappe-agent-kit Semgrep rules.", result.stdout)
-        # The kit's rule fixtures hold deliberate findings, so a pass shows they were not scanned.
-        self.assertTrue((self.app_root / "semgrep" / "kit" / "tests" / "transactions.py").is_file())
-
-    def test_frappe_error_blocks_before_advisory_and_kit_scans(self):
+    def test_frappe_error_blocks_before_advisory_scan(self):
         result = self.scan("value = eval(user_input)\n")
         self.assertEqual(result.returncode, 1, result.stdout)
         self.assertIn("frappe-codeinjection-eval", "".join(result.stdout.split()))
-        self.assertNotIn("Running advisory Frappe Semgrep rules.", result.stdout)
-        self.assertNotIn("Running blocking frappe-agent-kit Semgrep rules.", result.stdout)
+        self.assertNotIn("Running advisory Frappe Semgrep rules", result.stdout)
 
-    def test_kit_transaction_rule_blocks(self):
-        # frappe-manual-commit is a Frappe WARNING, so only the kit scan blocks this.
+    def test_kit_rule_blocks(self):
+        # frappe-manual-commit is a Frappe WARNING, so only the kit rule blocks this.
         result = self.scan("import frappe\nfrappe.db.commit()\n")
         self.assertEqual(result.returncode, 1, result.stdout)
-        self.assertIn("Running blocking frappe-agent-kit Semgrep rules.", result.stdout)
         self.assertIn("frappe-kit-no-manual-transaction-boundary", "".join(result.stdout.split()))
-
-    def test_kit_decimal_rule_blocks(self):
-        result = self.scan("from decimal import Decimal\nvalue = Decimal(0.1)\n")
-        self.assertEqual(result.returncode, 1, result.stdout)
-        self.assertIn("frappe-kit-decimal-from-float-literal", "".join(result.stdout.split()))
 
     def test_advisory_warning_does_not_block(self):
         result = self.scan('import frappe\nfrappe.db.sql(f"SELECT {user_input}")\n')
         self.assertEqual(result.returncode, 0, result.stdout)
         self.assertIn("frappe-sql-format-injection", "".join(result.stdout.split()))
-        self.assertIn("Running blocking frappe-agent-kit Semgrep rules.", result.stdout)
+        # The kit's rule fixtures hold deliberate findings, so a pass shows they were not scanned.
+        self.assertTrue((self.app_root / "semgrep" / "kit" / "tests" / "transactions.py").is_file())
+
+    def test_kit_decimal_float_literal_blocks(self):
+        result = self.scan("from decimal import Decimal\nvalue = Decimal(0.1)\n")
+        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assertIn("frappe-kit-decimal-from-float-literal", "".join(result.stdout.split()))
+
+    def test_kit_lower_severities_still_block(self):
+        rule_path = self.app_root / "semgrep" / "kit" / "finance.yml"
+        original_rule = rule_path.read_text(encoding="utf-8")
+        self.assertIn("severity: ERROR", original_rule)
+        for severity in ("WARNING", "INFO"):
+            with self.subTest(severity=severity):
+                rule_path.write_text(
+                    original_rule.replace("severity: ERROR", f"severity: {severity}"), encoding="utf-8"
+                )
+                result = self.scan("from decimal import Decimal\nvalue = Decimal(0.1)\n")
+                self.assertEqual(result.returncode, 1, result.stdout)
+                self.assertIn("frappe-kit-decimal-from-float-literal", "".join(result.stdout.split()))
 
     def scan(self, source):
         (self.app_root / "violation.py").write_text(source, encoding="utf-8")

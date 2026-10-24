@@ -13,7 +13,7 @@ FRAPPE_SEMGREP_RULES_DIR="${APP_ROOT}/semgrep/frappe"
 KIT_SEMGREP_RULES_DIR="${APP_ROOT}/semgrep/kit"
 
 usage() {
-    echo "Usage: scripts/verify.sh [lint|server|frontend|ui|playwright|pre-push|pre-push-ui|lifecycle|share-race] [playwright args]" >&2
+    echo "Usage: scripts/verify.sh [lint|server|frontend|ui|playwright|pre-push|pre-push-ui|lifecycle] [playwright args]" >&2
 }
 
 prepare_test_site() {
@@ -68,9 +68,9 @@ run_semgrep() {
     binary="$(semgrep_binary)"
 
     # semgrep/ holds rules and their test fixtures, which contain deliberate
-    # findings, not app code.
+    # findings, not app code. Scan kit rules separately so every severity blocks.
     cd "${APP_ROOT}"
-    echo "Running blocking Frappe Semgrep rules (ERROR severity)."
+    echo "Running blocking Frappe Semgrep rules (ERROR)."
     "${binary}" scan \
         --error \
         --metrics=off \
@@ -79,32 +79,27 @@ run_semgrep() {
         --severity ERROR \
         --exclude "semgrep"
 
-    echo "Running advisory Frappe Semgrep rules."
-    local advisory_status=0
-    if "${binary}" scan \
-        --metrics=off \
-        --disable-version-check \
-        --config "${FRAPPE_SEMGREP_RULES_DIR}" \
-        --exclude "semgrep"; then
-        advisory_status=0
-    else
-        advisory_status=$?
-    fi
-
-    if [[ "${advisory_status}" -gt 1 ]]; then
-        echo "The advisory Semgrep scan failed with status ${advisory_status}." >&2
-        exit "${advisory_status}"
-    fi
-
-    # The kit's rule fixtures live in semgrep/kit/tests, which --exclude skips.
-    echo "Running blocking frappe-agent-kit Semgrep rules."
+    echo "Running blocking frappe-agent-kit Semgrep rules (all severities)."
     "${binary}" scan \
         --error \
         --metrics=off \
         --disable-version-check \
         --config "${KIT_SEMGREP_RULES_DIR}" \
-        --exclude "semgrep" \
-        "${APP_ROOT}"
+        --exclude "semgrep"
+
+    echo "Running advisory Frappe Semgrep rules (WARNING)."
+    local advisory_status=0
+    "${binary}" scan \
+        --metrics=off \
+        --disable-version-check \
+        --config "${FRAPPE_SEMGREP_RULES_DIR}" \
+        --severity WARNING \
+        --exclude "semgrep" || advisory_status=$?
+
+    if [[ "${advisory_status}" -gt 1 ]]; then
+        echo "The advisory Semgrep scan failed with status ${advisory_status}." >&2
+        exit "${advisory_status}"
+    fi
 }
 
 run_lint() {
@@ -298,26 +293,6 @@ run_migration_lifecycle() {
     bench --site "${site}" execute "${phase}.verify"
 }
 
-run_share_race() {
-    local name
-    for name in BOND_SHARE_LOCK_SOCKET BOND_SHARE_LOCK_USER; do
-        if [[ -z "${!name:-}" ]]; then
-            echo "${name} is required for the share-race check; see investor_share_concurrency.py." >&2
-            exit 1
-        fi
-    done
-
-    create_temporary_site "bond-management-race-"
-    local site="${TEMPORARY_SITE}"
-    local helper="bond_management.bond_management.tests.investor_share_concurrency"
-
-    BOND_SHARE_RACE_BENCH="${BENCH_ROOT}"
-    BOND_SHARE_RACE_TOKEN="$(python3 -c 'import secrets; print(secrets.token_hex(6))')"
-    export BOND_SHARE_RACE_BENCH BOND_SHARE_RACE_TOKEN
-    bench --site "${site}" execute "${helper}.seed"
-    bench --site "${site}" execute "${helper}.run"
-}
-
 if [[ "${BASH_SOURCE[0]}" != "$0" ]]; then
     return
 fi
@@ -348,9 +323,6 @@ case "${MODE}" in
         ;;
     lifecycle)
         run_migration_lifecycle
-        ;;
-    share-race)
-        run_share_race
         ;;
     *)
         usage

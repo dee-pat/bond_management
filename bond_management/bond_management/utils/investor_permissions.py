@@ -23,6 +23,15 @@ PORTFOLIO_DOCTYPES = {
     "Bond Transaction": "portfolio_name",
     "Bond Statement": "portfolio_name",
 }
+SOURCE_DOCTYPE = "Bond Exchange Rate Source"
+# hooks.py keeps its own copy as _financial_doctypes so it stays free of app imports.
+FINANCIAL_DOCTYPES = (
+    *PORTFOLIO_DOCTYPES,
+    "Bond Master",
+    "Bond Market Date",
+    "Bond Exchange Rate",
+    SOURCE_DOCTYPE,
+)
 
 
 def has_investor_desk_access() -> bool:
@@ -104,7 +113,7 @@ def _portfolio_condition(doctype: str, fieldname: str, user: str) -> str | None:
     portfolios = get_allowed_portfolios(user)
     if portfolios is None:
         return None
-    _reject_incompatible_shared_documents(doctype, fieldname, user, portfolios)
+    _reject_investor_shares(doctype, user)
     if not portfolios:
         return "1=0"
 
@@ -115,23 +124,9 @@ def _portfolio_condition(doctype: str, fieldname: str, user: str) -> str | None:
     return f"`tab{doctype}`.`{fieldname}` in ({values})"
 
 
-def _reject_incompatible_shared_documents(
-    doctype: str, fieldname: str, user: str, portfolios: list[str]
-) -> None:
-    """Fail closed if a legacy share would be ORed around the query condition."""
-    shared_names = frappe.share.get_shared(doctype, user)
-    if not shared_names:
-        return
-
-    # Fail-closed boundary check: inspect every shared row, including rows
-    # outside the caller's portfolio scope.
-    shared_documents = frappe.qb.get_query(
-        doctype,
-        fields=["name", fieldname],
-        filters={"name": ["in", shared_names]},
-        ignore_permissions=True,
-    ).run(as_dict=True)
-    if any(document.get(fieldname) not in portfolios for document in shared_documents):
+def _reject_investor_shares(doctype: str, user: str) -> None:
+    """Fail closed: financial documents are never shared, and Frappe ORs shares around list conditions."""
+    if frappe.share.get_shared(doctype, user):
         frappe.throw(_("Not permitted"), frappe.PermissionError)
 
 
@@ -156,7 +151,7 @@ def file_query_condition(user: str | None = None) -> str | None:
     portfolios = get_allowed_portfolios(user)
     if portfolios is None:
         return None
-    _reject_out_of_scope_file_shares(user)
+    _reject_financial_file_shares(user)
 
     portfolio_values = ", ".join(frappe.db.escape(portfolio) for portfolio in portfolios)
     scoped_doctypes = ", ".join(frappe.db.escape(doctype) for doctype in PORTFOLIO_DOCTYPES)
@@ -222,19 +217,20 @@ class InvestorFileMixin:
         return super().is_downloadable() and is_file_in_investor_scope(self, frappe.session.user)
 
 
-def _reject_out_of_scope_file_shares(user: str) -> None:
-    """Fail closed: Frappe ORs shared names around the File query condition."""
+def _reject_financial_file_shares(user: str) -> None:
+    """Fail closed: Files attached to financial documents are never shared."""
     shared_names = frappe.share.get_shared("File", user)
     if not shared_names:
         return
     # This boundary inspects shared files before the caller's scope applies.
-    shared_files = frappe.qb.get_query(
+    financial_files = frappe.qb.get_query(
         "File",
-        fields=["name", "is_private", "attached_to_doctype", "attached_to_name"],
-        filters={"name": ["in", shared_names]},
+        fields=["name"],
+        filters={"name": ["in", shared_names], "attached_to_doctype": ["in", FINANCIAL_DOCTYPES]},
+        limit=1,
         ignore_permissions=True,
-    ).run(as_dict=True)
-    if not all(is_file_in_investor_scope(file, user) for file in shared_files):
+    ).run()
+    if financial_files:
         frappe.throw(_("Not permitted"), frappe.PermissionError)
 
 
@@ -248,116 +244,24 @@ def _attached_portfolio(file: Document | frappe._dict, field: str) -> str | None
 
 
 def exchange_rate_source_query_condition(user: str | None = None) -> str | None:
-    """Limit provenance lists to explicitly shared rows in assigned portfolios."""
+    """Permission-query hook: list no provenance for an investor, including one with another role.
+
+    Another role can grant a Source DocPerm, and then Frappe runs this hook.
+    """
     user = user or frappe.session.user
-    portfolios = get_allowed_portfolios(user)
-    if portfolios is None:
+    if not is_investor_user(user):
         return None
-
-    shared_names = _reject_incompatible_exchange_rate_source_shares(user, portfolios)
-    if not portfolios or not shared_names:
-        return "1=0"
-
-    values = ", ".join(frappe.db.escape(portfolio) for portfolio in portfolios)
-    return (
-        "`tabBond Exchange Rate Source`.`name` in ("
-        "select `tabDocShare`.`share_name` from `tabDocShare` "
-        f"where `tabDocShare`.`share_doctype` = {frappe.db.escape('Bond Exchange Rate Source')} "
-        f"and `tabDocShare`.`user` = {frappe.db.escape(user)} "
-        "and `tabDocShare`.`read` = 1 and `tabDocShare`.`everyone` = 0) "
-        "and `tabBond Exchange Rate Source`.`statement` in ("
-        "select `tabBond Statement`.`name` from `tabBond Statement` "
-        f"where `tabBond Statement`.`portfolio_name` in ({values}))"
-    )
+    _reject_investor_shares(SOURCE_DOCTYPE, user)
+    return "1=0"
 
 
 def has_exchange_rate_source_permission(
     doc: Document, user: str | None = None, ptype: str | None = None, **_kwargs: Any
 ) -> bool:
-    """Permission hook: investors may only read explicitly shared provenance in assigned portfolios."""
-    user = user or frappe.session.user
-    portfolios = get_allowed_portfolios(user)
-    if portfolios is None:
-        return True
-
-    portfolio = get_statement_portfolio(doc.get("statement"))
-    if (
-        ptype not in READ_PERMISSION_TYPES
-        or not portfolio
-        or portfolio not in portfolios
-        or not has_explicit_exchange_rate_source_share(user, doc.name)
-    ):
+    """Permission hook: deny investors any access to exchange-rate provenance, even through a share."""
+    if is_investor_user(user or frappe.session.user):
         frappe.throw(_("Not permitted"), frappe.PermissionError)
     return True
-
-
-def _reject_incompatible_exchange_rate_source_shares(user: str, portfolios: list[str]) -> list[str]:
-    """Prevent DocShare's list-query OR from bypassing provenance scope."""
-    shared_names = frappe.share.get_shared("Bond Exchange Rate Source", user, rights=["read"])
-    if not shared_names:
-        return []
-
-    everyone_names = frappe.share.get_shared(
-        "Bond Exchange Rate Source",
-        user,
-        rights=["read"],
-        filters=[["everyone", "=", 1]],
-    )
-    if everyone_names:
-        frappe.throw(_("Not permitted"), frappe.PermissionError)
-
-    # This permission service must inspect the linked statement even when the
-    # caller has no direct permission to read provenance or statement records.
-    sources = frappe.qb.get_query(
-        "Bond Exchange Rate Source",
-        fields=["name", "statement"],
-        filters={"name": ["in", shared_names]},
-        ignore_permissions=True,
-    ).run(as_dict=True)
-    statement_names = {source.statement for source in sources if source.statement}
-    statements = []
-    if statement_names:
-        statements = frappe.qb.get_query(
-            "Bond Statement",
-            fields=["name", "portfolio_name"],
-            filters={"name": ["in", list(statement_names)]},
-            ignore_permissions=True,
-        ).run(as_dict=True)
-    portfolio_by_statement = {statement.name: statement.portfolio_name for statement in statements}
-
-    if any(portfolio_by_statement.get(source.statement) not in portfolios for source in sources):
-        frappe.throw(_("Not permitted"), frappe.PermissionError)
-    return shared_names
-
-
-def has_explicit_exchange_rate_source_share(user: str, source_name: str | None) -> bool:
-    """Return whether ``user`` has a direct, non-everyone read share of the provenance row."""
-    if not source_name:
-        return False
-    return bool(
-        frappe.share.get_shared(
-            "Bond Exchange Rate Source",
-            user,
-            rights=["read"],
-            filters=[["share_name", "=", source_name], ["everyone", "=", 0]],
-            limit=1,
-        )
-    )
-
-
-def get_statement_portfolio(
-    statement_name: str | None, *, for_update: bool = False, wait: bool = True
-) -> str | None:
-    """Return a statement's portfolio without a permission check; callers own the boundary."""
-    if not statement_name:
-        return None
-    return frappe.db.get_value(
-        "Bond Statement",
-        statement_name,
-        "portfolio_name",
-        for_update=for_update,
-        wait=wait,
-    )
 
 
 _SHARED_EXCHANGE_RATE_PROJECTION_FLAG = "include_shared_exchange_rates_in_safe_projection"
