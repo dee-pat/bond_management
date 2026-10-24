@@ -78,8 +78,10 @@ requests. `e2e/investor/performance.spec.ts` owns visible failure/Retry recovery
 The opt-in `tests/migration_lifecycle.py` CLI helper verifies manual index and
 permission bootstrap immediately after fresh installation, then runs the real
 registered patch sequence via `bench migrate` over representative legacy FX
-provenance fixtures. It compares persisted business results after a
-forced registered-patch rerun and checks that an ordinary migration preserves
+provenance and financial-share fixtures. The first migration retains the older
+share-cleanup Patch Logs so the new patch alone must remove financial grants;
+unrelated shares and private Files must survive unchanged. It compares persisted
+business results after a forced registered-patch rerun and checks that an ordinary migration preserves
 Patch Log identities. `tests/test_migration_lifecycle.py` covers the temporary
 site safety guards in the normal server suite. See the [lifecycle plan](specs/migration-lifecycle.md)
 for the exact phases and temporary-site boundary, and

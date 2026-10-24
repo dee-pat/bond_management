@@ -69,6 +69,7 @@ def assert_permissions():
 
 
 def assert_business_data(fixtures):
+    _assert_share_cleanup(fixtures["shares"])
     transaction = frappe.get_doc("Bond Transaction", fixtures["transaction"])
     for field, expected in {
         "quantity_face_value": "10",
@@ -93,6 +94,19 @@ def assert_business_data(fixtures):
     assert Decimal(str(sources[0]["reverse_rate"])) == Decimal("125")
     manual = frappe.get_doc("Bond Exchange Rate", fixtures["manual_exchange_rate"])
     assert manual.manual_fallback == 1 and not manual.statement
+
+
+def _assert_share_cleanup(shares):
+    remaining = _rows("DocShare", ["name"], {"name": ["in", shares["removed"]]})
+    assert not remaining, ("Financial shares survived migration", remaining)
+    for expected in shares["kept"]:
+        actual = frappe.db.get_value("DocShare", expected["name"], list(expected), as_dict=True)
+        assert actual == expected, ("Unrelated share changed", expected, actual)
+    for expected in shares["files"]:
+        file = frappe.get_doc("File", expected["name"])
+        for field, value in expected.items():
+            actual = file.get_content() if field == "content" else file.get(field)
+            assert actual == value, ("File changed during share cleanup", file.name, field)
 
 
 def _rows(doctype, fields, filters):
