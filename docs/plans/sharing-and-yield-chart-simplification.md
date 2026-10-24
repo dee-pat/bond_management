@@ -1,6 +1,6 @@
 # Sharing and yield chart simplification
 
-Status: In progress on `chore/simplify-and-speed-up-tests`; PR pending.
+Status: Complete. Merged in [#104](https://github.com/dee-pat/bond_management/pull/104) on 2026-10-24.
 Decision: [0012](../decisions/0012-financial-documents-are-never-shared.md).
 
 ## Goal
