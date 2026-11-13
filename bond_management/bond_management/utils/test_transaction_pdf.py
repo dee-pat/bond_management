@@ -103,6 +103,26 @@ class TestTransactionPdf(UnitTestCase):
         self.assertIsNone(row.commission_percent)
         self.assertEqual(row.commission_amount, Decimal("2025.00"))
 
+    def test_ignores_maturity_and_call_fields_beside_commission_amount(self):
+        parsed = parse_transaction_pdf_text(_transaction_text_with_charge_fields())
+
+        row = parsed.transactions[0]
+        self.assertIsNone(row.commission_percent)
+        self.assertEqual(row.commission_amount, Decimal("15750.00"))
+        self.assertEqual(row.accrued_interest_paid, Decimal("1375.00"))
+
+    def test_rejects_non_zero_or_malformed_unrecorded_charges(self):
+        for brokerage_fee, vat, message in (
+            ("12.50", "0.00", "non-zero Brokerage Fee"),
+            ("0.00", "0.01", "non-zero VAT"),
+            ("abc", "0.00", "invalid Brokerage Fee"),
+        ):
+            with self.subTest(brokerage_fee=brokerage_fee, vat=vat):
+                with self.assertRaisesRegex(TransactionPdfError, message):
+                    parse_transaction_pdf_text(
+                        _transaction_text_with_charge_fields(brokerage_fee=brokerage_fee, vat=vat)
+                    )
+
     def test_parses_pdf_principal_and_settlement_amount(self):
         parsed = parse_transaction_pdf_text(
             """
@@ -354,6 +374,23 @@ class TestTransactionPdf(UnitTestCase):
         )
         with self.assertRaisesRegex(TransactionPdfError, "conflicting values"):
             parse_transaction_pdf_text(conflicting)
+
+
+def _transaction_text_with_charge_fields(*, brokerage_fee="0.00", vat="0.00"):
+    return f"""
+    Account No : 1110700351101
+    Subscription
+    Bonds Name : REPUBLIC OF KENYA - XS3305838602
+    ISIN : XS3305838602
+    Currency : USD Quantity / Face Value : 3,500,000.000000
+    Price : 99.950000 Principal : 3,498,250.00
+    Trade Date : 26/02/2026 Accrued Interest : 1,375.00
+    Settlement Date : 27/02/2026 Commission % :
+    Commission Amount : 15,750.00 Maturity Date :  26/02/2034
+    Brokerage Fee :  {brokerage_fee} Next Call Date :
+    VAT :  {vat} Coupon Declaration Date :
+    Transaction Reference : U1903418
+    """
 
 
 def _current_transaction_text(

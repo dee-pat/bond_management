@@ -38,9 +38,13 @@ FIELD_PATTERN = re.compile(
     r"\b(?P<label>Bonds\s+Name|ISIN|Currency|Quantity(?:\s*/\s*Face\s+Value)?|"
     r"Face\s+Value|Price|Principal|Trade\s+Date|Settlement\s+Date|"
     r"Settlement\s+Amount(?:\s+in\s+Currency)?|Accrued\s+Interest|"
-    r"Commission(?:\s*%|\s+Amount)?|Transaction\s+Reference)\s*:",
+    r"Commission(?:\s*%|\s+Amount)?|Transaction\s+Reference|"
+    r"Maturity\s+Date|Next\s+Call\s+Date|Coupon\s+Declaration\s+Date|"
+    r"Brokerage\s+Fee|VAT)\s*:",
     re.IGNORECASE,
 )
+# Charges the app does not record. They must be blank, N/A or zero so a cost is never dropped silently.
+UNSUPPORTED_CHARGE_LABELS = ("Brokerage Fee", "Vat")
 DECIMAL_FIELD_LABELS = {
     "Quantity",
     "Quantity / Face Value",
@@ -142,6 +146,7 @@ def parse_transaction_pdf_text(text: str) -> ParsedTransactionPdf:
         settlement_date = _required_date(fields, "Settlement Date")
         trade_date = _optional_date(fields, "Trade Date") or settlement_date
         commission_percent, commission_amount = _parse_commission(fields)
+        _reject_unsupported_charges(fields)
         row = ParsedTransactionPdfRow(
             transaction_reference=reference,
             transaction_type="Sale" if reference.startswith("R") else "Purchase",
@@ -395,7 +400,7 @@ def _parse_row_fields(text: str) -> dict[str, str]:
 def _same_field_value(label: str, first: str, second: str) -> bool:
     if label == "Isin":
         return first.upper() == second.upper()
-    if label in {"Commission Amount", "Commission"}:
+    if label in {"Commission Amount", "Commission", *UNSUPPORTED_CHARGE_LABELS}:
         return _parse_commission_amount(first, label) == _parse_commission_amount(second, label)
     if label in DECIMAL_FIELD_LABELS:
         return _parse_decimal(first, label) == _parse_decimal(second, label)
@@ -502,6 +507,15 @@ def _parse_commission(fields: dict[str, str]) -> tuple[Decimal | None, Decimal |
     if "Commission %" in fields:
         return Decimal("0"), None
     raise TransactionPdfError("Could not find Commission in a transaction PDF row.")
+
+
+def _reject_unsupported_charges(fields: dict[str, str]) -> None:
+    for label in UNSUPPORTED_CHARGE_LABELS:
+        display_label = "VAT" if label == "Vat" else label
+        if label in fields and _parse_commission_amount(fields[label], display_label) != 0:
+            raise TransactionPdfError(
+                f"The transaction PDF contains a non-zero {display_label}, which is not supported."
+            )
 
 
 def _parse_commission_percent(value: str) -> Decimal | None:
