@@ -102,7 +102,9 @@ jobs:
         run: apps/bond_management/scripts/verify.sh server
 
   ui-tests:
-    runs-on: ubuntu-latest
+    # Playwright 1.57 has no Chromium build for ubuntu-latest (26.04). Move
+    # back to ubuntu-latest when @playwright/test is upgraded to a release that supports it.
+    runs-on: ubuntu-24.04
     timeout-minutes: 35
     name: UI (Playwright)
 
