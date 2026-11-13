@@ -221,8 +221,6 @@ go to Playwright, for example
 - Install the Playwright browser when it is missing with
   `yarn playwright install chromium` from the app root. CI installs Chromium
   in its run-scoped bench; the runner image provides its system libraries.
-  The UI job is pinned to `ubuntu-24.04` because Playwright 1.57 has no Chromium
-  build for Ubuntu 26.04; unpin it when `@playwright/test` is upgraded.
 - Start the intended local site explicitly so the browser cannot land on a
   different default site:
   `bench --site bond-management-test.localhost serve --port 8001 --noreload`.
