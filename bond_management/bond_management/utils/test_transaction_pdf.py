@@ -123,6 +123,31 @@ class TestTransactionPdf(UnitTestCase):
                         _transaction_text_with_charge_fields(brokerage_fee=brokerage_fee, vat=vat)
                     )
 
+    def test_checks_unrecorded_charges_printed_outside_transaction_rows(self):
+        for trailer in ("VAT : 0.00", "Brokerage Fee : N/A"):
+            with self.subTest(trailer=trailer):
+                parsed = parse_transaction_pdf_text(_transaction_text_with_charge_fields(trailer=trailer))
+                self.assertEqual(parsed.transactions[0].commission_amount, Decimal("15750.00"))
+
+        for trailer, message in (
+            ("VAT : 5.00", "non-zero VAT"),
+            ("Brokerage Fee : 12.50", "non-zero Brokerage Fee"),
+            ("VAT : abc", "invalid VAT"),
+            # A blank value cannot be told apart from one printed on the next line, so it is not read as zero.
+            ("VAT :", "invalid VAT"),
+        ):
+            with self.subTest(trailer=trailer):
+                with self.assertRaisesRegex(TransactionPdfError, message):
+                    parse_transaction_pdf_text(_transaction_text_with_charge_fields(trailer=trailer))
+
+    def test_names_vat_in_conflicting_value_errors(self):
+        text = _transaction_text_with_charge_fields().replace(
+            "Transaction Reference", "VAT : 1.00 Transaction Reference"
+        )
+
+        with self.assertRaisesRegex(TransactionPdfError, "conflicting VAT values"):
+            parse_transaction_pdf_text(text)
+
     def test_parses_pdf_principal_and_settlement_amount(self):
         parsed = parse_transaction_pdf_text(
             """
@@ -376,7 +401,7 @@ class TestTransactionPdf(UnitTestCase):
             parse_transaction_pdf_text(conflicting)
 
 
-def _transaction_text_with_charge_fields(*, brokerage_fee="0.00", vat="0.00"):
+def _transaction_text_with_charge_fields(*, brokerage_fee="0.00", vat="0.00", trailer=""):
     return f"""
     Account No : 1110700351101
     Subscription
@@ -389,7 +414,8 @@ def _transaction_text_with_charge_fields(*, brokerage_fee="0.00", vat="0.00"):
     Commission Amount : 15,750.00 Maturity Date :  26/02/2034
     Brokerage Fee :  {brokerage_fee} Next Call Date :
     VAT :  {vat} Coupon Declaration Date :
-    Transaction Reference : U1903418
+    Transaction Reference : U1903418 {trailer}
+    This confirmation is computer generated.
     """
 
 

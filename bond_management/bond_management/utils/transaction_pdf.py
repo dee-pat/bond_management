@@ -1,5 +1,5 @@
 import re
-from collections.abc import Sequence
+from collections.abc import Iterable, Iterator, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import date, datetime
 from decimal import ROUND_HALF_EVEN, Decimal
@@ -44,7 +44,8 @@ FIELD_PATTERN = re.compile(
     re.IGNORECASE,
 )
 # Charges the app does not record. They must be blank, N/A or zero so a cost is never dropped silently.
-UNSUPPORTED_CHARGE_LABELS = ("Brokerage Fee", "Vat")
+UNSUPPORTED_CHARGE_LABELS = ("Brokerage Fee", "VAT")
+LABEL_SPELLINGS = {"Vat": "VAT"}
 DECIMAL_FIELD_LABELS = {
     "Quantity",
     "Quantity / Face Value",
@@ -137,6 +138,7 @@ def parse_transaction_pdf_text(text: str) -> ParsedTransactionPdf:
     if len(account_numbers) > 1:
         raise TransactionPdfError("The transaction PDF contains conflicting account numbers.")
 
+    _reject_unsupported_charges_outside_rows(text or "")
     rows_by_reference = {}
     for match in TRANSACTION_BLOCK_PATTERN.finditer(text or ""):
         reference = match.group("reference").upper()
@@ -146,7 +148,7 @@ def parse_transaction_pdf_text(text: str) -> ParsedTransactionPdf:
         settlement_date = _required_date(fields, "Settlement Date")
         trade_date = _optional_date(fields, "Trade Date") or settlement_date
         commission_percent, commission_amount = _parse_commission(fields)
-        _reject_unsupported_charges(fields)
+        _reject_unsupported_charges(fields.items())
         row = ParsedTransactionPdfRow(
             transaction_reference=reference,
             transaction_type="Sale" if reference.startswith("R") else "Purchase",
@@ -382,19 +384,24 @@ def _extract_positioned_page_text(
 
 
 def _parse_row_fields(text: str) -> dict[str, str]:
-    matches = list(FIELD_PATTERN.finditer(text))
     fields = {}
-    for index, match in enumerate(matches):
-        label = " ".join(match.group("label").split()).title()
-        label = re.sub(r"\s*/\s*", " / ", label)
-        label = re.sub(r"\s*%", " %", label)
-        label = label.removesuffix(" In Currency")
-        end = matches[index + 1].start() if index + 1 < len(matches) else len(text)
-        value = text[match.end() : end].strip()
+    for label, value in _labelled_values(text):
         if label in fields and not _same_field_value(label, fields[label], value):
             raise TransactionPdfError(f"The transaction PDF contains conflicting {label} values.")
         fields[label] = value
     return fields
+
+
+def _labelled_values(text: str) -> Iterator[tuple[str, str]]:
+    """Yield each known label with the text up to the next known label."""
+    matches = list(FIELD_PATTERN.finditer(text))
+    for index, match in enumerate(matches):
+        label = " ".join(match.group("label").split()).title()
+        label = re.sub(r"\s*/\s*", " / ", label)
+        label = re.sub(r"\s*%", " %", label)
+        label = LABEL_SPELLINGS.get(label, label).removesuffix(" In Currency")
+        end = matches[index + 1].start() if index + 1 < len(matches) else len(text)
+        yield label, text[match.end() : end].strip()
 
 
 def _same_field_value(label: str, first: str, second: str) -> bool:
@@ -509,12 +516,21 @@ def _parse_commission(fields: dict[str, str]) -> tuple[Decimal | None, Decimal |
     raise TransactionPdfError("Could not find Commission in a transaction PDF row.")
 
 
-def _reject_unsupported_charges(fields: dict[str, str]) -> None:
-    for label in UNSUPPORTED_CHARGE_LABELS:
-        display_label = "VAT" if label == "Vat" else label
-        if label in fields and _parse_commission_amount(fields[label], display_label) != 0:
+def _reject_unsupported_charges_outside_rows(text: str) -> None:
+    """Check charges printed between or around transaction rows, where no row parser sees them."""
+    outside_rows = TRANSACTION_BLOCK_PATTERN.sub("\n", text)
+    # Outside a row a value runs into footers and headings, so only its first line is the value.
+    _reject_unsupported_charges(
+        (label, value.splitlines()[0].strip() if value else value)
+        for label, value in _labelled_values(outside_rows)
+    )
+
+
+def _reject_unsupported_charges(labelled_values: Iterable[tuple[str, str]]) -> None:
+    for label, value in labelled_values:
+        if label in UNSUPPORTED_CHARGE_LABELS and _parse_commission_amount(value, label) != 0:
             raise TransactionPdfError(
-                f"The transaction PDF contains a non-zero {display_label}, which is not supported."
+                f"The transaction PDF contains a non-zero {label}, which is not supported."
             )
 
 
