@@ -109,7 +109,7 @@ reviewed; no data-flow or relationship changes.
 
 ### Upcoming coupon totals follow-up
 
-Status: In progress on `feat/portfolio-performance-coupon-totals`.
+Status: Implemented in [PR #107](https://github.com/dee-pat/bond_management/pull/107).
 Fill the TOTAL row's Next Coupon Amount and Second Coupon Amount in Desk and
 the investor report with the sum of the bonds' amounts that are present, only
 when all bonds share one native currency. Mixed-currency portfolios and
