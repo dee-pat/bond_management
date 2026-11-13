@@ -499,12 +499,17 @@ def make_total_row(
     combined_future_cashflow: list[dict[str, Any]],
     combined_reporting_cashflow: list[dict[str, Any]],
 ) -> dict[str, Any]:
-    """Return the TOTAL row; native totals and XIRRs are ``None`` for a mixed-currency portfolio."""
+    """Return the TOTAL row; native totals, coupon totals and XIRRs are ``None`` for a mixed-currency portfolio."""
     currencies = {row["currency"] for row in data if row.get("currency")}
     single_native_currency = len(currencies) <= 1
 
     def sum_field(fieldname: str) -> Decimal:
         return quantize_money(sum((to_decimal(row.get(fieldname)) for row in data), Decimal(0)))
+
+    def sum_present_field(fieldname: str) -> Decimal | None:
+        """Sum only the values present, so a column with no values stays blank rather than zero."""
+        values = [to_decimal(row[fieldname]) for row in data if row.get(fieldname) is not None]
+        return quantize_money(sum(values, Decimal(0))) if values else None
 
     native_values = {
         fieldname: sum_field(fieldname) if single_native_currency else None
@@ -516,6 +521,11 @@ def make_total_row(
             "market_value",
             "gain_value",
         )
+    }
+    # Each bond's next coupon falls on its own date, so the total keeps no date.
+    upcoming_coupon_totals = {
+        fieldname: sum_present_field(fieldname) if single_native_currency else None
+        for fieldname in ("next_coupon_amount", "second_coupon_amount")
     }
     reporting_values = {
         "expected_coupons_next_year_usd": sum_field("expected_coupons_next_year_usd"),
@@ -531,9 +541,8 @@ def make_total_row(
     return {
         "isin": "TOTAL",
         "next_coupon_date": None,
-        "next_coupon_amount": None,
         "second_coupon_date": None,
-        "second_coupon_amount": None,
+        **upcoming_coupon_totals,
         "currency": currencies.pop() if single_native_currency and currencies else None,
         "reporting_currency": REPORTING_CURRENCY,
         **native_values,

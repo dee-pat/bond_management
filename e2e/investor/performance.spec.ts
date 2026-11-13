@@ -86,6 +86,11 @@ test("copies past cash flows without XIRR and future cash flows", async ({
     .filter({ hasText: "TOTAL" });
   await expect(totalRow).toContainText("1,059.81");
   await expect(totalRow).toContainText("4.473%");
+  // A single-currency portfolio totals its upcoming coupons; the dates stay blank.
+  await expect(totalRow.getByRole("cell").nth(10)).toHaveText("");
+  await expect(totalRow.getByRole("cell").nth(11)).toContainText("35.00");
+  await expect(totalRow.getByRole("cell").nth(12)).toHaveText("");
+  await expect(totalRow.getByRole("cell").nth(13)).toContainText("35.00");
 
   const pastCopy = bondRow.getByRole("button", {
     name: `Copy native cash flows for ${BOND_ISIN} XIRR`,

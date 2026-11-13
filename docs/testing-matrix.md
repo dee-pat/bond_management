@@ -98,4 +98,7 @@ Portfolio Performance's next two coupon date/amount pairs are covered by
 `report/portfolio_performance/test_portfolio_performance.py::test_next_two_coupon_payments_exclude_valuation_day_and_other_flows`,
 with API projection parity in `api/test_investor_performance.py` and visible
 pairs in `e2e/investor/performance.spec.ts` and
-`e2e/desk/portfolio-performance.spec.ts`.
+`e2e/desk/portfolio-performance.spec.ts`. Their single-currency TOTAL amounts,
+and the blank mixed-currency and no-amount cases, are covered by
+`::test_total_row_sums_upcoming_coupons_only_in_one_currency`, with the visible
+TOTAL amounts in `e2e/investor/performance.spec.ts`.

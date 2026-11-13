@@ -376,5 +376,9 @@ against its own fresh site where a site is needed.
 Desk and SPA end the report with Next Coupon Date, Next Coupon Amount,
 Second Coupon Date and Second Coupon Amount. Dates are strictly after the
 valuation date; amounts use the held position's existing projected net coupons
-in native currency. No one-year cutoff applies. Missing payments and TOTAL
-cells are blank. Legacy annual-total fields remain available in API rows.
+in native currency. No one-year cutoff applies. Missing payments are blank.
+The TOTAL row sums Next Coupon Amount and Second Coupon Amount across bonds
+that have one when every bond shares one native currency; a mixed-currency
+portfolio, or a column with no amounts, leaves the total blank. TOTAL dates
+stay blank because each bond pays on its own date. Legacy annual-total fields
+remain available in API rows.
