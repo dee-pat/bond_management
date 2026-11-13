@@ -106,3 +106,15 @@ Status: Implemented in [PR #103](https://github.com/dee-pat/bond_management/pull
 column widths in Desk and the investor table to keep the report compact.
 Coupon values, labels and the API contract remain unchanged. Domain model
 reviewed; no data-flow or relationship changes.
+
+### Upcoming coupon totals follow-up
+
+Status: Implemented in [PR #107](https://github.com/dee-pat/bond_management/pull/107).
+Fill the TOTAL row's Next Coupon Amount and Second Coupon Amount in Desk and
+the investor report with the sum of the bonds' amounts that are present, only
+when all bonds share one native currency. Mixed-currency portfolios and
+columns without amounts stay blank, and both TOTAL dates stay blank. The
+change is confined to the report's TOTAL row; there are no schema, permission
+or API field changes, and rollback is code-only.
+Acceptance: server tests for sums with missing amounts, all-blank and
+mixed-currency cases, and an investor browser assertion on the TOTAL row.

@@ -767,3 +767,39 @@ class TestPortfolioPerformance(IntegrationTestCase):
             self.assertIsNone(values["second_coupon_date"])
             self.assertIsNone(values["second_coupon_amount"])
         self.assertIsNone(upcoming_coupon_values([], "2025-12-31")["next_coupon_amount"])
+
+    def test_total_row_sums_upcoming_coupons_only_in_one_currency(self):
+        rows = [
+            {
+                "currency": "USD",
+                "next_coupon_date": "2026-01-01",
+                "next_coupon_amount": Decimal("35.0000"),
+                "second_coupon_date": "2026-07-01",
+                "second_coupon_amount": Decimal("35.0000"),
+            },
+            {
+                "currency": "USD",
+                "next_coupon_date": "2026-03-15",
+                "next_coupon_amount": Decimal("12.3457"),
+                "second_coupon_date": None,
+                "second_coupon_amount": None,
+            },
+        ]
+
+        total = make_total_row(rows, [], [], [])
+
+        self.assertEqual(total["next_coupon_amount"], Decimal("47.3457"))
+        self.assertEqual(total["second_coupon_amount"], Decimal("35.0000"))
+        # Bonds pay on different dates, so the total has no single coupon date.
+        self.assertIsNone(total["next_coupon_date"])
+        self.assertIsNone(total["second_coupon_date"])
+
+        without_coupons = [{**row, "next_coupon_amount": None, "second_coupon_amount": None} for row in rows]
+        total = make_total_row(without_coupons, [], [], [])
+        self.assertIsNone(total["next_coupon_amount"])
+        self.assertIsNone(total["second_coupon_amount"])
+
+        mixed_currency = [rows[0], {**rows[1], "currency": "KES"}]
+        total = make_total_row(mixed_currency, [], [], [])
+        self.assertIsNone(total["next_coupon_amount"])
+        self.assertIsNone(total["second_coupon_amount"])
